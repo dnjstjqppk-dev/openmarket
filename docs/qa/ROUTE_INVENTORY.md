@@ -26,3 +26,4 @@
 | `/partner/bulk-import` | CSV/Excel 대량 상품 임포트 | `POST /api/v1/partner/products/bulk` | PASS |
 | `/partner/orders` | 발주 확인 및 운송장 입력 상태머신 | `PATCH /api/v1/partner/sub-orders/{id}/shipment`| PASS |
 | `/partner/settlements` | 월별 매출/수수료 정산 내역서 | `GET /api/v1/partner/settlements` | PASS |
+

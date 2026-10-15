@@ -31,3 +31,4 @@
 | `ledger_transactions` | `id, reference_type, reference_id, description` | 결제/정산 원장 트랜잭션 헤더 |
 | `ledger_entries` | `id, transaction_id, account_id, direction, amount` | DEBIT(차변) / CREDIT(대변) 분개 명세 |
 | `settlements` | `id, partner_id, gross_sales_amount, commission_amount, net_payout_amount` | 월별/기수별 파트너 정산 확정 데이터 |
+

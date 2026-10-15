@@ -28,3 +28,4 @@ Deploy status: 200 OK
 Edge CDN Active across 300+ PoPs
 ```
 모든 정적 에셋 및 API 엔드포인트가 HTTP 200 OK 응답을 확인하였습니다.
+

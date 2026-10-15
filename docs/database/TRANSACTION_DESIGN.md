@@ -40,3 +40,4 @@ sequenceDiagram
 - **차변 (DEBIT)**: `201. PLATFORM_ESCROW`
 - **대변 (CREDIT)**: `202. PARTNER_PAYABLE` (파트너 정산 부채, 90%)
 - **대변 (CREDIT)**: `401. PLATFORM_REVENUE` (플랫폼 수수료 매출, 10%)
+

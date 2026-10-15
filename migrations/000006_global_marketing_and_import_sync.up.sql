@@ -100,3 +100,4 @@ CREATE TABLE IF NOT EXISTS feature_flags (
     is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+

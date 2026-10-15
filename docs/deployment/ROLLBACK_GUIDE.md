@@ -20,3 +20,4 @@ npx wrangler rollback [DEPLOYMENT_ID]
 - 마이그레이션 실패 시 사전 백업된 R2 스냅샷 또는 `.down.sql`을 실행하여 롤백합니다.
 - 테이블 드롭 시 `CASCADE` 사용을 엄격히 제한하고 역순으로 외래키 종속 테이블부터 안전하게 해제합니다.
 - 롤백 후 `audit_logs`에 사유 및 영향도 분석 리포트를 남깁니다.
+

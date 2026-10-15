@@ -23,3 +23,4 @@ flowchart TD
 - **비밀번호**: Argon2id 기반 단방향 솔트 해싱 적용
 - **카드 정보 비보존 원칙**: 신용카드 번호는 자체 DB에 일절 저장하지 않으며, PG사 발급 일회용 결제 빌링키/토큰만 취급
 - **중복 결제 방어**: 클라이언트가 전송한 UUID `X-Idempotency-Key`를 Redis 및 DB Unique Constraint로 동시 검증
+

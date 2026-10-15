@@ -33,3 +33,4 @@ export const translations = {
     subOrderNotice: '出店者ごとの注文分割およびエスクロー保護が適用されます。'
   }
 };
+

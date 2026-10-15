@@ -64,6 +64,18 @@ export default {
       }), { headers: corsHeaders });
     }
 
+    // Auth Login
+    if (url.pathname === '/api/v1/auth/login' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const role = body.email?.includes('admin') ? 'ROLE_ADMIN' : body.email?.includes('seller') ? 'ROLE_PARTNER' : 'ROLE_CUSTOMER';
+      return new Response(JSON.stringify({
+        token: 'ey-mock-edge-jwt-' + crypto.randomUUID(),
+        role,
+        email: body.email,
+        expiresIn: 86400
+      }), { headers: corsHeaders });
+    }
+
     // Categories
     if (url.pathname === '/api/v1/categories') {
       return new Response(JSON.stringify({
@@ -72,22 +84,21 @@ export default {
       }), { headers: corsHeaders });
     }
 
-    // SDUI layout
-    if (url.pathname === '/api/v1/home/sdui') {
+    // Products catalog
+    if (url.pathname === '/api/v1/products') {
       return new Response(JSON.stringify({
-        targetPlatform: 'ALL',
-        version: 4,
-        blocks: [
-          { type: 'FLASH_SALE_HERO', limit: 10, refreshSeconds: 60 },
-          { type: 'CATEGORY_CHIPS', count: 33 },
-          { type: 'ALGORITHM_FEED', model: 'temu-deep-recs-v2' }
-        ]
+        items: [
+          { id: 'p-1', brand: 'Anker Official', name: 'Soundcore Space Q45 ANC 헤드폰', price: 49900, stock: 120, category: 'electronics' },
+          { id: 'p-2', brand: 'Baseus Korea', name: '블레이드 100W 초고속 보조배터리', price: 28900, stock: 85, category: 'electronics' },
+          { id: 'p-3', brand: 'Urban Fit', name: '헤비웨이트 기모 오버핏 후드 집업', price: 19800, stock: 240, category: 'fashion' },
+          { id: 'p-4', brand: 'Nordic Home', name: '호텔식 순면 베개커버 2P 세트', price: 9900, stock: 500, category: 'home' }
+        ],
+        total: 4
       }), { headers: corsHeaders });
     }
 
     // Orders Checkout (Split-Order Transaction)
     if (url.pathname === '/api/v1/orders/checkout' && request.method === 'POST') {
-      const body = await request.json().catch(() => ({}));
       const idempotencyKey = request.headers.get('X-Idempotency-Key') || crypto.randomUUID();
       return new Response(JSON.stringify({
         orderId: crypto.randomUUID(),
@@ -98,23 +109,21 @@ export default {
         totalShippingFee: 3000,
         totalPayAmount: 51800,
         subOrders: [
-          {
-            subOrderId: crypto.randomUUID(),
-            partnerId: 'partner-tek-01',
-            subTotal: 29900,
-            shippingFee: 3000,
-            status: 'PAID'
-          },
-          {
-            subOrderId: crypto.randomUUID(),
-            partnerId: 'partner-fsh-02',
-            subTotal: 18900,
-            shippingFee: 0,
-            status: 'PAID'
-          }
+          { subOrderId: crypto.randomUUID(), partnerId: 'partner-anker', subTotal: 49900, shippingFee: 0, status: 'PAID' },
+          { subOrderId: crypto.randomUUID(), partnerId: 'partner-baseus', subTotal: 28900, shippingFee: 2500, status: 'PAID' }
         ],
         createdAt: new Date().toISOString()
       }), { status: 201, headers: corsHeaders });
+    }
+
+    // Partner Sub-orders
+    if (url.pathname === '/api/v1/partner/sub-orders') {
+      return new Response(JSON.stringify({
+        orders: [
+          { id: 'SUB-ORD-9021', item: 'Space Q45 ANC 헤드폰', status: 'PREPARING', amount: 49900 },
+          { id: 'SUB-ORD-8814', item: 'Nano Pro 30W 충전기 2개', status: 'SHIPPED', amount: 31800, tracking: '6891024819' }
+        ]
+      }), { headers: corsHeaders });
     }
 
     // Admin Ledger
@@ -128,9 +137,19 @@ export default {
       }), { headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      path: url.pathname
-    }), { status: 404, headers: corsHeaders });
+    // Admin SDUI layout
+    if (url.pathname === '/api/v1/admin/sdui/layouts' || url.pathname === '/api/v1/home/sdui') {
+      return new Response(JSON.stringify({
+        targetPlatform: 'ALL',
+        version: 5,
+        blocks: [
+          { type: 'LIGHTNING_FLASH_SALE', count: 12, timerSeconds: 15500 },
+          { type: 'CATEGORY_CHIPS', count: 33 },
+          { type: 'CURATED_PRODUCT_FEED', algorithm: 'temu-deep-recs' }
+        ]
+      }), { headers: corsHeaders });
+    }
+
+    return new Response(JSON.stringify({ error: 'Not Found', path: url.pathname }), { status: 404, headers: corsHeaders });
   }
 };

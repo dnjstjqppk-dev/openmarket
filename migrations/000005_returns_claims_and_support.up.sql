@@ -87,3 +87,4 @@ CREATE TABLE IF NOT EXISTS support_messages (
     attachments JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+

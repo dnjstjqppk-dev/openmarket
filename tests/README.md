@@ -14,3 +14,4 @@ npm test
 cd backend && go test -v ./...
 ```
 모든 테스트는 모의(Mock) 객체가 아닌 실제 비즈니스 로직과 수학적 화폐 계산(`BIGINT`)을 직접 검증합니다.
+

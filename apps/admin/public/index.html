@@ -3,172 +3,222 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenMarket — 통합 관리자 콘솔 (Admin Operations)</title>
+  <title>OpenMarket — 플랫폼 통합 운영 관리자 콘솔 (Admin Operations)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-100 text-gray-900 font-sans antialiased" x-data="{
-  section: 'dashboard',
+<body class="bg-slate-100 text-slate-900 font-sans antialiased" x-data="{
+  isLoggedIn: false,
+  loginEmail: 'admin@openmarket.global',
+  loginPassword: '',
+  mfaCode: '',
+  loginError: '',
+  tab: 'dashboard',
   partners: [
-    { id: 'p-1', name: '테크파트너즈 (주)', regNo: '120-88-99120', status: 'PENDING', date: '2026-10-15', commission: '10%' },
-    { id: 'p-2', name: '글로벌스타일 코리아', regNo: '214-85-11049', status: 'APPROVED', date: '2026-10-14', commission: '12%' },
-    { id: 'p-3', name: '한중무역상사', regNo: '107-82-44912', status: 'PENDING', date: '2026-10-16', commission: '10%' }
+    { id: 'p-1', name: '앤커코리아 공식스토어', regNo: '120-88-99120', status: 'PENDING', date: '2026-10-15', rate: '10%' },
+    { id: 'p-2', name: '베이스어스코리아 (주)', regNo: '214-85-11049', status: 'APPROVED', date: '2026-10-14', rate: '12%' },
+    { id: 'p-3', name: '노르딕홈 라이프스타일', regNo: '107-82-44912', status: 'PENDING', date: '2026-10-16', rate: '10%' }
   ],
-  sduiVersion: 4,
-  sduiJson: JSON.stringify({
-    version: 4,
-    target: 'ALL',
-    blocks: [
-      { type: 'FLASH_SALE_HERO', limit: 10, refreshSeconds: 60 },
-      { type: 'CATEGORY_CHIPS', count: 33 },
-      { type: 'ALGORITHM_FEED', model: 'temu-deep-recs-v2' }
-    ]
-  }, null, 2),
-  sduiUpdated: false,
-  settlementExecuted: false,
-  approvePartner(id) {
-    let p = this.partners.find(x => x.id === id);
-    if (p) p.status = 'APPROVED';
-  }
+  products: [
+    { id: 'prd-901', partner: '앤커코리아', name: 'Space Q45 ANC 헤드폰', price: 49900, status: 'APPROVED' },
+    { id: 'prd-902', partner: '노르딕홈', name: '호텔식 순면 베개커버 2P', price: 9900, status: 'PENDING' }
+  ],
+  settleStatus: '',
+  login() {
+    if (this.loginPassword === 'admin2026!' || this.loginPassword.length >= 6) {
+      this.isLoggedIn = true;
+      this.loginError = '';
+    } else {
+      this.loginError = '비밀번호를 6자리 이상 입력해주세요. (기본 테스트: admin2026!)';
+    }
+  },
+  logout() {
+    this.isLoggedIn = false;
+    this.loginPassword = '';
+    this.mfaCode = '';
+  },
+  approvePartner(p) { p.status = 'APPROVED'; },
+  approveProduct(pr) { pr.status = 'APPROVED'; }
 }">
-  <!-- Top Admin Navigation -->
-  <header class="bg-slate-900 text-white sticky top-0 z-50 border-b border-slate-800">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="text-xl font-black tracking-tight text-white">⚙️ OPENMARKET <span class="text-amber-400 text-sm font-semibold">ADMIN</span></span>
-        <span class="bg-purple-900/80 text-purple-200 border border-purple-700 text-[10px] font-bold px-2 py-0.5 rounded">ROLE_SUPER_ADMIN</span>
+  <!-- Auth Gate 1: Unauthenticated Admin Login Screen -->
+  <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-slate-100">
+    <div class="max-w-md w-full bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl space-y-6">
+      <div class="text-center space-y-2">
+        <div class="text-3xl font-black text-white tracking-tight">⚙️ OPENMARKET <span class="text-amber-400">ADMIN</span></div>
+        <p class="text-xs text-slate-400">내부 운영자 보안 인증 및 다단계 인증(MFA)</p>
       </div>
-      <div class="flex items-center gap-2 text-xs">
-        <button @click="section = 'dashboard'" :class="section === 'dashboard' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">대시보드</button>
-        <button @click="section = 'partners'" :class="section === 'partners' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">파트너 심사</button>
-        <button @click="section = 'ledger'" :class="section === 'ledger' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">복식부기 원장</button>
-        <button @click="section = 'sdui'" :class="section === 'sdui' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">SDUI 엔진</button>
-      </div>
-      <div class="text-[11px] text-slate-400 hidden sm:block">
-        Cloudflare Edge Secured
-      </div>
-    </div>
-  </header>
-
-  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-    <!-- SECTION 1: Dashboard -->
-    <div x-show="section === 'dashboard'" class="space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">당일 플랫폼 총 거래액 (GMV)</div>
-          <div class="text-2xl font-black text-gray-900 mt-1">₩ 412,850,000</div>
-          <div class="text-[10px] text-emerald-600 mt-1">↑ 전일 대비 18.4% 증가</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">플랫폼 보관 에스크로 잔액</div>
-          <div class="text-2xl font-black text-purple-700 mt-1">₩ 189,400,000</div>
-          <div class="text-[10px] text-gray-400 mt-1">구매확정 전 안전 격리 자금</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">입점 심사 대기 파트너</div>
-          <div class="text-2xl font-black text-orange-600 mt-1">2 건</div>
-          <div class="text-[10px] text-orange-700 mt-1">사업자등록증 & 통신판매업 심사 필요</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">Redis 재고 동시성 인스턴스</div>
-          <div class="text-2xl font-black text-blue-600 mt-1">정상 (100%)</div>
-          <div class="text-[10px] text-emerald-600 mt-1">평균 레이턴시 0.8ms</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SECTION 2: Partner Verification -->
-    <div x-show="section === 'partners'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <div class="flex items-center justify-between border-b pb-3">
+      <form @submit.prevent="login()" class="space-y-4 text-xs">
         <div>
-          <h3 class="text-base font-bold text-gray-800">입점 파트너사 심사 및 승인 관리</h3>
-          <p class="text-xs text-gray-500">파트너 신원 및 세무 서류 검증 (PostgreSQL 16 partner_verifications 연동)</p>
+          <label class="block font-semibold text-slate-300 mb-1">운영자 계정 (ID / Email)</label>
+          <input type="email" x-model="loginEmail" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
         </div>
-        <span class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-semibold">총 3개 사</span>
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">비밀번호</label>
+          <input type="password" x-model="loginPassword" placeholder="비밀번호 입력 (admin2026!)" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">MFA 보안 OTP 코드 (6자리)</label>
+          <input type="text" x-model="mfaCode" placeholder="123456" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+        <div x-show="loginError" class="text-red-400 text-xs font-semibold" x-text="loginError"></div>
+        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-lg text-xs transition duration-150">보안 로그인 (Secure Sign In)</button>
+      </form>
+      <div class="text-[11px] text-slate-500 text-center">
+        인가되지 않은 접근 시도 및 비정상 요청은 관련 법령에 의해 기록 및 추적됩니다.
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs text-left">
-          <thead class="bg-gray-50 text-gray-500 uppercase border-b text-[10px]">
-            <tr>
-              <th class="p-3">파트너명</th>
-              <th class="p-3">사업자등록번호</th>
-              <th class="p-3">신청일</th>
-              <th class="p-3">수수료율</th>
-              <th class="p-3">심사 상태</th>
-              <th class="p-3 text-right">조치</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y text-gray-700">
-            <template x-for="p in partners" :key="p.id">
-              <tr class="hover:bg-gray-50">
-                <td class="p-3 font-bold" x-text="p.name"></td>
-                <td class="p-3 font-mono" x-text="p.regNo"></td>
-                <td class="p-3 font-mono" x-text="p.date"></td>
-                <td class="p-3 font-bold text-blue-600" x-text="p.commission"></td>
-                <td class="p-3">
-                  <span :class="p.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'" class="px-2 py-0.5 rounded-full text-[10px] font-bold" x-text="p.status"></span>
-                </td>
-                <td class="p-3 text-right">
-                  <button x-show="p.status === 'PENDING'" @click="approvePartner(p.id)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 rounded text-xs transition">승인(Approve)</button>
-                  <span x-show="p.status === 'APPROVED'" class="text-gray-400 text-xs">승인 완료됨</span>
-                </td>
+    </div>
+  </div>
+
+  <!-- Auth Gate 2: Authenticated Admin Portal -->
+  <div x-show="isLoggedIn" class="min-h-screen flex flex-col">
+    <!-- Top Global Bar -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-xl font-black tracking-tight">⚙️ OPENMARKET <span class="text-amber-400 text-xs">ADMIN</span></span>
+          <span class="bg-purple-900 text-purple-200 border border-purple-700 text-[10px] font-bold px-2 py-0.5 rounded">ROLE_SUPER_ADMIN</span>
+        </div>
+        <!-- Tab Navigation -->
+        <nav class="flex items-center gap-1 text-xs">
+          <button @click="tab = 'dashboard'" :class="tab === 'dashboard' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">대시보드</button>
+          <button @click="tab = 'partners'" :class="tab === 'partners' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">파트너 심사</button>
+          <button @click="tab = 'products'" :class="tab === 'products' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">상품 승인</button>
+          <button @click="tab = 'ledger'" :class="tab === 'ledger' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded transition">복식부기 원장</button>
+        </nav>
+        <div class="flex items-center gap-3 text-xs">
+          <span class="text-slate-400 hidden sm:inline" x-text="loginEmail"></span>
+          <button @click="logout()" class="bg-slate-800 hover:bg-red-900 hover:text-white text-slate-300 px-3 py-1.5 rounded text-xs transition">로그아웃</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 flex-1 w-full">
+      <!-- 1. Dashboard -->
+      <div x-show="tab === 'dashboard'" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-slate-500 font-medium">당일 플랫폼 총 거래액 (GMV)</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">₩ 412,850,000</div>
+            <div class="text-emerald-600 font-bold mt-1">↑ 전일 대비 18.4% 증가</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-slate-500 font-medium">플랫폼 에스크로 보관 잔액</div>
+            <div class="text-2xl font-black text-purple-700 mt-1">₩ 189,400,000</div>
+            <div class="text-slate-400 mt-1">구매확정 대기 자금 안전 격리</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-slate-500 font-medium">입점 심사 대기 파트너</div>
+            <div class="text-2xl font-black text-orange-600 mt-1">2 건</div>
+            <div class="text-orange-700 mt-1">사업자등록증 서류 심사 필요</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-slate-500 font-medium">오늘 접수된 신규 주문</div>
+            <div class="text-2xl font-black text-blue-600 mt-1">3,491 건</div>
+            <div class="text-slate-400 mt-1">전체 주문 정상 출고 진행중</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Partner Management -->
+      <div x-show="tab === 'partners'" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h3 class="text-base font-bold text-slate-900 border-b pb-3">입점 파트너사 서류 심사 및 승인 관리</h3>
+        <div class="overflow-x-auto text-xs">
+          <table class="w-full text-left">
+            <thead class="bg-slate-50 text-slate-500 uppercase border-b text-[10px]">
+              <tr>
+                <th class="p-3">파트너 상호명</th>
+                <th class="p-3">사업자등록번호</th>
+                <th class="p-3">신청일자</th>
+                <th class="p-3">수수료율</th>
+                <th class="p-3">상태</th>
+                <th class="p-3 text-right">조치</th>
               </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- SECTION 3: Double-Entry Ledger Inspector -->
-    <div x-show="section === 'ledger'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <div class="flex items-center justify-between border-b pb-3">
-        <div>
-          <h3 class="text-base font-bold text-gray-800">복식부기 에스크로 회계 원장 (Double-entry Ledger)</h3>
-          <p class="text-xs text-gray-500">대변(Credit)과 차변(Debit)의 절대적 합계 일치 보장 (PostgreSQL 16 ledger_entries)</p>
-        </div>
-        <button @click="settlementExecuted = true" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">당기 정산 배치 집행</button>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-        <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div class="text-gray-500">101. PG_RECEIVABLE (차변)</div>
-          <div class="text-base font-bold text-blue-900 mt-1">₩ 250,000,000</div>
-        </div>
-        <div class="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-          <div class="text-gray-500">201. PLATFORM_ESCROW (대변)</div>
-          <div class="text-base font-bold text-purple-900 mt-1">₩ 189,400,000</div>
-        </div>
-        <div class="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-          <div class="text-gray-500">202. PARTNER_PAYABLE (대변)</div>
-          <div class="text-base font-bold text-orange-900 mt-1">₩ 54,540,000</div>
-        </div>
-        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-          <div class="text-gray-500">401. PLATFORM_REVENUE (수익)</div>
-          <div class="text-base font-bold text-emerald-900 mt-1">₩ 6,060,000</div>
+            </thead>
+            <tbody class="divide-y text-slate-700">
+              <template x-for="p in partners" :key="p.id">
+                <tr class="hover:bg-slate-50">
+                  <td class="p-3 font-bold text-slate-900" x-text="p.name"></td>
+                  <td class="p-3 font-mono" x-text="p.regNo"></td>
+                  <td class="p-3 font-mono" x-text="p.date"></td>
+                  <td class="p-3 font-bold text-blue-600" x-text="p.rate"></td>
+                  <td class="p-3">
+                    <span :class="p.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'" class="px-2 py-0.5 rounded-full text-[10px] font-bold" x-text="p.status"></span>
+                  </td>
+                  <td class="p-3 text-right">
+                    <button x-show="p.status === 'PENDING'" @click="approvePartner(p)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 rounded text-xs transition">승인(Approve)</button>
+                    <span x-show="p.status === 'APPROVED'" class="text-slate-400 text-xs font-medium">승인완료</span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div x-show="settlementExecuted" class="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg text-xs">
-        ✓ 당기 파트너 정산 배치가 성공적으로 집행되었습니다. (ledger_transactions ID: 88a10-settle-run)
-      </div>
-    </div>
-
-    <!-- SECTION 4: SDUI Manager -->
-    <div x-show="section === 'sdui'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <div class="flex items-center justify-between border-b pb-3">
-        <div>
-          <h3 class="text-base font-bold text-gray-800">서버 주도형 UI (SDUI) 실시간 레이아웃 엔진</h3>
-          <p class="text-xs text-gray-500">클라이언트 앱 배포 없이 홈 피드 블록 배치 및 추천 알고리즘 동적 변경</p>
+      <!-- 3. Product Catalog Approval -->
+      <div x-show="tab === 'products'" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h3 class="text-base font-bold text-slate-900 border-b pb-3">파트너 등록 상품 검수 및 승인 관리</h3>
+        <div class="overflow-x-auto text-xs">
+          <table class="w-full text-left">
+            <thead class="bg-slate-50 text-slate-500 uppercase border-b text-[10px]">
+              <tr>
+                <th class="p-3">입점사</th>
+                <th class="p-3">상품명</th>
+                <th class="p-3">판매가</th>
+                <th class="p-3">검수 상태</th>
+                <th class="p-3 text-right">조치</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y text-slate-700">
+              <template x-for="pr in products" :key="pr.id">
+                <tr class="hover:bg-slate-50">
+                  <td class="p-3 font-bold" x-text="pr.partner"></td>
+                  <td class="p-3" x-text="pr.name"></td>
+                  <td class="p-3 font-mono text-red-600 font-bold" x-text="'₩ ' + pr.price.toLocaleString()"></td>
+                  <td class="p-3">
+                    <span :class="pr.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'" class="px-2 py-0.5 rounded-full text-[10px] font-bold" x-text="pr.status"></span>
+                  </td>
+                  <td class="p-3 text-right">
+                    <button x-show="pr.status === 'PENDING'" @click="approveProduct(pr)" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1 rounded text-xs transition">전시 승인</button>
+                    <span x-show="pr.status === 'APPROVED'" class="text-slate-400 text-xs font-medium">전시중</span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
-        <button @click="sduiUpdated = true; sduiVersion++" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">새 버전 즉시 배포</button>
       </div>
-      <div>
-        <textarea x-model="sduiJson" rows="8" class="w-full font-mono text-xs bg-slate-900 text-green-400 p-4 rounded-xl border focus:outline-none"></textarea>
+
+      <!-- 4. Double-Entry Escrow Ledger -->
+      <div x-show="tab === 'ledger'" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">복식부기 에스크로 회계 원장 감사 (Double-entry Ledger)</h3>
+            <p class="text-xs text-slate-500">대변(Credit)과 차변(Debit)의 100% 대차평형 일치 검증</p>
+          </div>
+          <button @click="settleStatus = '당기 파트너 정산 배치가 성공적으로 집행되었습니다.'" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">정산 배치 실행</button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="text-slate-500">101. PG_RECEIVABLE (차변)</div>
+            <div class="text-base font-bold text-blue-900 mt-1">₩ 250,000,000</div>
+          </div>
+          <div class="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <div class="text-slate-500">201. PLATFORM_ESCROW (대변)</div>
+            <div class="text-base font-bold text-purple-900 mt-1">₩ 189,400,000</div>
+          </div>
+          <div class="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <div class="text-slate-500">202. PARTNER_PAYABLE (대변)</div>
+            <div class="text-base font-bold text-orange-900 mt-1">₩ 54,540,000</div>
+          </div>
+          <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <div class="text-slate-500">401. PLATFORM_REVENUE (수익)</div>
+            <div class="text-base font-bold text-emerald-900 mt-1">₩ 6,060,000</div>
+          </div>
+        </div>
+        <div x-show="settleStatus" class="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-lg" x-text="settleStatus"></div>
       </div>
-      <div x-show="sduiUpdated" class="p-3 bg-green-50 border border-green-200 text-green-900 rounded-lg text-xs">
-        ✓ SDUI 레이아웃 v<span x-text="sduiVersion"></span>이 Cloudflare Edge 캐시에 즉시 배포 반영되었습니다.
-      </div>
-    </div>
-  </main>
+    </main>
+  </div>
 </body>
 </html>

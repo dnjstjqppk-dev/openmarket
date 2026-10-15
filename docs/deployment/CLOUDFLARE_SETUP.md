@@ -28,3 +28,4 @@ npm run deploy:partner
 npm run deploy:api
 ```
 모든 프로젝트는 `wrangler.jsonc` 및 `wrangler.toml`의 유효성 검증을 통과하도록 구성되어 있습니다.
+

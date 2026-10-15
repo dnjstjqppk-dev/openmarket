@@ -17,3 +17,4 @@
 3. 최신 기본 백업 스냅샷 복원
 4. WAL 로그를 시점 T까지 리플레이(Roll-Forward)
 5. `ledger_entries` 및 `orders` 데이터 대사 후 서비스 트래픽 재개
+

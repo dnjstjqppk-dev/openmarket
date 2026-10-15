@@ -30,3 +30,4 @@ flowchart LR
 3. **Cloudflare Rate Limiting**:
    - `/api/v1/orders/checkout`: IP당 초당 10회 제한
    - `/api/v1/auth/login`: IP당 분당 5회 제한 및 Turnstile 캡차 적용
+

@@ -41,3 +41,4 @@ flowchart TD
 - **금액 처리**: 모든 화폐 필드는 부동소수점 오차 방지를 위해 `BIGINT` 엄격 적용 (KRW 원단위, USD 센트 단위)
 - **원자적 재고 감산**: Redis 7 Lua 스크립트를 통해 초과 판매(Overselling)를 0%로 통제하고 멱등키 보장
 - **복식부기 회계 원장**: 결제 발생 시 `PG_RECEIVABLE` 차변, `PLATFORM_ESCROW` 대변 동시 기장
+

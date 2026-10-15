@@ -91,3 +91,4 @@ CREATE TABLE IF NOT EXISTS shipment_tracking_events (
     raw_payload JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+

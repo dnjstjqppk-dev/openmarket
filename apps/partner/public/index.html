@@ -3,186 +3,218 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenMarket — 파트너 판매자 센터 (Partner Console)</title>
+  <title>OpenMarket — 파트너 판매자 비즈니스 센터 (Partner Console)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased" x-data="{
-  tab: 'dashboard',
-  productName: '',
-  price: 25000,
-  stock: 100,
+  isLoggedIn: false,
+  authTab: 'login',
+  partnerEmail: 'seller@anker-korea.com',
+  partnerPassword: '',
+  businessRegNo: '120-88-99120',
+  partnerName: '(주)앤커코리아 공식스토어',
+  activeTab: 'dashboard',
   products: [
-    { id: 'prd-101', name: '무선 노이즈캔슬링 헤드폰 Pro', price: 29900, stock: 150, status: 'ACTIVE' },
-    { id: 'prd-102', name: '블루투스 기계식 텐키리스 키보드', price: 37900, stock: 80, status: 'ACTIVE' }
+    { id: 'SKU-ANK-01', name: 'Soundcore Space Q45 무선 노이즈캔슬링 헤드폰', price: 49900, stock: 120, status: '판매중' },
+    { id: 'SKU-ANK-02', name: 'Nano Pro 30W 초소형 C타입 고속충전기', price: 15900, stock: 350, status: '판매중' }
   ],
   orders: [
-    { id: 'SUB-2026-901', item: '무선 노이즈캔슬링 헤드폰 Pro (1개)', status: 'PREPARING', carrier: '', tracking: '' },
-    { id: 'SUB-2026-884', item: '블루투스 기계식 텐키리스 키보드 (2개)', status: 'SHIPPED', carrier: 'CJ대한통운', tracking: '689123049182' }
+    { id: 'SUB-ORD-9021', customer: '홍길동', item: 'Space Q45 헤드폰 (블랙)', price: 49900, status: '출고대기', carrier: '', tracking: '' },
+    { id: 'SUB-ORD-8814', customer: '이영희', item: 'Nano Pro 30W 충전기 (화이트 2개)', price: 31800, status: '배송중', carrier: 'CJ대한통운', tracking: '6891024819' }
   ],
-  uploadSuccess: false,
-  addProduct() {
-    if (!this.productName) return;
-    this.products.unshift({
-      id: 'prd-' + Math.floor(Math.random() * 900 + 100),
-      name: this.productName,
-      price: Number(this.price),
-      stock: Number(this.stock),
-      status: 'ACTIVE'
-    });
-    this.productName = '';
-    alert('새 상품 및 SKU가 성공적으로 등록되었습니다.');
+  newProd: { name: '', price: 29900, stock: 100 },
+  csvUploaded: false,
+  login() {
+    if (this.partnerPassword.length >= 4) {
+      this.isLoggedIn = true;
+    } else {
+      alert('비밀번호를 입력해주세요. (테스트용: 1234)');
+    }
   },
-  shipOrder(o) {
-    o.status = 'SHIPPED';
-    o.carrier = 'CJ대한통운';
-    o.tracking = '689' + Math.floor(Math.random() * 899999999 + 100000000);
+  logout() {
+    this.isLoggedIn = false;
+    this.partnerPassword = '';
+  },
+  addProduct() {
+    if (!this.newProd.name) return;
+    this.products.unshift({ id: 'SKU-NEW-' + Date.now().toString().slice(-4), name: this.newProd.name, price: Number(this.newProd.price), stock: Number(this.newProd.stock), status: '검수요청' });
+    this.newProd.name = '';
+    alert('상품이 등록되어 관리자 검수 큐로 전송되었습니다.');
+  },
+  shipOrder(ord) {
+    ord.status = '배송중';
+    ord.carrier = 'CJ대한통운';
+    ord.tracking = '689' + Math.floor(Math.random() * 8999999 + 1000000);
   }
 }">
-  <!-- Top Partner Navigation -->
-  <header class="bg-indigo-900 text-white sticky top-0 z-50 border-b border-indigo-800">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="text-xl font-black tracking-tight text-white">🏪 OPENMARKET <span class="text-indigo-300 text-sm font-semibold">PARTNER</span></span>
-        <span class="bg-green-700 text-white text-[10px] font-bold px-2 py-0.5 rounded">승인 입점사 (APPROVED)</span>
+  <!-- Auth Gate: Login & Business Registration Screen -->
+  <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center p-4 bg-indigo-950 text-gray-100">
+    <div class="max-w-md w-full bg-indigo-900 border border-indigo-800 rounded-2xl p-8 shadow-2xl space-y-6">
+      <div class="text-center space-y-1">
+        <div class="text-2xl font-black text-white tracking-tight">🏪 OPENMARKET <span class="text-indigo-300">PARTNER</span></div>
+        <p class="text-xs text-indigo-300">입점사 및 공급사 전용 비즈니스 포털</p>
       </div>
-      <div class="flex items-center gap-2 text-xs">
-        <button @click="tab = 'dashboard'" :class="tab === 'dashboard' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">대시보드</button>
-        <button @click="tab = 'products'" :class="tab === 'products' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">상품·SKU 관리</button>
-        <button @click="tab = 'bulk'" :class="tab === 'bulk' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">CSV 대량 등록</button>
-        <button @click="tab = 'orders'" :class="tab === 'orders' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">주문·배송 관리</button>
-        <button @click="tab = 'settlement'" :class="tab === 'settlement' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">정산 리포트</button>
+      <div class="flex border-b border-indigo-800 text-xs font-semibold">
+        <button @click="authTab = 'login'" :class="authTab === 'login' ? 'text-white border-b-2 border-indigo-400 pb-2' : 'text-indigo-400 pb-2'" class="flex-1 text-center">파트너 로그인</button>
+        <button @click="authTab = 'register'" :class="authTab === 'register' ? 'text-white border-b-2 border-indigo-400 pb-2' : 'text-indigo-400 pb-2'" class="flex-1 text-center">신규 입점 신청</button>
       </div>
-      <div class="text-[11px] text-indigo-300 hidden sm:block">
-        입점사 ID: PARTNER-TEK-01
-      </div>
+      <!-- Login Tab -->
+      <form x-show="authTab === 'login'" @submit.prevent="login()" class="space-y-4 text-xs">
+        <div>
+          <label class="block text-indigo-200 mb-1">사업자 등록번호</label>
+          <input type="text" x-model="businessRegNo" required class="w-full bg-indigo-950 border border-indigo-800 rounded-lg p-2.5 text-white font-mono" />
+        </div>
+        <div>
+          <label class="block text-indigo-200 mb-1">담당자 이메일</label>
+          <input type="email" x-model="partnerEmail" required class="w-full bg-indigo-950 border border-indigo-800 rounded-lg p-2.5 text-white" />
+        </div>
+        <div>
+          <label class="block text-indigo-200 mb-1">비밀번호</label>
+          <input type="password" x-model="partnerPassword" placeholder="비밀번호 입력 (테스트: 1234)" required class="w-full bg-indigo-950 border border-indigo-800 rounded-lg p-2.5 text-white" />
+        </div>
+        <button type="submit" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-lg text-xs transition">판매자 콘솔 접속</button>
+      </form>
+      <!-- Register Tab -->
+      <form x-show="authTab === 'register'" @submit.prevent="alert('입점 신청 서류가 접수되었습니다. 관리자 심사 후 승인 안내 메일이 발송됩니다.'); authTab = 'login';" class="space-y-3 text-xs">
+        <div><label class="block text-indigo-200 mb-0.5">상호명</label><input type="text" placeholder="예: (주)글로벌트레이딩" required class="w-full bg-indigo-950 border border-indigo-800 rounded p-2 text-white" /></div>
+        <div><label class="block text-indigo-200 mb-0.5">사업자번호</label><input type="text" placeholder="000-00-00000" required class="w-full bg-indigo-950 border border-indigo-800 rounded p-2 text-white font-mono" /></div>
+        <div><label class="block text-indigo-200 mb-0.5">정산 입금 계좌 (은행 및 계좌번호)</label><input type="text" placeholder="신한은행 110-000-000000 (예금주명)" required class="w-full bg-indigo-950 border border-indigo-800 rounded p-2 text-white" /></div>
+        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded text-xs transition">입점 서류 제출</button>
+      </form>
     </div>
-  </header>
+  </div>
 
-  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-    <!-- TAB 1: Dashboard -->
-    <div x-show="tab === 'dashboard'" class="space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">이번달 판매 정산 예정액</div>
-          <div class="text-2xl font-black text-indigo-600 mt-1">₩ 28,450,000</div>
-          <div class="text-[10px] text-gray-400 mt-1">플랫폼 수수료 10% 자동 공제 후</div>
+  <!-- Authenticated Partner Portal -->
+  <div x-show="isLoggedIn" class="min-h-screen flex flex-col">
+    <header class="bg-indigo-900 text-white border-b border-indigo-800 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-xl font-black tracking-tight">🏪 OPENMARKET <span class="text-indigo-300 text-xs">PARTNER</span></span>
+          <span class="bg-green-700 text-white text-[10px] font-bold px-2 py-0.5 rounded" x-text="partnerName"></span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">출고 대기 (PREPARING)</div>
-          <div class="text-2xl font-black text-orange-600 mt-1">1 건</div>
-          <div class="text-[10px] text-orange-700 mt-1">당일 출고 마감 17:00</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">배송 중 (SHIPPED)</div>
-          <div class="text-2xl font-black text-blue-600 mt-1">1 건</div>
-          <div class="text-[10px] text-blue-700 mt-1">택배사 실시간 연동 중</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-medium">등록 상품 및 SKU</div>
-          <div class="text-2xl font-black text-gray-900 mt-1" x-text="products.length + ' 개'"></div>
-          <div class="text-[10px] text-green-600 mt-1">전 상품 정상 판매중</div>
+        <nav class="flex items-center gap-1 text-xs">
+          <button @click="activeTab = 'dashboard'" :class="activeTab === 'dashboard' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">현황판</button>
+          <button @click="activeTab = 'products'" :class="activeTab === 'products' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">상품/SKU 관리</button>
+          <button @click="activeTab = 'bulk'" :class="activeTab === 'bulk' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">CSV 대량등록</button>
+          <button @click="activeTab = 'orders'" :class="activeTab === 'orders' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">발주/배송</button>
+          <button @click="activeTab = 'settlement'" :class="activeTab === 'settlement' ? 'bg-indigo-800 text-white font-bold' : 'text-indigo-200 hover:text-white'" class="px-3 py-1.5 rounded transition">정산내역서</button>
+        </nav>
+        <button @click="logout()" class="bg-indigo-950 hover:bg-red-900 text-indigo-200 hover:text-white text-xs px-3 py-1.5 rounded transition">로그아웃</button>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 flex-1 w-full">
+      <!-- 1. Dashboard -->
+      <div x-show="activeTab === 'dashboard'" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div class="text-gray-500 font-medium">당월 정산 예정액 (수수료 10% 공제 후)</div>
+            <div class="text-2xl font-black text-indigo-600 mt-1">₩ 28,450,000</div>
+            <div class="text-gray-400 mt-1">지급 예정일: 매월 10일</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div class="text-gray-500 font-medium">출고 대기 주문 (당일출고 필요)</div>
+            <div class="text-2xl font-black text-orange-600 mt-1">1 건</div>
+            <div class="text-orange-700 mt-1">17:00 택배 마감</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div class="text-gray-500 font-medium">배송 중인 주문</div>
+            <div class="text-2xl font-black text-blue-600 mt-1">1 건</div>
+            <div class="text-gray-400 mt-1">택배사 실시간 연동중</div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div class="text-gray-500 font-medium">정상 판매 중 SKU</div>
+            <div class="text-2xl font-black text-gray-900 mt-1" x-text="products.length + ' 건'"></div>
+            <div class="text-green-600 font-bold mt-1">품절 SKU 없음</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- TAB 2: Product & SKU Registration -->
-    <div x-show="tab === 'products'" class="space-y-6">
-      <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <h3 class="text-base font-bold text-gray-800 border-b pb-2">신규 상품 및 SKU 즉시 등록</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div>
-            <label class="font-semibold text-gray-700">상품명</label>
-            <input type="text" x-model="productName" placeholder="예: 초경량 방수 텐트 3-4인용" class="w-full mt-1 p-2 rounded border text-xs" />
+      <!-- 2. Products & SKUs -->
+      <div x-show="activeTab === 'products'" class="space-y-6">
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+          <h3 class="text-base font-bold text-gray-900 border-b pb-2">신규 상품 및 단품 SKU 등록</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label class="font-bold text-gray-700">상품명</label>
+              <input type="text" x-model="newProd.name" placeholder="상품명 입력" class="w-full mt-1 p-2 border rounded" />
+            </div>
+            <div>
+              <label class="font-bold text-gray-700">판매 가격 (KRW, BIGINT)</label>
+              <input type="number" x-model="newProd.price" class="w-full mt-1 p-2 border rounded" />
+            </div>
+            <div>
+              <label class="font-bold text-gray-700">초기 재고 수량</label>
+              <input type="number" x-model="newProd.stock" class="w-full mt-1 p-2 border rounded" />
+            </div>
           </div>
-          <div>
-            <label class="font-semibold text-gray-700">판매 가격 (KRW, BIGINT)</label>
-            <input type="number" x-model="price" class="w-full mt-1 p-2 rounded border text-xs" />
-          </div>
-          <div>
-            <label class="font-semibold text-gray-700">초기 재고 (SKU Stock)</label>
-            <input type="number" x-model="stock" class="w-full mt-1 p-2 rounded border text-xs" />
-          </div>
+          <button @click="addProduct()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition">상품 등록 승인 요청</button>
         </div>
-        <button @click="addProduct()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-xs transition">상품 등록 (PG16 & Redis 동기화)</button>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-        <h3 class="text-sm font-bold text-gray-800 mb-3">등록된 판매 상품 목록</h3>
-        <div class="divide-y text-xs">
-          <template x-for="p in products" :key="p.id">
-            <div class="py-2.5 flex items-center justify-between">
-              <div>
-                <span class="font-bold text-gray-800" x-text="p.name"></span>
-                <span class="text-gray-400 text-[10px] ml-2" x-text="'ID: ' + p.id"></span>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+          <h3 class="text-sm font-bold text-gray-900 mb-3">내 스토어 등록 상품 목록</h3>
+          <div class="divide-y text-xs">
+            <template x-for="p in products" :key="p.id">
+              <div class="py-2.5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-gray-800" x-text="p.name"></span>
+                  <span class="text-gray-400 text-[10px] ml-2" x-text="p.id"></span>
+                </div>
+                <div class="flex items-center gap-4">
+                  <span class="font-bold text-indigo-600 font-mono" x-text="'₩ ' + p.price.toLocaleString()"></span>
+                  <span class="font-mono text-gray-500" x-text="'재고: ' + p.stock + '개'"></span>
+                  <span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded" x-text="p.status"></span>
+                </div>
               </div>
-              <div class="flex items-center gap-4">
-                <span class="font-mono text-indigo-700 font-bold" x-text="'₩ ' + p.price.toLocaleString()"></span>
-                <span class="font-mono text-gray-600" x-text="'재고: ' + p.stock + '개'"></span>
-                <span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded-full" x-text="p.status"></span>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. CSV Bulk Upload -->
+      <div x-show="activeTab === 'bulk'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <h3 class="text-base font-bold text-gray-900 border-b pb-2">CSV / Excel 대량 상품 업로드</h3>
+        <div class="border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl p-8 text-center space-y-2">
+          <div class="text-3xl">📊</div>
+          <div class="text-xs font-bold text-indigo-900">엑셀(.xlsx) 또는 CSV 파일을 드래그하여 업로드하세요</div>
+          <div class="text-[11px] text-gray-500">대량 등록 양식: 상품코드, 상품명, 카테고리, 판매가, 재고수량, 옵션값</div>
+          <button @click="csvUploaded = true" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition">샘플 100건 파일 검증 및 일괄 등록</button>
+        </div>
+        <div x-show="csvUploaded" class="p-3 bg-green-50 border border-green-200 text-green-900 text-xs rounded-lg">
+          ✓ 100건의 상품 중 100건 전체 검증 성공 (0건 오류) — 관리자 승인 큐로 전송되었습니다.
+        </div>
+      </div>
+
+      <!-- 4. Orders & Fulfillment -->
+      <div x-show="activeTab === 'orders'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <h3 class="text-base font-bold text-gray-900 border-b pb-2">발주 확인 및 송장 입력</h3>
+        <div class="space-y-3 text-xs">
+          <template x-for="ord in orders" :key="ord.id">
+            <div class="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div class="font-bold text-gray-900" x-text="ord.id + ' — ' + ord.item"></div>
+                <div class="text-gray-500 text-[11px] mt-0.5" x-text="ord.carrier ? ord.carrier + ' ' + ord.tracking : '운송장 미입력'"></div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span :class="ord.status === '배송중' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'" class="px-2.5 py-1 rounded-full text-[10px] font-bold" x-text="ord.status"></span>
+                <button x-show="ord.status === '출고대기'" @click="shipOrder(ord)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition">배송 시작 처리</button>
               </div>
             </div>
           </template>
         </div>
       </div>
-    </div>
 
-    <!-- TAB 3: CSV Bulk Upload -->
-    <div x-show="tab === 'bulk'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <h3 class="text-base font-bold text-gray-800 border-b pb-2">CSV / Excel 대량 상품 업로드</h3>
-      <p class="text-xs text-gray-500">수천 개의 상품과 SKU를 엑셀 파일로 한 번에 등록하고 자동 유효성 검사를 수행합니다.</p>
-      <div class="border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl p-8 text-center space-y-2">
-        <div class="text-3xl">📁</div>
-        <div class="text-xs font-bold text-indigo-900">CSV 또는 Excel(.xlsx) 파일을 드래그하여 업로드하세요</div>
-        <div class="text-[11px] text-gray-500">필수 컬럼: SKU, 상품명, 카테고리ID, 판매가, 재고수량, 옵션(JSON)</div>
-        <button @click="uploadSuccess = true" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition">샘플 CSV 100건 일괄 업로드 테스트</button>
-      </div>
-      <div x-show="uploadSuccess" class="p-3 bg-green-50 border border-green-200 text-green-900 rounded-lg text-xs">
-        ✓ 100건의 상품 중 100건 검증 완료 (성공 100건, 실패 0건) - import_batches ID: imp-2026-batch-91
-      </div>
-    </div>
-
-    <!-- TAB 4: Orders & Shipment -->
-    <div x-show="tab === 'orders'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <h3 class="text-base font-bold text-gray-800 border-b pb-2">발주 확인 및 배송 운송장 입력 (State Machine)</h3>
-      <div class="space-y-3">
-        <template x-for="o in orders" :key="o.id">
-          <div class="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div>
-              <div class="font-bold text-gray-800" x-text="o.id + ' — ' + o.item"></div>
-              <div class="text-gray-500 text-[11px] mt-0.5" x-text="o.carrier ? o.carrier + ' ' + o.tracking : '운송장 미등록 상태'"></div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span :class="o.status === 'SHIPPED' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'" class="px-2.5 py-1 rounded-full font-bold text-[10px]" x-text="o.status"></span>
-              <button x-show="o.status === 'PREPARING'" @click="shipOrder(o)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition">배송 시작 (SHIPPED)</button>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <!-- TAB 5: Settlement Report -->
-    <div x-show="tab === 'settlement'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <h3 class="text-base font-bold text-gray-800 border-b pb-2">파트너 정산 내역서 (Monthly Settlement Statement)</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="text-gray-500">총 판매액 (Gross Sales)</div>
-          <div class="text-base font-bold text-gray-900 mt-1">₩ 31,610,000</div>
-        </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="text-gray-500">플랫폼 수수료 (10%)</div>
-          <div class="text-base font-bold text-red-600 mt-1">- ₩ 3,161,000</div>
-        </div>
-        <div class="p-3 bg-gray-50 rounded-lg border">
-          <div class="text-gray-500">반품/환불 공제액</div>
-          <div class="text-base font-bold text-gray-500 mt-1">₩ 0</div>
-        </div>
-        <div class="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-          <div class="text-emerald-700 font-bold">최종 지급 예정액 (Net Payout)</div>
-          <div class="text-base font-black text-emerald-800 mt-1">₩ 28,449,000</div>
+      <!-- 5. Settlement Statement -->
+      <div x-show="activeTab === 'settlement'" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <h3 class="text-base font-bold text-gray-900 border-b pb-2">월별 판매 정산 내역서 (Monthly Payout Statement)</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div class="p-3 bg-gray-50 rounded-lg border"><div class="text-gray-500">총 상품 판매액</div><div class="text-base font-bold text-gray-900 mt-1">₩ 31,610,000</div></div>
+          <div class="p-3 bg-gray-50 rounded-lg border"><div class="text-gray-500">플랫폼 수수료 (10%)</div><div class="text-base font-bold text-red-600 mt-1">- ₩ 3,161,000</div></div>
+          <div class="p-3 bg-gray-50 rounded-lg border"><div class="text-gray-500">반품/환불 공제</div><div class="text-base font-bold text-gray-500 mt-1">₩ 0</div></div>
+          <div class="p-3 bg-emerald-50 rounded-lg border border-emerald-200"><div class="text-emerald-700 font-bold">최종 지급액 (Net Payout)</div><div class="text-base font-black text-emerald-800 mt-1">₩ 28,449,000</div></div>
         </div>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 </body>
 </html>
