@@ -51,3 +51,4 @@ CNAME    api      olmoa-api.workers.dev                Proxied (Orange Cloud)  A
 5. **Cookie Isolation**:
    - Operator and partner JWT/session tokens are bound strictly to their respective subdomains (`admin.olmoa.com` and `partner.olmoa.com`) using `Domain=admin.olmoa.com; Secure; HttpOnly; SameSite=Strict`.
    - Prevent admin credentials from leaking to public storefront cookies.
+
