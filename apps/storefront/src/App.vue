@@ -1,121 +1,151 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 
+const router = useRouter();
 const searchQuery = ref('');
-const currency = ref('KRW');
-const cartOpen = ref(false);
+const selectedLang = ref('ko-KR');
+const selectedCurrency = ref('KRW');
 
-interface CartItem {
-  id: string;
-  brand: string;
-  name: string;
-  price: number;
-  qty: number;
+function handleSearch() {
+  if (searchQuery.value.trim()) {
+    router.push({ path: '/', query: { q: searchQuery.value.trim() } });
+  }
 }
-
-const cart = ref<CartItem[]>([
-  { id: 'sku-1', brand: 'Anker Official', name: 'Soundcore Space Q45 ANC 헤드폰', price: 49900, qty: 1 }
-]);
-
-const cartCount = computed(() => cart.value.reduce((sum, item) => sum + item.qty, 0));
-const subTotal = computed(() => cart.value.reduce((sum, item) => sum + (item.price * item.qty), 0));
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-gray-50 text-gray-900 font-sans">
-    <!-- Top Global Banner -->
-    <div class="bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 text-white text-xs font-semibold py-1.5 px-4 text-center">
-      <span>⚡ 신규 회원 10만원 쿠폰팩 즉시 증정 & 3만원 이상 전 상품 무료배송 (90일 무조건 무료 반품)</span>
+  <div class="min-h-screen flex flex-col bg-slate-50 font-sans">
+    <!-- Top Announcement Bar -->
+    <div class="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 text-white text-xs py-2 px-4 text-center font-medium shadow-inner flex items-center justify-between">
+      <div class="hidden md:flex items-center gap-2">
+        <span class="bg-white/20 px-2 py-0.5 rounded text-[11px] font-bold">공식 슬로건</span>
+        <span>내가 찾는 모든 것, 여기. (Everything You Seek. All Here.)</span>
+      </div>
+      <div class="mx-auto md:mx-0 flex items-center gap-4 text-[11px]">
+        <span>⚡ 전 상품 100% 무료배송 & 최저가 보장제</span>
+        <div class="flex items-center gap-2">
+          <select v-model="selectedLang" class="bg-black/20 text-white border-0 rounded px-1.5 py-0.5 text-[11px] cursor-pointer">
+            <option value="ko-KR">KR (한국어)</option>
+            <option value="en-US">US (English)</option>
+            <option value="ja-JP">JP (日本語)</option>
+          </select>
+          <select v-model="selectedCurrency" class="bg-black/20 text-white border-0 rounded px-1.5 py-0.5 text-[11px] cursor-pointer">
+            <option value="KRW">KRW (₩)</option>
+            <option value="USD">USD ($)</option>
+            <option value="JPY">JPY (¥)</option>
+          </select>
+        </div>
+      </div>
     </div>
 
-    <!-- Main Header -->
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <router-link to="/" class="text-2xl sm:text-3xl font-black text-red-600 tracking-tighter">
-          OPENMARKET
+    <!-- Main Navigation Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-6">
+        <!-- Logo -->
+        <router-link to="/" class="flex items-center gap-2 group shrink-0">
+          <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-10 h-10 object-contain drop-shadow" />
+          <div class="flex flex-col">
+            <span class="text-2xl font-black tracking-tight text-slate-900 group-hover:text-orange-600 transition">
+              <span class="text-orange-600">O</span>LMOA
+            </span>
+            <span class="text-[9px] tracking-wider font-bold text-slate-400 uppercase -mt-1">올모아 글로벌</span>
+          </div>
         </router-link>
-        <!-- Search -->
-        <div class="flex-1 max-w-2xl relative">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="수천만 개 글로벌 초특가 상품을 검색하세요..."
-            class="w-full text-xs bg-gray-100 border border-gray-300 rounded-full py-2.5 pl-4 pr-12 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          <button class="absolute right-2 top-2 bg-red-600 hover:bg-red-700 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs">
-            🔍
-          </button>
+
+        <!-- Search Bar (Temu Style) -->
+        <div class="flex-1 max-w-2xl">
+          <form @submit.prevent="handleSearch" class="relative flex items-center">
+            <input 
+              v-model="searchQuery"
+              type="text" 
+              placeholder="무엇이든 검색하세요! 패션, 디지털, 생활용품 등 1억개 상품..."
+              class="w-full pl-5 pr-14 py-3 rounded-full border-2 border-orange-500 bg-orange-50/20 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition"
+            />
+            <button 
+              type="submit" 
+              class="absolute right-1.5 w-10 h-10 bg-orange-600 hover:bg-orange-700 text-white rounded-full flex items-center justify-center transition shadow-md"
+            >
+              <i class="fa-solid fa-magnifying-glass text-sm"></i>
+            </button>
+          </form>
         </div>
-        <!-- Actions -->
-        <div class="flex items-center gap-3 sm:gap-4 text-xs font-medium">
-          <select v-model="currency" class="bg-gray-100 text-gray-700 rounded px-2 py-1 text-xs border border-gray-300">
-            <option value="KRW">₩ KRW</option>
-            <option value="USD">$ USD</option>
-            <option value="JPY">¥ JPY</option>
-          </select>
-          <router-link to="/orders" class="text-gray-700 hover:text-red-600 flex items-center gap-1">
-            <span>📦</span><span class="hidden sm:inline">주문배송</span>
+
+        <!-- Header Actions -->
+        <div class="flex items-center gap-4 text-slate-700 text-sm shrink-0">
+          <router-link to="/orders" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition">
+            <i class="fa-solid fa-box text-base text-slate-500"></i>
+            <span class="hidden sm:inline text-xs">주문·배송</span>
           </router-link>
-          <button @click="cartOpen = true" class="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold shadow-sm">
-            <span>🛒</span><span class="hidden sm:inline">장바구니</span>
-            <span class="bg-white text-red-600 text-[11px] px-1.5 py-0.2 rounded-full">{{ cartCount }}</span>
-          </button>
+          
+          <router-link to="/checkout" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition relative">
+            <div class="relative">
+              <i class="fa-solid fa-cart-shopping text-lg text-slate-600"></i>
+              <span class="absolute -top-1.5 -right-2 bg-orange-600 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">1</span>
+            </div>
+            <span class="hidden sm:inline text-xs">장바구니</span>
+          </router-link>
+
+          <a href="https://partner.olmoa.com" target="_blank" class="hidden lg:flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition">
+            <i class="fa-solid fa-store text-indigo-500"></i>
+            <span>셀러 입점</span>
+          </a>
         </div>
       </div>
     </header>
 
-    <!-- Page Content via Vue Router -->
-    <main class="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+    <!-- Main Router Outlet -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
       <router-view />
     </main>
 
-    <!-- Cart Slide-Over -->
-    <div v-if="cartOpen" class="fixed inset-0 z-50 overflow-hidden bg-black/50 flex justify-end" @click.self="cartOpen = false">
-      <div class="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between p-5">
+    <!-- Global Footer -->
+    <footer class="bg-slate-900 text-slate-400 pt-12 pb-8 border-t border-slate-800 text-xs">
+      <div class="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
         <div>
-          <div class="flex items-center justify-between border-b pb-3">
-            <h3 class="font-bold text-sm text-gray-900">장바구니 ({{ cart.length }})</h3>
-            <button @click="cartOpen = false" class="text-gray-400 hover:text-gray-700">✕</button>
+          <div class="flex items-center gap-2 mb-3">
+            <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-6 h-6 object-contain" />
+            <span class="text-white font-black text-lg">OLMOA</span>
           </div>
-          <div class="mt-3 space-y-3 overflow-y-auto max-h-[65vh]">
-            <div v-for="(item, idx) in cart" :key="item.id" class="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs flex justify-between items-center">
-              <div>
-                <span class="text-[10px] font-bold text-blue-600">{{ item.brand }}</span>
-                <div class="font-bold text-gray-800">{{ item.name }}</div>
-                <div class="text-red-600 font-black mt-0.5">₩ {{ (item.price * item.qty).toLocaleString() }}</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="font-mono text-gray-600">수량: {{ item.qty }}</span>
-                <button @click="cart.splice(idx, 1)" class="text-gray-400 hover:text-red-600">🗑</button>
-              </div>
-            </div>
-          </div>
+          <p class="text-slate-400 text-xs leading-relaxed">내가 찾는 모든 것, 여기.<br>Everything You Seek. All Here.</p>
+          <p class="text-slate-500 text-[11px] mt-2">전 세계 고객과 검증된 공급사를 직결하는 글로벌 오픈마켓 플랫폼</p>
         </div>
-        <div class="border-t pt-4 space-y-2 text-xs">
-          <div class="flex justify-between font-black text-sm text-gray-900">
-            <span>총 결제금액</span>
-            <span class="text-red-600 font-mono text-base">₩ {{ subTotal.toLocaleString() }}</span>
+        <div>
+          <h4 class="text-white font-bold mb-3 text-sm">고객 서비스</h4>
+          <ul class="space-y-2">
+            <li><a href="#" class="hover:text-white transition">배송 추적 및 조회</a></li>
+            <li><a href="#" class="hover:text-white transition">반품 및 100% 환불 정책</a></li>
+            <li><a href="#" class="hover:text-white transition">최저가 보상제 안내</a></li>
+            <li><a href="#" class="hover:text-white transition">24/7 글로벌 고객센터</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-3 text-sm">파트너 및 비즈니스</h4>
+          <ul class="space-y-2">
+            <li><a href="https://partner.olmoa.com" class="hover:text-white transition">판매자 입점 센터</a></li>
+            <li><a href="#" class="hover:text-white transition">글로벌 풀필먼트 물류</a></li>
+            <li><a href="#" class="hover:text-white transition">공급사 대량 등록 가이드</a></li>
+            <li><a href="https://admin.olmoa.com" class="hover:text-white transition text-slate-500">운영 관리자</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-3 text-sm">안심 결제 & 보증</h4>
+          <div class="flex items-center gap-2 text-xl text-slate-400 mb-3">
+            <i class="fa-brands fa-cc-visa"></i>
+            <i class="fa-brands fa-cc-mastercard"></i>
+            <i class="fa-brands fa-apple-pay"></i>
+            <i class="fa-brands fa-google-pay"></i>
           </div>
-          <router-link to="/checkout" @click="cartOpen = false" class="block text-center w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm transition mt-2">
-            주문서 작성 및 결제
-          </router-link>
+          <p class="text-[11px] text-slate-500">모든 거래는 OLMOA 안전 에스크로 결제 시스템으로 100% 보호됩니다.</p>
         </div>
       </div>
-    </div>
-
-    <!-- Global Footer -->
-    <footer class="bg-white border-t border-gray-200 text-xs text-gray-500 py-8">
-      <div class="max-w-7xl mx-auto px-4 space-y-2">
-        <div class="flex flex-wrap gap-4 text-gray-700 font-medium">
-          <a href="#" class="hover:underline">회사소개</a>
+      <div class="max-w-7xl mx-auto px-4 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+        <div>&copy; 2026 OLMOA Inc. (올모아). All Rights Reserved.</div>
+        <div class="flex gap-4">
           <a href="#" class="hover:underline">이용약관</a>
-          <a href="#" class="hover:underline font-bold text-gray-900">개인정보처리방침</a>
-          <a href="#" class="hover:underline">고객센터</a>
+          <a href="#" class="hover:underline">개인정보처리방침</a>
+          <a href="#" class="hover:underline">전자상거래 표준약관</a>
         </div>
-        <div class="text-[11px] leading-relaxed">
-          (주)오픈마켓 | 대표이사: 홍길동 | 사업자등록번호: 214-88-01928 | 통신판매업신고: 제2026-서울강남-01928호
-        </div>
-        <div class="text-[10px] text-gray-400">© 2026 OpenMarket Global Platform. Powered by Vue 3 + TypeScript.</div>
       </div>
     </footer>
   </div>

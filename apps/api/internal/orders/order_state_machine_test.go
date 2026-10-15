@@ -107,3 +107,4 @@ func TestCheckoutService_ProcessCheckout(t *testing.T) {
 		t.Errorf("expected 2 split suborders, got %d", len(result.SubOrders))
 	}
 }
+

@@ -1,5 +1,6 @@
 // apps/cloudflare-gateway/src/index.js
-// Cloudflare Edge Gateway with D1 Cloud SQL Database binding and Go Backend Proxy
+// OLMOA Cloudflare Edge Gateway with D1 Cloud SQL Database binding and Go Backend Proxy
+// Official Target Domain: api.olmoa.com
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +33,12 @@ export default {
 
       return new Response(JSON.stringify({
         status: 'UP',
-        service: 'OpenMarket Cloudflare Gateway',
+        brand: 'OLMOA',
+        koreanBrand: '올모아',
+        tagline: '내가 찾는 모든 것, 여기.',
+        globalTagline: 'Everything You Seek. All Here.',
+        officialDomain: 'api.olmoa.com',
+        service: 'OLMOA Cloudflare Gateway & Edge API',
         databaseEngine: 'Cloudflare D1 (Serverless Relational SQL)',
         databaseStatus: dbStatus,
         activeProductsInD1: productCount,
@@ -57,7 +63,7 @@ export default {
       try {
         if (url.pathname === '/api/v1/categories' && request.method === 'GET') {
           const { results } = await env.DB.prepare('SELECT * FROM categories ORDER BY depth ASC, sort_order ASC').all();
-          return new Response(JSON.stringify({ success: true, data: results }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: results }), { headers: corsHeaders });
         }
 
         if (url.pathname === '/api/v1/products' && request.method === 'GET') {
@@ -69,7 +75,7 @@ export default {
              WHERE p.status = 'ACTIVE' 
              ORDER BY p.total_sold_count DESC`
           ).all();
-          return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
         }
 
         if (url.pathname.startsWith('/api/v1/products/') && request.method === 'GET') {
@@ -79,13 +85,13 @@ export default {
             return new Response(JSON.stringify({ error: 'Product not found' }), { status: 404, headers: corsHeaders });
           }
           const { results: skus } = await env.DB.prepare('SELECT * FROM product_skus WHERE product_id = ?').bind(prodId).all();
-          return new Response(JSON.stringify({ success: true, data: { ...product, skus } }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: { ...product, skus } }), { headers: corsHeaders });
         }
 
         if (url.pathname === '/api/v1/orders/checkout' && request.method === 'POST') {
           const body = await request.json();
-          const orderId = 'ord_' + Date.now();
-          const orderNo = 'ORD' + Date.now().toString().slice(-8);
+          const orderId = 'olm_ord_' + Date.now();
+          const orderNo = 'OLM' + Date.now().toString().slice(-8);
 
           // Insert order into real Cloudflare D1
           await env.DB.prepare(
@@ -96,8 +102,8 @@ export default {
             orderNo,
             body.customer_id || 'u_customer_001',
             body.total_goods_amount || 49900,
-            body.total_shipping_amount || 3000,
-            (body.total_goods_amount || 49900) + (body.total_shipping_amount || 3000),
+            body.total_shipping_amount || 0,
+            (body.total_goods_amount || 49900) + (body.total_shipping_amount || 0),
             body.recipient_name || 'Customer',
             body.recipient_phone || '010-0000-0000',
             body.shipping_address_line1 || 'Seoul, Korea',
@@ -107,27 +113,28 @@ export default {
 
           return new Response(JSON.stringify({
             success: true,
+            brand: 'OLMOA',
             order_id: orderId,
             order_no: orderNo,
-            message: 'Order created and persisted in Cloudflare D1 SQL Database',
+            message: 'Order created and persisted in OLMOA Cloudflare D1 SQL Database',
             status: 'PAYMENT_CONFIRMED'
           }), { status: 201, headers: corsHeaders });
         }
 
         if (url.pathname === '/api/v1/orders' && request.method === 'GET') {
           const { results } = await env.DB.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50').all();
-          return new Response(JSON.stringify({ success: true, data: results }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: results }), { headers: corsHeaders });
         }
       } catch (dbErr) {
         return new Response(JSON.stringify({ error: 'D1 Query Execution Failed', details: dbErr.message }), { status: 500, headers: corsHeaders });
       }
     }
 
-    // Default Gateway response informing caller of Go standard service routing
     return new Response(JSON.stringify({
-      gateway: 'OpenMarket Edge Gateway',
+      gateway: 'OLMOA Edge Gateway',
       route: url.pathname,
       targetBackend: 'Go 1.23 API Service (apps/api)',
+      brand: 'OLMOA',
       databaseStatus: 'Cloudflare D1 Bound',
       status: 'ROUTING_ACTIVE'
     }), { status: 200, headers: corsHeaders });

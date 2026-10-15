@@ -1,5 +1,5 @@
 {
-  "name": "openmarket-api",
+  "name": "olmoa-api",
   "main": "src/index.js",
   "compatibility_date": "2024-04-03",
   "d1_databases": [

@@ -51,3 +51,4 @@ VALUES
 ('sku_003_set', 'prod_003', 'VAC-CAN-4SET', '{"set":"4-Pieces"}', 45000, 19900, 450, 15, 'IN_STOCK'),
 ('sku_004_m', 'prod_004', 'HOOD-GRY-M', '{"color":"Grey","size":"M"}', 69000, 28900, 200, 10, 'IN_STOCK'),
 ('sku_004_l', 'prod_004', 'HOOD-GRY-L', '{"color":"Grey","size":"L"}', 69000, 28900, 350, 10, 'IN_STOCK');
+

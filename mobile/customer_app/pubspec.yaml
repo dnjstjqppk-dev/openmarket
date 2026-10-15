@@ -1,5 +1,5 @@
-name: openmarket_customer
-description: "OpenMarket Global Storefront Customer Mobile Application"
+name: olmoa_customer
+description: "OLMOA Global Marketplace Customer Mobile App"
 publish_to: 'none'
 version: 1.0.0+1
 

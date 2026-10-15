@@ -1,5 +1,6 @@
 // mobile/customer_app/lib/main.dart
-// OpenMarket Customer Mobile App Main Entry Point
+// OLMOA Customer Mobile App Main Entry Point
+// Official Brand: OLMOA (올모아) | Slogan: 내가 찾는 모든 것, 여기.
 
 import 'package:flutter/material.dart';
 import 'models/product.dart';
@@ -8,16 +9,16 @@ import 'views/cart_view.dart';
 import 'views/orders_view.dart';
 
 void main() {
-  runApp(const OpenMarketCustomerApp());
+  runApp(const OlmoaCustomerApp());
 }
 
-class OpenMarketCustomerApp extends StatelessWidget {
-  const OpenMarketCustomerApp({super.key});
+class OlmoaCustomerApp extends StatelessWidget {
+  const OlmoaCustomerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OpenMarket',
+      title: 'OLMOA',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFA541C)),
@@ -29,19 +30,19 @@ class OpenMarketCustomerApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const MainNavigationScreen(),
+      home: const OlmoaMainScreen(),
     );
   }
 }
 
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
+class OlmoaMainScreen extends StatefulWidget {
+  const OlmoaMainScreen({super.key});
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  State<OlmoaMainScreen> createState() => _OlmoaMainScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
   int _currentIndex = 0;
   final List<Product> _cartItems = [];
 
@@ -77,14 +78,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.bolt, color: Color(0xFFFA541C)),
-            const SizedBox(width: 6),
-            const Text('OpenMarket', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFA541C),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'OLMOA',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5, color: Color(0xFF1E293B)),
+            ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12)),
-              child: const Text('Temu Benchmark', style: TextStyle(color: Color(0xFFFA541C), fontSize: 10, fontWeight: FontWeight.bold)),
+              child: const Text('올모아 글로벌', style: TextStyle(color: Color(0xFFFA541C), fontSize: 10, fontWeight: FontWeight.bold)),
             ),
           ],
         ),

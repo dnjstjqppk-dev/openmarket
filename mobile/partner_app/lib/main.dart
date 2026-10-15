@@ -1,45 +1,46 @@
 // mobile/partner_app/lib/main.dart
-// OpenMarket Partner Seller Operations Mobile App Entry Point
+// OLMOA Partner Operations Mobile App Entry Point
+// Official Brand: OLMOA Partner (올모아 판매자 센터)
 
 import 'package:flutter/material.dart';
 import 'views/dashboard_view.dart';
 import 'views/shipment_view.dart';
 
 void main() {
-  runApp(const OpenMarketPartnerApp());
+  runApp(const OlmoaPartnerApp());
 }
 
-class OpenMarketPartnerApp extends StatelessWidget {
-  const OpenMarketPartnerApp({super.key});
+class OlmoaPartnerApp extends StatelessWidget {
+  const OlmoaPartnerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OpenMarket Partner',
+      title: 'OLMOA Partner',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF312E81),
+          backgroundColor: Color(0xFF1E1B4B),
           foregroundColor: Colors.white,
           elevation: 0,
         ),
       ),
-      home: const PartnerMainNavigation(),
+      home: const OlmoaPartnerMainScreen(),
     );
   }
 }
 
-class PartnerMainNavigation extends StatefulWidget {
-  const PartnerMainNavigation({super.key});
+class OlmoaPartnerMainScreen extends StatefulWidget {
+  const OlmoaPartnerMainScreen({super.key});
 
   @override
-  State<PartnerMainNavigation> createState() => _PartnerMainNavigationState();
+  State<OlmoaPartnerMainScreen> createState() => _OlmoaPartnerMainScreenState();
 }
 
-class _PartnerMainNavigationState extends State<PartnerMainNavigation> {
+class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
   int _currentIndex = 0;
 
   @override
@@ -53,9 +54,12 @@ class _PartnerMainNavigationState extends State<PartnerMainNavigation> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.store, color: Color(0xFF818CF8)),
+            Icon(Icons.storefront, color: Color(0xFFFA541C)),
             SizedBox(width: 8),
-            Text('OpenMarket Seller', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              'OLMOA Partner',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+            ),
           ],
         ),
       ),

@@ -75,3 +75,4 @@ class Product {
     return (((lowestOriginalPrice - lowestSalePrice) / lowestOriginalPrice) * 100).round();
   }
 }
+

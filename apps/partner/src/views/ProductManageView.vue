@@ -97,3 +97,4 @@ function saveStock(product: PartnerProduct) {
     </div>
   </div>
 </template>
+

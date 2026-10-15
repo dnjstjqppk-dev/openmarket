@@ -1,5 +1,5 @@
-name: openmarket_partner
-description: "OpenMarket Global Partner Seller Operations Mobile Application"
+name: olmoa_partner
+description: "OLMOA Partner Operations Mobile Application"
 publish_to: 'none'
 version: 1.0.0+1
 
