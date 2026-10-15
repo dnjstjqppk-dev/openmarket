@@ -1,0 +1,154 @@
+components:
+  parameters:
+    IdempotencyKey:
+      name: X-Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+        minLength: 36
+        maxLength: 36
+
+  schemas:
+    Role:
+      type: string
+      enum: [ROLE_CUSTOMER, ROLE_PARTNER, ROLE_ADMIN]
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+        message:
+          type: string
+          maxLength: 500
+        timestamp:
+          type: string
+          format: date-time
+        field_errors:
+          type: array
+          items:
+            type: object
+            required: [field, reason]
+            properties:
+              field:
+                type: string
+              reason:
+                type: string
+
+    CursorPageMeta:
+      type: object
+      required: [has_more]
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    SduiBlock:
+      type: object
+      required: [block_id, block_type, sort_order, data]
+      properties:
+        block_id:
+          type: string
+        block_type:
+          type: string
+          enum: [TOP_PROMO_BANNER, COUNTDOWN_FLASH_SALE, CATEGORY_SHORTCUT_GRID, INFINITE_PRODUCT_FEED]
+        sort_order:
+          type: integer
+          minimum: 0
+        data:
+          type: object
+          required: [title]
+          properties:
+            title:
+              type: string
+            subtitle:
+              type: string
+            campaign_end_at:
+              type: string
+              format: date-time
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductSummary'
+
+    ProductSummary:
+      type: object
+      required: [id, partner_id, title, thumbnail_url, lowest_original_price, lowest_sale_price, total_sold_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        partner_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 2
+          maxLength: 200
+        thumbnail_url:
+          type: string
+          format: uri
+        lowest_original_price:
+          type: integer
+          format: int64
+          minimum: 0
+        lowest_sale_price:
+          type: integer
+          format: int64
+          minimum: 0
+        total_sold_count:
+          type: integer
+          minimum: 0
+
+    SkuItem:
+      type: object
+      required: [id, sku_code, option_values, original_price, sale_price, stock_quantity, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku_code:
+          type: string
+          minLength: 3
+          maxLength: 64
+        option_values:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [group_name, value_name]
+            properties:
+              group_name:
+                type: string
+              value_name:
+                type: string
+        original_price:
+          type: integer
+          format: int64
+          minimum: 0
+        sale_price:
+          type: integer
+          format: int64
+          minimum: 0
+        stock_quantity:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [ACTIVE, OUT_OF_STOCK, HIDDEN]
+
+    SimpleSuccessResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string

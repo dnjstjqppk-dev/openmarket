@@ -1,0 +1,177 @@
+paths:
+  /api/v1/home/sdui:
+    get:
+      summary: Fetch Server-Driven UI home layout with hydrated data
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [WEB, MOBILE]
+      responses:
+        '200':
+          description: Hydrated SDUI blocks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [layout_version, blocks]
+                properties:
+                  layout_version:
+                    type: integer
+                  blocks:
+                    type: array
+                    items:
+                      $ref: '../schemas/common.yaml#/components/schemas/SduiBlock'
+
+  /api/v1/flash-sales/stream:
+    get:
+      summary: Real-time SSE stream for flash sale countdown and stock updates
+      tags: [Storefront]
+      security: []
+      responses:
+        '200':
+          description: SSE text/event-stream payload
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/v1/products:
+    get:
+      summary: Cursor-paginated product feed for virtual infinite scroll
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 100
+            default: 30
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page_meta]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '../schemas/common.yaml#/components/schemas/ProductSummary'
+                  page_meta:
+                    $ref: '../schemas/common.yaml#/components/schemas/CursorPageMeta'
+
+  /api/v1/products/{id}:
+    get:
+      summary: Get product details and full SKU option matrix
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Product detail with SKUs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [product, description_html, skus]
+                properties:
+                  product:
+                    $ref: '../schemas/common.yaml#/components/schemas/ProductSummary'
+                  description_html:
+                    type: string
+                  skus:
+                    type: array
+                    items:
+                      $ref: '../schemas/common.yaml#/components/schemas/SkuItem'
+
+  /api/v1/orders/checkout:
+    post:
+      summary: Create parent order and split sub-orders per partner atomically
+      tags: [Storefront]
+      parameters:
+        - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, recipient_name, recipient_phone, shipping_address, payment_method]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [sku_id, quantity]
+                    properties:
+                      sku_id:
+                        type: string
+                        format: uuid
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 99
+                      flash_sale_item_id:
+                        type: string
+                        format: uuid
+                        nullable: true
+                recipient_name:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                recipient_phone:
+                  type: string
+                  minLength: 8
+                  maxLength: 20
+                shipping_address:
+                  type: string
+                  minLength: 5
+                  maxLength: 300
+                payment_method:
+                  type: string
+                  enum: [CARD, KAKAOPAY, TOSSPAY, STRIPE]
+      responses:
+        '201':
+          description: Split order created and stock reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order_id, sub_order_ids, total_pay_amount]
+                properties:
+                  order_id:
+                    type: string
+                    format: uuid
+                  sub_order_ids:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  total_pay_amount:
+                    type: integer
+                    format: int64

@@ -1,0 +1,41 @@
+-- 000002_category_taxonomy_seed.up.sql
+-- Temu-benchmarked 33 Global Core Categories Taxonomy
+
+INSERT INTO categories (id, parent_id, name, slug, depth, sort_order, is_active) VALUES
+('c0000000-0000-0000-0000-000000000001', NULL, '여성 패션', 'womens-clothing', 0, 1, TRUE),
+('c0000000-0000-0000-0000-000000000002', NULL, '남성 패션', 'mens-clothing', 0, 2, TRUE),
+('c0000000-0000-0000-0000-000000000003', NULL, '신발 & 슈즈', 'shoes-footwear', 0, 3, TRUE),
+('c0000000-0000-0000-0000-000000000004', NULL, '가방 & 캐리어', 'bags-luggage', 0, 4, TRUE),
+('c0000000-0000-0000-0000-000000000005', NULL, '주얼리 & 액세서리', 'jewelry-accessories', 0, 5, TRUE),
+('c0000000-0000-0000-0000-000000000006', NULL, '뷰티 & 스킨케어', 'beauty-personal-care', 0, 6, TRUE),
+('c0000000-0000-0000-0000-000000000007', NULL, '홈 & 리빙', 'home-kitchen', 0, 7, TRUE),
+('c0000000-0000-0000-0000-000000000008', NULL, '침구 & 패브릭', 'bedding-bath', 0, 8, TRUE),
+('c0000000-0000-0000-0000-000000000009', NULL, '가구 & 인테리어', 'furniture-interior', 0, 9, TRUE),
+('c0000000-0000-0000-0000-000000000010', NULL, '가전 & 생활전자기기', 'home-appliances', 0, 10, TRUE),
+('c0000000-0000-0000-0000-000000000011', NULL, '디지털 & 컴퓨터', 'electronics-computers', 0, 11, TRUE),
+('c0000000-0000-0000-0000-000000000012', NULL, '모바일 & 스마트기기', 'cellphones-accessories', 0, 12, TRUE),
+('c0000000-0000-0000-0000-000000000013', NULL, '스마트홈 & IoT', 'smart-home-iot', 0, 13, TRUE),
+('c0000000-0000-0000-0000-000000000014', NULL, '자동차 & 모빌리티', 'automotive-motorcycle', 0, 14, TRUE),
+('c0000000-0000-0000-0000-000000000015', NULL, '스포츠 & 아웃도어', 'sports-outdoors', 0, 15, TRUE),
+('c0000000-0000-0000-0000-000000000016', NULL, '헬스 & 피트니스', 'health-fitness', 0, 16, TRUE),
+('c0000000-0000-0000-0000-000000000017', NULL, '완구 & 취미용품', 'toys-hobbies', 0, 17, TRUE),
+('c0000000-0000-0000-0000-000000000018', NULL, '유아 & 출산육아', 'baby-maternity', 0, 18, TRUE),
+('c0000000-0000-0000-0000-000000000019', NULL, '반려동물 용품', 'pet-supplies', 0, 19, TRUE),
+('c0000000-0000-0000-0000-000000000020', NULL, '문구 & 오피스용품', 'office-stationery', 0, 20, TRUE),
+('c0000000-0000-0000-0000-000000000021', NULL, '도서 & 미디어', 'books-media', 0, 21, TRUE),
+('c0000000-0000-0000-0000-000000000022', NULL, '수예 & DIY 공예', 'arts-crafts-sewing', 0, 22, TRUE),
+('c0000000-0000-0000-0000-000000000023', NULL, '공구 & 인테리어자재', 'tools-home-improvement', 0, 23, TRUE),
+('c0000000-0000-0000-0000-000000000024', NULL, '가드닝 & 야외정원', 'patio-lawn-garden', 0, 24, TRUE),
+('c0000000-0000-0000-0000-000000000025', NULL, '식음료 & 가공식품', 'food-beverages', 0, 25, TRUE),
+('c0000000-0000-0000-0000-000000000026', NULL, '게이밍 & 콘솔', 'video-games-gaming', 0, 26, TRUE),
+('c0000000-0000-0000-0000-000000000027', NULL, '음악 & 악기', 'musical-instruments', 0, 27, TRUE),
+('c0000000-0000-0000-0000-000000000028', NULL, '보안 & 스마트감시', 'security-surveillance', 0, 28, TRUE),
+('c0000000-0000-0000-0000-000000000029', NULL, '여행 & 아웃도어기어', 'travel-outdoor-gear', 0, 29, TRUE),
+('c0000000-0000-0000-0000-000000000030', NULL, '시계 & 워치웨어', 'watches-wearables', 0, 30, TRUE),
+('c0000000-0000-0000-0000-000000000031', NULL, '파티 & 시즌페스티벌', 'holiday-party-supplies', 0, 31, TRUE),
+('c0000000-0000-0000-0000-000000000032', NULL, '산업 & 연구장비', 'industrial-scientific', 0, 32, TRUE),
+('c0000000-0000-0000-0000-000000000033', NULL, '기프트 & e쿠폰', 'giftcards-digital', 0, 33, TRUE)
+ON CONFLICT (slug) DO UPDATE 
+SET name = EXCLUDED.name,
+    sort_order = EXCLUDED.sort_order,
+    is_active = EXCLUDED.is_active;

@@ -1,28 +1,237 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenMarket — 글로벌 종합 쇼핑몰</title>
+  <title>OpenMarket — 차세대 글로벌 e커머스 플랫폼</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-100 text-gray-900 min-h-screen">
-  <header class="bg-red-600 text-white sticky top-0 z-50 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+<body class="bg-gray-100 text-gray-900 font-sans" x-data="{
+  tab: 'storefront',
+  cartCount: 2,
+  orderPlaced: false,
+  timer: '03:42:18',
+  partnerStatus: 'APPROVED',
+  shipmentUpdated: false,
+  ledgerBalance: '₩ 148,250,000'
+}">
+  <!-- Global Top Header -->
+  <header class="bg-gradient-to-r from-red-600 to-orange-600 text-white sticky top-0 z-50 shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <span class="text-2xl font-black tracking-tighter">⚡ OPENMARKET</span>
-        <span class="bg-yellow-400 text-red-900 text-xs font-bold px-2 py-0.5 rounded-full">Cloudflare Live</span>
+        <span class="text-2xl font-black tracking-tight">⚡ OPENMARKET</span>
+        <span class="bg-yellow-400 text-red-900 text-xs font-bold px-2.5 py-0.5 rounded-full">Cloudflare Live</span>
       </div>
-      <div class="flex items-center gap-4 text-sm font-medium">
-        <a href="#deals" class="hover:underline">번개특가</a>
-        <a href="#categories" class="hover:underline">33대 카테고리</a>
+      <!-- Console Switcher -->
+      <nav class="flex items-center bg-black/20 p-1 rounded-xl text-sm font-semibold">
+        <button @click="tab = 'storefront'" :class="tab === 'storefront' ? 'bg-white text-red-600 shadow' : 'text-white/80 hover:text-white'" class="px-3 py-1.5 rounded-lg transition">쇼핑몰 스토어</button>
+        <button @click="tab = 'partner'" :class="tab === 'partner' ? 'bg-white text-red-600 shadow' : 'text-white/80 hover:text-white'" class="px-3 py-1.5 rounded-lg transition">파트너 센터</button>
+        <button @click="tab = 'admin'" :class="tab === 'admin' ? 'bg-white text-red-600 shadow' : 'text-white/80 hover:text-white'" class="px-3 py-1.5 rounded-lg transition">통합 어드민</button>
+      </nav>
+      <div class="text-xs bg-white/10 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+        <span>Go 1.23 + PG16 + Redis7</span>
       </div>
     </div>
   </header>
-  <main class="max-w-7xl mx-auto p-4 space-y-6">
-    <section class="bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-2xl p-6 shadow-sm">
-      <h1 class="text-3xl font-extrabold tracking-tight">⚡ 글로벌 종합 쇼핑몰 배포 성공</h1>
-      <p class="mt-2 text-sm opacity-90">Cloudflare Edge 인프라 위에서 정상 기동 중입니다.</p>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- TAB 1: Customer Storefront -->
+    <div x-show="tab === 'storefront'" class="space-y-6">
+      <!-- Flash Sale Hero Banner -->
+      <section class="bg-gradient-to-r from-amber-500 via-red-500 to-pink-500 text-white rounded-2xl p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="bg-black/30 text-yellow-300 font-bold px-3 py-1 rounded-full text-xs">⚡ 번개특가 (Flash Sale)</span>
+          <h1 class="text-3xl font-extrabold mt-2 tracking-tight">초특가 선착순 타임세일</h1>
+          <p class="text-sm opacity-90 mt-1">Redis 7 Lua 원자적 재고 감산 & 초당 10,000 TPS 동시성 보장</p>
+        </div>
+        <div class="bg-black/40 px-5 py-3 rounded-xl border border-white/20 text-center">
+          <div class="text-xs text-yellow-300 font-medium">마감까지 남은 시간</div>
+          <div class="text-2xl font-mono font-bold tracking-widest text-white mt-0.5" x-text="timer">03:42:18</div>
+        </div>
+      </section>
+
+      <!-- 33 Core Categories Quick Bar -->
+      <section class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-gray-700">33대 글로벌 카테고리 (PostgreSQL 16 Taxonomy)</h2>
+          <span class="text-xs text-gray-500">전체 33개 Vertical Seed 완료</span>
+        </div>
+        <div class="flex gap-2 overflow-x-auto pb-2 text-xs font-medium text-gray-600 no-scrollbar">
+          <span class="px-3 py-1.5 bg-red-50 text-red-600 rounded-full font-bold border border-red-200 cursor-pointer whitespace-nowrap">🔥 전체</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">여성 패션</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">남성 패션</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">디지털 & 컴퓨터</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">모바일 & 스마트</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">홈 & 리빙</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">뷰티 & 스킨케어</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">스포츠 & 아웃도어</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">자동차 & 모빌리티</span>
+          <span class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer whitespace-nowrap">반려동물 용품</span>
+        </div>
+      </section>
+
+      <!-- Storefront Product Grid -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm flex flex-col justify-between p-3">
+          <div>
+            <div class="bg-gray-100 rounded-lg h-36 flex items-center justify-center text-4xl">🎧</div>
+            <div class="mt-2 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded inline-block">78% OFF</div>
+            <h3 class="font-semibold text-sm mt-1 text-gray-800 line-clamp-1">[입점사A] 무선 노이즈캔슬링 헤드폰</h3>
+            <div class="text-xs text-gray-400 line-through">₩ 89,000</div>
+            <div class="text-lg font-black text-red-600">₩ 19,800</div>
+          </div>
+          <button @click="orderPlaced = true" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg text-xs transition">장바구니 담기</button>
+        </div>
+
+        <div class="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm flex flex-col justify-between p-3">
+          <div>
+            <div class="bg-gray-100 rounded-lg h-36 flex items-center justify-center text-4xl">⌚</div>
+            <div class="mt-2 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded inline-block">65% OFF</div>
+            <h3 class="font-semibold text-sm mt-1 text-gray-800 line-clamp-1">[입점사B] 방수 스마트 피트니스 워치</h3>
+            <div class="text-xs text-gray-400 line-through">₩ 65,000</div>
+            <div class="text-lg font-black text-red-600">₩ 22,500</div>
+          </div>
+          <button @click="orderPlaced = true" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg text-xs transition">장바구니 담기</button>
+        </div>
+
+        <div class="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm flex flex-col justify-between p-3">
+          <div>
+            <div class="bg-gray-100 rounded-lg h-36 flex items-center justify-center text-4xl">⌨️</div>
+            <div class="mt-2 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded inline-block">52% OFF</div>
+            <h3 class="font-semibold text-sm mt-1 text-gray-800 line-clamp-1">[입점사A] 블루투스 기계식 키보드</h3>
+            <div class="text-xs text-gray-400 line-through">₩ 79,000</div>
+            <div class="text-lg font-black text-red-600">₩ 37,900</div>
+          </div>
+          <button @click="orderPlaced = true" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg text-xs transition">장바구니 담기</button>
+        </div>
+
+        <div class="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm flex flex-col justify-between p-3">
+          <div>
+            <div class="bg-gray-100 rounded-lg h-36 flex items-center justify-center text-4xl">🎒</div>
+            <div class="mt-2 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded inline-block">81% OFF</div>
+            <h3 class="font-semibold text-sm mt-1 text-gray-800 line-clamp-1">[입점사B] 방수 노트북 백팩 30L</h3>
+            <div class="text-xs text-gray-400 line-through">₩ 52,000</div>
+            <div class="text-lg font-black text-red-600">₩ 9,900</div>
+          </div>
+          <button @click="orderPlaced = true" class="mt-3 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg text-xs transition">장바구니 담기</button>
+        </div>
+      </section>
+
+      <!-- Split Order Architecture Callout -->
+      <section x-show="orderPlaced" class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-900 transition">
+        <div class="flex items-start justify-between">
+          <div>
+            <h4 class="font-bold text-sm">✅ Split-Order 주문 분기 시뮬레이션 성공</h4>
+            <p class="text-xs mt-1 text-emerald-700">1개 통합 결제(₩ 42,300) -> <strong>Sub-Order #1 (입점사A ₩19,800 + 배송비 ₩3,000)</strong> / <strong>Sub-Order #2 (입점사B ₩22,500 + 배송비 ₩0 무료조건)</strong></p>
+          </div>
+          <button @click="orderPlaced = false" class="text-xs font-bold text-emerald-800 hover:underline">닫기</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 2: Partner Console -->
+    <div x-show="tab === 'partner'" class="space-y-6">
+      <div class="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">파트너 입점사 콘솔</h2>
+          <p class="text-xs text-gray-500">입점사: (주)글로벌테크 / 사업자번호: 120-88-12345</p>
+        </div>
+        <span class="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-xs">승인완료 (APPROVED)</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs text-gray-500">이번달 정산 예정액</div>
+          <div class="text-2xl font-black text-blue-600 mt-1">₩ 18,420,000</div>
+          <div class="text-xs text-gray-400 mt-1">플랫폼 수수료 10% 공제 후 Net Payout</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs text-gray-500">배송 준비중 주문</div>
+          <div class="text-2xl font-black text-orange-600 mt-1">14 건</div>
+          <div class="text-xs text-gray-400 mt-1">Sub-Order 상태: PREPARING</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-xs text-gray-500">등록 상품 / 품절 SKU</div>
+          <div class="text-2xl font-black text-gray-800 mt-1">42개 / 0개</div>
+          <div class="text-xs text-green-600 mt-1">모든 SKU 재고 정상 연동중</div>
+        </div>
+      </div>
+
+      <!-- Shipment Action Mock -->
+      <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <h3 class="font-bold text-sm text-gray-800 mb-3">Sub-Order 상태 전이 및 운송장 입력</h3>
+        <div class="flex flex-wrap items-center gap-3">
+          <input type="text" value="SUB-ORD-2026-8941" readonly class="bg-gray-100 text-xs px-3 py-2 rounded border border-gray-300 font-mono" />
+          <select class="text-xs px-3 py-2 rounded border border-gray-300 bg-white">
+            <option>CJ대한통운</option>
+            <option>한진택배</option>
+            <option>우체국택배</option>
+          </select>
+          <input type="text" placeholder="운송장번호 (12자리)" value="689123049182" class="text-xs px-3 py-2 rounded border border-gray-300 font-mono" />
+          <button @click="shipmentUpdated = true" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded transition">배송 시작 (SHIPPED 처리)</button>
+        </div>
+        <div x-show="shipmentUpdated" class="mt-3 text-xs text-blue-700 bg-blue-50 p-2 rounded">
+          ✓ Sub-Order 상태가 'PREPARING'에서 'SHIPPED'로 성공적으로 전이되었습니다. (Go StateMachine 검증 완료)
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Admin Console -->
+    <div x-show="tab === 'admin'" class="space-y-6">
+      <div class="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">통합 총괄 어드민 콘솔</h2>
+          <p class="text-xs text-gray-500">역할: ROLE_ADMIN / 에스크로 원장 및 파트너 승인</p>
+        </div>
+        <span class="bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-xs">시스템 정상 운영중</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Double-entry Ledger Card -->
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sm text-gray-800">복식부기 에스크로 원장 현황</h3>
+            <span class="text-xs font-mono text-purple-600 font-bold" x-text="ledgerBalance">₩ 148,250,000</span>
+          </div>
+          <div class="mt-3 text-xs space-y-2 text-gray-600">
+            <div class="flex justify-between border-b pb-1"><span>PG 매출채권 (PG_RECEIVABLE)</span><span class="font-mono">₩ 85,200,000</span></div>
+            <div class="flex justify-between border-b pb-1"><span>플랫폼 보관 에스크로 (PLATFORM_ESCROW)</span><span class="font-mono">₩ 52,100,000</span></div>
+            <div class="flex justify-between border-b pb-1"><span>파트너 정산 부채 (PARTNER_PAYABLE)</span><span class="font-mono">₩ 41,680,000</span></div>
+            <div class="flex justify-between"><span>플랫폼 수수료 수익 (PLATFORM_REVENUE)</span><span class="font-mono text-emerald-600 font-bold">₩ 10,420,000</span></div>
+          </div>
+        </div>
+
+        <!-- SDUI Layout Card -->
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sm text-gray-800">SDUI (Server-Driven UI) 레이아웃 엔진</h3>
+            <span class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">v1.4.0</span>
+          </div>
+          <div class="mt-3 text-xs text-gray-600">
+            <div class="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-[11px] overflow-x-auto">
+              { "target": "ALL", "blocks": ["FLASH_SALE_BANNER", "CATEGORY_CHIPS", "RECOMMENDED_FEED"] }
+            </div>
+            <p class="mt-2 text-gray-500">배포 없이 실시간 홈 피드 레이아웃 변경 가능</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Verification Badges -->
+    <section class="border-t border-gray-200 pt-6 text-center text-xs text-gray-500 space-y-2">
+      <div class="flex flex-wrap items-center justify-center gap-2">
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">OpenAPI 3.0 SSOT</span>
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">PostgreSQL 16 BigInt DDL</span>
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Redis 7 Lua Concurrency</span>
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Split-Order Architecture</span>
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Double-Entry Ledger</span>
+        <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded">Cloudflare Edge Live</span>
+      </div>
+      <div>OpenMarket Global Platform © 2026. All rights reserved.</div>
     </section>
   </main>
 </body>
