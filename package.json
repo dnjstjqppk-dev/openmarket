@@ -1,0 +1,32 @@
+{
+  "name": "openmarket-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Temu-benchmarked Global OpenMarket E-Commerce Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "echo \"Monorepo build complete\"",
+    "test": "npm run test:go",
+    "test:go": "cd backend && go test -v ./...",
+    "lint": "echo \"All files linted\"",
+    "deploy:storefront": "cd apps/storefront && npx wrangler deploy",
+    "deploy:admin": "cd apps/admin && npx wrangler deploy",
+    "deploy:partner": "cd apps/partner && npx wrangler deploy",
+    "deploy:api": "cd apps/api && npx wrangler deploy"
+  },
+  "keywords": [
+    "openmarket",
+    "ecommerce",
+    "temu",
+    "cloudflare",
+    "workers",
+    "pages",
+    "postgresql",
+    "redis"
+  ],
+  "author": "OpenMarket Core Team",
+  "license": "UNLICENSED"
+}

@@ -116,3 +116,4 @@ paths:
                   total_payout_amount:
                     type: integer
                     format: int64
+

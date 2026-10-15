@@ -140,3 +140,4 @@ func (s *StockDeductor) RollbackMultiple(
 	}
 	return firstErr
 }
+

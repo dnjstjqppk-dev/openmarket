@@ -208,3 +208,4 @@ CREATE TABLE settlements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (partner_id, period_start, period_end)
 );
+

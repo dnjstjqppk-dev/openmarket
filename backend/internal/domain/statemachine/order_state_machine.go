@@ -86,3 +86,4 @@ func (sm *OrderStateMachine) IsTerminal(status SubOrderStatus) bool {
 	allowed, exists := validTransitions[status]
 	return exists && len(allowed) == 0
 }
+

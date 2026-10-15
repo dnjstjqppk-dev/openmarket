@@ -1,0 +1,7 @@
+{
+  "name": "openmarket-storefront",
+  "compatibility_date": "2024-04-03",
+  "assets": {
+    "directory": "./public"
+  }
+}

@@ -224,3 +224,4 @@ paths:
                           enum: [PENDING, APPROVED, PAID, HELD]
                   page_meta:
                     $ref: '../schemas/common.yaml#/components/schemas/CursorPageMeta'
+

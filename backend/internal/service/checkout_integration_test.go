@@ -132,3 +132,4 @@ func TestOrderStateMachine_Transitions(t *testing.T) {
 		t.Fatal("expected error transitioning from terminal PURCHASE_CONFIRMED")
 	}
 }
+

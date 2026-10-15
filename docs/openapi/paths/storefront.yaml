@@ -175,3 +175,4 @@ paths:
                   total_pay_amount:
                     type: integer
                     format: int64
+

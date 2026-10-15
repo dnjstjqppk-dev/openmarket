@@ -1,0 +1,61 @@
+name: OpenMarket CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-backend:
+    name: Backend Go & Concurrency Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Backend Integration & State Machine Tests
+        run: |
+          cd backend
+          go test -v ./...
+
+  verify-cloudflare-apps:
+    name: Verify Cloudflare Apps & Configurations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Root Wrangler Config
+        run: npx wrangler deploy --dry-run
+
+      - name: Verify Storefront App Config
+        run: |
+          cd apps/storefront
+          npx wrangler deploy --dry-run
+
+      - name: Verify Admin App Config
+        run: |
+          cd apps/admin
+          npx wrangler deploy --dry-run
+
+      - name: Verify Partner App Config
+        run: |
+          cd apps/partner
+          npx wrangler deploy --dry-run
+
+      - name: Verify API Worker Config
+        run: |
+          cd apps/api
+          npx wrangler deploy --dry-run

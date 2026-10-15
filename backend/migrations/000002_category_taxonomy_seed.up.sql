@@ -39,3 +39,4 @@ ON CONFLICT (slug) DO UPDATE
 SET name = EXCLUDED.name,
     sort_order = EXCLUDED.sort_order,
     is_active = EXCLUDED.is_active;
+

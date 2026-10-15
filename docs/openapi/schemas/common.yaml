@@ -152,3 +152,4 @@ components:
           example: true
         message:
           type: string
+

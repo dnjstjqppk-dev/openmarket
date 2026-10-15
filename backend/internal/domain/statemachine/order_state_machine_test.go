@@ -68,3 +68,4 @@ func TestOrderStateMachine_AllTransitions(t *testing.T) {
 		t.Error("PAID should not be terminal")
 	}
 }
+
