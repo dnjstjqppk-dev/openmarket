@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="olmoaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF5722"/>
+      <stop offset="50%" stop-color="#FF7043"/>
+      <stop offset="100%" stop-color="#FF9800"/>
+    </linearGradient>
+    <linearGradient id="indigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Stylized O Symbol (Globe & Shopping Orbit) -->
+  <g transform="translate(10, 10)">
+    <circle cx="50" cy="50" r="46" fill="url(#olmoaGrad)"/>
+    <path d="M26 50 C26 36 36 26 50 26 C64 26 74 36 74 50 C74 64 64 74 50 74 C36 74 26 64 26 50 Z" fill="#FFFFFF" fill-opacity="0.95"/>
+    <!-- Dynamic Orbit Swoosh -->
+    <path d="M20 54 Q 50 82 80 54 Q 50 64 20 54 Z" fill="url(#olmoaGrad)"/>
+    <!-- Center Spark -->
+    <circle cx="50" cy="50" r="10" fill="url(#olmoaGrad)"/>
+  </g>
+
+  <!-- Wordmark: OLMOA -->
+  <g transform="translate(125, 74)">
+    <text font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="900" letter-spacing="-1.5" fill="#1E293B">
+      <tspan fill="#FF5722">O</tspan>LMOA
+    </text>
+  </g>
+
+  <!-- Global Tagline -->
+  <g transform="translate(130, 98)">
+    <text font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5" fill="#64748B">
+      EVERYTHING YOU SEEK. ALL HERE.
+    </text>
+  </g>
+</svg>

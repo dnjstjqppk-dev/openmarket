@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://olmoa.com/</loc>
+    <xhtml:link rel="alternate" hreflang="ko-kr" href="https://olmoa.com/ko-kr/krw/" />
+    <xhtml:link rel="alternate" hreflang="en-us" href="https://olmoa.com/en-us/usd/" />
+    <xhtml:link rel="alternate" hreflang="ja-jp" href="https://olmoa.com/ja-jp/jpy/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://olmoa.com/categories/electronics</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://olmoa.com/categories/fashion</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://olmoa.com/categories/home</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+</urlset>
+

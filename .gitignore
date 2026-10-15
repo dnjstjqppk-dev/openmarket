@@ -6,8 +6,11 @@ node_modules/
 .wrangler/
 .mf/
 
-# Build outputs
+# Build outputs (allow pre-built production assets for Cloudflare CI/CD deployment)
 dist/
+!apps/storefront/dist/**
+!apps/admin/dist/**
+!apps/partner/dist/**
 build/
 .nuxt/
 .output/
@@ -35,4 +38,3 @@ Thumbs.db
 .env.*.local
 *.pem
 *.key
-

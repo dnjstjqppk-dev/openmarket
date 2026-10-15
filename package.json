@@ -2,32 +2,35 @@
   "name": "openmarket-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "Temu-benchmarked Global OpenMarket E-Commerce Platform",
+  "description": "OLMOA Global OpenMarket E-Commerce Platform",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "echo \"Monorepo build complete\"",
+    "build": "npm run build --workspace=apps/storefront && npm run build --workspace=apps/admin && npm run build --workspace=apps/partner",
+    "build:storefront": "npm run build --workspace=apps/storefront",
+    "build:admin": "npm run build --workspace=apps/admin",
+    "build:partner": "npm run build --workspace=apps/partner",
     "test": "npm run test:go",
-    "test:go": "cd backend && go test -v ./...",
+    "test:go": "cd apps/api && go test -v ./...",
     "lint": "echo \"All files linted\"",
     "deploy:storefront": "cd apps/storefront && npx wrangler deploy",
     "deploy:admin": "cd apps/admin && npx wrangler deploy",
     "deploy:partner": "cd apps/partner && npx wrangler deploy",
-    "deploy:api": "cd apps/api && npx wrangler deploy"
+    "deploy:api": "cd apps/cloudflare-gateway && npx wrangler deploy"
   },
   "keywords": [
+    "olmoa",
     "openmarket",
     "ecommerce",
     "temu",
     "cloudflare",
     "workers",
-    "pages",
-    "postgresql",
-    "redis"
+    "vue3",
+    "golang",
+    "flutter"
   ],
-  "author": "OpenMarket Core Team",
+  "author": "OLMOA Global Core Team",
   "license": "UNLICENSED"
 }
-
