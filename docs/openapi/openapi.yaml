@@ -1,0 +1,48 @@
+﻿openapi: 3.0.3
+info:
+  title: Temu-Scale Open Market Platform API
+  version: 1.0.0
+  description: SSOT API specification for User Web (Nuxt 3), Partner/Admin Web (Vue 3), Mobile (Flutter), and Go Backend.
+servers:
+  - url: http://localhost:8080
+    description: Local Go API Server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/home/sdui:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1home~1sdui'
+  /api/v1/flash-sales/stream:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1flash-sales~1stream'
+  /api/v1/products:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products'
+  /api/v1/products/{id}:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}'
+  /api/v1/orders/checkout:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1orders~1checkout'
+
+  /api/v1/partner/media/presigned-url:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1media~1presigned-url'
+  /api/v1/partner/products:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products'
+  /api/v1/partner/products/bulk:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1bulk'
+  /api/v1/partner/sub-orders/{id}/shipment:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1sub-orders~1{id}~1shipment'
+  /api/v1/partner/settlements:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1settlements'
+
+  /api/v1/admin/partners/{id}/verify:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1verify'
+  /api/v1/admin/sdui/layouts:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1sdui~1layouts'
+  /api/v1/admin/settlements/execute:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1settlements~1execute'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
