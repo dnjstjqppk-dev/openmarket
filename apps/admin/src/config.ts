@@ -11,3 +11,4 @@ export function getAdminHeaders(extra: Record<string, string> = {}): Record<stri
     ...extra
   };
 }
+

@@ -168,3 +168,4 @@ components:
               error:
                 type: string
                 example: Unauthorized integration key
+

@@ -9,3 +9,4 @@ export function getPartnerHeaders(): Record<string, string> {
     'Authorization': `Bearer ${token}`
   };
 }
+

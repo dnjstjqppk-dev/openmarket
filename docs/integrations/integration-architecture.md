@@ -40,3 +40,4 @@ Selbym (셀바임) integration follows strict compliance rules:
 - Public read rate limit: 120 req/minute per IP.
 - Integration feed rate limit: 60 req/minute per API key.
 - TLS 1.3 encryption enforced on all endpoints.
+
