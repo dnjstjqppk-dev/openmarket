@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { API_BASE, getPartnerHeaders } from '../config';
 
 interface SubOrder {
   id: string;
@@ -22,8 +23,8 @@ const isSaving = ref<string | null>(null);
 async function loadShipments() {
   loading.value = true;
   try {
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/orders', {
-      headers: { 'X-Partner-Id': 'pt_001' }
+    const res = await fetch(`${API_BASE}/api/v1/partner/orders`, {
+      headers: getPartnerHeaders()
     });
     const json = await res.json();
     if (json.success && json.data) {
@@ -40,9 +41,9 @@ async function saveTracking(order: SubOrder) {
   isSaving.value = order.id;
 
   try {
-    const res = await fetch(`https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/orders/${order.id}/shipment`, {
+    const res = await fetch(`${API_BASE}/api/v1/partner/orders/${order.id}/shipment`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Partner-Id': 'pt_001' },
+      headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({
         carrier: order.carrier_code || 'CJ대한통운',
         tracking_number: order.tracking_number.trim()

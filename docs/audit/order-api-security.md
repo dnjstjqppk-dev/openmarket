@@ -48,3 +48,4 @@ In `apps/cloudflare-gateway/src/routes/orders.js`:
 - **Scenario C (Authorized Customer Access)**:
   - Request: `curl.exe -s -i -H "X-Customer-Id: u_customer_001" https://olmoa-api.dnjstjqppk.workers.dev/api/v1/orders/olm_ord_1792211089652`
   - Result: `HTTP/1.1 200 OK`
+

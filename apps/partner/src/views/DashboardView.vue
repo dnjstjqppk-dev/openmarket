@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { API_BASE, getPartnerHeaders } from '../config';
 
 const metrics = ref({
   totalProducts: 0,
@@ -14,8 +15,8 @@ const loading = ref(true);
 onMounted(async () => {
   try {
     const [metRes, ordRes] = await Promise.all([
-      fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/metrics', { headers: { 'X-Partner-Id': 'pt_001' } }),
-      fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/orders', { headers: { 'X-Partner-Id': 'pt_001' } })
+      fetch(`${API_BASE}/api/v1/partner/metrics`, { headers: getPartnerHeaders() }),
+      fetch(`${API_BASE}/api/v1/partner/orders`, { headers: getPartnerHeaders() })
     ]);
 
     const metJson = await metRes.json();

@@ -5,11 +5,12 @@ import { handleCatalogRoutes } from './routes/catalog.js';
 import { handleOrderRoutes } from './routes/orders.js';
 import { handlePartnerRoutes } from './routes/partner.js';
 import { handleAdminRoutes } from './routes/admin.js';
+import { handleIntegrationRoutes } from './routes/integrations.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, X-Partner-Id, X-Customer-Id',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, X-Partner-Id, X-Customer-Id, X-Integration-Key, X-Admin-Secret',
   'Content-Type': 'application/json; charset=utf-8'
 };
 
@@ -83,6 +84,10 @@ export default {
         // Admin: Metrics, Verification & Audit
         const adminRes = await handleAdminRoutes(request, url, env, corsHeaders);
         if (adminRes) return adminRes;
+
+        // External Integrations: PriceScanner & Selbym
+        const integrationRes = await handleIntegrationRoutes(request, url, env, corsHeaders);
+        if (integrationRes) return integrationRes;
 
       } catch (dbErr) {
         return new Response(JSON.stringify({ 

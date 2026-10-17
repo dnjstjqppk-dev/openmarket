@@ -42,3 +42,4 @@
   - `sku_004_blk_xl`: ₩30,900 / 재고 80개 / IN_STOCK
   - `sku_004_gry_xl`: ₩30,900 / 재고 0개 / OUT_OF_STOCK (CTA Disabled)
 - **Automated Test**: `tests/commerce_engine_e2e.js` Step 3 passed.
+

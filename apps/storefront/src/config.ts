@@ -12,3 +12,4 @@ export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Recor
     ...extraHeaders
   };
 }
+

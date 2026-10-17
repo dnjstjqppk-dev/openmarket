@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { API_BASE_URL, getAdminHeaders } from '../config';
 
 const metrics = ref({
   totalProducts: 0,
@@ -12,7 +13,9 @@ const loading = ref(true);
 
 onMounted(async () => {
   try {
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/admin/dashboard');
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/dashboard`, {
+      headers: getAdminHeaders()
+    });
     const json = await res.json();
     if (json.success && json.metrics) {
       metrics.value.totalProducts = json.metrics.total_products || 0;

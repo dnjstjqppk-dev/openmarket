@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { API_BASE, getPartnerHeaders } from '../config';
 
 interface PartnerProduct {
   id: string;
@@ -20,8 +21,8 @@ const isSaving = ref(false);
 async function loadProducts() {
   loading.value = true;
   try {
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/products', {
-      headers: { 'X-Partner-Id': 'pt_001' }
+    const res = await fetch(`${API_BASE}/api/v1/partner/products`, {
+      headers: getPartnerHeaders()
     });
     const json = await res.json();
     if (json.success && json.data) {
@@ -41,9 +42,9 @@ function editStock(product: PartnerProduct) {
 async function saveStock(product: PartnerProduct) {
   isSaving.value = true;
   try {
-    const res = await fetch(`https://olmoa-api.dnjstjqppk.workers.dev/api/v1/partner/products/${product.id}/stock`, {
+    const res = await fetch(`${API_BASE}/api/v1/partner/products/${product.id}/stock`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Partner-Id': 'pt_001' },
+      headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({ stock_quantity: tempStock.value })
     });
     if (res.ok) {

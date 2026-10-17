@@ -59,3 +59,4 @@ INSERT OR IGNORE INTO product_skus (id, product_id, sku_code, option_combination
 ('sku_sb02_blk_280', 'prod_sb_02', 'RUN-BLK-280', '{"색상":"올블랙","사이즈":"280mm"}', 39000, 24900, 70, 5, 'IN_STOCK'),
 ('sku_sb02_wht_260', 'prod_sb_02', 'RUN-WHT-260', '{"색상":"화이트/블루","사이즈":"260mm"}', 39000, 24900, 90, 5, 'IN_STOCK'),
 ('sku_sb02_wht_270', 'prod_sb_02', 'RUN-WHT-270', '{"색상":"화이트/블루","사이즈":"270mm"}', 39000, 24900, 140, 10, 'IN_STOCK');
+

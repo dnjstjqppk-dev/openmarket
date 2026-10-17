@@ -42,3 +42,4 @@
 - All mobile endpoints conform to standard JSON over HTTPS.
 - Zero cookie dependency: authenticated purely via `X-Customer-Id` and Bearer token headers.
 - Flutter data models can deserialize D1 catalog and order responses without modification.
+

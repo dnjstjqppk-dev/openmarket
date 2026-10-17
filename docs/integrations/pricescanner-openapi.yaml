@@ -1,0 +1,170 @@
+openapi: 3.0.3
+info:
+  title: OLMOA External PriceScanner Feed & Partner Integration API
+  version: 1.0.0
+  description: >
+    Official product catalog and price sync API for certified price comparison engines (PriceScanner)
+    and external partner integrations with multi-tenant isolation.
+servers:
+  - url: https://olmoa-api.dnjstjqppk.workers.dev
+    description: Production Cloudflare Gateway
+paths:
+  /api/v1/integrations/pricescanner/feed:
+    get:
+      summary: Retrieve Paginated Active Product Feed
+      description: >
+        Returns active products with latest selling prices, deep links, and category metadata.
+        Supports incremental sync via the `since` query parameter.
+      security:
+        - IntegrationKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-indexed)
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Number of items per page
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Incremental timestamp filter (ISO 8601)
+      responses:
+        '200':
+          description: Product feed retrieved successfully
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: public, max-age=60, s-maxage=300
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FeedProduct'
+                      pagination:
+                        $ref: '#/components/schemas/FeedPagination'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          description: Rate limit exceeded (120 req/min)
+
+  /api/v1/integrations/selbym/status:
+    get:
+      summary: Check Selbym Partnership Legal Boundary Status
+      description: >
+        Returns the formal integration and legal agreement status for Selbym.
+        Unauthorized scraping is strictly blocked by Cloudflare WAF.
+      responses:
+        '200':
+          description: Status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      integration:
+                        type: string
+                        example: selbym
+                      status:
+                        type: string
+                        example: AWAITING_COMMERCIAL_AGREEMENT
+                      direct_crawling_allowed:
+                        type: boolean
+                        example: false
+
+components:
+  securitySchemes:
+    IntegrationKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Integration-Key
+      description: Pre-shared integration key for verified aggregators
+  schemas:
+    FeedProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          example: prod_001
+        title:
+          type: string
+          example: 초경량 방수 바람막이 자켓
+        sale_price:
+          type: integer
+          example: 28900
+        original_price:
+          type: integer
+          example: 45000
+        category_slug:
+          type: string
+          example: mens-fashion
+        category_name:
+          type: string
+          example: 남성 패션
+        image_url:
+          type: string
+          format: uri
+        deep_link:
+          type: string
+          format: uri
+          example: https://openmarket.dnjstjqppk.workers.dev/product/prod_001?ref=pricescanner
+        updated_at:
+          type: string
+          format: date-time
+        partner_name:
+          type: string
+          example: Global Direct Logistics Ltd.
+        status:
+          type: string
+          example: ACTIVE
+    FeedPagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 50
+        has_more:
+          type: boolean
+          example: false
+  responses:
+    UnauthorizedError:
+      description: Missing or invalid integration key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized integration key

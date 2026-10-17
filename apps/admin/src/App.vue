@@ -39,6 +39,9 @@ onMounted(() => {
           <router-link to="/" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             대시보드
           </router-link>
+          <router-link to="/products" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            상품 관리
+          </router-link>
           <router-link to="/partners" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             셀러 심사
           </router-link>

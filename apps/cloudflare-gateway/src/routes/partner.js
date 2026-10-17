@@ -1,10 +1,32 @@
 // apps/cloudflare-gateway/src/routes/partner.js
-// OLMOA Partner Seller Engine: Products, SKU Inventory, Order Fulfillment
+// OLMOA Partner Seller Engine: Strict Multi-Tenant Isolation & Verification
+
+async function resolvePartner(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const partnerHeader = request.headers.get('X-Partner-Id') || '';
+  const candidateId = partnerHeader || (token.startsWith('pt_') ? token : null);
+  if (!candidateId) return null;
+
+  const partner = await env.DB.prepare(
+    'SELECT * FROM partners WHERE (id = ? OR owner_user_id = ?) AND status = "APPROVED"'
+  ).bind(candidateId, candidateId).first();
+
+  return partner;
+}
 
 export async function handlePartnerRoutes(request, url, env, corsHeaders) {
-  const partnerId = request.headers.get('X-Partner-Id') || 'pt_001';
+  if (!url.pathname.startsWith('/api/v1/partner')) return null;
 
-  // 1. Partner Products & SKUs
+  const partner = await resolvePartner(request, env);
+  if (!partner) {
+    return new Response(JSON.stringify({ 
+      error: 'Unauthorized: Valid approved partner credentials required. Tenant isolated.' 
+    }), { status: 401, headers: corsHeaders });
+  }
+
+  const partnerId = partner.id;
+
+  // 1. Partner Products & SKUs (Tenant Scoped)
   if (url.pathname === '/api/v1/partner/products' && request.method === 'GET') {
     const { results: products } = await env.DB.prepare(
       `SELECT p.*, c.name as category_name, s.id as sku_id, s.sku_code, s.stock_quantity, s.sale_price 
@@ -16,10 +38,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ).bind(partnerId).all();
 
     return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      count: products.length,
-      data: products
+      success: true, brand: 'OLMOA', partner_id: partnerId,
+      business_name: partner.business_name, count: products.length, data: products
     }), { headers: corsHeaders });
   }
 
@@ -37,49 +57,41 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       prodId, partnerId, body.category_id || 'cat_fashion',
       body.title, body.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
       body.description_html || '<p>' + (body.title || '') + '</p>',
-      body.original_price || body.price || 30000,
-      body.price || 19900
+      body.original_price || body.price || 30000, body.price || 19900
     ).run();
 
     await env.DB.prepare(
       `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
        VALUES (?, ?, ?, '{"옵션":"기본"}', ?, ?, ?, 5, 'IN_STOCK')`
-    ).bind(
-      skuId, prodId, skuCode,
-      body.original_price || body.price || 30000,
-      body.price || 19900,
-      body.stock_quantity || 100
-    ).run();
+    ).bind(skuId, prodId, skuCode, body.original_price || body.price || 30000, body.price || 19900, body.stock_quantity || 100).run();
 
     return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      product_id: prodId,
-      sku_id: skuId,
-      message: 'Product & SKU successfully created in D1'
+      success: true, brand: 'OLMOA', product_id: prodId, sku_id: skuId, message: 'Product created with tenant isolation'
     }), { status: 201, headers: corsHeaders });
   }
 
-  // 3. Partner Update SKU Stock
+  // 3. Partner Update SKU Stock (Enforce Product Ownership)
   if (url.pathname.startsWith('/api/v1/partner/products/') && url.pathname.endsWith('/stock') && (request.method === 'PUT' || request.method === 'PATCH')) {
     const prodId = url.pathname.split('/')[5];
     const body = await request.json();
-    const newStock = parseInt(body.stock_quantity, 10);
+    const newStock = Math.max(0, parseInt(body.stock_quantity, 10));
+
+    // Verify product belongs to this partner
+    const ownsProduct = await env.DB.prepare('SELECT id FROM products WHERE id = ? AND partner_id = ?').bind(prodId, partnerId).first();
+    if (!ownsProduct) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Tenant mismatch. Product not owned by partner.' }), { status: 403, headers: corsHeaders });
+    }
 
     await env.DB.prepare(
       'UPDATE product_skus SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ? OR id = ?'
     ).bind(newStock, prodId, prodId).run();
 
     return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      product_id: prodId,
-      stock_quantity: newStock,
-      message: 'Stock updated in D1'
+      success: true, brand: 'OLMOA', product_id: prodId, stock_quantity: newStock, message: 'Stock updated'
     }), { headers: corsHeaders });
   }
 
-  // 4. Partner Sub-Orders & Fulfillment
+  // 4. Partner Sub-Orders (Strictly Isolated to Partner)
   if (url.pathname === '/api/v1/partner/orders' && request.method === 'GET') {
     const { results: subOrders } = await env.DB.prepare(
       `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.shipping_postal_code, o.created_at as order_date
@@ -90,53 +102,43 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ).bind(partnerId).all();
 
     for (const sub of subOrders) {
-      const { results: items } = await env.DB.prepare(
-        'SELECT * FROM order_items WHERE sub_order_id = ?'
-      ).bind(sub.id).all();
+      const { results: items } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
       sub.items = items;
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      count: subOrders.length,
-      data: subOrders
-    }), { headers: corsHeaders });
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', partner_id: partnerId, count: subOrders.length, data: subOrders }), { headers: corsHeaders });
   }
 
-  // 5. Partner Update Shipment (Tracking Number)
+  // 5. Partner Update Shipment (Must Own Sub-Order)
   if (url.pathname.startsWith('/api/v1/partner/orders/') && url.pathname.endsWith('/shipment') && (request.method === 'PUT' || request.method === 'POST')) {
     const subOrderId = url.pathname.split('/')[5];
     const body = await request.json();
     const carrier = body.carrier || 'CJ대한통운';
     const trackingNo = body.tracking_number;
 
+    const subOrder = await env.DB.prepare('SELECT id FROM sub_orders WHERE id = ? AND partner_id = ?').bind(subOrderId, partnerId).first();
+    if (!subOrder) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Sub-order not found or belongs to another partner.' }), { status: 403, headers: corsHeaders });
+    }
+
     await env.DB.prepare(
       `UPDATE sub_orders 
        SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`
-    ).bind(carrier, trackingNo, subOrderId).run();
+       WHERE id = ? AND partner_id = ?`
+    ).bind(carrier, trackingNo, subOrderId, partnerId).run();
 
     return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      sub_order_id: subOrderId,
-      carrier: carrier,
-      tracking_number: trackingNo,
-      status: 'SHIPPED',
-      message: 'Shipment dispatched & tracking updated in D1'
+      success: true, brand: 'OLMOA', sub_order_id: subOrderId, carrier, tracking_number: trackingNo, status: 'SHIPPED'
     }), { headers: corsHeaders });
   }
 
-  // 6. Partner Dashboard Metrics
+  // 6. Partner Metrics
   if (url.pathname === '/api/v1/partner/metrics' && request.method === 'GET') {
     const prodRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products WHERE partner_id = ?').bind(partnerId).first();
     const orderRes = await env.DB.prepare('SELECT COUNT(*) as cnt, SUM(total_amount) as total_sales FROM sub_orders WHERE partner_id = ?').bind(partnerId).first();
 
     return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      partner_id: partnerId,
+      success: true, brand: 'OLMOA', partner_id: partnerId, business_name: partner.business_name,
       products_count: prodRes ? prodRes.cnt : 0,
       orders_count: orderRes ? orderRes.cnt : 0,
       total_sales_amount: orderRes && orderRes.total_sales ? orderRes.total_sales : 0

@@ -48,3 +48,4 @@ export interface CartItem {
 - In-cart option modal tested on live web app.
 - Clamping verified on both 1-unit minimum and available stock maximum.
 - Total payment and shipping amounts match Edge Gateway checkout calculations to the exact KRW integer.
+

@@ -51,3 +51,4 @@ Executed directly against production D1 with zero FK violations:
   ```
 - **Automated Verification**:
   - `curl -X POST /api/v1/orders/checkout` with `sku_id: 'sku_fake_phantom_999'` -> Returns `HTTP 400 Bad Request` (`{"error":"Invalid SKU ID: sku_fake_phantom_999. Zero fallback enforced."}`).
+

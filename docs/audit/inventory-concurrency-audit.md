@@ -51,3 +51,4 @@ INSERT INTO inventory_ledger (
   - Replays existing parent order without re-deducting stock.
   - Returns `{"idempotent_replay": true, "order_id": "...", "status": "PAID"}`.
 - Verified in `tests/commerce_engine_e2e.js` Step 6: 100% pass.
+

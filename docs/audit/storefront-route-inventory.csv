@@ -11,3 +11,4 @@ Route Path,Route Name,Vue Component,Backend API Dependency,Auth Required,Status,
 /order/:id,order-detail,OrderDetailView.vue,GET /api/v1/orders/:id,Yes (X-Customer-Id),Active,Order receipt with seller split sub-orders and tracking
 /account/orders,-,Redirect,None,Yes,Active,Convenience alias redirecting to /orders
 /*,not-found,Redirect,None,No,Active,Catch-all fallback route redirecting to /
+
