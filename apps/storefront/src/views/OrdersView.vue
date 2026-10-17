@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 
 const orders = ref<any[]>([]);
 const loading = ref(true);
 
 onMounted(async () => {
   try {
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/orders');
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders`, {
+      headers: getAuthHeaders()
+    });
     const json = await res.json();
     if (json.success && json.data) {
       orders.value = json.data;
@@ -55,7 +58,6 @@ onMounted(async () => {
           <span>주문일시: {{ ord.created_at }}</span>
         </div>
 
-        <!-- Sub orders & items list -->
         <div class="space-y-3">
           <div v-for="sub in ord.sub_orders" :key="sub.id" class="bg-slate-50/70 p-3 rounded-2xl space-y-2 border border-slate-100">
             <div class="flex items-center justify-between text-[11px]">

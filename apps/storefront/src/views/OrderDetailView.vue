@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 
 const route = useRoute();
 const order = ref<any>(null);
@@ -9,7 +10,9 @@ const loading = ref(true);
 onMounted(async () => {
   const ordId = route.params.id as string;
   try {
-    const res = await fetch(`https://olmoa-api.dnjstjqppk.workers.dev/api/v1/orders/${ordId}`);
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${ordId}`, {
+      headers: getAuthHeaders()
+    });
     const json = await res.json();
     if (json.success && json.data) {
       order.value = json.data;
@@ -95,7 +98,6 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Items in this Sub-Order -->
           <div class="divide-y divide-slate-100">
             <div v-for="it in sub.items" :key="it.id" class="py-2.5 flex items-center justify-between text-xs">
               <div class="space-y-0.5">

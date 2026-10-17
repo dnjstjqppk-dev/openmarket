@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useCartStore } from '../stores/cart';
+import { API_BASE_URL } from '../config';
 
 interface ProductItem {
   id: string;
@@ -37,8 +38,8 @@ async function loadProducts(catSlug: string = 'all') {
   loading.value = true;
   try {
     const url = catSlug === 'all' 
-      ? 'https://olmoa-api.dnjstjqppk.workers.dev/api/v1/products?sort=popular'
-      : `https://olmoa-api.dnjstjqppk.workers.dev/api/v1/products?category=${catSlug}&sort=popular`;
+      ? `${API_BASE_URL}/api/v1/products?sort=popular`
+      : `${API_BASE_URL}/api/v1/products?category=${catSlug}&sort=popular`;
     const res = await fetch(url);
     const json = await res.json();
     if (json.success && json.data) {
@@ -139,13 +140,13 @@ function calculateDiscount(orig: number, sale: number) {
               <span>판매 <strong class="text-slate-700">{{ p.total_sold_count.toLocaleString() }}</strong></span>
               <span class="text-amber-500 font-bold"><i class="fa-solid fa-star"></i> 4.9</span>
             </div>
-            <button 
-              @click="cartStore.addItem(p, null, 1)"
+            <router-link 
+              :to="'/product/' + p.id"
               class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm"
             >
-              <i class="fa-solid fa-cart-plus"></i>
-              <span>장바구니 담기</span>
-            </button>
+              <i class="fa-solid fa-sliders"></i>
+              <span>옵션 선택 / 구매</span>
+            </router-link>
           </div>
         </div>
       </div>

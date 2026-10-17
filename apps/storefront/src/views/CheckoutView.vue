@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 
 const router = useRouter();
 const cartStore = useCartStore();
@@ -11,13 +12,13 @@ const phone = ref('010-9876-5432');
 const postalCode = ref('06236');
 const addressLine1 = ref('서울특별시 강남구 테헤란로 152');
 const addressLine2 = ref('강남파이낸스센터 18층');
+const shippingMemo = ref('배송 전 미리 연락 바랍니다.');
 const paymentMethod = ref('KAKAOPAY');
 const isSubmitting = ref(false);
 const errorMessage = ref('');
 
 onMounted(() => {
   if (cartStore.items.length === 0) {
-    // If cart is empty, redirect to categories or home
     router.replace('/cart');
   }
 });
@@ -27,6 +28,8 @@ const handleOrder = async () => {
   isSubmitting.value = true;
   errorMessage.value = '';
 
+  const idempotencyKey = `ord_idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
   try {
     const payload = {
       customer_id: 'u_customer_001',
@@ -35,20 +38,19 @@ const handleOrder = async () => {
       shipping_postal_code: postalCode.value,
       shipping_address_line1: addressLine1.value,
       shipping_address_line2: addressLine2.value,
+      shipping_memo: shippingMemo.value,
       items: cartStore.items.map(it => ({
         sku_id: it.sku_id,
         product_id: it.product_id,
-        title: it.title,
-        option_summary: it.option_summary,
-        price: it.price,
-        quantity: it.quantity,
-        partner_id: it.partner_id || 'pt_001'
+        quantity: it.quantity
       }))
     };
 
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/orders/checkout', {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/checkout`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({
+        'X-Idempotency-Key': idempotencyKey
+      }),
       body: JSON.stringify(payload)
     });
 
@@ -121,7 +123,7 @@ const handleOrder = async () => {
         <div class="grid grid-cols-3 gap-2">
           <button @click="paymentMethod = 'KAKAOPAY'" :class="paymentMethod === 'KAKAOPAY' ? 'bg-amber-400 font-bold border-amber-500 shadow-sm' : 'bg-slate-50'" class="p-3 rounded-xl border text-center transition">카카오페이</button>
           <button @click="paymentMethod = 'TOSSPAY'" :class="paymentMethod === 'TOSSPAY' ? 'bg-blue-600 text-white font-bold shadow-sm' : 'bg-slate-50'" class="p-3 rounded-xl border text-center transition">토스페이</button>
-          <button @click="paymentMethod = 'CARD'" :class="paymentMethod === 'CARD' ? 'bg-slate-900 text-white font-bold shadow-sm' : 'bg-slate-50'" class="p-3 rounded-xl border text-center transition">글로벌 신용카드</button>
+          <button @click="paymentMethod = 'CARD'" :class="paymentMethod === 'CARD' ? 'bg-slate-900 text-white font-bold shadow-sm' : 'bg-slate-50'" class="p-3 rounded-xl border text-center transition">신용카드</button>
         </div>
       </div>
     </div>

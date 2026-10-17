@@ -9,7 +9,7 @@ import { handleAdminRoutes } from './routes/admin.js';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, X-Partner-Id',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, X-Partner-Id, X-Customer-Id',
   'Content-Type': 'application/json; charset=utf-8'
 };
 

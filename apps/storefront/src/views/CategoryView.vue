@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
+import { API_BASE_URL } from '../config';
 
 interface ProductItem {
   id: string;
@@ -38,7 +39,7 @@ async function loadCategoryData() {
 
   try {
     // 1. Fetch category meta & subcategories
-    const catRes = await fetch(`https://olmoa-api.dnjstjqppk.workers.dev/api/v1/categories/${slug}`);
+    const catRes = await fetch(`${API_BASE_URL}/api/v1/categories/${slug}`);
     if (catRes.ok) {
       const catJson = await catRes.json();
       if (catJson.data) {
@@ -48,7 +49,7 @@ async function loadCategoryData() {
     }
 
     // 2. Fetch products specifically matching this category
-    const prodUrl = `https://olmoa-api.dnjstjqppk.workers.dev/api/v1/products?category=${slug}&sort=${currentSort.value}`;
+    const prodUrl = `${API_BASE_URL}/api/v1/products?category=${slug}&sort=${currentSort.value}`;
     const prodRes = await fetch(prodUrl);
     const prodJson = await prodRes.json();
     if (prodJson.success && prodJson.data) {
@@ -185,13 +186,13 @@ onMounted(() => {
               <span>판매 <strong class="text-slate-700">{{ p.total_sold_count.toLocaleString() }}</strong></span>
               <span class="text-amber-500 font-bold"><i class="fa-solid fa-star"></i> 4.9</span>
             </div>
-            <button 
-              @click="cartStore.addItem(p, null, 1)"
+            <router-link 
+              :to="'/product/' + p.id"
               class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm"
             >
-              <i class="fa-solid fa-cart-plus"></i>
-              <span>장바구니 담기</span>
-            </button>
+              <i class="fa-solid fa-sliders"></i>
+              <span>옵션 선택 / 구매</span>
+            </router-link>
           </div>
         </div>
       </div>

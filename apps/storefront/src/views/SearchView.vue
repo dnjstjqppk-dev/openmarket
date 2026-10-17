@@ -2,6 +2,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
+import { API_BASE_URL } from '../config';
 
 const route = useRoute();
 const router = useRouter();
@@ -17,7 +18,7 @@ async function fetchSearchResults() {
   try {
     const q = query.value.trim();
     const sort = currentSort.value;
-    const url = `https://olmoa-api.dnjstjqppk.workers.dev/api/v1/products?q=${encodeURIComponent(q)}&sort=${sort}`;
+    const url = `${API_BASE_URL}/api/v1/products?q=${encodeURIComponent(q)}&sort=${sort}`;
     const res = await fetch(url);
     const json = await res.json();
     if (json.success && json.data) {
@@ -148,13 +149,13 @@ onMounted(() => {
             <div class="text-[10px] text-slate-400">
               판매 <strong class="text-slate-700">{{ p.total_sold_count.toLocaleString() }}</strong>개
             </div>
-            <button 
-              @click="cartStore.addItem(p, null, 1)"
-              class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1"
+            <router-link 
+              :to="'/product/' + p.id"
+              class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm"
             >
-              <i class="fa-solid fa-cart-plus"></i>
-              <span>담기</span>
-            </button>
+              <i class="fa-solid fa-sliders"></i>
+              <span>옵션 선택 / 구매</span>
+            </router-link>
           </div>
         </div>
       </div>

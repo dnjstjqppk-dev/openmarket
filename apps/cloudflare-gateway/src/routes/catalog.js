@@ -126,13 +126,29 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     }
 
     const { results: skus } = await env.DB.prepare(
-      'SELECT * FROM product_skus WHERE product_id = ?'
+      'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sale_price ASC'
     ).bind(prodId).all();
+
+    const optionsMap = {};
+    const parsedSkus = skus.map(s => {
+      let opt = {};
+      try { opt = JSON.parse(s.option_combination_json); } catch (e) { opt = {}; }
+      for (const [k, v] of Object.entries(opt)) {
+        if (!optionsMap[k]) optionsMap[k] = new Set();
+        optionsMap[k].add(v);
+      }
+      return { ...s, options: opt };
+    });
+
+    const attributes = Object.keys(optionsMap).map(name => ({
+      name,
+      values: Array.from(optionsMap[name])
+    }));
 
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA',
-      data: { ...product, skus }
+      data: { ...product, skus: parsedSkus, attributes }
     }), { headers: corsHeaders });
   }
 

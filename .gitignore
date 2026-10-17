@@ -8,9 +8,9 @@ node_modules/
 
 # Build outputs (allow pre-built production assets for Cloudflare CI/CD deployment)
 dist/
-!apps/storefront/dist/**
-!apps/admin/dist/**
-!apps/partner/dist/**
+!apps/
+!apps/*/dist/
+!apps/*/dist/**
 build/
 .nuxt/
 .output/

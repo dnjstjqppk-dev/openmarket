@@ -1,0 +1,13 @@
+Route Path,Route Name,Vue Component,Backend API Dependency,Auth Required,Status,Description
+/,home,HomeView.vue,GET /api/v1/products?sort=popular,No,Active,Storefront home banner and recommended product grid
+/categories,categories,CategoriesView.vue,GET /api/v1/categories,No,Active,Full 33 Temu-equivalent root categories taxonomy
+/category/:slug,category,CategoryView.vue,GET /api/v1/categories/:slug & /api/v1/products,No,Active,Category specific product list with sort and subcategories
+/categories/:slug,-,Redirect,None,No,Active,Compatibility redirect to /category/:slug
+/product/:id,product-detail,ProductDetailView.vue,GET /api/v1/products/:id,No,Active,PDP with multi-attribute SKU selector and stock ceiling
+/search,search,SearchView.vue,GET /api/v1/products?q=:q&sort=:sort,No,Active,Live keyword product search and sort filter
+/cart,cart,CartView.vue,GET /api/v1/products/:id (options modal),No,Active,Reactive cart with in-cart SKU option editor and free shipping tracker
+/checkout,checkout,CheckoutView.vue,POST /api/v1/orders/checkout,Yes (X-Customer-Id),Active,Secure checkout with real SKU bindings and idempotency
+/orders,orders,OrdersView.vue,GET /api/v1/orders,Yes (X-Customer-Id),Active,Customer order history scoped by authenticated customer ID
+/order/:id,order-detail,OrderDetailView.vue,GET /api/v1/orders/:id,Yes (X-Customer-Id),Active,Order receipt with seller split sub-orders and tracking
+/account/orders,-,Redirect,None,Yes,Active,Convenience alias redirecting to /orders
+/*,not-found,Redirect,None,No,Active,Catch-all fallback route redirecting to /
