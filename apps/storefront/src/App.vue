@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useCartStore } from './stores/cart';
 
 const router = useRouter();
+const cartStore = useCartStore();
 const searchQuery = ref('');
 const selectedLang = ref('ko-KR');
 const selectedCurrency = ref('KRW');
 
 function handleSearch() {
   if (searchQuery.value.trim()) {
-    router.push({ path: '/category/all', query: { q: searchQuery.value.trim() } });
+    router.push({ path: '/search', query: { q: searchQuery.value.trim() } });
   }
 }
 </script>
@@ -53,7 +55,7 @@ function handleSearch() {
           </div>
         </router-link>
 
-        <!-- Search Bar (Temu Style) -->
+        <!-- Search Bar -->
         <div class="flex-1 max-w-2xl">
           <form @submit.prevent="handleSearch" class="relative flex items-center">
             <input 
@@ -78,15 +80,20 @@ function handleSearch() {
             <span class="hidden sm:inline text-xs">주문·배송</span>
           </router-link>
           
-          <router-link to="/checkout" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition relative">
+          <router-link to="/cart" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition relative">
             <div class="relative">
               <i class="fa-solid fa-cart-shopping text-lg text-slate-600"></i>
-              <span class="absolute -top-1.5 -right-2 bg-orange-600 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">1</span>
+              <span 
+                v-if="cartStore.totalCount > 0"
+                class="absolute -top-1.5 -right-2 bg-orange-600 text-white text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center font-bold"
+              >
+                {{ cartStore.totalCount }}
+              </span>
             </div>
             <span class="hidden sm:inline text-xs">장바구니</span>
           </router-link>
 
-          <a href="https://partner.olmoa.com" target="_blank" class="hidden lg:flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition">
+          <a href="https://openmarket-partner.dnjstjqppk.workers.dev" target="_blank" class="hidden lg:flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition">
             <i class="fa-solid fa-store text-indigo-500"></i>
             <span>셀러 입점</span>
           </a>
@@ -98,7 +105,7 @@ function handleSearch() {
         <div class="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto text-xs py-2 scrollbar-none font-semibold">
           <router-link to="/categories" class="px-3 py-1 font-bold text-orange-600 bg-orange-100/70 rounded-full flex items-center gap-1.5 shrink-0 hover:bg-orange-200">
             <i class="fa-solid fa-bars"></i>
-            <span>전체 카테고리</span>
+            <span>전체 33개 카테고리</span>
           </router-link>
           <router-link to="/category/womens-clothing" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">여성의류</router-link>
           <router-link to="/category/mens-clothing" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">남성의류</router-link>
@@ -133,7 +140,7 @@ function handleSearch() {
         <div>
           <h4 class="text-white font-bold mb-3 text-sm">고객 서비스</h4>
           <ul class="space-y-2">
-            <li><a href="#" class="hover:text-white transition">배송 추적 및 조회</a></li>
+            <li><router-link to="/orders" class="hover:text-white transition">배송 추적 및 조회</router-link></li>
             <li><a href="#" class="hover:text-white transition">반품 및 100% 환불 정책</a></li>
             <li><a href="#" class="hover:text-white transition">최저가 보상제 안내</a></li>
             <li><a href="#" class="hover:text-white transition">24/7 글로벌 고객센터</a></li>
@@ -142,10 +149,10 @@ function handleSearch() {
         <div>
           <h4 class="text-white font-bold mb-3 text-sm">파트너 및 비즈니스</h4>
           <ul class="space-y-2">
-            <li><a href="https://partner.olmoa.com" class="hover:text-white transition">판매자 입점 센터</a></li>
+            <li><a href="https://openmarket-partner.dnjstjqppk.workers.dev" target="_blank" class="hover:text-white transition">판매자 입점 센터</a></li>
             <li><a href="#" class="hover:text-white transition">글로벌 풀필먼트 물류</a></li>
             <li><a href="#" class="hover:text-white transition">공급사 대량 등록 가이드</a></li>
-            <li><a href="https://admin.olmoa.com" class="hover:text-white transition text-slate-500">운영 관리자</a></li>
+            <li><a href="https://openmarket-admin.dnjstjqppk.workers.dev" target="_blank" class="hover:text-white transition text-slate-500">운영 관리자</a></li>
           </ul>
         </div>
         <div>

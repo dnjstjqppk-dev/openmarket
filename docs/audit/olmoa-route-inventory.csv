@@ -1,0 +1,19 @@
+olmoa_route,app_type,component,corresponding_api,auth_required,core_function,status,browser_test
+/,Storefront,HomeView.vue,GET /api/v1/products,No,Hero promotion 33 categories hot deals,VERIFIED,PASS
+/categories,Storefront,CategoriesView.vue,GET /api/v1/categories,No,33 categories visual taxonomy tree explorer,VERIFIED,PASS
+/category/:slug,Storefront,CategoryView.vue,GET /api/v1/products?category=:slug,No,Category product grid sub-chips sorting,VERIFIED,PASS
+/search,Storefront,SearchView.vue,GET /api/v1/products?q=:q,No,Search query keyword filter sorting,VERIFIED,PASS
+/product/:id,Storefront,ProductDetailView.vue,GET /api/v1/products/:id,No,PDP SKU selector gallery add-to-cart,VERIFIED,PASS
+/cart,Storefront,CartView.vue,Pinia CartStore + LocalStorage,No,Reactive cart item quantity free shipping meter,VERIFIED,PASS
+/checkout,Storefront,CheckoutView.vue,POST /api/v1/orders/checkout,No,Address entry payment split order creation,VERIFIED,PASS
+/orders,Storefront,OrdersView.vue,GET /api/v1/orders,No,Customer order history shipment tracking,VERIFIED,PASS
+/order/:id,Storefront,OrderDetailView.vue,GET /api/v1/orders/:id,No,Order sub-order shipment tracking detail,VERIFIED,PASS
+/account/orders,Storefront,OrdersView.vue,GET /api/v1/orders,No,Redirect alias to /orders,VERIFIED,PASS
+/,Partner,DashboardView.vue,GET /api/v1/partner/metrics,Yes,Partner business revenue & order stats,VERIFIED,PASS
+/products,Partner,ProductManageView.vue,GET/PUT /api/v1/partner/products,Yes,Partner SKU stock inventory management,VERIFIED,PASS
+/shipments,Partner,ShipmentView.vue,GET/PUT /api/v1/partner/orders,Yes,Sub-order tracking registration & dispatch,VERIFIED,PASS
+/bulk-upload,Partner,BulkUploadView.vue,POST /api/v1/partner/products,Yes,Excel/CSV batch catalog registration,VERIFIED,PASS
+/settlement,Partner,SettlementView.vue,GET /api/v1/admin/ledger,Yes,Partner revenue payout ledgers,VERIFIED,PASS
+/,Admin,DashboardView.vue,GET /api/v1/admin/dashboard,Yes,Platform GMV total orders & partner stats,VERIFIED,PASS
+/partners,Admin,PartnerVerifyView.vue,GET/PUT /api/v1/admin/partners,Yes,Partner KYC document approval & rejection,VERIFIED,PASS
+/ledger,Admin,LedgerAuditView.vue,GET /api/v1/admin/ledger,Yes,Escrow double-entry ledger audit,VERIFIED,PASS

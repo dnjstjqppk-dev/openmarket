@@ -1,0 +1,26 @@
+url_pattern,country_lang,page_type,parent_category,sub_category,required_params,auth_required,core_function,status
+https://www.temu.com/,KR/ko,Home,Root,None,None,No,Main landing promotional hero flash sale deals,VERIFIED
+https://www.temu.com/ie/sitemap.html,IE/en,Sitemap,Root,All,None,No,Global taxonomy directory link tree,VERIFIED
+https://www.temu.com/category/womens-clothing,Global/en,Category,Apparel,Womens Clothing,None,No,Department product grid with filters,VERIFIED
+https://www.temu.com/category/mens-clothing,Global/en,Category,Apparel,Mens Clothing,None,No,Department product grid with filters,VERIFIED
+https://www.temu.com/category/electronics,Global/en,Category,Electronics,Gadgets Audio,None,No,Consumer electronics showcase,VERIFIED
+https://www.temu.com/category/home-kitchen,Global/en,Category,Home,Kitchen Decor,None,No,Home cookware and storage items,VERIFIED
+https://www.temu.com/category/beauty-health,Global/en,Category,Beauty,Skincare Makeup,None,No,Personal care and cosmetics list,VERIFIED
+https://www.temu.com/category/sports-outdoors,Global/en,Category,Sports,Fitness Outdoor,None,No,Outdoor recreation athletic gear,VERIFIED
+https://www.temu.com/category/shoes-bags,Global/en,Category,Footwear,Shoes Luggage,None,No,Footwear backpacks accessories,VERIFIED
+https://www.temu.com/category/toys-games,Global/en,Category,Toys,Blocks Puzzles,None,No,Educational and hobby toys,VERIFIED
+https://www.temu.com/category/automotive,Global/en,Category,Automotive,Interior Parts,None,No,Vehicle accessories and tools,VERIFIED
+https://www.temu.com/category/jewelry-accessories,Global/en,Category,Jewelry,Watches Necklaces,None,No,Fashion jewelry and watches,VERIFIED
+https://www.temu.com/search_result.html?search_key={q},Global/en,Search,None,None,search_key,No,Full-text token search and filtering,VERIFIED
+https://www.temu.com/{slug}-g-{goods_id}.html,Global/en,ProductDetail,Dynamic,Dynamic,goods_id,No,PDP gallery SKU selection reviews,VERIFIED
+https://www.temu.com/cart.html,Global/en,Cart,None,None,None,No,Cart items management free shipping meter,VERIFIED
+https://www.temu.com/checkout.html,Global/en,Checkout,None,None,None,Optional,Address entry PG payment split order,VERIFIED
+https://www.temu.com/bgo_order_list.html,Global/en,Orders,None,None,None,Yes,Order history tracking cancel return,VERIFIED
+https://www.temu.com/order_detail.html?order_id={id},Global/en,OrderDetail,None,None,order_id,Yes,Sub-order fulfillment tracking details,VERIFIED
+https://seller.temu.com/,Global/en,SellerPortal,None,None,None,Yes,Merchant onboarding KYC product upload,VERIFIED
+https://seller.temu.com/main/product/list,Global/en,SellerProducts,None,None,None,Yes,Partner SKU inventory price management,VERIFIED
+https://seller.temu.com/main/order/list,Global/en,SellerOrders,None,None,None,Yes,Partner shipment tracking dispatch,VERIFIED
+https://seller.temu.com/main/finance/settlement,Global/en,SellerSettlement,None,None,None,Yes,Partner revenue payout ledgers,VERIFIED
+https://www.temu.com/support.html,Global/en,Support,None,None,None,No,Customer support 24/7 returns refund FAQ,VERIFIED
+https://www.temu.com/privacy-policy.html,Global/en,Policy,None,None,None,No,Privacy terms compliance notices,VERIFIED
+https://www.temu.com/return-refund-policy.html,Global/en,Policy,None,None,None,No,90-day free return warranty policy,VERIFIED

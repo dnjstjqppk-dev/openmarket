@@ -73,3 +73,4 @@ INSERT OR IGNORE INTO products (id, partner_id, category_id, title, thumbnail_ur
 
 -- Jewelry & Watches
 ('prod_j_01', 'pt_001', 'cat_jewelry', '밀레니즈 루프 마그네틱 메탈 스마트워치 스트랩', 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500', '<p>애플워치/갤럭시워치 전 기종 호환</p>', 22000, 8900, 19200, 'ACTIVE');
+

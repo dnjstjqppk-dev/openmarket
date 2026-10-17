@@ -20,3 +20,4 @@ INSERT OR IGNORE INTO products (id, partner_id, category_id, title, thumbnail_ur
 
 -- Home & Kitchen
 ('prod_h_03', 'pt_001', 'cat_home', '304 스테인리스 원터치 진공 보온보냉 텀블러 750ml', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500', '<p>최대 24시간 보냉, 스트로우 및 손잡이 일체형</p>', 32000, 14900, 9300, 'ACTIVE');
+
