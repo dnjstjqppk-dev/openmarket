@@ -9,7 +9,7 @@ const selectedCurrency = ref('KRW');
 
 function handleSearch() {
   if (searchQuery.value.trim()) {
-    router.push({ path: '/', query: { q: searchQuery.value.trim() } });
+    router.push({ path: '/category/all', query: { q: searchQuery.value.trim() } });
   }
 }
 </script>
@@ -90,6 +90,26 @@ function handleSearch() {
             <i class="fa-solid fa-store text-indigo-500"></i>
             <span>셀러 입점</span>
           </a>
+        </div>
+      </div>
+
+      <!-- Sub-Header Category Navigation Bar -->
+      <div class="bg-slate-50 border-t border-slate-100">
+        <div class="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto text-xs py-2 scrollbar-none font-semibold">
+          <router-link to="/categories" class="px-3 py-1 font-bold text-orange-600 bg-orange-100/70 rounded-full flex items-center gap-1.5 shrink-0 hover:bg-orange-200">
+            <i class="fa-solid fa-bars"></i>
+            <span>전체 카테고리</span>
+          </router-link>
+          <router-link to="/category/womens-clothing" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">여성의류</router-link>
+          <router-link to="/category/mens-clothing" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">남성의류</router-link>
+          <router-link to="/category/electronics" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">디지털/가전</router-link>
+          <router-link to="/category/home-kitchen" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">홈/주방</router-link>
+          <router-link to="/category/beauty-health" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">뷰티/헬스</router-link>
+          <router-link to="/category/sports-outdoors" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">스포츠/레저</router-link>
+          <router-link to="/category/shoes-bags" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">신발/가방</router-link>
+          <router-link to="/category/toys-games" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">완구/취미</router-link>
+          <router-link to="/category/automotive" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">차량용품</router-link>
+          <router-link to="/category/jewelry-accessories" class="px-3 py-1 text-slate-700 hover:text-orange-600 shrink-0" active-class="text-orange-600 font-bold">주얼리/시계</router-link>
         </div>
       </div>
     </header>
