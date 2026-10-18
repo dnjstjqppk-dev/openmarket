@@ -1,0 +1,30 @@
+URL_ID,App,Route_Path,Live_URL,Component_or_Handler,HTTP_Status,Auth_Level,Data_Binding,Finding,Action_Required
+U01,Storefront,/,https://openmarket.dnjstjqppk.workers.dev/,HomeView.vue,200 OK,Public,REAL_D1,Home loads 43 roots but mixes depth=1 due to filter bug,Fix line 49 filter to depth=0
+U02,Storefront,/categories,https://openmarket.dnjstjqppk.workers.dev/categories,CategoriesView.vue,200 OK,Public,REAL_D1,Categories list renders all categories from D1,Add icons for newly added 10 roots
+U03,Storefront,/category/:slug,https://openmarket.dnjstjqppk.workers.dev/category/womens-clothing,CategoryView.vue,200 OK,Public,REAL_D1,Category product cards show hardcoded 4.9 rating,Bind card ratings to product_reviews avg
+U04,Storefront,/product/:id,https://openmarket.dnjstjqppk.workers.dev/product/prod_001,ProductDetailView.vue,200 OK,Public,REAL_D1,PDP options work but rating is hardcoded and reviews UI missing,Render reviews list and photo tab
+U05,Storefront,/search,https://openmarket.dnjstjqppk.workers.dev/search,SearchView.vue,200 OK,Public,REAL_D1,Search works via query param but autocomplete dropdown missing,Add SearchAutocomplete component
+U06,Storefront,/cart,https://openmarket.dnjstjqppk.workers.dev/cart,CartView.vue,200 OK,Public,LOCAL_PINIA,Cart works with stock limit and option edit modal,Integrate coupon discount code input
+U07,Storefront,/checkout,https://openmarket.dnjstjqppk.workers.dev/checkout,CheckoutView.vue,200 OK,Public,REAL_D1,Validates recipient/phone/address and submits to D1,Add user credit deduction balance
+U08,Storefront,/orders,https://openmarket.dnjstjqppk.workers.dev/orders,OrdersView.vue,200 OK,Customer,REAL_D1,Lists orders from D1 but lacks action buttons,Add Cancel Order and Claim buttons
+U09,Storefront,/order/:id,https://openmarket.dnjstjqppk.workers.dev/order/olm_ord_xxx,OrderDetailView.vue,200 OK,Customer,REAL_D1,Shows sub-orders but lacks claim buttons,Add 90-day return & price match CTA
+U10,Storefront,/channel/lightning-deals,https://openmarket.dnjstjqppk.workers.dev/channel/lightning-deals,LightningDealsView.vue,404 Fallback,Public,UNIMPLEMENTED,Route missing from router/index.ts,Create view and add route
+U11,Storefront,/channel/best-sellers,https://openmarket.dnjstjqppk.workers.dev/channel/best-sellers,BestSellersView.vue,404 Fallback,Public,UNIMPLEMENTED,Route missing from router/index.ts,Create view and add route
+U12,Storefront,/wishlist,https://openmarket.dnjstjqppk.workers.dev/wishlist,WishlistView.vue,404 Fallback,Customer,UNIMPLEMENTED,Customer wishlist route missing,Create view and add route
+U13,Storefront,/coupons,https://openmarket.dnjstjqppk.workers.dev/coupons,CouponsView.vue,404 Fallback,Customer,UNIMPLEMENTED,Coupon wallet route missing,Create view and add route
+U14,Storefront,/support,https://openmarket.dnjstjqppk.workers.dev/support,SupportView.vue,404 Fallback,Public,UNIMPLEMENTED,Footer links to href=# instead of real support,Create support & policy views
+U15,Partner,/,https://olmoa-partner.dnjstjqppk.workers.dev/,DashboardView.vue,200 OK,Partner,REAL_D1,Loads merchant metrics and recent orders from D1,Maintain tenant header
+U16,Partner,/products,https://olmoa-partner.dnjstjqppk.workers.dev/products,ProductManageView.vue,200 OK,Partner,REAL_D1,SKU stock update calls PUT /stock with isolation,Add product creation modal
+U17,Partner,/shipments,https://olmoa-partner.dnjstjqppk.workers.dev/shipments,ShipmentView.vue,200 OK,Partner,REAL_D1,Registers tracking numbers into sub_orders,Add bulk tracking upload
+U18,Partner,/bulk-upload,https://olmoa-partner.dnjstjqppk.workers.dev/bulk-upload,BulkUploadView.vue,200 OK,Partner,MOCK_ONLY,Uses setTimeout and hardcodes 142 items,Implement real CSV parser and bulk API
+U19,Partner,/settlements,https://olmoa-partner.dnjstjqppk.workers.dev/settlements,SettlementView.vue,200 OK,Partner,MOCK_ONLY,Hardcodes 48M KRW settlement array,Wire to D1 settlements table
+U20,Admin,/,https://olmoa-admin.dnjstjqppk.workers.dev/,DashboardView.vue,200 OK,Admin,REAL_D1,Fetches live metrics with X-Admin-Secret,Add date range filter
+U21,Admin,/products,https://olmoa-admin.dnjstjqppk.workers.dev/products,ProductManageView.vue,200 OK,Admin,REAL_D1,Approves and suspends products in D1,Add batch status change
+U22,Admin,/partners,https://olmoa-admin.dnjstjqppk.workers.dev/partners,PartnerVerifyView.vue,200 OK,Admin,REAL_D1,Approves partner applications in D1,Add document preview
+U23,Admin,/ledger,https://olmoa-admin.dnjstjqppk.workers.dev/ledger,LedgerAuditView.vue,200 OK,Admin,REAL_D1,Audits atomic inventory ledger records,Add ledger discrepancy alert
+U24,Gateway,/health,https://olmoa-api.dnjstjqppk.workers.dev/health,index.js,200 OK,Public,REAL_D1,Returns CONNECTED_D1, active roots and products,Fully operational
+U25,Gateway,/api/v1/search/autocomplete,https://olmoa-api.dnjstjqppk.workers.dev/api/v1/search/autocomplete,features.js,200 OK,Public,REAL_D1,Returns trending keywords suggestions and previews,Fully operational
+U26,Gateway,/api/v1/campaigns/lightning,https://olmoa-api.dnjstjqppk.workers.dev/api/v1/campaigns/lightning,features.js,200 OK,Public,REAL_D1,Returns active flash sale items with sold percent,Fully operational
+U27,Gateway,/api/v1/products/:id/reviews,https://olmoa-api.dnjstjqppk.workers.dev/api/v1/products/prod_001/reviews,features.js,200 OK,Public,REAL_D1,Returns verified buyer reviews and avg rating,Fully operational
+U28,Gateway,/api/v1/integrations/pricescanner/feed,https://olmoa-api.dnjstjqppk.workers.dev/api/v1/integrations/pricescanner/feed,integrations.js,200 OK,API_Key,REAL_D1,Returns paginated product feed with edge cache,Fully operational
+U29,Gateway,/api/v1/integrations/selbym/status,https://olmoa-api.dnjstjqppk.workers.dev/api/v1/integrations/selbym/status,integrations.js,200 OK,Public,HARDCODED_POLICY,Returns AWAITING_COMMERCIAL_AGREEMENT status,Formal agreement required
