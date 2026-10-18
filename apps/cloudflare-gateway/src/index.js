@@ -6,6 +6,7 @@ import { handleOrderRoutes } from './routes/orders.js';
 import { handlePartnerRoutes } from './routes/partner.js';
 import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
+import { handleFeatureRoutes } from './routes/features.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,6 +70,10 @@ export default {
     // 3. Direct D1 Relational Engine
     if (env && env.DB) {
       try {
+        // Extended Features: Autocomplete, Flash Sales, Reviews, Coupons & FAQ
+        const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
+        if (featureRes) return featureRes;
+
         // Catalog: Categories, Products & Search
         const catalogRes = await handleCatalogRoutes(request, url, env, corsHeaders);
         if (catalogRes) return catalogRes;

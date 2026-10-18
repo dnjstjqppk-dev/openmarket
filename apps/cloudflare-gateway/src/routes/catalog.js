@@ -108,7 +108,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   }
 
   // 4. Single Product with SKUs and Partner
-  if (url.pathname.startsWith('/api/v1/products/') && request.method === 'GET') {
+  if (url.pathname.startsWith('/api/v1/products/') && !url.pathname.includes('/reviews') && request.method === 'GET') {
     const prodId = url.pathname.replace('/api/v1/products/', '').trim();
     const product = await env.DB.prepare(
       `SELECT p.*, c.name as category_name, c.slug as category_slug, pt.business_name, pt.base_shipping_fee, pt.free_shipping_threshold 
