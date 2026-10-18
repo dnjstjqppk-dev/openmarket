@@ -1,0 +1,41 @@
+<template>
+  <div class="max-w-4xl mx-auto bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm space-y-6 text-slate-700 text-xs sm:text-sm leading-relaxed">
+    <div class="border-b border-slate-100 pb-4">
+      <span class="text-orange-600 font-bold text-xs uppercase tracking-wider">OLMOA Buyer Protection</span>
+      <h1 class="text-2xl font-black text-slate-900 mt-1">90일 무조건 무료 반품 & 100% 환불 정책</h1>
+      <p class="text-xs text-slate-400 mt-1">구매자 안심 보호 프로그램 (전 주문 첫 회 반품 배송비 0원 전액 무료)</p>
+    </div>
+
+    <section class="space-y-2">
+      <h2 class="text-base font-bold text-slate-900">1. 90일 반품 보장 프로그램 개요</h2>
+      <p>OLMOA에서 구매한 모든 상품은 배송 완료일로부터 <strong>90일 이내</strong> 단순 변심을 포함하여 반품 및 100% 전액 환불을 신청하실 수 있습니다.</p>
+      <div class="p-4 bg-orange-50 border border-orange-200 rounded-2xl text-xs text-orange-900 font-semibold space-y-1">
+        <div><i class="fa-solid fa-gift mr-1.5 text-orange-600"></i>첫 번째 반품 배송비 100% 무료 지원</div>
+        <p class="font-normal text-[11px] text-orange-800">동일 주문 건에서 첫 번째 반품 요청 시 반품 수거 배송비는 전액 올모아가 부담합니다.</p>
+      </div>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-base font-bold text-slate-900">2. 반품 신청 절차</h2>
+      <ol class="list-decimal list-inside space-y-1 text-slate-600">
+        <li><strong>[주문·배송]</strong> 메뉴에서 해당 주문의 <strong>[반품/교환 신청]</strong> 버튼을 클릭합니다.</li>
+        <li>반품 수량과 사유를 선택하고 사진을 첨부한 뒤 접수를 완료합니다.</li>
+        <li>지정 택배 기사님이 1~3 영업일 이내 방문하여 상품을 무료 수거합니다.</li>
+        <li>물류센터 입고 검수 완료 후 결제 수단으로 24시간 이내 즉시 전액 환불됩니다.</li>
+      </ol>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-base font-bold text-slate-900">3. 반품이 제한되는 경우</h2>
+      <p>소비자 귀책으로 상품이 멸실·훼손되거나 개봉 후 상품 가치가 현저히 상실된 경우(식품 개봉, 밀봉 스티커 제거 소프트웨어 등)에는 반품이 제한될 수 있습니다.</p>
+    </section>
+
+    <div class="pt-6 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+      <router-link to="/" class="font-bold text-orange-600 hover:underline">&larr; 홈으로 돌아가기</router-link>
+      <div class="space-x-3">
+        <router-link to="/legal/terms" class="hover:text-slate-800">이용약관</router-link>
+        <router-link to="/legal/privacy" class="hover:text-slate-800">개인정보처리방침</router-link>
+      </div>
+    </div>
+  </div>
+</template>

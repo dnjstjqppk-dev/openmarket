@@ -124,7 +124,25 @@ export const useCartStore = defineStore('cart', () => {
 
   const totalCount = computed(() => items.value.reduce((sum, item) => sum + item.quantity, 0));
   const totalGoodsAmount = computed(() => items.value.reduce((sum, item) => sum + (item.price * item.quantity), 0));
-  const shippingFee = computed(() => (items.value.length === 0 || totalGoodsAmount.value >= 30000) ? 0 : 3000);
+
+  const partnerShippingDetails = computed(() => {
+    const groups: Record<string, { goodsAmount: number; shippingFee: number }> = {};
+    for (const item of items.value) {
+      const pid = item.partner_id || 'pt_001';
+      if (!groups[pid]) groups[pid] = { goodsAmount: 0, shippingFee: 0 };
+      groups[pid].goodsAmount += (item.price * item.quantity);
+    }
+    for (const pid in groups) {
+      groups[pid].shippingFee = groups[pid].goodsAmount >= 30000 ? 0 : 3000;
+    }
+    return groups;
+  });
+
+  const shippingFee = computed(() => {
+    if (items.value.length === 0) return 0;
+    return Object.values(partnerShippingDetails.value).reduce((sum, g) => sum + g.shippingFee, 0);
+  });
+
   const freeShippingRemaining = computed(() => Math.max(0, 30000 - totalGoodsAmount.value));
   const totalPayAmount = computed(() => totalGoodsAmount.value + shippingFee.value);
 
@@ -137,6 +155,7 @@ export const useCartStore = defineStore('cart', () => {
     clearCart,
     totalCount,
     totalGoodsAmount,
+    partnerShippingDetails,
     shippingFee,
     freeShippingRemaining,
     totalPayAmount

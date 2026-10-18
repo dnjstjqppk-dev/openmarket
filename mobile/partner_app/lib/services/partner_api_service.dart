@@ -1,28 +1,46 @@
 // mobile/partner_app/lib/services/partner_api_service.dart
-// Partner Mobile API Service connecting to Edge Gateway and Go Backend
+// OLMOA Mobile Partner API Service: D1 Gateway Synchronization
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/sub_order.dart';
 
 class PartnerApiService {
-  static const String baseUrl = 'https://openmarket-api.dnjstjqppk.workers.dev';
+  static const String baseUrl = 'https://olmoa-api.dnjstjqppk.workers.dev';
+  static const String partnerId = 'pt_001';
+
+  Map<String, String> _getPartnerHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'X-Partner-Id': partnerId,
+      'Authorization': 'Bearer $partnerId',
+    };
+  }
 
   Future<List<SubOrder>> fetchPartnerOrders() async {
     try {
-      final res = await http.get(Uri.parse('$baseUrl/api/v1/orders'));
+      final res = await http.get(
+        Uri.parse('$baseUrl/api/v1/partner/orders'),
+        headers: _getPartnerHeaders(),
+      );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         final List<dynamic> list = body['data'] ?? [];
         if (list.isNotEmpty) {
-          return list.map((item) => SubOrder(
-            id: item['id'] ?? 'sub_001',
-            subOrderNo: item['order_no'] ?? 'ORD-001',
-            productTitle: 'ANC 노이즈캔슬링 무선 이어폰 Pro 3',
-            quantity: 1,
-            totalAmount: item['total_pay_amount'] ?? 49900,
-            status: item['payment_status'] == 'PAID' ? 'PAYMENT_CONFIRMED' : 'READY',
-          )).toList();
+          return list.map((item) {
+            final itemsList = item['items'] as List<dynamic>? ?? [];
+            final title = itemsList.isNotEmpty ? itemsList[0]['product_title'] : '주문 상품';
+            final qty = itemsList.isNotEmpty ? itemsList[0]['quantity'] : 1;
+
+            return SubOrder(
+              id: item['id'] ?? 'sub_001',
+              subOrderNo: item['sub_order_no'] ?? item['order_no'] ?? 'ORD-001',
+              productTitle: title,
+              quantity: qty is int ? qty : 1,
+              totalAmount: item['total_amount'] ?? 49900,
+              status: item['status'] ?? 'PREPARING',
+            );
+          }).toList();
         }
       }
     } catch (_) {}
@@ -54,18 +72,16 @@ class PartnerApiService {
   }) async {
     try {
       final res = await http.post(
-        Uri.parse('$baseUrl/api/v1/shipments/tracking'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$baseUrl/api/v1/partner/orders/$subOrderId/shipment'),
+        headers: _getPartnerHeaders(),
         body: jsonEncode({
-          'sub_order_id': subOrderId,
-          'carrier_code': carrier,
+          'carrier': carrier,
           'tracking_number': trackingNo,
         }),
       );
-      return res.statusCode == 200 || res.statusCode == 201;
+      return res.statusCode == 200;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 }
-

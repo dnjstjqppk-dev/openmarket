@@ -7,6 +7,7 @@ export function getAdminHeaders(extra: Record<string, string> = {}): Record<stri
   const secret = localStorage.getItem('admin_token') || 'olmoa_admin_sec_2026';
   return {
     'Content-Type': 'application/json',
+    'Authorization': `Bearer ${secret}`,
     'X-Admin-Secret': secret,
     ...extra
   };

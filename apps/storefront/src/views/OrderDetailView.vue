@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { API_BASE_URL, getAuthHeaders } from '../config';
+import ClaimModal from '../components/ClaimModal.vue';
 
 const route = useRoute();
 const order = ref<any>(null);
 const loading = ref(true);
+const actionError = ref('');
+const actionMessage = ref('');
 
-onMounted(async () => {
+const showClaimModal = ref(false);
+const activeSubOrder = ref<any>(null);
+const claimLoading = ref(false);
+
+const canCancel = computed(() => {
+  if (!order.value || order.value.payment_status === 'CANCELLED') return false;
+  const subs = order.value.sub_orders || [];
+  return !subs.some((s: any) => ['SHIPPED', 'DELIVERED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(s.status));
+});
+
+async function loadOrder() {
   const ordId = route.params.id as string;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${ordId}`, {
@@ -21,6 +34,64 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+}
+
+async function handleCancelOrder() {
+  if (!confirm('정말 이 주문을 전액 취소하시겠습니까? 재고가 즉시 복원됩니다.')) return;
+  actionError.value = '';
+  actionMessage.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/cancel`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      actionMessage.value = '주문이 취소되었으며 결제 및 재고가 환원되었습니다.';
+      await loadOrder();
+    } else {
+      actionError.value = json.error || '주문 취소에 실패했습니다.';
+    }
+  } catch (e: any) {
+    actionError.value = '취소 요청 실패: ' + e.message;
+  }
+}
+
+function openClaim(sub: any) {
+  activeSubOrder.value = sub;
+  showClaimModal.value = true;
+}
+
+async function handleClaimSubmit(payload: { claimType: 'RETURN' | 'EXCHANGE'; reason: string }) {
+  claimLoading.value = true;
+  actionError.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/claim`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        claim_type: payload.claimType,
+        reason: payload.reason,
+        sub_order_id: activeSubOrder.value?.id
+      })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      showClaimModal.value = false;
+      actionMessage.value = json.message || '클레임 신청이 완료되었습니다.';
+      await loadOrder();
+    } else {
+      actionError.value = json.error || '신청 실패';
+    }
+  } catch (e: any) {
+    actionError.value = '클레임 요청 실패: ' + e.message;
+  } finally {
+    claimLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadOrder();
 });
 </script>
 
@@ -40,18 +111,35 @@ onMounted(async () => {
     </div>
 
     <div v-else class="space-y-6">
+      <div v-if="actionMessage" class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold">
+        <i class="fa-solid fa-circle-check mr-1.5 text-emerald-600"></i>{{ actionMessage }}
+      </div>
+      <div v-if="actionError" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold">
+        <i class="fa-solid fa-circle-exclamation mr-1.5 text-rose-600"></i>{{ actionError }}
+      </div>
+
       <!-- Order Header Banner -->
       <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
-            <div class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-1">
-              <i class="fa-solid fa-circle-check"></i>
-              <span>결제 및 주문 승인 완료</span>
+            <div class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full mb-1"
+                 :class="order.payment_status === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-600'">
+              <i :class="order.payment_status === 'CANCELLED' ? 'fa-solid fa-ban' : 'fa-solid fa-circle-check'"></i>
+              <span>{{ order.payment_status === 'CANCELLED' ? '주문 취소 및 환불 완료' : '결제 및 주문 승인 완료' }}</span>
             </div>
             <h1 class="text-xl font-black text-slate-900">주문번호: {{ order.order_no }}</h1>
           </div>
-          <div class="text-xs text-slate-500 font-mono">
-            주문일시: {{ order.created_at }}
+          <div class="flex items-center gap-2">
+            <button 
+              v-if="canCancel"
+              @click="handleCancelOrder" 
+              class="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold rounded-xl transition"
+            >
+              주문 전체 취소
+            </button>
+            <div class="text-xs text-slate-500 font-mono">
+              주문일시: {{ order.created_at }}
+            </div>
           </div>
         </div>
 
@@ -87,14 +175,17 @@ onMounted(async () => {
             <div class="flex items-center gap-2">
               <span 
                 class="px-3 py-1 rounded-full font-bold text-[11px]"
-                :class="sub.status === 'SHIPPED' ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-amber-50 text-amber-700 border border-amber-200'"
+                :class="sub.status === 'SHIPPED' ? 'bg-sky-50 text-sky-700 border border-sky-200' : sub.status.includes('RETURN') ? 'bg-purple-50 text-purple-700 border border-purple-200' : sub.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'"
               >
-                <i class="fa-solid fa-truck mr-1"></i>
-                {{ sub.status === 'SHIPPED' ? '출고완료 (배송중)' : '상품 준비중' }}
+                {{ sub.status === 'SHIPPED' ? '출고완료 (배송중)' : sub.status === 'RETURN_REQUESTED' ? '반품 접수' : sub.status === 'EXCHANGE_REQUESTED' ? '교환 접수' : sub.status === 'CANCELLED' ? '취소완료' : '상품 준비중' }}
               </span>
-              <span v-if="sub.tracking_number" class="text-slate-600 font-mono">
-                {{ sub.carrier_code || 'CJ대한통운' }} {{ sub.tracking_number }}
-              </span>
+              <button 
+                v-if="['SHIPPED', 'DELIVERED'].includes(sub.status)"
+                @click="openClaim(sub)"
+                class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-[11px]"
+              >
+                반품/교환 신청
+              </button>
             </div>
           </div>
 
@@ -122,5 +213,14 @@ onMounted(async () => {
         </router-link>
       </div>
     </div>
+
+    <!-- Modal Component -->
+    <ClaimModal 
+      v-if="showClaimModal" 
+      :sub-order="activeSubOrder" 
+      :loading="claimLoading" 
+      @close="showClaimModal = false" 
+      @submit="handleClaimSubmit" 
+    />
   </div>
 </template>

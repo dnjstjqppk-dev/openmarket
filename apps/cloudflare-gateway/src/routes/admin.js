@@ -20,7 +20,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   // 1. Admin Dashboard Statistics
   if (url.pathname === '/api/v1/admin/dashboard' && request.method === 'GET') {
     const prodRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products').first();
-    const orderRes = await env.DB.prepare('SELECT COUNT(*) as cnt, SUM(total_pay_amount) as total_gmv FROM orders').first();
+    const orderRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(total_pay_amount) as total_gmv FROM orders WHERE payment_status != 'CANCELLED'").first();
     const partnerRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM partners').first();
     const userRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM users').first();
     const oosRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM product_skus WHERE stock_quantity = 0').first();

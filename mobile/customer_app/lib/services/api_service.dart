@@ -1,24 +1,36 @@
 // mobile/customer_app/lib/services/api_service.dart
-// OpenMarket API Service communicating with Cloudflare D1 Gateway and Go Backend
+// OLMOA Mobile Customer API Service: D1 Gateway Synchronization
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/product.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://openmarket-api.dnjstjqppk.workers.dev';
+  static const String baseUrl = 'https://olmoa-api.dnjstjqppk.workers.dev';
+  static const String defaultCustomerId = 'u_customer_001';
+
+  Map<String, String> _getHeaders({String? idempotencyKey}) {
+    return {
+      'Content-Type': 'application/json',
+      'X-Customer-Id': defaultCustomerId,
+      'Authorization': 'Bearer $defaultCustomerId',
+      if (idempotencyKey != null) 'X-Idempotency-Key': idempotencyKey,
+    };
+  }
 
   Future<List<Product>> fetchProducts() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/v1/products'));
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/products?limit=20'),
+        headers: _getHeaders(),
+      );
       if (response.statusCode == 200) {
         final Map<String, dynamic> body = jsonDecode(response.body);
-        final List<dynamic> data = body['data'] ?? [];
+        final List<dynamic> data = body['data'] is List ? body['data'] : (body['data']?['items'] ?? []);
         return data.map((item) => Product.fromJson(item)).toList();
       }
       return [];
-    } catch (e) {
-      // Fallback local products if offline
+    } catch (_) {
       return [
         Product(
           id: 'prod_001',
@@ -47,23 +59,33 @@ class ApiService {
     required String phone,
     required String address,
     required int amount,
+    String? skuId,
+    String? productId,
+    int quantity = 1,
   }) async {
+    final idempKey = 'idemp_flutter_${DateTime.now().millisecondsSinceEpoch}';
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/orders/checkout'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _getHeaders(idempotencyKey: idempKey),
         body: jsonEncode({
           'recipient_name': recipientName,
           'recipient_phone': phone,
           'shipping_address_line1': address,
-          'total_goods_amount': amount,
-          'total_shipping_amount': 3000,
+          'items': [
+            {
+              'product_id': productId ?? 'prod_001',
+              'sku_id': skuId ?? 'sku_001_w',
+              'quantity': quantity,
+            }
+          ]
         }),
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
         return jsonDecode(response.body);
       }
     } catch (_) {}
+
     return {
       'success': true,
       'order_no': 'ORD-FLUTTER-${DateTime.now().millisecondsSinceEpoch}',
@@ -71,4 +93,3 @@ class ApiService {
     };
   }
 }
-

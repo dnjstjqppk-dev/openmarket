@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { API_BASE_URL } from '../config';
+import ProductReviews from '../components/ProductReviews.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -88,7 +89,10 @@ function handleBuyNow() {
 
 const safeDescription = computed(() => {
   if (!product.value?.description_html) return '';
-  return product.value.description_html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  return product.value.description_html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\bon\w+\s*=\s*(['"]).*?\1/gi, '')
+    .replace(/javascript\s*:/gi, '');
 });
 </script>
 
@@ -216,6 +220,9 @@ const safeDescription = computed(() => {
           <h4 class="font-bold text-slate-800">상품 상세 정보</h4>
           <div v-html="safeDescription" class="prose prose-sm text-slate-600"></div>
         </div>
+
+        <!-- Real Product Reviews Component -->
+        <ProductReviews v-if="product?.id" :product-id="product.id" />
       </div>
     </div>
   </div>

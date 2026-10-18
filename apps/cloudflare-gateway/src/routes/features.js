@@ -1,11 +1,21 @@
 // apps/cloudflare-gateway/src/routes/features.js
-// OLMOA Extended Features: Autocomplete, Flash Sales, Reviews, Coupons & Wishlist
+// OLMOA Extended Features: Autocomplete, Flash Sales, Reviews, Coupons & Order Claims
+
+function sanitizeText(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 export async function handleFeatureRoutes(request, url, env, corsHeaders) {
-  // 1. Search Autocomplete
-  if (url.pathname === '/api/v1/search/autocomplete' && request.method === 'GET') {
+  // 1. Search Autocomplete & Trending
+  if ((url.pathname === '/api/v1/search/autocomplete' || url.pathname === '/api/v1/search/trending') && request.method === 'GET') {
     const q = (url.searchParams.get('q') || '').trim();
-    if (!q) {
+    if (!q || url.pathname === '/api/v1/search/trending') {
       const { results: trending } = await env.DB.prepare(
         'SELECT keyword, search_count, is_promoted FROM search_keywords ORDER BY search_count DESC LIMIT 10'
       ).all();
@@ -80,7 +90,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 4. Product Reviews List & Create
+  // 4. Product Reviews List & Create (Sanitized, WO-09)
   if (url.pathname.match(/^\/api\/v1\/products\/[^\/]+\/reviews$/)) {
     const prodId = url.pathname.split('/')[4];
     if (request.method === 'GET') {
@@ -103,20 +113,50 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     if (request.method === 'POST') {
       const b = await request.json();
       const revId = `rev_${Date.now()}`;
+      const safeContent = sanitizeText(b.content || '');
+      const safeReviewer = sanitizeText(b.reviewer_name || '구매자');
+      const safeSummary = sanitizeText(b.sku_option_summary || '기본');
+
       await env.DB.prepare(
         `INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, sku_option_summary, rating, content, images_json)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
-        revId, prodId, b.user_id || 'u_customer_001', b.reviewer_name || '구매자',
-        b.sku_option_summary || '기본', Math.max(1, Math.min(5, b.rating || 5)),
-        b.content || '', JSON.stringify(b.images || [])
+        revId, prodId, b.user_id || 'u_customer_001', safeReviewer,
+        safeSummary, Math.max(1, Math.min(5, b.rating || 5)),
+        safeContent, JSON.stringify(b.images || [])
       ).run();
 
       return new Response(JSON.stringify({ success: true, review_id: revId }), { status: 201, headers: corsHeaders });
     }
   }
 
-  // 5. Coupons & Wishlist
+  // 5. Order Claims: Return / Exchange / Dispute (WO-10)
+  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/claim$/) && request.method === 'POST') {
+    const ordId = url.pathname.split('/')[4];
+    const b = await request.json();
+    const claimType = (b.claim_type || 'RETURN').toUpperCase();
+    const reason = sanitizeText(b.reason || '고객 단순 변심 또는 상품 불만족');
+    const newStatus = claimType === 'EXCHANGE' ? 'EXCHANGE_REQUESTED' : 'RETURN_REQUESTED';
+
+    const order = await env.DB.prepare('SELECT id FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
+    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
+
+    if (b.sub_order_id) {
+      await env.DB.prepare('UPDATE sub_orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND parent_order_id = ?')
+        .bind(newStatus, b.sub_order_id, order.id).run();
+    } else {
+      await env.DB.prepare('UPDATE sub_orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?')
+        .bind(newStatus, order.id).run();
+    }
+
+    return new Response(JSON.stringify({
+      success: true, brand: 'OLMOA',
+      order_id: order.id, claim_type: claimType, reason, status: newStatus,
+      message: `${claimType === 'EXCHANGE' ? '교환' : '반품'} 접수가 정상 완료되었습니다.`
+    }), { status: 200, headers: corsHeaders });
+  }
+
+  // 6. Coupons & Support FAQ
   if (url.pathname === '/api/v1/coupons' && request.method === 'GET') {
     const { results } = await env.DB.prepare("SELECT * FROM coupons WHERE is_active = 1").all();
     return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
@@ -133,4 +173,3 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   return null;
 }
-

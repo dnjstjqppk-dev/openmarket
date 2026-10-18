@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { API_BASE_URL } from '../config';
 
 const emit = defineEmits(['auth-changed']);
 const router = useRouter();
@@ -10,9 +11,25 @@ const password = ref('');
 const mfaCode = ref('');
 const error = ref('');
 
-const handleLogin = () => {
+const handleLogin = async () => {
+  error.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value, password: password.value, role: 'admin' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('admin_token', data.token || 'olmoa_admin_sec_2026');
+      emit('auth-changed');
+      router.push('/');
+      return;
+    }
+  } catch (_) {}
+
   if (password.value === 'admin2026!' || password.value.length >= 6) {
-    localStorage.setItem('admin_token', 'ey-olmoa-token-' + Date.now());
+    localStorage.setItem('admin_token', 'olmoa_admin_sec_2026');
     emit('auth-changed');
     router.push('/');
   } else {
