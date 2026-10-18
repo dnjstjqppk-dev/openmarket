@@ -1,4 +1,4 @@
-﻿if redis.call("EXISTS", KEYS[3]) == 1 then
+if redis.call("EXISTS", KEYS[3]) == 1 then
     return 0
 end
 local current_stock_raw = redis.call("GET", KEYS[1])

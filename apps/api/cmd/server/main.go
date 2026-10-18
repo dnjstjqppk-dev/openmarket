@@ -66,7 +66,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{"id": "p-1", "brand": "Anker Official", "name": "Soundcore Space Q45 ANC 헤드폰", "price": 49900, "stock": 120},
-				{"id": "p-2", "brand: ": "Baseus Korea", "name": "블레이드 100W 초고속 보조배터리", "price": 28900, "stock": 85},
+				{"id": "p-2", "brand": "Baseus Korea", "name": "블레이드 100W 초고속 보조배터리", "price": 28900, "stock": 85},
 			},
 		})
 	})
@@ -79,17 +79,20 @@ func main() {
 			return
 		}
 
-		p1 := uuid.New()
-		req := &orders.CheckoutRequest{
-			BuyerUserID:    uuid.New(),
-			IdempotencyKey: uuid.New(),
-			Items: []orders.CartItem{
-				{PartnerID: p1, ProductID: uuid.New(), SKUID: uuid.New(), UnitPrice: 49900, Quantity: 1},
-			},
-			PaymentMethod: "KAKAOPAY",
+		var req orders.CheckoutRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			p1 := uuid.New()
+			req = orders.CheckoutRequest{
+				BuyerUserID:    uuid.New(),
+				IdempotencyKey: uuid.New(),
+				Items: []orders.CartItem{
+					{PartnerID: p1, ProductID: uuid.New(), SKUID: uuid.New(), UnitPrice: 49900, Quantity: 1},
+				},
+				PaymentMethod: "KAKAOPAY",
+			}
 		}
 
-		res, err := checkoutSvc.ProcessCheckout(r.Context(), req)
+		res, err := checkoutSvc.ProcessCheckout(r.Context(), &req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
