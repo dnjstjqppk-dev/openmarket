@@ -13,7 +13,7 @@ const routes = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/categories', name: 'categories', component: CategoriesView },
   { path: '/category/:slug', name: 'category', component: CategoryView },
-  { path: '/categories/:slug', redirect: (to: { params: { slug: string } }) => `/category/${to.params.slug}` },
+  { path: '/categories/:slug', redirect: (to: any) => `/category/${to.params.slug}` },
   { path: '/product/:id', name: 'product-detail', component: ProductDetailView },
   { path: '/search', name: 'search', component: SearchView },
   { path: '/cart', name: 'cart', component: CartView },
@@ -26,7 +26,7 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: routes as any,
   scrollBehavior() {
     return { top: 0 };
   }
