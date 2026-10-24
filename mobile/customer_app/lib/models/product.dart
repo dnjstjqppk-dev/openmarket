@@ -74,5 +74,32 @@ class Product {
     if (lowestOriginalPrice <= 0) return 0;
     return (((lowestOriginalPrice - lowestSalePrice) / lowestOriginalPrice) * 100).round();
   }
+
+  static List<Product> fallbackCatalog() {
+    return [
+      Product(
+        id: 'prod_e_01',
+        title: '초경량 고속 무선충전 앤커 보조배터리 10000mAh',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1609081219090-a6d81d3085bf?w=400',
+        descriptionHtml: '<p>초고속 무선 충전을 지원하는 대용량 보조배터리</p>',
+        lowestOriginalPrice: 49000,
+        lowestSalePrice: 28900,
+        totalSoldCount: 1240,
+        categoryName: '가전/디지털',
+        businessName: '글로벌 테크 코리아',
+      ),
+      Product(
+        id: 'prod_e_02',
+        title: '노이즈 캔슬링 블루투스 5.3 무선 헤드셋',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400',
+        descriptionHtml: '<p>풍부한 사운드와 강력한 노이즈 캔슬링</p>',
+        lowestOriginalPrice: 89000,
+        lowestSalePrice: 45000,
+        totalSoldCount: 850,
+        categoryName: '가전/디지털',
+        businessName: '사운드 마스터',
+      ),
+    ];
+  }
 }
 
