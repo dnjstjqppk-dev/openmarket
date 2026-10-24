@@ -1,139 +1,112 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { API_BASE_URL } from '../config'
 
-interface CategoryItem {
-  id: string;
-  parent_id: string | null;
-  name: string;
-  slug: string;
-  depth: number;
-  sort_order: number;
-}
-
-interface RootCategoryWithSubs {
-  id: string;
-  name: string;
-  slug: string;
-  icon: string;
-  subcategories: { id: string; name: string; slug: string }[];
-}
-
-const rootCategories = ref<RootCategoryWithSubs[]>([]);
-const loading = ref(true);
-
-const iconMap: Record<string, string> = {
-  'womens-clothing': 'fa-person-dress text-pink-500',
-  'mens-clothing': 'fa-shirt text-blue-500',
-  'electronics': 'fa-laptop text-indigo-500',
-  'home-kitchen': 'fa-couch text-emerald-500',
-  'beauty-health': 'fa-wand-magic-sparkles text-purple-500',
-  'sports-outdoors': 'fa-person-running text-teal-500',
-  'shoes-bags': 'fa-bag-shopping text-amber-500',
-  'toys-games': 'fa-gamepad text-rose-500',
-  'automotive': 'fa-car text-cyan-500',
-  'jewelry-accessories': 'fa-gem text-yellow-500',
-  'bedding-bath': 'fa-bed text-indigo-400',
-  'furniture-interior': 'fa-chair text-amber-600',
-  'home-appliances': 'fa-blender text-blue-400',
-  'cellphones-accessories': 'fa-mobile-screen text-slate-700',
-  'smart-home-iot': 'fa-house-signal text-emerald-600',
-  'health-fitness': 'fa-heart-pulse text-red-500',
-  'baby-maternity': 'fa-baby text-pink-400',
-  'pet-supplies': 'fa-paw text-amber-500',
-  'office-stationery': 'fa-pen-ruler text-sky-500',
-  'books-media': 'fa-book text-emerald-700',
-  'arts-crafts-sewing': 'fa-palette text-purple-600',
-  'tools-home-improvement': 'fa-wrench text-slate-600',
-  'patio-lawn-garden': 'fa-seedling text-green-500',
-  'food-beverages': 'fa-utensils text-orange-500',
-  'video-games-gaming': 'fa-headset text-indigo-600',
-  'musical-instruments': 'fa-guitar text-rose-600',
-  'security-surveillance': 'fa-video text-slate-800',
-  'travel-outdoor-gear': 'fa-compass text-teal-600',
-  'watches-wearables': 'fa-clock text-blue-600',
-  'holiday-party-supplies': 'fa-champagne-glasses text-yellow-500',
-  'industrial-scientific': 'fa-microscope text-cyan-600',
-  'giftcards-digital': 'fa-ticket text-rose-500'
-};
+const allCategories = ref<any[]>([])
+const loading = ref(true)
+const searchFilter = ref('')
 
 onMounted(async () => {
   try {
-    const res = await fetch('https://olmoa-api.dnjstjqppk.workers.dev/api/v1/categories');
-    const json = await res.json();
-    if (json.success && json.data) {
-      const all: CategoryItem[] = json.data;
-      const roots = all.filter(c => !c.parent_id);
-      const subs = all.filter(c => c.parent_id);
-
-      rootCategories.value = roots.map(r => ({
-        id: r.id,
-        name: r.name,
-        slug: r.slug,
-        icon: iconMap[r.slug] || 'fa-tag text-slate-500',
-        subcategories: subs.filter(s => s.parent_id === r.id)
-      }));
-    }
-  } catch (_) {
+    const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
+    const json = await res.json()
+    if (json.success) allCategories.value = json.data
+  } catch (e) {
+    console.error(e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-});
+})
+
+const rootCategories = computed(() => {
+  const roots = allCategories.value.filter(c => Number(c.depth) === 0)
+  if (!searchFilter.value.trim()) return roots
+  const q = searchFilter.value.toLowerCase()
+  return roots.filter(r =>
+    r.name.toLowerCase().includes(q) ||
+    allCategories.value.some(sub => sub.parent_id === r.id && sub.name.toLowerCase().includes(q))
+  )
+})
+
+const getSubcategories = (parentId: string) =>
+  allCategories.value.filter(c => c.parent_id === parentId)
+
+const categoryIcons: Record<string, string> = {
+  'womens-clothing': '👗', 'mens-clothing': '👔', 'electronics': '💻', 'home-kitchen': '🍳',
+  'beauty-health': '💄', 'shoes': '👟', 'bags-luggage': '👜', 'jewelry-watches': '⌚',
+  'baby-kids': '🧸', 'sports-outdoors': '⛺', 'automotive': '🚗', 'pet-supplies': '🐾',
+  'office-school': '📎', 'tools-home-improvement': '🛠️', 'patio-lawn-garden': '🌱',
+  'arts-crafts-sewing': '🎨', 'musical-instruments': '🎸', 'toys-games': '🎮',
+  'appliances': '🧺', 'cell-phones-accessories': '📱', 'smart-home': '🏠',
+  'industrial-scientific': '🔬', 'grocery-gourmet': '🥑', 'health-household': '💊',
+  'books-media': '📚', 'collectibles-fine-art': '🖼️', 'handmade-crafts': '🧶',
+  'luxury-beauty': '✨', 'camera-photo': '📷', 'video-games-consoles': '🕹️',
+  'wearable-technology': '⌚', 'computer-components': '🖥️', 'networking-cloud': '📡',
+  'home-audio-theater': '🔊', 'furniture-mattresses': '🛋️', 'bedding-bath': '🛁',
+  'lighting-ceiling-fans': '💡', 'storage-organization': '📦', 'cleaning-laundry': '🧼',
+  'party-event-supplies': '🎈', 'travel-accessories': '✈️', 'sustainable-eco-living': '♻️'
+}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-3xl p-6 sm:p-8 shadow-lg">
-      <div class="max-w-xl space-y-2">
-        <span class="text-xs font-bold text-amber-200 tracking-wider uppercase">OLMOA Global Category Taxonomy</span>
-        <h1 class="text-2xl sm:text-3xl font-black">전체 33개 카테고리</h1>
-        <p class="text-xs sm:text-sm text-white/90">
-          내가 찾는 모든 것, 여기! Temu 수준의 방대한 글로벌 카테고리 상품을 만나보세요.
-        </p>
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <div class="text-xs font-extrabold text-[#FF5000] uppercase tracking-wider mb-1">Global Taxonomic Directory</div>
+        <h1 class="text-2xl sm:text-3xl font-black text-gray-900">All {{ rootCategories.length }} Store Departments</h1>
+      </div>
+      <div class="w-full md:w-80">
+        <input
+          v-model="searchFilter"
+          type="search"
+          placeholder="Filter departments or subcategories..."
+          class="w-full h-10 px-4 rounded-full bg-white border border-gray-300 text-sm focus:outline-none focus:border-[#FF5000]"
+        />
       </div>
     </div>
 
-    <div v-if="loading" class="py-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-orange-500"></i>
-      <p class="text-xs font-bold">카테고리 트리를 불러오는 중입니다...</p>
+    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-for="n in 9" :key="n" class="h-44 bg-white rounded-2xl p-5 animate-pulse border border-gray-100"></div>
     </div>
 
-    <!-- 33 Root Categories Visual Cards Grid -->
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div 
-        v-for="cat in rootCategories" 
-        :key="cat.id" 
-        class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition space-y-3"
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div
+        v-for="root in rootCategories"
+        :key="root.id"
+        class="bg-white rounded-2xl p-5 border border-gray-200/80 hover:border-[#FF5000] hover:shadow-md transition-all flex flex-col justify-between"
       >
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <router-link :to="'/category/' + cat.slug" class="flex items-center gap-3 group">
-            <div class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-lg group-hover:bg-orange-50 transition">
-              <i :class="['fa-solid', cat.icon]"></i>
+        <div>
+          <RouterLink :to="`/category/${root.slug}`" class="flex items-center justify-between group mb-3">
+            <div class="flex items-center gap-3">
+              <span class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-xl">
+                {{ categoryIcons[root.slug] || '🛍️' }}
+              </span>
+              <div>
+                <h2 class="font-black text-gray-900 group-hover:text-[#FF5000] transition-colors">{{ root.name }}</h2>
+                <span class="text-[11px] text-gray-400">Department • Direct Verified</span>
+              </div>
             </div>
-            <div>
-              <h3 class="font-black text-slate-900 text-sm group-hover:text-orange-600 transition">{{ cat.name }}</h3>
-              <span class="text-[10px] text-slate-400 font-mono">{{ cat.slug }}</span>
-            </div>
-          </router-link>
-          <router-link :to="'/category/' + cat.slug" class="text-xs text-orange-600 font-bold hover:underline">
-            전체보기 &rarr;
-          </router-link>
-        </div>
+            <span class="text-xs font-bold text-[#FF5000] group-hover:translate-x-1 transition-transform">Explore →</span>
+          </RouterLink>
 
-        <!-- Subcategories -->
-        <div v-if="cat.subcategories.length > 0" class="flex flex-wrap gap-1.5 pt-1">
-          <router-link 
-            v-for="sub in cat.subcategories" 
-            :key="sub.id"
-            :to="'/category/' + sub.slug"
-            class="px-2.5 py-1 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg text-[11px] font-medium transition"
-          >
-            {{ sub.name }}
-          </router-link>
-        </div>
-        <div v-else class="text-[11px] text-slate-400">
-          <router-link :to="'/category/' + cat.slug" class="hover:text-orange-600">
-            {{ cat.name }} 특가 상품 바로보기 &rarr;
-          </router-link>
+          <div class="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
+            <RouterLink
+              v-for="sub in getSubcategories(root.id)"
+              :key="sub.id"
+              :to="`/category/${sub.slug}`"
+              class="px-2.5 py-1 rounded-full bg-gray-100 hover:bg-[#FF5000] hover:text-white text-gray-700 text-xs font-medium transition-colors"
+            >
+              {{ sub.name }}
+            </RouterLink>
+            <RouterLink
+              v-if="getSubcategories(root.id).length === 0"
+              :to="`/category/${root.slug}`"
+              class="text-xs text-gray-400 hover:text-[#FF5000]"
+            >
+              Browse all {{ root.name }} products →
+            </RouterLink>
+          </div>
         </div>
       </div>
     </div>

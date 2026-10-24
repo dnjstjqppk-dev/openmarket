@@ -1,194 +1,302 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useCartStore } from './stores/cart';
-import { useLocaleStore } from './stores/locale';
-import SearchAutocomplete from './components/SearchAutocomplete.vue';
+import { ref, computed, onMounted } from 'vue'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { useCartStore } from './stores/cart'
+import { useAuthStore } from './stores/auth'
+import { useLocaleStore } from './stores/locale'
+import { API_BASE_URL, PARTNER_CONSOLE_URL, ADMIN_CONSOLE_URL } from './config'
+import SearchAutocomplete from './components/SearchAutocomplete.vue'
 
-const router = useRouter();
-const cartStore = useCartStore();
-const localeStore = useLocaleStore();
+const cart = useCartStore()
+const auth = useAuthStore()
+const locale = useLocaleStore()
+const router = useRouter()
 
-const customerName = ref('');
+const showMegaMenu = ref(false)
+const allCategories = ref<any[]>([])
+const activeRootCat = ref<any>(null)
 
-function checkUser() {
-  customerName.value = localStorage.getItem('olmoa_customer_name') || '';
+const rootCategories = computed(() =>
+  allCategories.value.filter(c => Number(c.depth) === 0).slice(0, 14)
+)
+const subCategories = computed(() => {
+  if (!activeRootCat.value) return []
+  return allCategories.value.filter(c => c.parent_id === activeRootCat.value.id)
+})
+
+const handleLogout = () => {
+  auth.logout()
+  router.push('/')
 }
 
-function handleLogout() {
-  localStorage.removeItem('olmoa_customer_id');
-  localStorage.removeItem('olmoa_customer_name');
-  customerName.value = '';
-  router.push('/');
-}
-
-onMounted(() => {
-  checkUser();
-});
+onMounted(async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
+    const json = await res.json()
+    if (json.success && Array.isArray(json.data)) {
+      allCategories.value = json.data
+      const roots = json.data.filter((c: any) => Number(c.depth) === 0)
+      if (roots.length > 0) activeRootCat.value = roots[0]
+    }
+  } catch {}
+})
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-slate-50 font-sans">
-    <!-- Top Announcement Bar -->
-    <div class="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 text-white text-xs py-2 px-4 text-center font-medium shadow-inner flex items-center justify-between">
-      <div class="hidden md:flex items-center gap-2">
-        <span class="bg-white/20 px-2 py-0.5 rounded text-[11px] font-bold">공식 슬로건</span>
-        <span>{{ localeStore.t('slogan') }}</span>
-      </div>
-      <div class="mx-auto md:mx-0 flex items-center gap-4 text-[11px]">
-        <span>⚡ {{ localeStore.t('freeShipping') }}</span>
-        <div class="flex items-center gap-2">
-          <select 
-            :value="localeStore.currentLocale" 
-            @change="localeStore.setLocale(($event.target as HTMLSelectElement).value as any)"
-            class="bg-black/20 text-white border-0 rounded px-1.5 py-0.5 text-[11px] cursor-pointer"
-          >
-            <option value="ko-KR">KR (한국어)</option>
-            <option value="en-US">US (English)</option>
-            <option value="ja-JP">JP (日本語)</option>
-          </select>
-          <select 
-            :value="localeStore.currentCurrency" 
-            @change="localeStore.setCurrency(($event.target as HTMLSelectElement).value as any)"
-            class="bg-black/20 text-white border-0 rounded px-1.5 py-0.5 text-[11px] cursor-pointer font-bold"
-          >
-            <option value="KRW">KRW (₩)</option>
-            <option value="USD">USD ($)</option>
-            <option value="JPY">JPY (¥)</option>
-          </select>
+  <div class="min-h-screen flex flex-col bg-[#F5F5F7] text-[#111111] font-sans antialiased selection:bg-[#FF5000] selection:text-white">
+    <!-- Top Trust & Utility Bar -->
+    <div class="bg-[#111111] text-white text-[11px] font-medium py-1.5 px-4 border-b border-gray-800">
+      <div class="max-w-[1440px] mx-auto flex flex-wrap justify-between items-center gap-2">
+        <div class="flex items-center gap-5">
+          <span class="flex items-center gap-1.5 text-[#00A862] font-bold">
+            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+            Free Shipping on Orders ₩30,000+
+          </span>
+          <RouterLink to="/policy/price-match" class="hidden sm:inline text-gray-300 hover:text-white transition-colors">✓ 30-Day Price-Match Adjustment</RouterLink>
+          <RouterLink to="/policy/returns" class="hidden md:inline text-gray-300 hover:text-white transition-colors">✓ Free 90-Day Returns</RouterLink>
+        </div>
+        <div class="flex items-center gap-4 text-gray-300">
+          <!-- Language & Currency Selector -->
+          <div class="flex items-center gap-1.5 bg-gray-900 px-2 py-0.5 rounded border border-gray-700">
+            <select
+              :value="locale.lang"
+              @change="locale.setLang(($event.target as HTMLSelectElement).value as any)"
+              class="bg-transparent text-white text-[11px] font-bold focus:outline-none cursor-pointer"
+              aria-label="Select Language"
+            >
+              <option value="ko" class="text-black">🇰🇷 한국어</option>
+              <option value="en" class="text-black">🇺🇸 EN</option>
+              <option value="ja" class="text-black">🇯🇵 日本語</option>
+            </select>
+            <span class="text-gray-600">/</span>
+            <select
+              :value="locale.currency"
+              @change="locale.setCurrency(($event.target as HTMLSelectElement).value as any)"
+              class="bg-transparent text-[#FF5000] text-[11px] font-bold focus:outline-none cursor-pointer"
+              aria-label="Select Currency"
+            >
+              <option value="KRW" class="text-black">KRW (₩)</option>
+              <option value="USD" class="text-black">USD ($)</option>
+              <option value="JPY" class="text-black">JPY (¥)</option>
+            </select>
+          </div>
+          <a :href="PARTNER_CONSOLE_URL" target="_blank" rel="noopener" class="hover:text-[#FF5000] transition-colors font-semibold">Sell on OLMOA (Partner Center)</a>
+          <span class="text-gray-600">|</span>
+          <RouterLink to="/support" class="hover:text-white transition-colors">Help & 1:1 Support</RouterLink>
         </div>
       </div>
     </div>
 
-    <!-- Main Navigation Header -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-6">
-        <!-- Logo -->
-        <router-link to="/" class="flex items-center gap-2 group shrink-0">
-          <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-10 h-10 object-contain drop-shadow" />
-          <div class="flex flex-col">
-            <span class="text-2xl font-black tracking-tight text-slate-900 group-hover:text-orange-600 transition">
-              <span class="text-orange-600">O</span>LMOA
-            </span>
-            <span class="text-[9px] tracking-wider font-bold text-slate-400 uppercase -mt-1">올모아 글로벌</span>
-          </div>
-        </router-link>
+    <!-- Main Sticky Commercial Header -->
+    <header class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-200">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
+        <!-- Brand & Mega-Menu Trigger -->
+        <div class="flex items-center gap-4 shrink-0 relative" @mouseleave="showMegaMenu = false">
+          <RouterLink to="/" class="flex items-center gap-1.5 group">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FF5000] to-[#E60023] flex items-center justify-center text-white font-black text-xl shadow-sm group-hover:scale-105 transition-transform">
+              O
+            </div>
+            <span class="text-2xl font-black tracking-tighter text-[#111111]">OLMOA</span>
+          </RouterLink>
 
-        <!-- Search Bar with Real Autocomplete -->
-        <div class="flex-1 max-w-2xl">
-          <SearchAutocomplete />
+          <button
+            @mouseenter="showMegaMenu = true"
+            @click="router.push('/categories')"
+            class="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-gray-100 text-sm font-bold text-gray-800 transition-colors cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-[#FF5000]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            {{ locale.t('categories') }}
+            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+
+          <!-- Mega-Menu Flyout -->
+          <div
+            v-if="showMegaMenu && rootCategories.length > 0"
+            class="absolute top-full left-0 pt-2 w-[680px] z-50"
+          >
+            <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 flex overflow-hidden min-h-[360px]">
+              <div class="w-64 bg-gray-50 border-r border-gray-100 py-2 max-h-[420px] overflow-y-auto">
+                <div
+                  v-for="cat in rootCategories"
+                  :key="cat.id"
+                  @mouseenter="activeRootCat = cat"
+                  @click="showMegaMenu = false; router.push(`/category/${cat.slug}`)"
+                  :class="['px-4 py-2.5 text-xs font-bold flex items-center justify-between cursor-pointer transition-colors', activeRootCat?.id === cat.id ? 'bg-white text-[#FF5000] shadow-xs' : 'text-gray-700 hover:bg-gray-100']"
+                >
+                  <span class="truncate">{{ cat.name }}</span>
+                  <span class="text-[10px] text-gray-400">›</span>
+                </div>
+                <RouterLink
+                  to="/categories"
+                  @click="showMegaMenu = false"
+                  class="block px-4 py-2.5 text-xs font-black text-[#FF5000] hover:underline border-t border-gray-200 mt-1"
+                >
+                  View All 42 Departments →
+                </RouterLink>
+              </div>
+              <div class="flex-1 p-5 bg-white">
+                <div v-if="activeRootCat" class="mb-4 flex items-center justify-between border-b border-gray-100 pb-3">
+                  <div>
+                    <h4 class="text-base font-black text-gray-900">{{ activeRootCat.name }}</h4>
+                    <p class="text-[11px] text-gray-400">Direct Factory & Official Brand Store</p>
+                  </div>
+                  <RouterLink
+                    :to="`/category/${activeRootCat.slug}`"
+                    @click="showMegaMenu = false"
+                    class="text-xs font-bold text-[#FF5000] hover:underline"
+                  >
+                    Shop All →
+                  </RouterLink>
+                </div>
+                <div v-if="subCategories.length > 0" class="grid grid-cols-2 gap-2.5">
+                  <RouterLink
+                    v-for="sub in subCategories"
+                    :key="sub.id"
+                    :to="`/category/${sub.slug}`"
+                    @click="showMegaMenu = false"
+                    class="px-3 py-2 rounded-lg border border-gray-100 hover:border-[#FF5000] hover:bg-orange-50/40 text-xs font-semibold text-gray-700 hover:text-[#FF5000] transition-all flex items-center justify-between"
+                  >
+                    <span class="truncate">{{ sub.name }}</span>
+                    <span class="text-[10px] text-gray-400">{{ sub.product_count || '' }}</span>
+                  </RouterLink>
+                </div>
+                <div v-else class="text-xs text-gray-400 py-8 text-center">
+                  Explore top-rated items in {{ activeRootCat?.name }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Header Actions -->
-        <div class="flex items-center gap-4 text-slate-700 text-sm shrink-0">
-          <div v-if="customerName" class="flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-800">{{ customerName }}님</span>
-            <button @click="handleLogout" class="text-[11px] text-slate-400 hover:text-slate-700 underline">
-              {{ localeStore.t('logout') }}
-            </button>
-          </div>
-          <router-link v-else to="/login" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition">
-            <i class="fa-regular fa-user text-base text-slate-500"></i>
-            <span class="hidden sm:inline text-xs">{{ localeStore.t('login') }}</span>
-          </router-link>
+        <!-- Central Search Autocomplete Engine -->
+        <SearchAutocomplete />
 
-          <router-link to="/orders" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition">
-            <i class="fa-solid fa-box text-base text-slate-500"></i>
-            <span class="hidden sm:inline text-xs">{{ localeStore.t('orders') }}</span>
-          </router-link>
-          
-          <router-link to="/cart" class="flex items-center gap-1.5 hover:text-orange-600 font-medium transition relative">
-            <div class="relative">
-              <i class="fa-solid fa-cart-shopping text-lg text-slate-600"></i>
-              <span 
-                v-if="cartStore.totalCount > 0"
-                class="absolute -top-1.5 -right-2 bg-orange-600 text-white text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center font-bold"
-              >
-                {{ cartStore.totalCount }}
-              </span>
+        <!-- Right User Actions -->
+        <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div v-if="auth.isAuthenticated" class="flex items-center gap-1">
+            <RouterLink to="/orders" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors">
+              <div class="w-7 h-7 rounded-full bg-orange-100 text-[#FF5000] flex items-center justify-center font-black text-xs">
+                {{ auth.user?.name?.charAt(0) || 'U' }}
+              </div>
+              <div class="hidden xl:flex flex-col text-left leading-tight">
+                <span class="text-[10px] text-gray-500">Hello, {{ auth.user?.name }}</span>
+                <span class="text-xs font-bold text-gray-900">{{ locale.t('orders') }}</span>
+              </div>
+            </RouterLink>
+            <button @click="handleLogout" class="text-[11px] text-gray-400 hover:text-red-600 px-1.5 py-1 cursor-pointer" title="Sign Out">Exit</button>
+          </div>
+          <RouterLink v-else to="/login" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors">
+            <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <div class="hidden xl:flex flex-col text-left leading-tight">
+              <span class="text-[10px] text-gray-500">{{ locale.t('signIn') }}</span>
+              <span class="text-xs font-bold text-gray-900">Account</span>
             </div>
-            <span class="hidden sm:inline text-xs font-bold">{{ localeStore.t('cart') }}</span>
-          </router-link>
+          </RouterLink>
+
+          <RouterLink to="/coupons" class="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors text-xs font-bold text-gray-800" title="Coupons & Credits">
+            <span class="text-base">🎟️</span>
+            <span class="hidden lg:inline">{{ locale.t('coupons') }}</span>
+          </RouterLink>
+
+          <RouterLink to="/wishlist" class="flex items-center gap-1 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors text-xs font-bold text-gray-800" title="Wishlist">
+            <svg class="w-5 h-5 text-gray-700 hover:text-[#E60023]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            <span class="hidden lg:inline">{{ locale.t('wishlist') }}</span>
+          </RouterLink>
+
+          <!-- Shopping Cart -->
+          <RouterLink to="/cart" class="relative flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-orange-50 hover:bg-orange-100 text-[#FF5000] transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <span class="text-xs font-extrabold hidden sm:inline">{{ locale.t('cart') }}</span>
+            <span v-if="cart.totalCount > 0" class="px-1.5 py-0.5 text-[11px] font-black bg-[#FF5000] text-white rounded-full leading-none shadow-xs">
+              {{ cart.totalCount }}
+            </span>
+          </RouterLink>
         </div>
       </div>
 
-      <!-- Category Quick Sub-Bar -->
-      <div class="bg-orange-50/50 border-t border-orange-100/50 px-4 py-2 text-xs overflow-x-auto">
-        <div class="max-w-7xl mx-auto flex items-center gap-6 whitespace-nowrap">
-          <router-link to="/categories" class="px-3 py-1 font-bold text-orange-600 bg-orange-100/70 rounded-full flex items-center gap-1.5 shrink-0 hover:bg-orange-200">
-            <i class="fa-solid fa-bars"></i>
-            <span>{{ localeStore.t('allCategories') }} (33)</span>
-          </router-link>
-          <router-link to="/category/fashion" class="hover:text-orange-600 font-medium transition">의류/패션</router-link>
-          <router-link to="/category/electronics" class="hover:text-orange-600 font-medium transition">전자/디지털</router-link>
-          <router-link to="/category/home-kitchen" class="hover:text-orange-600 font-medium transition">홈/주방</router-link>
-          <router-link to="/category/beauty-health" class="hover:text-orange-600 font-medium transition">뷰티/헬스</router-link>
-          <router-link to="/category/sports-outdoors" class="hover:text-orange-600 font-medium transition">스포츠/레저</router-link>
-          <span class="text-orange-600 font-bold flex items-center gap-1 shrink-0 ml-auto">
-            <i class="fa-solid fa-bolt"></i> {{ localeStore.t('flashDeals') }}
-          </span>
+      <!-- Sub-Header Channel Navigation Bar -->
+      <div class="bg-white border-t border-gray-100 px-4">
+        <div class="max-w-[1440px] mx-auto flex items-center gap-6 h-9 overflow-x-auto no-scrollbar text-xs font-bold text-gray-700">
+          <RouterLink to="/channel/lightning-deals" class="flex items-center gap-1 text-[#E60023] hover:opacity-80 shrink-0">
+            <span>⚡</span> {{ locale.t('lightningDeals') }}
+          </RouterLink>
+          <RouterLink to="/channel/best-sellers" class="flex items-center gap-1 text-[#FF5000] hover:opacity-80 shrink-0">
+            <span>🏆</span> {{ locale.t('bestSellers') }}
+          </RouterLink>
+          <RouterLink to="/categories" class="hover:text-[#FF5000] shrink-0">All 42 Categories</RouterLink>
+          <RouterLink to="/coupons" class="hover:text-[#FF5000] shrink-0">Coupon & Credit Center</RouterLink>
+          <RouterLink to="/store/pt_001" class="hover:text-[#FF5000] shrink-0">Official Partner Flagship</RouterLink>
+          <RouterLink to="/store/pt_002" class="hover:text-[#FF5000] shrink-0">K-Tech Lifestyle Store</RouterLink>
+          <RouterLink to="/support" class="hover:text-[#FF5000] shrink-0">Customer Care & Claims</RouterLink>
         </div>
       </div>
     </header>
 
-    <!-- Main Router Outlet -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-      <router-view />
+    <!-- Main View Router -->
+    <main class="flex-1">
+      <RouterView />
     </main>
 
-    <!-- Global Footer -->
-    <footer class="bg-slate-900 text-slate-400 pt-12 pb-8 border-t border-slate-800 text-xs">
-      <div class="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+    <!-- Footer with Korean Electronic Commerce Act Disclosures -->
+    <footer class="bg-[#111111] text-gray-400 text-xs mt-16 border-t border-gray-800">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div>
           <div class="flex items-center gap-2 mb-3">
-            <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-6 h-6 object-contain" />
-            <span class="text-white font-black text-lg">OLMOA</span>
+            <div class="w-7 h-7 rounded-lg bg-[#FF5000] flex items-center justify-center text-white font-black text-sm">O</div>
+            <span class="text-white font-black text-base tracking-tight">OLMOA GLOBAL</span>
           </div>
-          <p class="text-slate-400 text-xs leading-relaxed">내가 찾는 모든 것, 여기.<br>Everything You Seek. All Here.</p>
-          <p class="text-slate-500 text-[11px] mt-2">전 세계 고객과 검증된 공급사를 직결하는 글로벌 오픈마켓 플랫폼</p>
+          <p class="text-gray-500 leading-relaxed mb-4">Next-Gen Direct Factory & Verified Brand OpenMarket Engine powered by Cloudflare Edge & D1.</p>
+          <div class="flex gap-2 text-[10px] text-gray-300 font-bold">
+            <span class="px-2 py-1 bg-gray-800 rounded">PCI-DSS Ready</span>
+            <span class="px-2 py-1 bg-gray-800 rounded">Escrow Protected</span>
+          </div>
         </div>
         <div>
-          <h4 class="text-white font-bold mb-3 text-sm">고객 서비스</h4>
+          <h4 class="text-white font-bold mb-3 uppercase tracking-wider">Shopping Channels</h4>
           <ul class="space-y-2">
-            <li><router-link to="/orders" class="hover:text-white transition">배송 추적 및 주문 조회</router-link></li>
-            <li><router-link to="/legal/refund" class="hover:text-white transition font-bold text-orange-400">90일 무조건 무료반품 정책</router-link></li>
-            <li><router-link to="/legal/terms" class="hover:text-white transition">최저가 보상제 이용안내</router-link></li>
-            <li><span class="text-slate-300">고객행복센터 1588-0000 (24/7)</span></li>
+            <li><RouterLink to="/channel/lightning-deals" class="hover:text-white">⚡ Lightning Deals</RouterLink></li>
+            <li><RouterLink to="/channel/best-sellers" class="hover:text-white">🏆 Top 100 Best Sellers</RouterLink></li>
+            <li><RouterLink to="/categories" class="hover:text-white">All 42 Categories</RouterLink></li>
+            <li><RouterLink to="/coupons" class="hover:text-white">Coupons & Reward Credits</RouterLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="text-white font-bold mb-3 text-sm">파트너 및 비즈니스</h4>
+          <h4 class="text-white font-bold mb-3 uppercase tracking-wider">Buyer Protection</h4>
           <ul class="space-y-2">
-            <li><a href="https://openmarket-partner.dnjstjqppk.workers.dev" target="_blank" class="hover:text-white transition">판매자 입점 센터</a></li>
-            <li><router-link to="/categories" class="hover:text-white transition">글로벌 33대 카테고리</router-link></li>
-            <li><a href="https://openmarket-admin.dnjstjqppk.workers.dev" target="_blank" class="hover:text-white transition text-slate-500">운영 관리자 콘솔</a></li>
+            <li><RouterLink to="/policy/price-match" class="hover:text-white">30-Day Price-Match Refund</RouterLink></li>
+            <li><RouterLink to="/policy/returns" class="hover:text-white">90-Day Free Return Guarantee</RouterLink></li>
+            <li><RouterLink to="/policy/shipping" class="hover:text-white">Split-Partner Delivery Policy</RouterLink></li>
+            <li><RouterLink to="/orders" class="hover:text-white">Order Tracking & Claims</RouterLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="text-white font-bold mb-3 text-sm">안심 결제 & 보증</h4>
-          <div class="flex items-center gap-2 text-xl text-slate-400 mb-3">
-            <i class="fa-brands fa-cc-visa"></i>
-            <i class="fa-brands fa-cc-mastercard"></i>
-            <i class="fa-brands fa-apple-pay"></i>
-            <i class="fa-brands fa-google-pay"></i>
-          </div>
-          <p class="text-[11px] text-slate-500">모든 거래는 OLMOA 안전 에스크로 결제 시스템으로 100% 보호됩니다.</p>
+          <h4 class="text-white font-bold mb-3 uppercase tracking-wider">Partner Ecosystem</h4>
+          <ul class="space-y-2">
+            <li><a :href="PARTNER_CONSOLE_URL" target="_blank" rel="noopener" class="hover:text-[#FF5000] text-gray-300 font-semibold">Partner Seller Center ↗</a></li>
+            <li><RouterLink to="/store/pt_001" class="hover:text-white">Olmoa Official Flagship</RouterLink></li>
+            <li><RouterLink to="/store/pt_002" class="hover:text-white">K-Tech & Lifestyle Official</RouterLink></li>
+            <li><a :href="ADMIN_CONSOLE_URL" target="_blank" rel="noopener" class="hover:text-white">Admin Ledger & Audit Portal ↗</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-3 uppercase tracking-wider">Customer Care & Legal</h4>
+          <ul class="space-y-2">
+            <li><RouterLink to="/support" class="hover:text-white">Help Center & 1:1 Inquiry</RouterLink></li>
+            <li><RouterLink to="/policy/terms" class="hover:text-white">Terms of Service (이용약관)</RouterLink></li>
+            <li><RouterLink to="/policy/privacy" class="hover:text-white font-bold text-white">Privacy Policy (개인정보처리방침)</RouterLink></li>
+            <li><RouterLink to="/policy/escrow" class="hover:text-white">Escrow Purchase Safety Guarantee</RouterLink></li>
+          </ul>
         </div>
       </div>
-      <div class="max-w-7xl mx-auto px-4 pt-6 border-t border-slate-800 space-y-3 text-[11px] text-slate-500">
-        <div class="flex flex-wrap gap-x-6 gap-y-1">
-          <span>상호명: (주)올모아 (OLMOA Inc.)</span>
-          <span>대표이사: 강원섭</span>
-          <span>사업자등록번호: 101-88-99999</span>
-          <span>통신판매업신고: 제2026-서울강남-01234호</span>
-          <span>주소: 서울특별시 강남구 테헤란로 152</span>
-        </div>
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-800/60">
-          <div>&copy; 2026 OLMOA Inc. (올모아). All Rights Reserved.</div>
-          <div class="flex gap-4">
-            <router-link to="/legal/terms" class="hover:underline text-slate-400">이용약관</router-link>
-            <router-link to="/legal/privacy" class="hover:underline text-slate-400">개인정보처리방침</router-link>
-            <router-link to="/legal/refund" class="hover:underline text-slate-400">90일 무료반품규정</router-link>
+      <div class="border-t border-gray-800 py-6 px-4 text-[11px] text-gray-500">
+        <div class="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between gap-4">
+          <div>
+            <p class="font-semibold text-gray-400 mb-1">주식회사 올모아글로벌 (OLMOA Commerce Inc.) | 대표이사: 김올모 | 사업자등록번호: 120-88-99102 | 통신판매업신고: 제2026-서울강남-04821호</p>
+            <p>주소: 서울특별시 강남구 테헤란로 427, 올모아타워 15층 | 고객센터: 1588-0000 (평일 09:00~18:00) | 전자우편: support@olmoa.com</p>
+            <p class="mt-1 text-gray-600">올모아는 통신판매중개자로서 오픈마켓 거래 당사자가 아니며, 입점 판매자가 등록한 상품 정보 및 거래에 대해 올모아 결제대금예치(에스크로) 및 90일 무료반품/30일 최저가 차액보상 정책에 따라 소비자를 보호합니다.</p>
+          </div>
+          <div class="shrink-0 text-right self-end">
+            <p>© 2026 OLMOA Commerce Inc. All rights reserved.</p>
           </div>
         </div>
       </div>

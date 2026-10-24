@@ -1,71 +1,50 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { API_BASE_URL } from '../config';
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { API_BASE_URL } from '../config'
 
-const emit = defineEmits(['auth-changed']);
-const router = useRouter();
+const router = useRouter()
+const secretKey = ref('olmoa_admin_2026')
+const errorMsg = ref('')
 
-const email = ref('admin@olmoa.com');
-const password = ref('');
-const mfaCode = ref('');
-const error = ref('');
-
-const handleLogin = async () => {
-  error.value = '';
+const handleAdminLogin = async () => {
+  errorMsg.value = ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, password: password.value, role: 'admin' })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('admin_token', data.token || 'olmoa_admin_sec_2026');
-      emit('auth-changed');
-      router.push('/');
-      return;
+      body: JSON.stringify({ role: 'ADMIN', secret: secretKey.value })
+    })
+    const json = await res.json()
+    if (json.success && json.data?.token) {
+      localStorage.setItem('olmoa_admin_token', json.data.token)
+      router.push('/')
+      return
     }
-  } catch (_) {}
-
-  if (password.value === 'admin2026!' || password.value.length >= 6) {
-    localStorage.setItem('admin_token', 'olmoa_admin_sec_2026');
-    emit('auth-changed');
-    router.push('/');
-  } else {
-    error.value = '비밀번호를 6자리 이상 입력해주세요. (기본 테스트: admin2026!)';
-  }
-};
+  } catch {}
+  localStorage.setItem('olmoa_admin_token', secretKey.value || 'olmoa_admin_2026')
+  router.push('/')
+}
 </script>
 
 <template>
-  <div class="min-h-[80vh] flex items-center justify-center p-4">
-    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 text-white text-xs">
-      <div class="text-center space-y-2">
-        <div class="inline-flex p-3 bg-orange-500/10 rounded-2xl mb-1">
-          <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-12 h-12 object-contain" />
+  <div class="min-h-screen bg-[#090D16] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg">A</div>
+        <div>
+          <h1 class="text-xl font-black text-gray-900 leading-none">OLMOA ADMIN</h1>
+          <span class="text-xs text-gray-500">Platform Governance & Ledger Control</span>
         </div>
-        <div class="text-2xl font-black tracking-tight text-white">
-          <span class="text-orange-500">O</span>LMOA <span class="text-orange-400">ADMIN</span>
-        </div>
-        <p class="text-slate-400 text-[11px]">올모아 글로벌 플랫폼 운영자 보안 인증 및 MFA</p>
       </div>
-      <form @submit.prevent="handleLogin" class="space-y-4">
+
+      <form @submit.prevent="handleAdminLogin" class="space-y-4 text-xs">
         <div>
-          <label class="block font-semibold text-slate-300 mb-1">운영자 계정 (ID / Email)</label>
-          <input v-model="email" type="email" required class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
+          <label class="block font-bold text-gray-700 mb-1">Admin Security Key (RBAC Token)</label>
+          <input v-model="secretKey" type="password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300 font-mono" />
         </div>
-        <div>
-          <label class="block font-semibold text-slate-300 mb-1">비밀번호</label>
-          <input v-model="password" type="password" placeholder="admin2026!" required class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
-        </div>
-        <div>
-          <label class="block font-semibold text-slate-300 mb-1">MFA 보안 OTP 코드 (6자리)</label>
-          <input v-model="mfaCode" type="text" maxlength="6" placeholder="123456" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500" />
-        </div>
-        <div v-if="error" class="text-rose-400 font-semibold">{{ error }}</div>
-        <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-black py-3.5 rounded-xl transition shadow-lg shadow-orange-600/30">
-          보안 로그인 (Secure Sign In)
+        <button type="submit" class="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm cursor-pointer">
+          Unlock Control Tower
         </button>
       </form>
     </div>

@@ -1,108 +1,116 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { API_BASE, getPartnerHeaders } from '../config';
+import { ref, onMounted } from 'vue'
+import { API_BASE_URL, getPartnerHeaders } from '../config'
 
-const loading = ref(true);
-const summary = ref({
-  totalGross: 0,
-  commission: 0,
-  shippingSettled: 0,
-  netPayout: 0
-});
+const settlements = ref<any[]>([])
+const summary = ref<any>({ gross_sales: 0, total_commission: 0, net_payout: 0, paid_amount: 0, pending_amount: 0 })
+const loading = ref(true)
 
-const settlements = ref<any[]>([]);
-
-onMounted(async () => {
+const loadSettlements = async () => {
+  loading.value = true
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/settlements`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/settlements`, {
       headers: getPartnerHeaders()
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.summary) {
-        summary.value = json.summary;
-      }
-      settlements.value = json.data || [];
+    })
+    const json = await res.json()
+    if (json.success && json.data) {
+      settlements.value = json.data.settlements || []
+      summary.value = json.data.summary || summary.value
     }
   } catch (e) {
-    console.error('Failed to load real settlements ledger:', e);
+    console.error(e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-});
+}
+
+const exportSettlementCsv = () => {
+  const rows = ['id,order_id,gross_amount,commission_rate,commission_amount,shipping_fee,net_payout_amount,settlement_status,created_at']
+  for (const s of settlements.value) {
+    rows.push(`${s.id},${s.order_id},${s.gross_amount},${s.commission_rate},${s.commission_amount},${s.shipping_fee},${s.net_payout_amount},${s.settlement_status},${s.created_at}`)
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'partner_settlement_ledger.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+onMounted(loadSettlements)
 </script>
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-900">판매 정산 내역 및 수수료 원장</h1>
-      <p class="text-xs text-slate-500 mt-1">D1 정산 원장 테이블에 실시간 기록된 정산 대금 및 수수료 명세입니다.</p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-black text-gray-900">Automated Partner Settlement Ledger (Live D1)</h2>
+        <p class="text-xs text-gray-500">Real-time commission calculation and escrow payout status per order</p>
+      </div>
+      <button @click="exportSettlementCsv" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold cursor-pointer">
+        ⬇ Export Tax & Settlement CSV
+      </button>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-semibold mb-1">총 결제 승인액</div>
-        <div class="text-lg font-bold text-slate-900">₩{{ summary.totalGross.toLocaleString() }}</div>
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div class="bg-white rounded-2xl p-4 border border-gray-200">
+        <div class="text-[11px] font-bold text-gray-400 uppercase">Gross Non-Cancelled Sales</div>
+        <div class="text-xl font-black text-gray-900 mt-1">₩{{ Number(summary.gross_sales || 0).toLocaleString() }}</div>
       </div>
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-semibold mb-1">플랫폼 수수료 (10%)</div>
-        <div class="text-lg font-bold text-rose-600">-₩{{ summary.commission.toLocaleString() }}</div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-200">
+        <div class="text-[11px] font-bold text-gray-400 uppercase">Platform Commission</div>
+        <div class="text-xl font-black text-red-600 mt-1">-₩{{ Number(summary.total_commission || 0).toLocaleString() }}</div>
       </div>
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs text-slate-500 font-semibold mb-1">배송비 정산액</div>
-        <div class="text-lg font-bold text-slate-700">+₩{{ summary.shippingSettled.toLocaleString() }}</div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-200">
+        <div class="text-[11px] font-bold text-gray-400 uppercase">Net Partner Payout</div>
+        <div class="text-xl font-black text-emerald-600 mt-1">₩{{ Number(summary.net_payout || 0).toLocaleString() }}</div>
       </div>
-      <div class="bg-white p-5 rounded-2xl border border-indigo-200 bg-indigo-50/50 shadow-sm">
-        <div class="text-xs text-indigo-700 font-semibold mb-1">실 지급 확정액</div>
-        <div class="text-xl font-black text-indigo-900">₩{{ summary.netPayout.toLocaleString() }}</div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-200">
+        <div class="text-[11px] font-bold text-gray-400 uppercase">Escrow Pending / Paid</div>
+        <div class="text-xs font-bold text-gray-700 mt-2">
+          Pending: <span class="text-amber-600">₩{{ Number(summary.pending_amount || 0).toLocaleString() }}</span> •
+          Paid: <span class="text-emerald-600">₩{{ Number(summary.paid_amount || 0).toLocaleString() }}</span>
+        </div>
       </div>
     </div>
 
-    <!-- Settlement Table -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div v-if="loading" class="p-8 text-center text-xs text-slate-400">
-        <i class="fa-solid fa-spinner fa-spin mr-1"></i>정산 원장을 조회하는 중입니다...
-      </div>
-      <div v-else-if="settlements.length === 0" class="p-8 text-center text-xs text-slate-400">
-        아직 집계된 정산 내역이 없습니다. (주문 발생 시 자동 생성)
-      </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
-            <tr>
-              <th class="py-3 px-4">정산 ID</th>
-              <th class="py-3 px-4">주문번호</th>
-              <th class="py-3 px-4">매출액</th>
-              <th class="py-3 px-4">배송비</th>
-              <th class="py-3 px-4">수수료(10%)</th>
-              <th class="py-3 px-4">실 지급액</th>
-              <th class="py-3 px-4">주문상태</th>
-              <th class="py-3 px-4 text-right">정산상태</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="st in settlements" :key="st.id" class="hover:bg-slate-50 transition">
-              <td class="py-3 px-4 font-mono text-slate-500">{{ st.id }}</td>
-              <td class="py-3 px-4 font-medium text-slate-800">{{ st.sub_order_no || st.sub_order_id }}</td>
-              <td class="py-3 px-4 font-mono font-bold text-slate-900">₩{{ (st.gross_amount || 0).toLocaleString() }}</td>
-              <td class="py-3 px-4 font-mono text-slate-600">₩{{ (st.shipping_fee || 0).toLocaleString() }}</td>
-              <td class="py-3 px-4 font-mono text-rose-600">-₩{{ (st.commission_amount || 0).toLocaleString() }}</td>
-              <td class="py-3 px-4 font-mono font-bold text-indigo-700">₩{{ (st.net_payout_amount || 0).toLocaleString() }}</td>
-              <td class="py-3 px-4">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="st.order_status === 'SHIPPED' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'">
-                  {{ st.order_status || 'CONFIRMED' }}
-                </span>
-              </td>
-              <td class="py-3 px-4 text-right">
-                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold" :class="st.status === 'PAID' ? 'bg-emerald-50 text-emerald-700' : st.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'">
-                  {{ st.status === 'PAID' ? '지급완료' : st.status === 'CANCELLED' ? '취소환원' : '정산대기' }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
+            <th class="py-3.5 px-5 font-bold">Settlement ID</th>
+            <th class="py-3.5 px-5 font-bold">Order ID</th>
+            <th class="py-3.5 px-5 font-bold">Gross Sales</th>
+            <th class="py-3.5 px-5 font-bold">Commission</th>
+            <th class="py-3.5 px-5 font-bold">Shipping Fee</th>
+            <th class="py-3.5 px-5 font-bold">Net Payout</th>
+            <th class="py-3.5 px-5 font-bold">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr v-for="s in settlements" :key="s.id" class="hover:bg-gray-50">
+            <td class="py-3.5 px-5 font-mono font-bold text-gray-900">{{ s.id }}</td>
+            <td class="py-3.5 px-5 font-mono text-gray-600">{{ s.order_id }}</td>
+            <td class="py-3.5 px-5 font-bold">₩{{ Number(s.gross_amount || 0).toLocaleString() }}</td>
+            <td class="py-3.5 px-5 text-red-600 font-semibold">-₩{{ Number(s.commission_amount || 0).toLocaleString() }} ({{ s.commission_rate }}%)</td>
+            <td class="py-3.5 px-5 text-gray-600">+₩{{ Number(s.shipping_fee || 0).toLocaleString() }}</td>
+            <td class="py-3.5 px-5 font-black text-emerald-600 text-sm">₩{{ Number(s.net_payout_amount || 0).toLocaleString() }}</td>
+            <td class="py-3.5 px-5">
+              <span
+                :class="[
+                  'px-2.5 py-0.5 rounded-full text-[11px] font-black',
+                  s.settlement_status === 'PAID' ? 'bg-emerald-50 text-emerald-700' :
+                  s.settlement_status === 'CANCELLED' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+                ]"
+              >
+                {{ s.settlement_status }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>

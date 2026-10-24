@@ -1,174 +1,123 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useCartStore, type CartItem } from '../stores/cart';
-import { useRouter } from 'vue-router';
-import { API_BASE_URL } from '../config';
+import { RouterLink, useRouter } from 'vue-router'
+import { useCartStore } from '../stores/cart'
+import { useLocaleStore } from '../stores/locale'
 
-const cartStore = useCartStore();
-const router = useRouter();
-
-const editingItem = ref<CartItem | null>(null);
-const availableSkus = ref<any[]>([]);
-const loadingOptions = ref(false);
-
-async function openOptionModal(item: CartItem) {
-  editingItem.value = item;
-  loadingOptions.value = true;
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/products/${item.product_id}`);
-    const json = await res.json();
-    if (json.success && json.data?.skus) {
-      availableSkus.value = json.data.skus;
-    }
-  } catch (_) {
-  } finally {
-    loadingOptions.value = false;
-  }
-}
-
-function selectNewSku(sku: any) {
-  if (!editingItem.value || sku.stock_quantity <= 0) return;
-  cartStore.updateSku(editingItem.value.sku_id, sku);
-  editingItem.value = null;
-}
-
-function handleCheckout() {
-  if (cartStore.items.length === 0) return;
-  router.push('/checkout');
-}
+const cart = useCartStore()
+const locale = useLocaleStore()
+const router = useRouter()
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-center justify-between border-b border-slate-200 pb-4">
-      <div>
-        <h1 class="text-xl sm:text-2xl font-black text-slate-900">장바구니 ({{ cartStore.totalCount }}개)</h1>
-        <p class="text-xs text-slate-500 mt-0.5">내가 찾는 모든 것, 여기! 올모아 직배송 장바구니</p>
-      </div>
-      <button v-if="cartStore.items.length > 0" @click="cartStore.clearCart" class="text-xs text-slate-400 hover:text-rose-600 transition">
-        전체 비우기
-      </button>
+  <div class="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+    <h1 class="text-2xl font-black text-gray-900 mb-6">Shopping Cart ({{ cart.totalCount }})</h1>
+
+    <div v-if="cart.items.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200">
+      <div class="text-4xl mb-3">🛒</div>
+      <h2 class="text-lg font-bold text-gray-800 mb-2">Your cart is currently empty</h2>
+      <p class="text-xs text-gray-500 mb-6">Explore our 42 root departments and lightning deals to start saving.</p>
+      <RouterLink to="/" class="inline-block px-6 py-3 rounded-full bg-[#FF5000] text-white text-xs font-black">
+        Explore Today's Deals
+      </RouterLink>
     </div>
 
-    <!-- Free shipping status banner -->
-    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between text-xs">
-      <div class="flex items-center gap-2">
-        <i class="fa-solid fa-truck-fast text-orange-600 text-base"></i>
-        <span v-if="cartStore.freeShippingRemaining === 0" class="font-bold text-emerald-700">
-          🎉 축하합니다! 전 품목 100% 무료배송 혜택이 적용되었습니다.
-        </span>
-        <span v-else class="text-slate-700">
-          <strong>₩{{ cartStore.freeShippingRemaining.toLocaleString() }}</strong> 추가 주문 시 <strong>무료배송!</strong>
-        </span>
-      </div>
-      <router-link to="/categories" class="font-bold text-orange-600 hover:underline shrink-0">더 둘러보기 &rarr;</router-link>
-    </div>
-
-    <!-- Empty State -->
-    <div v-if="cartStore.items.length === 0" class="bg-white rounded-3xl p-16 text-center border border-slate-200 space-y-4">
-      <i class="fa-solid fa-cart-arrow-down text-5xl text-slate-300"></i>
-      <h3 class="font-bold text-slate-800 text-base">장바구니에 담긴 상품이 없습니다.</h3>
-      <p class="text-xs text-slate-400">초특가 번개세일과 다양한 글로벌 상품을 지금 확인해 보세요.</p>
-      <router-link to="/" class="inline-block px-6 py-3 bg-orange-600 text-white text-xs font-black rounded-2xl shadow-lg shadow-orange-600/30">
-        인기 특가 상품 쇼핑하기 &rarr;
-      </router-link>
-    </div>
-
-    <!-- Cart Items Grid + Order Summary -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="md:col-span-2 space-y-3">
-        <div v-for="item in cartStore.items" :key="item.sku_id" class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex gap-4 items-center">
-          <img :src="item.thumbnail_url" :alt="item.title" class="w-20 h-20 rounded-xl object-cover bg-slate-100 shrink-0" />
-          <div class="flex-1 min-w-0 space-y-1">
-            <h4 class="font-bold text-slate-900 text-xs sm:text-sm line-clamp-1">{{ item.title }}</h4>
-            <div class="flex items-center gap-2">
-              <span class="text-[11px] text-slate-500 font-medium">옵션: {{ item.option_summary }}</span>
-              <button @click="openOptionModal(item)" class="text-[10px] text-orange-600 font-bold bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded border border-orange-200">
-                옵션 변경
-              </button>
-            </div>
-            <div class="flex items-baseline gap-2">
-              <span class="font-black text-orange-600 text-sm">₩{{ item.price.toLocaleString() }}</span>
-              <span v-if="item.original_price > item.price" class="text-[10px] text-slate-400 line-through">
-                ₩{{ item.original_price.toLocaleString() }}
+    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <!-- Left: Partner-Grouped Cart Items -->
+      <div class="lg:col-span-8 space-y-5">
+        <div
+          v-for="group in cart.partnerShippingBreakdown"
+          :key="group.partner_id"
+          class="bg-white rounded-2xl p-5 border border-gray-200/80 space-y-4"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
+            <RouterLink :to="`/store/${group.partner_id}`" class="flex items-center gap-2 text-xs font-black text-gray-900 hover:text-[#FF5000]">
+              <span>🏪 {{ group.partner_name }}</span>
+              <span class="text-[10px] text-gray-400">Visit Store ›</span>
+            </RouterLink>
+            <div class="text-xs font-bold">
+              <span v-if="group.shipping_fee === 0" class="text-[#00A862]">✓ Free Partner Shipping Unlocked!</span>
+              <span v-else class="text-[#FF5000]">
+                Add {{ locale.formatPrice(group.remaining_for_free) }} more from this seller for FREE shipping (Current: {{ locale.formatPrice(group.shipping_fee) }})
               </span>
             </div>
           </div>
 
-          <div class="flex flex-col items-end gap-2 shrink-0">
-            <button @click="cartStore.removeItem(item.sku_id)" class="text-slate-300 hover:text-rose-500 text-xs">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
-            <div class="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs">
-              <button @click="cartStore.updateQuantity(item.sku_id, item.quantity - 1)" class="px-2 py-0.5 bg-slate-50 hover:bg-slate-100">-</button>
-              <span class="px-3 py-0.5 font-bold font-mono">{{ item.quantity }}</span>
-              <button :disabled="item.quantity >= (item.stock_quantity || 999)" @click="cartStore.updateQuantity(item.sku_id, item.quantity + 1)" class="px-2 py-0.5 bg-slate-50 hover:bg-slate-100 disabled:opacity-30">+</button>
-            </div>
-            <span v-if="item.stock_quantity" class="text-[10px] text-slate-400">재고: {{ item.stock_quantity }}개</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Order Summary Card -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4 h-fit">
-        <h3 class="font-bold text-slate-900 text-sm border-b pb-3">결제 예상 금액</h3>
-        <div class="space-y-2 text-xs">
-          <div class="flex justify-between text-slate-600">
-            <span>상품 금액</span>
-            <span class="font-bold">₩{{ cartStore.totalGoodsAmount.toLocaleString() }}</span>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>배송비</span>
-            <span :class="cartStore.shippingFee === 0 ? 'text-emerald-600 font-bold' : 'font-bold'">
-              {{ cartStore.shippingFee === 0 ? '무료' : '₩' + cartStore.shippingFee.toLocaleString() }}
-            </span>
-          </div>
-          <div class="flex justify-between text-slate-600">
-            <span>글로벌 직구 관부가세</span>
-            <span class="text-emerald-600 font-bold">면세 범위</span>
-          </div>
-          <div class="border-t pt-3 flex justify-between items-baseline">
-            <span class="font-bold text-slate-800">최종 결제 금액</span>
-            <span class="text-xl font-black text-orange-600">₩{{ cartStore.totalPayAmount.toLocaleString() }}</span>
-          </div>
-        </div>
-
-        <button @click="handleCheckout" class="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl text-xs sm:text-sm transition shadow-lg shadow-orange-600/30 flex items-center justify-center gap-2">
-          <span>주문서 작성하기 ({{ cartStore.totalCount }}개)</span>
-          <i class="fa-solid fa-arrow-right"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Option Change Modal -->
-    <div v-if="editingItem" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-800 text-sm">상품 옵션 변경</h3>
-          <button @click="editingItem = null" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div v-if="loadingOptions" class="py-8 text-center text-slate-400 text-xs">
-          <i class="fa-solid fa-spinner fa-spin text-orange-500 text-lg mb-2"></i>
-          <p>옵션 목록을 불러오는 중...</p>
-        </div>
-        <div v-else class="space-y-2 max-h-64 overflow-y-auto">
-          <div 
-            v-for="sku in availableSkus" 
-            :key="sku.id"
-            @click="sku.stock_quantity > 0 && selectNewSku(sku)"
-            :class="[
-              sku.id === editingItem.sku_id ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:border-slate-300',
-              sku.stock_quantity <= 0 ? 'opacity-40 cursor-not-allowed bg-slate-50' : 'cursor-pointer'
-            ]"
-            class="p-3 rounded-xl border text-xs flex justify-between items-center transition"
+          <div
+            v-for="item in group.items"
+            :key="item.sku_id"
+            class="flex gap-4 pt-2"
           >
-            <div>
-              <div class="font-bold text-slate-800">{{ sku.options ? Object.entries(sku.options).map(([k,v])=>`${k}:${v}`).join(' / ') : sku.sku_code }}</div>
-              <div class="text-[11px] text-slate-500">₩{{ sku.sale_price.toLocaleString() }} · 재고 {{ sku.stock_quantity }}개</div>
+            <RouterLink :to="`/product/${item.slug || item.product_id}`" class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+              <img :src="item.thumbnail_url" :alt="item.title" class="w-full h-full object-cover" />
+            </RouterLink>
+
+            <div class="flex-1 flex flex-col justify-between">
+              <div class="flex justify-between gap-2">
+                <div>
+                  <span class="text-[10px] font-bold text-gray-400 uppercase">{{ item.brand }}</span>
+                  <h3 class="text-sm font-bold text-gray-900">{{ item.title }}</h3>
+                  <span class="inline-block mt-1 px-2 py-0.5 bg-gray-100 rounded text-[11px] text-gray-600 font-medium">
+                    Option: {{ item.option_Label }}
+                  </span>
+                </div>
+                <button @click="cart.removeItem(item.sku_id)" class="text-xs text-gray-400 hover:text-red-600 font-semibold cursor-pointer">
+                  Remove
+                </button>
+              </div>
+
+              <div class="flex items-center justify-between mt-3">
+                <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                  <button @click="cart.updateQuantity(item.sku_id, item.quantity - 1)" class="w-7 h-7 bg-gray-50 font-bold text-xs cursor-pointer">-</button>
+                  <span class="w-9 text-center text-xs font-bold">{{ item.quantity }}</span>
+                  <button @click="cart.updateQuantity(item.sku_id, item.quantity + 1)" class="w-7 h-7 bg-gray-50 font-bold text-xs cursor-pointer">+</button>
+                </div>
+
+                <div class="text-right">
+                  <div class="text-base font-black text-[#111111]">{{ locale.formatPrice(item.price * item.quantity) }}</div>
+                  <div v-if="item.original_price > item.price" class="text-[11px] text-gray-400 line-through">
+                    {{ locale.formatPrice(item.original_price * item.quantity) }}
+                  </div>
+                </div>
+              </div>
             </div>
-            <span v-if="sku.stock_quantity <= 0" class="text-rose-500 font-bold text-[10px]">품절</span>
-            <span v-else-if="sku.id === editingItem.sku_id" class="text-orange-600 font-bold text-[11px]"><i class="fa-solid fa-check mr-1"></i>선택중</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Right: Order Summary with Partner Shipping Breakdown -->
+      <div class="lg:col-span-4">
+        <div class="bg-white rounded-2xl p-6 border border-gray-200/80 sticky top-24">
+          <h2 class="text-base font-black text-gray-900 mb-4 pb-3 border-b border-gray-100">Order Summary</h2>
+          <div class="space-y-2.5 text-xs text-gray-600 mb-4">
+            <div class="flex justify-between">
+              <span>Items Retail Total</span>
+              <span class="line-through">{{ locale.formatPrice(cart.subtotalAmount + cart.totalSavings) }}</span>
+            </div>
+            <div class="flex justify-between text-[#E60023] font-bold">
+              <span>Instant Direct Discount</span>
+              <span>-{{ locale.formatPrice(cart.totalSavings) }}</span>
+            </div>
+            <div class="flex justify-between font-bold text-gray-900 pt-1">
+              <span>Subtotal ({{ cart.totalCount }} items)</span>
+              <span>{{ locale.formatPrice(cart.subtotalAmount) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Partner Split Shipping ({{ cart.partnerShippingBreakdown.length }} seller{{ cart.partnerShippingBreakdown.length > 1 ? 's' : '' }})</span>
+              <span class="font-bold text-gray-900">{{ cart.shippingFee === 0 ? 'FREE' : locale.formatPrice(cart.shippingFee) }}</span>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-baseline pt-4 border-t border-gray-200 mb-6">
+            <span class="text-sm font-black text-gray-900">Estimated Total</span>
+            <span class="text-2xl font-black text-[#E60023]">{{ locale.formatPrice(cart.finalTotal) }}</span>
+          </div>
+
+          <button
+            @click="router.push('/checkout')"
+            class="w-full h-12 rounded-full bg-gradient-to-r from-[#FF5000] to-[#E60023] text-white font-black text-sm shadow-md hover:opacity-95 transition-opacity cursor-pointer"
+          >
+            Proceed to Checkout ({{ cart.totalCount }})
+          </button>
         </div>
       </div>
     </div>

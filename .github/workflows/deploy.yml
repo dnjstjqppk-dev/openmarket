@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy-cloudflare:
-    name: Deploy 4 Apps to Cloudflare
+    name: Build & Deploy 4 Apps to Cloudflare Edge
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
@@ -19,12 +19,22 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies & build frontends
+      - name: Install Dependencies & Build All Frontends
         run: |
           npm ci
           npm run build
 
+      - name: Deploy Edge API Gateway (olmoa-api)
+        run: cd apps/cloudflare-gateway && npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Deploy Root Portal / Storefront
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy Dedicated Storefront Worker
         run: cd apps/storefront && npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -36,10 +46,5 @@ jobs:
 
       - name: Deploy Partner Console
         run: cd apps/partner && npx wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy Edge API Gateway (D1)
-        run: cd apps/cloudflare-gateway && npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

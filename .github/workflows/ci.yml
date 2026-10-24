@@ -25,8 +25,13 @@ jobs:
           cd backend
           go test -v ./...
 
+      - name: Run API Server Unit Tests
+        run: |
+          cd apps/api
+          go test -v ./...
+
   verify-cloudflare-apps:
-    name: Verify Cloudflare Apps & Configurations
+    name: Build & Verify Cloudflare Apps
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -37,11 +42,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build All Frontends
-        run: npm run build
+      - name: Install Dependencies & Build Frontends
+        run: |
+          npm ci
+          npm run build
 
       - name: Verify Storefront App Config
         run: |
@@ -58,7 +62,7 @@ jobs:
           cd apps/partner
           npx wrangler deploy --dry-run
 
-      - name: Verify Edge Gateway (D1) Config
+      - name: Verify Cloudflare D1 Edge Gateway Config
         run: |
           cd apps/cloudflare-gateway
           npx wrangler deploy --dry-run

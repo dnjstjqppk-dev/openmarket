@@ -1,116 +1,172 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { API_BASE, getPartnerHeaders } from '../config';
+import { ref } from 'vue'
+import { API_BASE_URL, getPartnerHeaders } from '../config'
 
-const uploadSuccess = ref(false);
-const isProcessing = ref(false);
-const importedCount = ref(0);
-const errorMessage = ref('');
+const fileName = ref('')
+const parsedItems = ref<any[]>([])
+const uploading = ref(false)
+const uploadResult = ref<any>(null)
+const errorMsg = ref('')
 
-function parseCSV(text: string) {
-  const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-  if (lines.length <= 1) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const items = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    if (cols.length >= 2) {
-      const obj: Record<string, any> = {};
-      headers.forEach((h, idx) => {
-        obj[h] = cols[idx] || '';
-      });
-      items.push({
-        title: obj.title || obj['상품명'] || `상품 ${i}`,
-        category_slug: obj.category_slug || obj['카테고리'] || 'sub_w_tops',
-        sku_code: obj.sku_code || obj['SKU코드'] || `SKU-${Date.now()}-${i}`,
-        lowest_original_price: parseInt(obj.lowest_original_price || obj['원가'] || '30000', 10),
-        lowest_sale_price: parseInt(obj.lowest_sale_price || obj['판매가'] || '19900', 10),
-        stock_quantity: parseInt(obj.stock_quantity || obj['재고'] || '100', 10)
-      });
-    }
-  }
-  return items;
+const sampleCsvContent = `title,brand,category_id,original_price,sale_price,stock_quantity,option_label,thumbnail_url
+"Ultra-Light Carbon Trekking Poles (Pair)",OLMOA OUTDOOR,cat_s_camp,89000,49000,150,"Black / 120cm",https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&q=80
+"Pro Ceramic Non-Stick Wok 30cm",OLMOA LIVING,cat_h_cook,75000,42000,200,"30cm Induction",https://images.unsplash.com/photo-1584990347449-a2d4c2c044c9?auto=format&fit=crop&w=600&q=80
+"Pure Centella Calming Ampoule 100ml",OLMOA BEAUTY,cat_b_skin,38000,19800,300,"100ml Jumbo",https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=600&q=80`
+
+const downloadSampleCsv = () => {
+  const blob = new Blob([sampleCsvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'olmoa_partner_bulk_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
-async function handleFileUpload(e: Event) {
-  const target = e.target as HTMLInputElement;
-  if (!target.files || target.files.length === 0) return;
+const parseCsvText = (text: string) => {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  const rows: any[] = []
+  for (let i = 1; i < lines.length; i++) {
+    // Handle quoted CSV fields
+    const matches = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []
+    const vals = matches.map(v => v.trim().replace(/^"|"$/g, ''))
+    const obj: any = {}
+    headers.forEach((h, idx) => { obj[h] = vals[idx] || '' })
+    if (obj.title) {
+      rows.push({
+        title: obj.title,
+        brand: obj.brand || 'OLMOA PARTNER',
+        category_id: obj.category_id || 'cat_e_audio',
+        original_price: Number(obj.original_price) || 50000,
+        sale_price: Number(obj.sale_price) || 35000,
+        stock_quantity: Number(obj.stock_quantity) || 100,
+        option_values_json: JSON.stringify({ Option: obj.option_label || 'Standard' }),
+        thumbnail_url: obj.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80'
+      })
+    }
+  }
+  return rows
+}
 
-  const file = target.files[0];
-  isProcessing.value = true;
-  uploadSuccess.value = false;
-  errorMessage.value = '';
+const handleFileSelect = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  errorMsg.value = ''
+  uploadResult.value = null
+  if (input.files && input.files.length > 0) {
+    const file = input.files[0]
+    fileName.value = file.name
+    const text = await file.text()
+    parsedItems.value = parseCsvText(text)
+    if (parsedItems.value.length === 0) {
+      errorMsg.value = 'No valid product rows found in CSV. Click "Load Sample Batch" to test.'
+    }
+  }
+}
 
+const loadSampleBatchDirectly = () => {
+  fileName.value = 'olmoa_partner_bulk_template.csv'
+  parsedItems.value = parseCsvText(sampleCsvContent)
+  errorMsg.value = ''
+  uploadResult.value = null
+}
+
+const executeBulkUpload = async () => {
+  if (parsedItems.value.length === 0) return
+  uploading.value = true
+  errorMsg.value = ''
   try {
-    const text = await file.text();
-    let items: any[] = [];
-    if (file.name.endsWith('.json')) {
-      items = JSON.parse(text);
-    } else {
-      items = parseCSV(text);
-    }
-
-    if (items.length === 0) {
-      // Default sample items if blank template uploaded
-      items = [
-        { title: '신규 오버핏 코튼 티셔츠', category_slug: 'sub_m_tshirts', sku_code: `SKU-${Date.now()}-1`, lowest_original_price: 35000, lowest_sale_price: 19900, stock_quantity: 120 },
-        { title: '데일리 와이드 밴딩 슬랙스', category_slug: 'sub_m_pants', sku_code: `SKU-${Date.now()}-2`, lowest_original_price: 49000, lowest_sale_price: 25900, stock_quantity: 80 }
-      ];
-    }
-
-    const res = await fetch(`${API_BASE}/api/v1/partner/products/batch`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/products/bulk`, {
       method: 'POST',
-      headers: { ...getPartnerHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
-    });
-
-    const json = await res.json();
-    if (res.ok && json.success) {
-      importedCount.value = json.imported_count || items.length;
-      uploadSuccess.value = true;
-    } else {
-      errorMessage.value = json.error || '대량 등록 중 서버 오류가 발생했습니다.';
-    }
+      headers: getPartnerHeaders(),
+      body: JSON.stringify({ items: parsedItems.value })
+    })
+    const json = await res.json()
+    if (!res.ok || !json.success) throw new Error(json.error || 'Bulk upload failed')
+    uploadResult.value = json.data
   } catch (err: any) {
-    errorMessage.value = '파일 처리 실패: ' + err.message;
+    errorMsg.value = err.message || 'Network error'
   } finally {
-    isProcessing.value = false;
+    uploading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="space-y-6 max-w-4xl mx-auto">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-900">Excel / CSV 대량 상품 일괄 등록</h1>
-      <p class="text-xs text-slate-500 mt-1">양식 템플릿에 맞추어 수천 개의 SKU 상품을 Cloudflare D1 엔진으로 일괄 적재합니다.</p>
-    </div>
-
-    <!-- Upload Box -->
-    <div class="bg-white p-8 rounded-2xl border-2 border-dashed border-indigo-200 text-center hover:border-indigo-500 transition">
-      <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
-        <i class="fa-solid fa-cloud-arrow-up"></i>
+  <div class="max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-black text-gray-900">Mass SKU & Product Registration (CSV Batch Engine)</h2>
+        <p class="text-xs text-gray-500">Atomically insert up to 200 products, SKUs, and initial inventory ledger records into D1</p>
       </div>
-      <h3 class="font-bold text-slate-800 text-base mb-1">CSV 또는 JSON 파일을 업로드하세요</h3>
-      <p class="text-xs text-slate-400 mb-6">지원 형식: .csv, .json (최대 50MB, 행 수 최대 5,000건)</p>
+      <div class="flex gap-2">
+        <button @click="downloadSampleCsv" class="px-3.5 py-2 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-xs font-bold cursor-pointer">
+          ⬇ Download CSV Template
+        </button>
+        <button @click="loadSampleBatchDirectly" class="px-3.5 py-2 rounded-xl bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-black cursor-pointer">
+          ⚡ Load Sample 3-Product Batch
+        </button>
+      </div>
+    </div>
 
-      <label class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-md inline-block">
-        <span>파일 선택 및 D1 전송</span>
-        <input type="file" accept=".csv, .json, .txt" class="hidden" @change="handleFileUpload" />
+    <div class="bg-white rounded-2xl p-8 border-2 border-dashed border-gray-300 text-center">
+      <div class="text-4xl mb-3">📦</div>
+      <h3 class="text-base font-bold text-gray-800 mb-1">Drop your Catalog CSV file here</h3>
+      <p class="text-xs text-gray-500 mb-5">Columns: title, brand, category_id, original_price, sale_price, stock_quantity, option_label, thumbnail_url</p>
+
+      <label class="inline-block px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold cursor-pointer">
+        Select CSV File
+        <input type="file" accept=".csv" class="hidden" @change="handleFileSelect" />
       </label>
+
+      <div v-if="fileName" class="mt-4 text-xs font-bold text-[#FF5000]">
+        Loaded File: {{ fileName }} ({{ parsedItems.length }} rows parsed)
+      </div>
     </div>
 
-    <div v-if="isProcessing" class="p-4 bg-indigo-50 border border-indigo-200 rounded-xl text-center text-xs text-indigo-700 animate-pulse font-medium">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>D1 Batch 트랜잭션 적재 및 SKU 유효성 검증 중...
+    <div v-if="errorMsg" class="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-600">
+      {{ errorMsg }}
     </div>
 
-    <div v-if="errorMessage" class="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
-      <i class="fa-solid fa-circle-exclamation mr-1.5"></i>{{ errorMessage }}
+    <!-- Preview Table & Execute Button -->
+    <div v-if="parsedItems.length > 0" class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+      <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <span class="text-xs font-black text-gray-800">Parsed CSV Batch Preview ({{ parsedItems.length }} items)</span>
+        <button
+          @click="executeBulkUpload"
+          :disabled="uploading"
+          class="px-5 py-2 rounded-xl bg-[#FF5000] hover:bg-[#E04600] text-white text-xs font-black cursor-pointer disabled:opacity-50"
+        >
+          {{ uploading ? 'Executing D1 Batch Insert...' : `Commit ${parsedItems.length} Products to D1` }}
+        </button>
+      </div>
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="border-b border-gray-200 text-gray-500 uppercase">
+            <th class="py-2.5 px-4">Title</th>
+            <th class="py-2.5 px-4">Brand</th>
+            <th class="py-2.5 px-4">Category ID</th>
+            <th class="py-2.5 px-4">Orig Price</th>
+            <th class="py-2.5 px-4">Sale Price</th>
+            <th class="py-2.5 px-4">Stock</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr v-for="(item, idx) in parsedItems" :key="idx">
+            <td class="py-2.5 px-4 font-bold text-gray-900">{{ item.title }}</td>
+            <td class="py-2.5 px-4 text-gray-600">{{ item.brand }}</td>
+            <td class="py-2.5 px-4 font-mono text-gray-500">{{ item.category_id }}</td>
+            <td class="py-2.5 px-4 text-gray-400 line-through">₩{{ item.original_price.toLocaleString() }}</td>
+            <td class="py-2.5 px-4 font-black text-[#FF5000]">₩{{ item.sale_price.toLocaleString() }}</td>
+            <td class="py-2.5 px-4 font-bold">{{ item.stock_quantity }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div v-if="uploadSuccess" class="p-5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 space-y-1">
-      <div class="font-bold text-sm"><i class="fa-solid fa-circle-check mr-1.5 text-emerald-600"></i>D1 대량 등록 완료!</div>
-      <p>총 <strong>{{ importedCount }}</strong>건의 신규 SKU 상품이 D1 데이터베이스에 안전하게 원자적 적재되었습니다.</p>
+    <div v-if="uploadResult" class="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-bold">
+      ✓ Successfully committed {{ uploadResult.inserted_count }} products & SKUs to Cloudflare D1! (IDs: {{ uploadResult.products.map((p: any) => p.product_id).join(', ') }})
     </div>
   </div>
 </template>

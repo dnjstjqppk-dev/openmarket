@@ -1,15 +1,12 @@
-// apps/admin/src/config.ts
-// OLMOA Admin Console Configuration
+export const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://olmoa-api.dnjstjqppk.workers.dev'
 
-export const API_BASE_URL = 'https://olmoa-api.dnjstjqppk.workers.dev';
-
-export function getAdminHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const secret = localStorage.getItem('admin_token') || 'olmoa_admin_sec_2026';
+export const getAdminHeaders = (): Record<string, string> => {
+  let token = 'olmoa_admin_2026'
+  try {
+    token = localStorage.getItem('olmoa_admin_token') || 'olmoa_admin_2026'
+  } catch {}
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${secret}`,
-    'X-Admin-Secret': secret,
-    ...extra
-  };
+    'Authorization': `Bearer ${token}`
+  }
 }
-

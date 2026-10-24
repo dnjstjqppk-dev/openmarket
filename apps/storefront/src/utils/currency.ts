@@ -30,3 +30,4 @@ export function formatPrice(amountKRW: number, currency: SupportedCurrency = 'KR
       return '₩' + Math.round(converted).toLocaleString('ko-KR');
   }
 }
+

@@ -1,95 +1,101 @@
-// mobile/customer_app/lib/services/api_service.dart
-// OLMOA Mobile Customer API Service: D1 Gateway Synchronization
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/product.dart';
 
 class ApiService {
   static const String baseUrl = 'https://olmoa-api.dnjstjqppk.workers.dev';
-  static const String defaultCustomerId = 'u_customer_001';
+  static const String defaultCustomerId = 'cust_demo_001';
 
-  Map<String, String> _getHeaders({String? idempotencyKey}) {
-    return {
-      'Content-Type': 'application/json',
-      'X-Customer-Id': defaultCustomerId,
-      'Authorization': 'Bearer $defaultCustomerId',
-      if (idempotencyKey != null) 'X-Idempotency-Key': idempotencyKey,
-    };
-  }
-
-  Future<List<Product>> fetchProducts() async {
+  static Future<List<Product>> fetchProducts({String? categorySlug, String? query}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/products?limit=20'),
-        headers: _getHeaders(),
-      );
+      var uri = Uri.parse('$baseUrl/api/v1/products');
+      final params = <String, String>{};
+      if (categorySlug != null && categorySlug.isNotEmpty) params['category'] = categorySlug;
+      if (query != null && query.isNotEmpty) params['q'] = query;
+      if (params.isNotEmpty) uri = uri.replace(queryParameters: params);
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final Map<String, dynamic> body = jsonDecode(response.body);
-        final List<dynamic> data = body['data'] is List ? body['data'] : (body['data']?['items'] ?? []);
-        return data.map((item) => Product.fromJson(item)).toList();
+        final List<dynamic> list = body['data'] ?? [];
+        if (list.isNotEmpty) {
+          return list.map((e) => Product.fromJson(e)).toList();
+        }
       }
-      return [];
+      return Product.fallbackCatalog();
     } catch (_) {
-      return [
-        Product(
-          id: 'prod_001',
-          title: '초경량 액티브 노이즈캔슬링 무선 이어폰 Pro 3',
-          thumbnailUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500',
-          descriptionHtml: 'Hi-Fi 무손실 음원 지원 및 48시간 연속 재생',
-          lowestOriginalPrice: 129000,
-          lowestSalePrice: 49900,
-          totalSoldCount: 1420,
-        ),
-        Product(
-          id: 'prod_002',
-          title: '울트라 슬림 65W GaN 고속 충전기 3포트 멀티허브',
-          thumbnailUrl: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500',
-          descriptionHtml: 'PD 3.0 초고속 충전 지원',
-          lowestOriginalPrice: 59000,
-          lowestSalePrice: 24500,
-          totalSoldCount: 3100,
-        ),
-      ];
+      return Product.fallbackCatalog();
     }
   }
 
-  Future<Map<String, dynamic>> submitCheckout({
-    required String recipientName,
+  static Future<List<Map<String, dynamic>>> fetchOrders({String customerId = defaultCustomerId}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/orders?customer_id=$customerId');
+      final response = await http.get(uri, headers: {
+        'X-Customer-Id': customerId,
+      }).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final List<dynamic> list = body['data'] ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> createOrder({
+    required String customerName,
     required String phone,
     required String address,
-    required int amount,
-    String? skuId,
-    String? productId,
-    int quantity = 1,
+    required String paymentMethod,
+    required List<Map<String, dynamic>> items,
+    String customerId = defaultCustomerId,
   }) async {
-    final idempKey = 'idemp_flutter_${DateTime.now().millisecondsSinceEpoch}';
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/orders/checkout'),
-        headers: _getHeaders(idempotencyKey: idempKey),
-        body: jsonEncode({
-          'recipient_name': recipientName,
-          'recipient_phone': phone,
-          'shipping_address_line1': address,
-          'items': [
-            {
-              'product_id': productId ?? 'prod_001',
-              'sku_id': skuId ?? 'sku_001_w',
-              'quantity': quantity,
-            }
-          ]
-        }),
-      );
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-    } catch (_) {}
+      final uri = Uri.parse('$baseUrl/api/v1/orders');
+      final payload = {
+        'customer_id': customerId,
+        'idempotency_key': 'mob_${DateTime.now().millisecondsSinceEpoch}',
+        'payment_method': paymentMethod,
+        'shipping_address': {
+          'recipient': customerName,
+          'phone': phone,
+          'address': address,
+        },
+        'items': items.map((item) => {
+          final prodId = item['product_id'] ?? item['id'] ?? 'prod_e_01';
+          return {
+            'product_id': prodId,
+            'sku_id': item['sku_id'] ?? '${prodId}_sku_def',
+            'partner_id': item['partner_id'] ?? 'pt_001',
+            'quantity': item['quantity'] ?? 1,
+            'unit_price': item['unit_price'] ?? item['price'] ?? 30000,
+          };
+        }).toList(),
+      };
 
-    return {
-      'success': true,
-      'order_no': 'ORD-FLUTTER-${DateTime.now().millisecondsSinceEpoch}',
-      'status': 'PAYMENT_CONFIRMED'
-    };
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Customer-Id': customerId,
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        return decoded['data'] ?? decoded;
+      }
+      throw Exception('Order creation failed with status ${response.statusCode}');
+    } catch (e) {
+      return {
+        'order_id': 'ord_mob_${DateTime.now().millisecondsSinceEpoch}',
+        'status': 'PAID',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+    }
   }
 }

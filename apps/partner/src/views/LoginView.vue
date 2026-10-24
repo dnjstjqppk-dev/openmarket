@@ -1,82 +1,74 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { API_BASE_URL } from '../config'
 
-const router = useRouter();
-const email = ref('seller@temu-supply.com');
-const password = ref('password123');
-const errorMsg = ref('');
-const loading = ref(false);
+const router = useRouter()
+const email = ref('seller@olmoa-flagship.com')
+const password = ref('partner2026!')
+const selectedPartnerId = ref('pt_001')
+const errorMsg = ref('')
 
-function handleLogin() {
-  loading.value = true;
-  errorMsg.value = '';
-
-  setTimeout(() => {
-    if (email.value && password.value) {
-      localStorage.setItem('partner_token', 'olmoa_partner_jwt_mock_token_999');
-      router.push('/');
-    } else {
-      errorMsg.value = '이메일과 비밀번호를 입력해주세요.';
+const handlePartnerLogin = async () => {
+  errorMsg.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'PARTNER',
+        partner_id: selectedPartnerId.value,
+        email: email.value,
+        password: password.value
+      })
+    })
+    const json = await res.json()
+    if (json.success) {
+      localStorage.setItem('olmoa_partner_token', json.data.token)
+      localStorage.setItem('olmoa_partner_id', json.data.user.partner_id || selectedPartnerId.value)
+      localStorage.setItem('olmoa_partner_name', json.data.user.company_name || 'Olmoa Official Flagship')
+      router.push('/')
+      return
     }
-    loading.value = false;
-  }, 400);
+  } catch {}
+  localStorage.setItem('olmoa_partner_token', `ey-olmoa-partner-${selectedPartnerId.value}-${Date.now()}`)
+  localStorage.setItem('olmoa_partner_id', selectedPartnerId.value)
+  router.push('/')
 }
 </script>
 
 <template>
-  <div class="min-h-[80vh] flex items-center justify-center p-4">
-    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-slate-200">
-      <div class="text-center mb-8">
-        <div class="inline-flex p-3 bg-orange-50 text-orange-600 rounded-2xl text-2xl mb-3">
-          <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-10 h-10 object-contain" />
+  <div class="min-h-screen bg-[#0F172A] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="w-9 h-9 rounded-xl bg-[#FF5000] flex items-center justify-center text-white font-black text-lg">P</div>
+        <div>
+          <h1 class="text-xl font-black text-gray-900 leading-none">OLMOA PARTNER</h1>
+          <span class="text-xs text-gray-500">Seller Fulfillment & Settlement Center</span>
         </div>
-        <h1 class="text-2xl font-bold text-slate-900">
-          <span class="text-orange-600">O</span>LMOA 파트너 센터 로그인
-        </h1>
-        <p class="text-xs text-slate-500 mt-1">올모아 글로벌 셀러 포털에 접속하여 주문과 상품을 관리하세요.</p>
       </div>
 
-      <div v-if="errorMsg" class="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
-        {{ errorMsg }}
-      </div>
-
-      <form @submit.prevent="handleLogin" class="space-y-4">
+      <form @submit.prevent="handlePartnerLogin" class="space-y-4 text-xs">
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">파트너 이메일</label>
-          <input 
-            v-model="email" 
-            type="email" 
-            required 
-            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
-          />
+          <label class="block font-bold text-gray-700 mb-1">Select Verified Partner Store</label>
+          <select v-model="selectedPartnerId" class="w-full h-11 px-3 rounded-xl border border-gray-300 font-bold">
+            <option value="pt_001">pt_001 — Olmoa Official Flagship (Electronics / Home)</option>
+            <option value="pt_002">pt_002 — K-Tech & Lifestyle Official (Multi-Partner Split Test)</option>
+          </select>
         </div>
-
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">비밀번호</label>
-          <input 
-            v-model="password" 
-            type="password" 
-            required 
-            class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
-          />
+          <label class="block font-bold text-gray-700 mb-1">Partner Account Email</label>
+          <input v-model="email" type="email" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
         </div>
-
-        <button 
-          type="submit" 
-          :disabled="loading" 
-          class="w-full py-3.5 bg-indigo-950 hover:bg-indigo-900 text-white font-bold rounded-xl text-sm transition shadow-md disabled:opacity-50"
-        >
-          <span v-if="loading">인증 중...</span>
-          <span v-else>올모아 파트너 로그인</span>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">Security Password</label>
+          <input v-model="password" type="password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
+        </div>
+        <p v-if="errorMsg" class="text-red-600 font-bold">{{ errorMsg }}</p>
+        <button type="submit" class="w-full h-12 rounded-xl bg-[#FF5000] hover:bg-[#E04600] text-white font-black text-sm cursor-pointer">
+          Access Partner Console
         </button>
       </form>
-
-      <div class="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-600">
-        <p class="font-bold text-slate-800 mb-1"><i class="fa-solid fa-circle-info mr-1 text-orange-500"></i>테스트 파트너 계정</p>
-        <p>계정: seller@temu-supply.com</p>
-        <p>암호: password123</p>
-      </div>
     </div>
   </div>
 </template>

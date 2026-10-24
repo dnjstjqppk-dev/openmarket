@@ -92,3 +92,4 @@ function handleRegister() {
     </div>
   </div>
 </template>
+

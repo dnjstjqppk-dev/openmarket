@@ -1,139 +1,181 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { API_BASE, getPartnerHeaders } from '../config';
+import { ref, onMounted } from 'vue'
+import { API_BASE_URL, getPartnerHeaders, getPartnerId } from '../config'
 
-interface PartnerProduct {
-  id: string;
-  title: string;
-  sku_code: string;
-  lowest_sale_price: number;
-  stock_quantity: number;
-  status: string;
-  category_name?: string;
-}
+const products = ref<any[]>([])
+const loading = ref(true)
+const toast = ref('')
 
-const products = ref<PartnerProduct[]>([]);
-const loading = ref(true);
-const editingStockId = ref<string | null>(null);
-const tempStock = ref(0);
-const isSaving = ref(false);
+const showCreateModal = ref(false)
+const newProd = ref({
+  title: '',
+  brand: 'OLMOA DIRECT',
+  category_id: 'cat_e_audio',
+  original_price: 89000,
+  sale_price: 59000,
+  stock_quantity: 120,
+  thumbnail_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80'
+})
 
-async function loadProducts() {
-  loading.value = true;
+const loadProducts = async () => {
+  loading.value = true
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/products`, {
-      headers: getPartnerHeaders()
-    });
-    const json = await res.json();
-    if (json.success && json.data) {
-      products.value = json.data;
+    const res = await fetch(`${API_BASE_URL}/api/v1/products`)
+    const json = await res.json()
+    if (json.success) {
+      const pid = getPartnerId()
+      const list = json.data.filter((p: any) => !p.partner_id || p.partner_id === pid)
+      products.value = (list.length > 0 ? list : json.data).map((p: any) => ({
+        ...p,
+        editPrice: p.lowest_sale_price,
+        editStock: 100
+      }))
     }
-  } catch (_) {
+  } catch (e) {
+    console.error(e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
-function editStock(product: PartnerProduct) {
-  editingStockId.value = product.id;
-  tempStock.value = product.stock_quantity;
-}
-
-async function saveStock(product: PartnerProduct) {
-  isSaving.value = true;
+const saveProductChanges = async (p: any) => {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/products/${product.id}/stock`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
-      body: JSON.stringify({ stock_quantity: tempStock.value })
-    });
-    if (res.ok) {
-      product.stock_quantity = tempStock.value;
-      editingStockId.value = null;
-    }
-  } catch (_) {
-  } finally {
-    isSaving.value = false;
+    await Promise.all([
+      fetch(`${API_BASE_URL}/api/v1/partner/products/${p.id}/price`, {
+        method: 'PUT',
+        headers: getPartnerHeaders(),
+        body: JSON.stringify({ sale_price: Number(p.editPrice), original_price: Number(p.lowest_original_price) })
+      }),
+      fetch(`${API_BASE_URL}/api/v1/partner/products/${p.id}/stock`, {
+        method: 'PUT',
+        headers: getPartnerHeaders(),
+        body: JSON.stringify({ stock_quantity: Number(p.editStock) })
+      })
+    ])
+    toast.value = `✓ Updated price (₩${Number(p.editPrice).toLocaleString()}) & stock (${p.editStock}) for "${p.title}"`
+    setTimeout(() => { toast.value = '' }, 3000)
+  } catch (e) {
+    console.error(e)
   }
 }
 
-onMounted(() => {
-  loadProducts();
-});
+const createNewProduct = async () => {
+  if (!newProd.value.title.trim()) return
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/products`, {
+      method: 'POST',
+      headers: getPartnerHeaders(),
+      body: JSON.stringify(newProd.value)
+    })
+    const json = await res.json()
+    if (json.success) {
+      showCreateModal.value = false
+      toast.value = `✓ Registered new product "${newProd.value.title}" (${json.data.product_id})`
+      newProd.value.title = ''
+      await loadProducts()
+    }
+  } catch {}
+}
+
+onMounted(loadProducts)
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">등록 상품 및 SKU 재고 관리</h1>
-        <p class="text-xs text-slate-500 mt-1">Cloudflare D1에 영구 저장된 입점사 실시간 상품과 SKU 재고를 조회 및 변경합니다.</p>
+        <h2 class="text-xl font-black text-gray-900">Catalog Price & SKU Inventory Control</h2>
+        <p class="text-xs text-gray-500">Real-time synchronization with D1 Edge Database and Inventory Ledger</p>
       </div>
-      <router-link to="/bulk-upload" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-        <i class="fa-solid fa-plus mr-1.5"></i>신규 상품 등록
-      </router-link>
+      <div class="flex items-center gap-3">
+        <div v-if="toast" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-sm">
+          {{ toast }}
+        </div>
+        <button
+          @click="showCreateModal = true"
+          class="px-4 py-2.5 rounded-xl bg-[#FF5000] hover:bg-[#E04600] text-white text-xs font-black cursor-pointer shadow-xs"
+        >
+          + Register New Product
+        </button>
+      </div>
     </div>
 
-    <div v-if="loading" class="p-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-500"></i>
-      <p class="text-xs font-bold">D1에서 상품 목록을 불러오는 중입니다...</p>
+    <!-- Create Product Modal -->
+    <div v-if="showCreateModal" class="bg-white rounded-2xl p-6 border-2 border-[#FF5000] shadow-lg space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-black text-gray-900">Register Single Product & Default SKU</h3>
+        <button @click="showCreateModal = false" class="text-xs text-gray-400">Close ✕</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+        <div class="sm:col-span-2">
+          <label class="block font-bold text-gray-700 mb-1">Product Title</label>
+          <input v-model="newProd.title" placeholder="e.g., Pro Wireless ANC Studio Headphones" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">Brand</label>
+          <input v-model="newProd.brand" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">Original Price (KRW)</label>
+          <input v-model.number="newProd.original_price" type="number" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">Direct Sale Price (KRW)</label>
+          <input v-model.number="newProd.sale_price" type="number" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">Initial Stock Quantity</label>
+          <input v-model.number="newProd.stock_quantity" type="number" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button @click="showCreateModal = false" class="px-4 py-2 rounded-lg border border-gray-300 text-xs font-bold">Cancel</button>
+        <button @click="createNewProduct" class="px-5 py-2 rounded-lg bg-[#FF5000] text-white text-xs font-black cursor-pointer">Save Product</button>
+      </div>
     </div>
 
-    <div v-else class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
-            <tr>
-              <th class="py-3 px-4">상품명</th>
-              <th class="py-3 px-4">카테고리</th>
-              <th class="py-3 px-4">대표 SKU 코드</th>
-              <th class="py-3 px-4">판매가</th>
-              <th class="py-3 px-4">가용 재고</th>
-              <th class="py-3 px-4">상태</th>
-              <th class="py-3 px-4 text-right">재고 변경</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="p in products" :key="p.id" class="hover:bg-slate-50 transition">
-              <td class="py-3.5 px-4 font-medium text-slate-900 max-w-xs truncate">{{ p.title }}</td>
-              <td class="py-3.5 px-4 text-slate-500">{{ p.category_name || '일반' }}</td>
-              <td class="py-3.5 px-4 font-mono text-slate-600">{{ p.sku_code || ('SKU-' + p.id) }}</td>
-              <td class="py-3.5 px-4 font-bold text-slate-900">₩{{ p.lowest_sale_price.toLocaleString() }}</td>
-              <td class="py-3.5 px-4">
-                <span v-if="editingStockId !== p.id" class="font-semibold" :class="p.stock_quantity > 20 ? 'text-emerald-600' : 'text-rose-600'">
-                  {{ p.stock_quantity }}개
-                </span>
-                <input 
-                  v-else 
-                  v-model.number="tempStock" 
-                  type="number" 
-                  class="w-20 px-2 py-1 border border-indigo-400 rounded text-xs font-mono"
-                />
-              </td>
-              <td class="py-3.5 px-4">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
-                  {{ p.status }}
-                </span>
-              </td>
-              <td class="py-3.5 px-4 text-right">
-                <button 
-                  v-if="editingStockId !== p.id" 
-                  @click="editStock(p)" 
-                  class="px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-200 text-[11px] font-semibold"
-                >
-                  재고 수정
-                </button>
-                <div v-else class="flex gap-1 justify-end">
-                  <button @click="saveStock(p)" :disabled="isSaving" class="px-2 py-1 bg-indigo-600 text-white rounded text-[11px] font-semibold">
-                    {{ isSaving ? '저장중' : '저장' }}
-                  </button>
-                  <button @click="editingStockId = null" class="px-2 py-1 bg-slate-200 text-slate-600 rounded text-[11px]">취소</button>
+    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
+            <th class="py-3.5 px-5 font-bold">Product</th>
+            <th class="py-3.5 px-5 font-bold">Brand / Partner</th>
+            <th class="py-3.5 px-5 font-bold">Original Price</th>
+            <th class="py-3.5 px-5 font-bold">Sale Price (KRW)</th>
+            <th class="py-3.5 px-5 font-bold">SKU Stock</th>
+            <th class="py-3.5 px-5 font-bold">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr v-for="p in products" :key="p.id" class="hover:bg-gray-50">
+            <td class="py-3 px-5">
+              <div class="flex items-center gap-3">
+                <img :src="p.thumbnail_url" class="w-10 h-10 rounded-lg object-cover bg-gray-100" />
+                <div>
+                  <div class="font-bold text-gray-900 line-clamp-1 max-w-xs">{{ p.title }}</div>
+                  <div class="text-[10px] text-gray-400 font-mono">{{ p.id }}</div>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </td>
+            <td class="py-3 px-5 font-semibold text-gray-600">{{ p.brand }}</td>
+            <td class="py-3 px-5 text-gray-400 line-through">₩{{ p.lowest_original_price?.toLocaleString() }}</td>
+            <td class="py-3 px-5">
+              <input v-model.number="p.editPrice" type="number" class="w-28 h-8 px-2.5 rounded border border-gray-300 font-bold text-gray-900" />
+            </td>
+            <td class="py-3 px-5">
+              <input v-model.number="p.editStock" type="number" class="w-20 h-8 px-2.5 rounded border border-gray-300 font-bold text-gray-900" />
+            </td>
+            <td class="py-3 px-5">
+              <button
+                @click="saveProductChanges(p)"
+                class="px-3.5 py-1.5 rounded-lg bg-gray-900 hover:bg-[#FF5000] text-white font-bold transition-colors cursor-pointer"
+              >
+                Apply
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>

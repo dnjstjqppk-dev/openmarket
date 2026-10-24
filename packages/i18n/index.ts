@@ -1,36 +1,76 @@
 // packages/i18n/index.ts
-// Multilingual Translation Dictionaries (KO, EN, JA)
+// OLMOA Multilingual Translation Dictionaries (KO, EN, JA)
 
-export const translations = {
-  ko: {
-    siteTitle: 'OpenMarket — 글로벌 오픈마켓 플랫폼',
-    flashSale: '타임특가 번개세일',
+export type SupportedLocale = 'ko-KR' | 'en-US' | 'ja-JP';
+
+export const translations: Record<SupportedLocale, Record<string, string>> = {
+  'ko-KR': {
+    siteTitle: 'OLMOA — 글로벌 오픈마켓 플랫폼',
+    tagline: '내가 찾는 모든 것, 여기.',
+    searchPlaceholder: '무엇이든 검색하세요! 패션, 디지털, 생활용품 등 초특가 상품...',
+    allCategories: '전체 42개 카테고리',
+    lightningDeals: '⚡ 번개특가',
+    bestSellers: '👑 베스트 100',
+    couponCenter: '🎟️ 쿠폰·적립금',
+    wishlist: '찜목록',
+    ordersAndShipping: '주문·배송',
     cart: '장바구니',
+    sellerJoin: '셀러 입점',
+    supportCenter: '고객센터',
+    freeShippingGuarantee: '3만원 이상 무료배송 · 90일 무료반품 · 30일 최저가 차액보상',
+    addToCart: '장바구니 담기',
+    buyNow: '즉시 바로구매 →',
+    outOfStock: '현재 품절',
     checkout: '주문서 작성 및 결제',
     freeShipping: '무료 배송',
     shippingFee: '배송비',
     totalAmount: '총 결제 금액',
-    subOrderNotice: '입점사별 주문 분기 및 에스크로 보호가 적용됩니다.'
+    subOrderNotice: '입점사별 주문 분기 및 에스크로 100% 구매자 보호가 적용됩니다.'
   },
-  en: {
-    siteTitle: 'OpenMarket — Global Enterprise Marketplace',
-    flashSale: 'Lightning Flash Sale',
-    cart: 'Shopping Cart',
+  'en-US': {
+    siteTitle: 'OLMOA — Global Enterprise Marketplace',
+    tagline: 'Everything You Seek. All Here.',
+    searchPlaceholder: 'Search millions of global deals in fashion, tech, home & more...',
+    allCategories: 'All 42 Categories',
+    lightningDeals: '⚡ Lightning Deals',
+    bestSellers: '👑 Best Sellers',
+    couponCenter: '🎟️ Coupons & Credits',
+    wishlist: 'Wishlist',
+    ordersAndShipping: 'Orders',
+    cart: 'Cart',
+    sellerJoin: 'Sell on OLMOA',
+    supportCenter: 'Help Center',
+    freeShippingGuarantee: 'Free Shipping over ₩30,000 · 90-Day Free Returns · 30-Day Price Match',
+    addToCart: 'Add to Cart',
+    buyNow: 'Buy Now →',
+    outOfStock: 'Out of Stock',
     checkout: 'Checkout & Place Order',
     freeShipping: 'Free Shipping',
     shippingFee: 'Shipping Fee',
     totalAmount: 'Total Pay Amount',
-    subOrderNotice: 'Split-order per vendor and escrow protection applied.'
+    subOrderNotice: 'Split-order per vendor and 100% escrow buyer protection applied.'
   },
-  ja: {
-    siteTitle: 'OpenMarket — グローバルオープンマーケット',
-    flashSale: 'タイムセール',
-    cart: 'ショッピングカート',
+  'ja-JP': {
+    siteTitle: 'OLMOA — グローバルオープンマーケット',
+    tagline: '探していたすべてが、ここに。',
+    searchPlaceholder: 'ファッション、デジタル、生活用品など超特価商品を検索...',
+    allCategories: '全42カテゴリー',
+    lightningDeals: '⚡ タイムセール',
+    bestSellers: '👑 ベストセラー',
+    couponCenter: '🎟️ クーポン・ポイント',
+    wishlist: 'お気に入り',
+    ordersAndShipping: '注文・配送',
+    cart: 'カート',
+    sellerJoin: '出店案内',
+    supportCenter: 'カスタマーセンター',
+    freeShippingGuarantee: '3万ウォン以上送料無料 · 90日間無料返品 · 30日間最低価格保証',
+    addToCart: 'カートに入れる',
+    buyNow: '今すぐ購入 →',
+    outOfStock: '品切れ',
     checkout: '注文手続き・決済',
     freeShipping: '送料無料',
     shippingFee: '送料',
     totalAmount: '合計決済金額',
-    subOrderNotice: '出店者ごとの注文分割およびエスクロー保護が適用されます。'
+    subOrderNotice: '出店者ごとの注文分割およびエスクロー100%購入者保護が適用されます。'
   }
 };
-

@@ -1,208 +1,331 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { API_BASE_URL } from '../config';
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useCartStore } from '../stores/cart'
+import { useLocaleStore } from '../stores/locale'
+import { API_BASE_URL } from '../config'
 
-interface ProductItem {
-  id: string;
-  title: string;
-  thumbnail_url: string;
-  lowest_original_price: number;
-  lowest_sale_price: number;
-  total_sold_count: number;
-  category_name?: string;
-  category_slug?: string;
-  business_name?: string;
-  rating?: number;
+const cart = useCartStore()
+const locale = useLocaleStore()
+const products = ref<any[]>([])
+const categories = ref<any[]>([])
+const lightningCampaign = ref<any>(null)
+const loading = ref(true)
+const activeCategorySlug = ref('ALL')
+const sortBy = ref<'popular' | 'price_asc' | 'price_desc' | 'discount'>('popular')
+
+const countdown = ref('04:59:42')
+let timer: any = null
+
+const updateCountdown = () => {
+  const now = new Date()
+  const sec = 59 - now.getSeconds()
+  const min = 59 - now.getMinutes()
+  const hr = 4 - (now.getHours() % 5)
+  countdown.value = `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-interface CategoryItem {
-  id: string;
-  name: string;
-  slug: string;
-  icon?: string;
-}
-
-const products = ref<ProductItem[]>([]);
-const categories = ref<CategoryItem[]>([
-  { id: 'all', slug: 'all', name: '전체 핫딜', icon: 'fa-fire text-orange-500' }
-]);
-const loading = ref(true);
-const loadingCats = ref(true);
-const selectedCategory = ref('all');
-const apiError = ref('');
-
-const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500';
-
-function onImgError(e: Event) {
-  const target = e.target as HTMLImageElement;
-  if (target && target.src !== fallbackImage) {
-    target.src = fallbackImage;
-  }
-}
-
-async function loadCategories() {
-  loadingCats.value = true;
+onMounted(async () => {
+  updateCountdown()
+  timer = setInterval(updateCountdown, 1000)
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/categories`);
-    const json = await res.json();
-    if (json.success && Array.isArray(json.data)) {
-      const roots = json.data.filter((c: any) => !c.parent_id || c.depth === 1);
-      categories.value = [
-        { id: 'all', slug: 'all', name: '전체 핫딜', icon: 'fa-fire text-orange-500' },
-        ...roots.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          slug: c.slug,
-          icon: 'fa-layer-group text-slate-400'
-        }))
-      ];
+    const [prodRes, catRes, flashRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/v1/products`),
+      fetch(`${API_BASE_URL}/api/v1/categories`),
+      fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`)
+    ])
+    const prodJson = await prodRes.json()
+    const catJson = await catRes.json()
+    const flashJson = await flashRes.json()
+
+    if (prodJson.success) products.value = prodJson.data
+    if (catJson.success && Array.isArray(catJson.data)) {
+      categories.value = catJson.data.filter((c: any) => Number(c.depth) === 0)
     }
-  } catch (_) {
+    if (flashJson.success) lightningCampaign.value = flashJson.data
+  } catch (e) {
+    console.error('Failed to fetch storefront data:', e)
   } finally {
-    loadingCats.value = false;
+    loading.value = false
   }
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+
+const getDiscountPercent = (sale: number, orig: number) => {
+  if (!orig || orig <= sale) return 0
+  return Math.round(((orig - sale) / orig) * 100)
 }
 
-async function loadProducts(catSlug: string = 'all') {
-  selectedCategory.value = catSlug;
-  loading.value = true;
-  apiError.value = '';
-  try {
-    const url = catSlug === 'all' 
-      ? `${API_BASE_URL}/api/v1/products?sort=popular`
-      : `${API_BASE_URL}/api/v1/products?category=${catSlug}&sort=popular`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.success && Array.isArray(json.data)) {
-      products.value = json.data;
-    } else {
-      products.value = [];
-    }
-  } catch (err: any) {
-    apiError.value = '상품 목록을 불러오는 중 네트워크 오류가 발생했습니다.';
-    products.value = [];
-  } finally {
-    loading.value = false;
+const filteredProducts = computed(() => {
+  let list = [...products.value]
+  if (activeCategorySlug.value !== 'ALL') {
+    list = list.filter(p =>
+      p.category_slug === activeCategorySlug.value ||
+      p.parent_category_slug === activeCategorySlug.value
+    )
   }
-}
+  if (sortBy.value === 'price_asc') {
+    list.sort((a, b) => a.lowest_sale_price - b.lowest_sale_price)
+  } else if (sortBy.value === 'price_desc') {
+    list.sort((a, b) => b.lowest_sale_price - a.lowest_sale_price)
+  } else if (sortBy.value === 'discount') {
+    list.sort((a, b) => getDiscountPercent(b.lowest_sale_price, b.lowest_original_price) - getDiscountPercent(a.lowest_sale_price, a.lowest_original_price))
+  } else {
+    list.sort((a, b) => (b.total_sold_count || 0) - (a.total_sold_count || 0))
+  }
+  return list
+})
 
-onMounted(() => {
-  loadCategories();
-  loadProducts('all');
-});
+const flashDeals = computed(() => {
+  if (lightningCampaign.value?.deals?.length) {
+    return lightningCampaign.value.deals.slice(0, 5)
+  }
+  return [...products.value]
+    .sort((a, b) => getDiscountPercent(b.lowest_sale_price, b.lowest_original_price) - getDiscountPercent(a.lowest_sale_price, a.lowest_original_price))
+    .slice(0, 5)
+})
 
-function calculateDiscount(orig: number, sale: number) {
-  if (orig <= 0) return 0;
-  return Math.max(0, Math.round(((orig - sale) / orig) * 100));
+const quickAdd = (e: Event, product: any) => {
+  e.preventDefault()
+  e.stopPropagation()
+  cart.addItem({
+    product_id: product.id,
+    sku_id: product.default_sku_id || `${product.id}_sku_def`,
+    partner_id: product.partner_id || 'pt_001',
+    partner_name: product.partner_name || 'Olmoa Official Flagship',
+    title: product.title,
+    brand: product.brand,
+    option_Label: 'Standard Choice',
+    price: product.lowest_sale_price,
+    original_price: product.lowest_original_price,
+    quantity: 1,
+    thumbnail_url: product.thumbnail_url,
+    slug: product.slug
+  })
 }
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Verified Policy Hero Banner -->
-    <section class="rounded-3xl bg-gradient-to-r from-orange-600 via-rose-500 to-amber-500 text-white p-6 sm:p-10 shadow-xl overflow-hidden relative">
-      <div class="relative z-10 max-w-2xl space-y-3">
-        <div class="inline-flex items-center gap-2 bg-black/25 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-amber-200">
-          <i class="fa-solid fa-crown"></i>
-          <span>OLMOA 글로벌 오픈마켓 직배송</span>
+  <div class="pb-16">
+    <!-- Hero Promotional Banner -->
+    <section class="bg-gradient-to-r from-[#FF5000] via-[#E60023] to-[#B8001F] text-white py-6 px-4 shadow-inner">
+      <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
+        <div class="max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 text-xs font-extrabold uppercase tracking-wider mb-3 backdrop-blur-xs">
+            <span class="w-2 h-2 rounded-full bg-[#FFE600] animate-ping"></span>
+            Global Direct OpenMarket • 42 Root Categories Live
+          </div>
+          <h1 class="text-3xl sm:text-5xl font-black tracking-tight leading-none mb-3">
+            DIRECT FACTORY DEALS <span class="text-[#FFE600]">UP TO 70% OFF</span>
+          </h1>
+          <p class="text-white/90 text-sm sm:text-base font-medium mb-5">
+            Every order is backed by our 30-day Price-Match Adjustment Guarantee, 90-day Free Returns, and 1% Purchase Confirmation Reward Credits.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <RouterLink to="/channel/lightning-deals" class="px-5 py-2.5 rounded-full bg-[#FFE600] text-black font-black text-xs sm:text-sm hover:bg-yellow-300 transition-colors shadow-md">
+              ⚡ Shop Lightning Deals
+            </RouterLink>
+            <RouterLink to="/coupons" class="px-5 py-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xs transition-colors">
+              🎟️ Claim ₩15,000 Coupon Pack
+            </RouterLink>
+          </div>
         </div>
-        <h1 class="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-          내가 찾는 모든 것, 여기.<br>
-          <span class="text-amber-200">스마트 글로벌 특가 쇼핑</span>
-        </h1>
-        <p class="text-white/90 text-sm sm:text-base font-medium">
-          3만원 이상 주문 시 무료배송 · 입점사 100% 정품 보증 · 실시간 배송 추적
-        </p>
-        <div class="pt-2 flex flex-wrap gap-3">
-          <router-link to="/categories" class="px-6 py-3 bg-white text-orange-600 font-extrabold rounded-full text-sm hover:bg-amber-100 transition shadow-lg">
-            전체 33개 카테고리 전체보기 &rarr;
-          </router-link>
+
+        <div class="grid grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
+          <RouterLink to="/coupons" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
+            <div class="text-2xl font-black text-[#FFE600]">₩5,000</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">Instant Welcome Credit</div>
+          </RouterLink>
+          <RouterLink to="/policy/shipping" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
+            <div class="text-2xl font-black text-white">100%</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">On-Time Guarantee</div>
+          </RouterLink>
+          <RouterLink to="/policy/returns" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
+            <div class="text-2xl font-black text-[#FFE600]">90 Days</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">Free Return Window</div>
+          </RouterLink>
         </div>
-      </div>
-      <div class="absolute right-4 bottom-0 opacity-20 sm:opacity-40 pointer-events-none transform translate-y-4">
-        <i class="fa-solid fa-gift text-[180px] sm:text-[240px]"></i>
       </div>
     </section>
 
-    <!-- Dynamic 33 Categories Scrollbar -->
-    <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-      <button 
-        v-for="cat in categories" 
-        :key="cat.slug"
-        @click="loadProducts(cat.slug)"
-        :class="selectedCategory === cat.slug ? 'bg-orange-600 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'"
-        class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
-      >
-        <i :class="['fa-solid', cat.icon || 'fa-tag text-slate-400']"></i>
-        <span>{{ cat.name }}</span>
-      </button>
-    </div>
-
-    <!-- Error State -->
-    <div v-if="apiError" class="p-6 bg-rose-50 border border-rose-200 rounded-2xl text-center space-y-2">
-      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-xl"></i>
-      <p class="text-xs text-rose-700 font-bold">{{ apiError }}</p>
-      <button @click="loadProducts(selectedCategory)" class="px-4 py-1.5 bg-rose-600 text-white text-xs rounded-xl font-bold">다시 시도</button>
-    </div>
-
-    <!-- Loading State -->
-    <div v-else-if="loading" class="py-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-orange-500"></i>
-      <p class="text-xs font-bold">상품 정보를 실시간 불러오는 중입니다...</p>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else-if="products.length === 0" class="py-16 text-center bg-white rounded-3xl border border-slate-200 space-y-3">
-      <i class="fa-solid fa-box-open text-4xl text-slate-300"></i>
-      <p class="text-sm font-bold text-slate-700">해당 카테고리의 상품이 준비 중입니다.</p>
-      <button @click="loadProducts('all')" class="px-5 py-2 bg-orange-600 text-white text-xs rounded-xl font-bold">전체 상품 보기</button>
-    </div>
-
-    <!-- High Density Product Grid -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-      <div 
-        v-for="p in products" 
-        :key="p.id" 
-        class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition duration-300 flex flex-col group"
-      >
-        <router-link :to="'/product/' + p.id" class="aspect-square bg-slate-100 overflow-hidden relative block">
-          <img :src="p.thumbnail_url" :alt="p.title" @error="onImgError" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
-          <span v-if="calculateDiscount(p.lowest_original_price, p.lowest_sale_price) > 0" class="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
-            -{{ calculateDiscount(p.lowest_original_price, p.lowest_sale_price) }}%
-          </span>
-        </router-link>
-
-        <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
-          <div>
-            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ p.category_name || 'OLMOA' }}</span>
-            <router-link :to="'/product/' + p.id" class="font-bold text-slate-900 text-xs line-clamp-2 mt-0.5 hover:text-orange-600 transition">
-              {{ p.title }}
-            </router-link>
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 mt-6 space-y-8">
+      <!-- Lightning Deals Row -->
+      <section v-if="!loading && flashDeals.length > 0" class="bg-white rounded-2xl p-5 shadow-xs border border-orange-200/80">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5 text-[#E60023] font-black text-xl tracking-tight">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+              LIGHTNING DEALS
+            </div>
+            <span class="px-2.5 py-0.5 bg-red-50 text-[#E60023] font-extrabold text-xs rounded-full border border-red-200">
+              Ends in {{ countdown }}
+            </span>
           </div>
+          <RouterLink to="/channel/lightning-deals" class="text-xs font-bold text-[#FF5000] hover:underline">
+            View All Flash Deals →
+          </RouterLink>
+        </div>
 
-          <div class="space-y-1.5 pt-1 border-t border-slate-100">
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm sm:text-base font-black text-orange-600">₩{{ p.lowest_sale_price.toLocaleString() }}</span>
-              <span v-if="p.lowest_original_price > p.lowest_sale_price" class="text-[10px] text-slate-400 line-through">
-                ₩{{ p.lowest_original_price.toLocaleString() }}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <RouterLink
+            v-for="item in flashDeals"
+            :key="'flash-' + (item.product_id || item.id)"
+            :to="`/product/${item.slug}`"
+            class="group bg-orange-50/40 rounded-xl p-3 border border-orange-100 hover:border-[#FF5000] hover:shadow-md transition-all flex flex-col"
+          >
+            <div class="relative aspect-square rounded-lg overflow-hidden bg-white mb-2.5">
+              <img :src="item.thumbnail_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <span class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded-md shadow-xs">
+                -{{ item.discount_rate || getDiscountPercent(item.deal_price || item.lowest_sale_price, item.lowest_original_price) }}%
               </span>
             </div>
-            <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span>판매 <strong class="text-slate-700">{{ p.total_sold_count.toLocaleString() }}</strong></span>
-              <!-- Only display rating if present in data, otherwise show badge -->
-              <span v-if="p.rating" class="text-amber-500 font-bold"><i class="fa-solid fa-star"></i> {{ p.rating }}</span>
-              <span v-else class="text-emerald-600 font-medium">OLMOA 직송</span>
+            <h3 class="text-xs font-semibold text-gray-800 line-clamp-1 mb-1 group-hover:text-[#FF5000]">{{ item.title }}</h3>
+            <div class="flex items-baseline gap-1.5 mt-auto">
+              <span class="text-base font-black text-[#E60023]">{{ locale.formatPrice(item.deal_price || item.lowest_sale_price) }}</span>
+              <span class="text-[11px] text-gray-400 line-through">{{ locale.formatPrice(item.lowest_original_price) }}</span>
             </div>
-            <router-link 
-              :to="'/product/' + p.id"
-              class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm"
-            >
-              <i class="fa-solid fa-sliders"></i>
-              <span>옵션 선택 / 구매</span>
-            </router-link>
-          </div>
+            <div class="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+              <div class="bg-gradient-to-r from-[#FF5000] to-[#E60023] h-full rounded-full" :style="{ width: `${Math.min(94, 48 + ((item.sold_quantity || item.total_sold_count || 20) % 45))}%` }"></div>
+            </div>
+            <span class="text-[10px] font-bold text-[#FF5000] mt-1">🔥 {{ (item.sold_quantity || item.total_sold_count || 85).toLocaleString() }} claimed</span>
+          </RouterLink>
         </div>
+      </section>
+
+      <!-- Root Category Filter Bar & Sort Controls -->
+      <div class="sticky top-25 z-40 bg-[#F5F5F7]/95 backdrop-blur-md py-3 border-b border-gray-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div class="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 no-scrollbar">
+          <button
+            @click="activeCategorySlug = 'ALL'"
+            :class="[
+              'px-4 py-2 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer',
+              activeCategorySlug === 'ALL'
+                ? 'bg-[#111111] text-white shadow-xs'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            ]"
+          >
+            🔥 All Recommended ({{ products.length }})
+          </button>
+          <button
+            v-for="cat in categories.slice(0, 12)"
+            :key="cat.id"
+            @click="activeCategorySlug = cat.slug"
+            :class="[
+              'px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
+              activeCategorySlug === cat.slug
+                ? 'bg-[#FF5000] text-white shadow-xs'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            ]"
+          >
+            {{ cat.name }}
+          </button>
+          <RouterLink
+            to="/categories"
+            class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-orange-50 text-[#FF5000] border border-orange-200 hover:bg-orange-100"
+          >
+            + All {{ categories.length }} Categories
+          </RouterLink>
+        </div>
+
+        <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
+          <span class="text-xs text-gray-500 font-medium">Sort by:</span>
+          <select
+            v-model="sortBy"
+            aria-label="Sort products by"
+            class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#FF5000]"
+          >
+            <option value="popular">Most Popular</option>
+            <option value="discount">Biggest Discount</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Loading Skeletons -->
+      <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div v-for="n in 10" :key="n" class="bg-white rounded-xl p-3 animate-pulse h-80 border border-gray-100">
+          <div class="w-full aspect-square bg-gray-200 rounded-lg mb-3"></div>
+          <div class="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div class="h-5 bg-gray-200 rounded w-1/2"></div>
+        </div>
+      </div>
+
+      <!-- High-Density Commercial Product Grid -->
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+        <RouterLink
+          v-for="product in filteredProducts"
+          :key="product.id"
+          :to="`/product/${product.slug}`"
+          class="group bg-white rounded-xl overflow-hidden border border-gray-200/80 hover:border-[#FF5000] hover:shadow-xl transition-all duration-200 flex flex-col"
+        >
+          <div class="relative aspect-square bg-gray-100 overflow-hidden">
+            <img
+              :src="product.thumbnail_url"
+              :alt="product.title"
+              loading="lazy"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+            <div
+              v-if="getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) > 0"
+              class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded shadow-xs"
+            >
+              -{{ getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) }}%
+            </div>
+            <div
+              v-if="(product.total_sold_count || 0) >= 300"
+              class="absolute bottom-2 left-2 bg-black/75 backdrop-blur-xs text-[#FFE600] text-[10px] font-extrabold px-2 py-0.5 rounded flex items-center gap-1"
+            >
+              🔥 BEST SELLER
+            </div>
+          </div>
+
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="px-1.5 py-0.5 bg-[#FFE600] text-black text-[9px] font-black rounded uppercase tracking-tighter">CHOICE</span>
+                <span class="text-[11px] font-bold text-gray-500 truncate">{{ product.brand }}</span>
+              </div>
+              <h2 class="text-xs sm:text-[13px] font-medium text-gray-800 line-clamp-2 leading-snug group-hover:text-[#FF5000] transition-colors mb-2">
+                {{ product.title }}
+              </h2>
+            </div>
+
+            <div>
+              <div class="flex items-baseline gap-1.5 flex-wrap">
+                <span class="text-base sm:text-lg font-black text-[#111111] tracking-tight">
+                  {{ locale.formatPrice(product.lowest_sale_price) }}
+                </span>
+                <span
+                  v-if="product.lowest_original_price > product.lowest_sale_price"
+                  class="text-[11px] text-gray-400 line-through"
+                >
+                  {{ locale.formatPrice(product.lowest_original_price) }}
+                </span>
+              </div>
+
+              <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                <div class="flex items-center gap-1 text-[11px] text-gray-500">
+                  <span class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating || 4.8).toFixed(1) }}</span>
+                  <span v-if="product.review_count">({{ product.review_count }})</span>
+                  <span>•</span>
+                  <span>{{ (product.total_sold_count || 120).toLocaleString() }}+ sold</span>
+                </div>
+
+                <button
+                  @click="(e) => quickAdd(e, product)"
+                  class="w-7 h-7 rounded-full bg-orange-50 hover:bg-[#FF5000] text-[#FF5000] hover:text-white flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+                  title="Quick Add to Cart"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </RouterLink>
       </div>
     </div>
   </div>

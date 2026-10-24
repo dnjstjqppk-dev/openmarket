@@ -1,201 +1,262 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useCartStore } from '../stores/cart';
-import { API_BASE_URL, getAuthHeaders } from '../config';
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useCartStore } from '../stores/cart'
+import { useAuthStore } from '../stores/auth'
+import { useLocaleStore } from '../stores/locale'
+import { API_BASE_URL } from '../config'
 
-const router = useRouter();
-const cartStore = useCartStore();
+const cart = useCartStore()
+const auth = useAuthStore()
+const locale = useLocaleStore()
+const router = useRouter()
 
-const recipientName = ref('');
-const phone = ref('');
-const postalCode = ref('');
-const addressLine1 = ref('');
-const addressLine2 = ref('');
-const shippingMemo = ref('');
-const paymentMethod = ref('KAKAOPAY');
-const isSubmitting = ref(false);
-const errorMessage = ref('');
+const recipientName = ref(auth.user?.name || 'Alex Kim')
+const phone = ref('010-8282-5959')
+const zipCode = ref('06236')
+const address = ref('Teheran-ro 427, Gangnam-gu, Seoul')
+const detailAddress = ref('Suite 1502 (Olmoa Tower)')
+const paymentMethod = ref('TOSS_PAY')
+const submitting = ref(false)
+const errorMsg = ref('')
 
-// Load saved shipping address if previously entered
-try {
-  const saved = localStorage.getItem('olmoa_shipping_addr');
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    recipientName.value = parsed.name || '';
-    phone.value = parsed.phone || '';
-    postalCode.value = parsed.postalCode || '';
-    addressLine1.value = parsed.addressLine1 || '';
-    addressLine2.value = parsed.addressLine2 || '';
-    shippingMemo.value = parsed.memo || '';
+const availableCoupons = ref<any[]>([])
+const selectedCouponCode = ref('')
+const creditBalance = ref(5000)
+const useCreditFlag = ref(false)
+
+onMounted(async () => {
+  const cid = auth.user?.id || 'cust_demo_001'
+  try {
+    const [coupRes, credRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`),
+      fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { 'X-Customer-Id': cid } })
+    ])
+    const coupJson = await coupRes.json()
+    const credJson = await credRes.json()
+    if (coupJson.success && Array.isArray(coupJson.data)) {
+      availableCoupons.value = coupJson.data
+    }
+    if (credJson.success && credJson.data) {
+      creditBalance.value = Number(credJson.data.balance || 0)
+    }
+  } catch {}
+})
+
+const selectedCoupon = computed(() =>
+  availableCoupons.value.find(c => c.code === selectedCouponCode.value)
+)
+
+const couponDiscount = computed(() => {
+  const c = selectedCoupon.value
+  if (!c) return 0
+  if (cart.subtotalAmount < (c.min_order_amount || 0)) return 0
+  if (c.discount_type === 'FIXED') {
+    return Math.min(Number(c.discount_value), Number(c.max_discount_amount || c.discount_value))
   }
-} catch (_) {}
+  const raw = Math.round((cart.subtotalAmount * Number(c.discount_value)) / 100)
+  return Math.min(raw, Number(c.max_discount_amount || raw))
+})
 
-onMounted(() => {
-  if (cartStore.items.length === 0) {
-    router.replace('/cart');
-  }
-});
+const appliedCredits = computed(() => {
+  if (!useCreditFlag.value) return 0
+  const afterCoupon = Math.max(0, cart.subtotalAmount + cart.shippingFee - couponDiscount.value)
+  return Math.min(creditBalance.value, afterCoupon)
+})
 
-const handleOrder = async () => {
-  if (cartStore.items.length === 0) return;
-  errorMessage.value = '';
+const netPayableTotal = computed(() =>
+  Math.max(0, cart.subtotalAmount + cart.shippingFee - couponDiscount.value - appliedCredits.value)
+)
 
-  if (!recipientName.value.trim()) {
-    errorMessage.value = '수령인 성함을 입력해 주세요.';
-    return;
-  }
-  const cleanPhone = phone.value.replace(/\D/g, '');
-  if (cleanPhone.length < 9 || cleanPhone.length > 12) {
-    errorMessage.value = '올바른 연락처(휴대전화 번호)를 입력해 주세요. (예: 010-1234-5678)';
-    return;
-  }
-  if (!addressLine1.value.trim()) {
-    errorMessage.value = '기본 배송 주소를 입력해 주세요.';
-    return;
-  }
-
-  isSubmitting.value = true;
-  const idempotencyKey = `ord_idemp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+const submitOrder = async () => {
+  if (cart.items.length === 0) return
+  submitting.value = true
+  errorMsg.value = ''
 
   try {
+    const cid = auth.user?.id || 'cust_demo_001'
     const payload = {
-      recipient_name: recipientName.value.trim(),
-      recipient_phone: phone.value.trim(),
-      shipping_postal_code: postalCode.value.trim() || '00000',
-      shipping_address_line1: addressLine1.value.trim(),
-      shipping_address_line2: addressLine2.value.trim() || '',
-      shipping_memo: shippingMemo.value.trim() || '문 앞 배송 부탁드립니다.',
+      customer_id: cid,
+      idempotency_key: `idem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       payment_method: paymentMethod.value,
-      items: cartStore.items.map(it => ({
-        sku_id: it.sku_id,
-        product_id: it.product_id,
-        quantity: it.quantity
+      coupon_code: selectedCouponCode.value || undefined,
+      use_credits: appliedCredits.value,
+      shipping_address: {
+        recipient: recipientName.value,
+        phone: phone.value,
+        zip: zipCode.value,
+        address: address.value,
+        detail: detailAddress.value
+      },
+      items: cart.items.map(i => ({
+        product_id: i.product_id,
+        sku_id: i.sku_id,
+        partner_id: i.partner_id || 'pt_001',
+        quantity: i.quantity,
+        unit_price: i.price
       }))
-    };
-
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders/checkout`, {
-      method: 'POST',
-      headers: getAuthHeaders({
-        'X-Idempotency-Key': idempotencyKey
-      }),
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    if (res.ok && data.success) {
-      try {
-        localStorage.setItem('olmoa_shipping_addr', JSON.stringify({
-          name: recipientName.value,
-          phone: phone.value,
-          postalCode: postalCode.value,
-          addressLine1: addressLine1.value,
-          addressLine2: addressLine2.value,
-          memo: shippingMemo.value
-        }));
-      } catch (_) {}
-
-      const orderId = data.order_id;
-      cartStore.clearCart();
-      router.push(`/order/${orderId}`);
-    } else {
-      errorMessage.value = data.error || '주문 처리 중 오류가 발생했습니다.';
     }
-  } catch (err: any) {
-    errorMessage.value = '네트워크 통신 오류: ' + (err.message || String(err));
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Customer-Id': cid
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const json = await res.json()
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || 'Checkout transaction failed')
+    }
+
+    cart.clearCart()
+    router.push(`/orders/${json.data.order_id}`)
+  } catch (e: any) {
+    errorMsg.value = e.message || 'Network error during checkout'
   } finally {
-    isSubmitting.value = false;
+    submitting.value = false
   }
-};
+}
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-6">
-    <div class="flex items-center justify-between border-b pb-4">
-      <div>
-        <h2 class="text-xl font-black text-slate-900">OLMOA 안심 주문서 작성</h2>
-        <p class="text-xs text-slate-500 mt-0.5">내가 찾는 모든 것, 여기. 올모아 에스크로 안전 결제</p>
-      </div>
-      <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
-        <i class="fa-solid fa-shield-halved"></i>
-        <span>100% 구매자 보호</span>
-      </div>
-    </div>
+  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8">
+    <h1 class="text-2xl font-black text-gray-900 mb-6">Secure Direct Checkout</h1>
 
-    <!-- Sandbox Notice -->
-    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <i class="fa-solid fa-flask-vial text-amber-600"></i>
-        <span><strong>샌드박스 주문 모드:</strong> 실제 카드 승인은 PG 가맹 심사 중이며 안전한 테스트 승인으로 처리됩니다.</span>
-      </div>
-      <span class="text-[10px] bg-amber-200/70 font-bold px-2 py-0.5 rounded text-amber-800 shrink-0">TEST SANDBOX</span>
-    </div>
-
-    <!-- Ordered items preview -->
-    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/60 space-y-2">
-      <div class="text-xs font-bold text-slate-700">주문 상품 (총 {{ cartStore.totalCount }}개)</div>
-      <div class="divide-y divide-slate-200/60 max-h-48 overflow-y-auto">
-        <div v-for="it in cartStore.items" :key="it.sku_id" class="py-2 flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2.5 truncate max-w-xs sm:max-w-md">
-            <img :src="it.thumbnail_url" class="w-8 h-8 rounded-lg object-cover" />
-            <span class="truncate font-medium text-slate-800">{{ it.title }} ({{ it.option_summary }}) x {{ it.quantity }}</span>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div class="lg:col-span-7 space-y-6">
+        <!-- Shipping Address Card -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-200/80">
+          <h2 class="text-base font-black text-gray-900 mb-4">1. Shipping Destination</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label class="block font-bold text-gray-700 mb-1">Recipient Name</label>
+              <input v-model="recipientName" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+            </div>
+            <div>
+              <label class="block font-bold text-gray-700 mb-1">Mobile Phone</label>
+              <input v-model="phone" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+            </div>
+            <div>
+              <label class="block font-bold text-gray-700 mb-1">Postal Code</label>
+              <input v-model="zipCode" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block font-bold text-gray-700 mb-1">Street Address</label>
+              <input v-model="address" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block font-bold text-gray-700 mb-1">Apartment / Suite / Delivery Note</label>
+              <input v-model="detailAddress" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+            </div>
           </div>
-          <span class="font-bold font-mono text-slate-900 shrink-0">₩{{ (it.price * it.quantity).toLocaleString() }}</span>
         </div>
-      </div>
-    </div>
-    
-    <div class="space-y-4 text-xs">
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">수령인 성함 <span class="text-rose-500">*</span></label>
-          <input v-model="recipientName" placeholder="받으실 분 성함" type="text" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+
+        <!-- Coupons & Credits Card -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-200/80 space-y-4">
+          <h2 class="text-base font-black text-gray-900">2. Coupons & Olmoa Reward Credits</h2>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1.5">Select Promo Coupon</label>
+            <select
+              v-model="selectedCouponCode"
+              class="w-full h-10 px-3 rounded-xl border border-gray-300 text-xs font-bold bg-white"
+            >
+              <option value="">-- No Coupon Applied --</option>
+              <option
+                v-for="c in availableCoupons"
+                :key="c.code"
+                :value="c.code"
+                :disabled="cart.subtotalAmount < (c.min_order_amount || 0)"
+              >
+                [{{ c.code }}] {{ c.name }} (Min {{ locale.formatPrice(c.min_order_amount || 0) }})
+              </option>
+            </select>
+          </div>
+
+          <div class="flex items-center justify-between p-3.5 rounded-xl bg-orange-50/60 border border-orange-200/80">
+            <div>
+              <div class="text-xs font-black text-gray-900">Use Olmoa Reward Credits</div>
+              <div class="text-[11px] text-gray-600">Available Balance: <strong class="text-[#FF5000]">{{ locale.formatPrice(creditBalance) }}</strong></div>
+            </div>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-[#FF5000]">
+              <input type="checkbox" v-model="useCreditFlag" class="w-4 h-4 accent-[#FF5000]" />
+              <span>Apply Credits</span>
+            </label>
+          </div>
         </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">연락처 <span class="text-rose-500">*</span></label>
-          <input v-model="phone" placeholder="010-0000-0000" type="text" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-orange-500" />
+
+        <!-- Payment Method Card -->
+        <div class="bg-white rounded-2xl p-6 border border-gray-200/80">
+          <h2 class="text-base font-black text-gray-900 mb-4">3. Escrow Payment Method</h2>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-bold">
+            <button
+              v-for="method in ['TOSS_PAY', 'KAKAO_PAY', 'CREDIT_CARD']"
+              :key="method"
+              type="button"
+              @click="paymentMethod = method"
+              :class="[
+                'py-3 px-4 rounded-xl border text-center cursor-pointer transition-all',
+                paymentMethod === method
+                  ? 'border-[#FF5000] bg-orange-50 text-[#FF5000]'
+                  : 'border-gray-200 text-gray-700 hover:border-gray-400'
+              ]"
+            >
+              {{ method.replace('_', ' ') }}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="space-y-2">
-        <label class="block font-bold text-slate-700">배송 주소 <span class="text-rose-500">*</span></label>
-        <div class="grid grid-cols-3 gap-2">
-          <input v-model="postalCode" placeholder="우편번호 (선택)" class="bg-slate-50 p-3 rounded-xl border border-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-orange-500" />
-          <input v-model="addressLine1" placeholder="기본 주소 (도로명/지번)" class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-        </div>
-        <input v-model="addressLine2" placeholder="상세 주소 (동/호수, 층 등)" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-        <input v-model="shippingMemo" placeholder="배송 요청사항 (선택)" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500" />
-      </div>
+      <!-- Right Summary -->
+      <div class="lg:col-span-5">
+        <div class="bg-white rounded-2xl p-6 border border-gray-200/80 sticky top-24">
+          <h2 class="text-base font-black text-gray-900 mb-4">Final Order Verification</h2>
+          <div class="space-y-3 max-h-60 overflow-y-auto mb-4 pr-1">
+            <div v-for="item in cart.items" :key="item.sku_id" class="flex justify-between text-xs">
+              <span class="text-gray-700 line-clamp-1 flex-1 pr-2">{{ item.title }} × {{ item.quantity }}</span>
+              <span class="font-bold text-gray-900">{{ locale.formatPrice(item.price * item.quantity) }}</span>
+            </div>
+          </div>
 
-      <div>
-        <label class="block font-bold text-slate-700 mb-1">결제 수단 선택</label>
-        <div class="grid grid-cols-3 gap-2">
-          <button @click="paymentMethod = 'KAKAOPAY'" :class="paymentMethod === 'KAKAOPAY' ? 'bg-amber-400 font-bold border-amber-500 shadow-sm ring-2 ring-amber-400/30' : 'bg-slate-50 border-slate-200'" class="p-3 rounded-xl border text-center transition">카카오페이</button>
-          <button @click="paymentMethod = 'TOSSPAY'" :class="paymentMethod === 'TOSSPAY' ? 'bg-blue-600 text-white font-bold shadow-sm ring-2 ring-blue-500/30' : 'bg-slate-50 border-slate-200'" class="p-3 rounded-xl border text-center transition">토스페이</button>
-          <button @click="paymentMethod = 'CARD'" :class="paymentMethod === 'CARD' ? 'bg-slate-900 text-white font-bold shadow-sm ring-2 ring-slate-700/30' : 'bg-slate-50 border-slate-200'" class="p-3 rounded-xl border text-center transition">신용카드</button>
+          <div class="border-t border-gray-100 pt-3 space-y-2 text-xs text-gray-600 mb-4">
+            <div class="flex justify-between">
+              <span>Items Subtotal</span>
+              <span class="font-bold text-gray-900">{{ locale.formatPrice(cart.subtotalAmount) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Partner Split Shipping ({{ cart.partnerShippingBreakdown.length }} seller{{ cart.partnerShippingBreakdown.length > 1 ? 's' : '' }})</span>
+              <span class="font-bold text-gray-900">{{ cart.shippingFee === 0 ? 'FREE' : locale.formatPrice(cart.shippingFee) }}</span>
+            </div>
+            <div v-if="couponDiscount > 0" class="flex justify-between text-[#E60023] font-bold">
+              <span>Coupon Discount ({{ selectedCouponCode }})</span>
+              <span>-{{ locale.formatPrice(couponDiscount) }}</span>
+            </div>
+            <div v-if="appliedCredits > 0" class="flex justify-between text-[#00A862] font-bold">
+              <span>Olmoa Reward Credits Applied</span>
+              <span>-{{ locale.formatPrice(appliedCredits) }}</span>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-baseline border-t border-gray-200 pt-4 mb-5">
+            <span class="text-sm font-black text-gray-900">Net Payment Amount</span>
+            <span class="text-2xl font-black text-[#E60023]">{{ locale.formatPrice(netPayableTotal) }}</span>
+          </div>
+
+          <div v-if="errorMsg" class="p-3 rounded-xl bg-red-50 text-[#E60023] text-xs font-bold mb-4">
+            {{ errorMsg }}
+          </div>
+
+          <button
+            @click="submitOrder"
+            :disabled="submitting || cart.items.length === 0"
+            class="w-full h-13 rounded-full bg-gradient-to-r from-[#FF5000] to-[#E60023] text-white font-black text-sm shadow-md hover:opacity-95 disabled:opacity-50 cursor-pointer"
+          >
+            {{ submitting ? 'Executing Atomic D1 Transaction...' : `Pay ${locale.formatPrice(netPayableTotal)} Now` }}
+          </button>
         </div>
       </div>
-    </div>
-
-    <div v-if="errorMessage" class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-bold">
-      <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>{{ errorMessage }}
-    </div>
-
-    <div class="border-t pt-5 flex justify-between items-center">
-      <div>
-        <div class="text-[11px] text-slate-400">
-          최종 결제 금액 (배송비: {{ cartStore.shippingFee === 0 ? '무료' : '₩' + cartStore.shippingFee.toLocaleString() }})
-        </div>
-        <div class="text-2xl font-black text-orange-600">₩ {{ cartStore.totalPayAmount.toLocaleString() }}</div>
-      </div>
-      <button 
-        @click="handleOrder" 
-        :disabled="isSubmitting || cartStore.items.length === 0"
-        class="bg-orange-600 hover:bg-orange-700 text-white font-black px-8 py-3.5 rounded-2xl text-sm transition shadow-lg shadow-orange-600/30 disabled:opacity-50"
-      >
-        <span v-if="isSubmitting"><i class="fa-solid fa-spinner fa-spin mr-2"></i>결제 승인 중...</span>
-        <span v-else>즉시 결제 승인 &rarr;</span>
-      </button>
     </div>
   </div>
 </template>

@@ -1,94 +1,140 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { API_BASE_URL, getAuthHeaders } from '../config';
+import { ref, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+import { useLocaleStore } from '../stores/locale'
+import { API_BASE_URL } from '../config'
 
-const orders = ref<any[]>([]);
-const loading = ref(true);
+const auth = useAuthStore()
+const locale = useLocaleStore()
+const orders = ref<any[]>([])
+const loading = ref(true)
+const actionMsg = ref('')
 
-onMounted(async () => {
+const loadOrders = async () => {
+  loading.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders`, {
-      headers: getAuthHeaders()
-    });
-    const json = await res.json();
-    if (json.success && json.data) {
-      orders.value = json.data;
-    }
-  } catch (_) {
+    const cid = auth.user?.id || 'cust_demo_001'
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders?customer_id=${encodeURIComponent(cid)}`, {
+      headers: { 'X-Customer-Id': cid }
+    })
+    const json = await res.json()
+    if (json.success) orders.value = json.data
+  } catch (e) {
+    console.error(e)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-});
+}
+
+const cancelOrder = async (orderId: string) => {
+  const cid = auth.user?.id || 'cust_demo_001'
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${orderId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+      body: JSON.stringify({ reason: 'Customer requested cancellation from Orders list' })
+    })
+    const json = await res.json()
+    if (json.success) {
+      actionMsg.value = `✓ Order ${orderId} cancelled and stock restored.`
+      await loadOrders()
+    } else {
+      actionMsg.value = `⚠️ ${json.error}`
+    }
+  } catch {}
+}
+
+const confirmPurchase = async (orderId: string) => {
+  const cid = auth.user?.id || 'cust_demo_001'
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${orderId}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid }
+    })
+    const json = await res.json()
+    if (json.success) {
+      actionMsg.value = `🎉 Purchase confirmed! +₩${Number(json.data.reward_credit || 0).toLocaleString()} (1%) Olmoa Credit added to your wallet.`
+      await loadOrders()
+    }
+  } catch {}
+}
+
+onMounted(loadOrders)
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto space-y-5">
-    <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-6">
       <div>
-        <h2 class="text-xl font-black text-slate-900">내 주문 및 배송 조회</h2>
-        <p class="text-xs text-slate-500 mt-0.5">올모아(OLMOA)에서 주문하신 모든 내역을 실시간으로 추적합니다.</p>
+        <h1 class="text-2xl font-black text-gray-900">My Orders & Delivery Guarantee</h1>
+        <p class="text-xs text-gray-500 mt-0.5">Confirm purchase to earn +1% Olmoa Credits or request a 90-day free return / 30-day price match.</p>
       </div>
-      <router-link to="/" class="text-xs text-orange-600 font-bold hover:underline">
-        쇼핑 계속하기 &rarr;
-      </router-link>
+      <RouterLink to="/coupons" class="text-xs font-bold text-[#FF5000] hover:underline">
+        View My Reward Credits & Coupons →
+      </RouterLink>
     </div>
 
-    <div v-if="loading" class="p-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-orange-500"></i>
-      <p class="text-xs font-bold">주문 내역을 불러오는 중입니다...</p>
+    <div v-if="actionMsg" class="mb-4 p-3.5 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-[#00A862]">
+      {{ actionMsg }}
     </div>
-    
-    <div v-else-if="orders.length === 0" class="bg-white rounded-3xl p-16 text-center border border-slate-200 space-y-3">
-      <i class="fa-solid fa-clipboard-list text-5xl text-slate-300"></i>
-      <h3 class="font-bold text-slate-700">주문 내역이 없습니다.</h3>
-      <p class="text-xs text-slate-400">올모아의 특별한 글로벌 핫딜 상품을 만나보세요.</p>
-      <router-link to="/" class="inline-block mt-2 px-6 py-2.5 bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md">
-        상품 둘러보기
-      </router-link>
+
+    <div v-if="loading" class="space-y-4">
+      <div v-for="n in 3" :key="n" class="h-32 bg-white rounded-2xl animate-pulse"></div>
+    </div>
+
+    <div v-else-if="orders.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200">
+      <p class="text-base font-bold text-gray-700 mb-3">You haven't placed any orders yet.</p>
+      <RouterLink to="/" class="inline-block px-6 py-2.5 rounded-full bg-[#FF5000] text-white text-xs font-black">Start Shopping</RouterLink>
     </div>
 
     <div v-else class="space-y-4">
-      <div 
-        v-for="ord in orders" 
-        :key="ord.id" 
-        class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 text-xs"
+      <div
+        v-for="order in orders"
+        :key="order.id"
+        class="bg-white rounded-2xl p-6 border border-gray-200/80 hover:border-[#FF5000] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
-        <div class="flex justify-between font-mono text-slate-500 text-[11px] border-b border-slate-100 pb-3">
-          <span>주문번호: <strong class="text-slate-800">{{ ord.order_no }}</strong></span>
-          <span>주문일시: {{ ord.created_at }}</span>
-        </div>
-
-        <div class="space-y-3">
-          <div v-for="sub in ord.sub_orders" :key="sub.id" class="bg-slate-50/70 p-3 rounded-2xl space-y-2 border border-slate-100">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="font-bold text-slate-700">판매자: {{ sub.business_name || 'OLMOA Direct' }}</span>
-              <span 
-                class="px-2.5 py-0.5 rounded-full font-bold text-[10px]"
-                :class="sub.status === 'SHIPPED' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'"
-              >
-                {{ sub.status === 'SHIPPED' ? '출고완료 (배송중)' : '상품 준비중' }}
-              </span>
-            </div>
-
-            <div v-for="it in sub.items" :key="it.id" class="flex justify-between items-center text-xs">
-              <span class="font-medium text-slate-800">{{ it.product_title }} ({{ it.option_summary }}) x {{ it.quantity }}</span>
-              <span class="font-bold font-mono text-slate-900">₩{{ it.total_price.toLocaleString() }}</span>
-            </div>
-
-            <div v-if="sub.tracking_number" class="text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-200/50">
-              운송장: {{ sub.carrier_code || 'CJ대한통운' }} {{ sub.tracking_number }}
-            </div>
+        <div>
+          <div class="flex items-center gap-2.5 mb-1.5">
+            <span
+              :class="[
+                'px-2.5 py-0.5 text-[11px] font-black rounded-full uppercase',
+                order.status === 'CANCELLED' ? 'bg-red-50 text-[#E60023]' :
+                order.status === 'CONFIRMED' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-[#00A862]'
+              ]"
+            >
+              {{ order.status }}
+            </span>
+            <span class="text-xs font-bold text-gray-500">Order #{{ order.id }}</span>
+            <span class="text-xs text-gray-400">• {{ new Date(order.created_at).toLocaleString() }}</span>
+          </div>
+          <div class="text-lg font-black text-gray-900">
+            {{ locale.formatPrice(order.total_amount) }}
+            <span class="text-xs font-medium text-gray-500 ml-2">via {{ order.payment_method }}</span>
           </div>
         </div>
 
-        <div class="flex justify-between items-center pt-3 border-t border-slate-100">
-          <div>
-            <span class="text-slate-400 text-[11px]">총 결제금액: </span>
-            <span class="text-base font-black text-orange-600">₩ {{ ord.total_pay_amount?.toLocaleString() }}</span>
-          </div>
-          <router-link :to="'/order/' + ord.id" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
-            주문 상세 보기 &rarr;
-          </router-link>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            v-if="['PAID', 'PREPARING'].includes(order.status)"
+            @click="cancelOrder(order.id)"
+            class="px-3.5 py-2 rounded-full border border-red-200 text-[#E60023] hover:bg-red-50 text-xs font-bold cursor-pointer"
+          >
+            Cancel Order
+          </button>
+          <button
+            v-if="['PAID', 'SHIPPED', 'DELIVERED'].includes(order.status)"
+            @click="confirmPurchase(order.id)"
+            class="px-3.5 py-2 rounded-full bg-orange-50 text-[#FF5000] hover:bg-[#FF5000] hover:text-white text-xs font-black transition-colors cursor-pointer"
+          >
+            ✓ Confirm (+1% Credit)
+          </button>
+          <RouterLink
+            :to="`/orders/${order.id}`"
+            class="px-4 py-2 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-bold transition-colors text-center"
+          >
+            Track / Return / Price-Match →
+          </RouterLink>
         </div>
       </div>
     </div>

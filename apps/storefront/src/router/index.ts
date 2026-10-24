@@ -1,45 +1,30 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue';
-import CategoryView from '../views/CategoryView.vue';
-import CategoriesView from '../views/CategoriesView.vue';
-import ProductDetailView from '../views/ProductDetailView.vue';
-import SearchView from '../views/SearchView.vue';
-import CartView from '../views/CartView.vue';
-import CheckoutView from '../views/CheckoutView.vue';
-import OrdersView from '../views/OrdersView.vue';
-import OrderDetailView from '../views/OrderDetailView.vue';
-import LegalTermsView from '../views/LegalTermsView.vue';
-import LegalPrivacyView from '../views/LegalPrivacyView.vue';
-import LegalRefundView from '../views/LegalRefundView.vue';
-import LoginView from '../views/LoginView.vue';
-import RegisterView from '../views/RegisterView.vue';
-
-const routes = [
-  { path: '/', name: 'home', component: HomeView },
-  { path: '/categories', name: 'categories', component: CategoriesView },
-  { path: '/category/:slug', name: 'category', component: CategoryView },
-  { path: '/categories/:slug', redirect: (to: any) => `/category/${to.params.slug}` },
-  { path: '/product/:id', name: 'product-detail', component: ProductDetailView },
-  { path: '/search', name: 'search', component: SearchView },
-  { path: '/cart', name: 'cart', component: CartView },
-  { path: '/checkout', name: 'checkout', component: CheckoutView },
-  { path: '/orders', name: 'orders', component: OrdersView },
-  { path: '/order/:id', name: 'order-detail', component: OrderDetailView },
-  { path: '/login', name: 'login', component: LoginView },
-  { path: '/register', name: 'register', component: RegisterView },
-  { path: '/legal/terms', name: 'legal-terms', component: LegalTermsView },
-  { path: '/legal/privacy', name: 'legal-privacy', component: LegalPrivacyView },
-  { path: '/legal/refund', name: 'legal-refund', component: LegalRefundView },
-  { path: '/account/orders', redirect: '/orders' },
-  { path: '/:pathMatch(.*)*', redirect: '/' }
-];
+import { createRouter, createWebHistory } from 'vue-router'
+import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
-  routes: routes as any,
+  history: createWebHistory((import.meta as any).env?.BASE_URL || '/'),
   scrollBehavior() {
-    return { top: 0 };
-  }
-});
+    return { top: 0 }
+  },
+  routes: [
+    { path: '/', name: 'home', component: HomeView },
+    { path: '/categories', name: 'categories', component: () => import('../views/CategoriesView.vue') },
+    { path: '/category/:slug', name: 'category', component: () => import('../views/CategoryView.vue') },
+    { path: '/product/:slug', name: 'product', component: () => import('../views/ProductDetailView.vue') },
+    { path: '/cart', name: 'cart', component: () => import('../views/CartView.vue') },
+    { path: '/checkout', name: 'checkout', component: () => import('../views/CheckoutView.vue') },
+    { path: '/orders', name: 'orders', component: () => import('../views/OrdersView.vue') },
+    { path: '/orders/:id', name: 'order-detail', component: () => import('../views/OrderDetailView.vue') },
+    { path: '/search', name: 'search', component: () => import('../views/SearchView.vue') },
+    { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
+    { path: '/channel/lightning-deals', name: 'lightning-deals', component: () => import('../views/LightningDealsView.vue') },
+    { path: '/channel/best-sellers', name: 'best-sellers', component: () => import('../views/BestSellersView.vue') },
+    { path: '/coupons', name: 'coupons', component: () => import('../views/CouponsView.vue') },
+    { path: '/wishlist', name: 'wishlist', component: () => import('../views/WishlistView.vue') },
+    { path: '/store/:id', name: 'seller-store', component: () => import('../views/SellerStoreView.vue') },
+    { path: '/support', name: 'support', component: () => import('../views/SupportView.vue') },
+    { path: '/policy/:type', name: 'policy', component: () => import('../views/PolicyView.vue') }
+  ]
+})
 
-export default router;
+export default router

@@ -175,3 +175,4 @@ export async function processCheckout(request, env, corsHeaders, auth) {
     success: true, brand: 'OLMOA', ...responsePayload, data: responsePayload
   }), { status: 201, headers: corsHeaders });
 }
+

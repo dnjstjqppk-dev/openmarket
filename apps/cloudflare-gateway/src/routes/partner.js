@@ -1,5 +1,5 @@
 // apps/cloudflare-gateway/src/routes/partner.js
-// OLMOA Partner Seller Engine: Strict Multi-Tenant Isolation & Verification
+// OLMOA Partner Seller Engine: Multi-Tenant Isolation, Per-SKU Stock, CSV Bulk Upload, Live Settlements & Q&A
 
 async function resolvePartner(request, env) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
@@ -8,7 +8,7 @@ async function resolvePartner(request, env) {
   if (!candidateId) return null;
 
   const partner = await env.DB.prepare(
-    'SELECT * FROM partners WHERE (id = ? OR owner_user_id = ?) AND status = "APPROVED"'
+    "SELECT * FROM partners WHERE (id = ? OR owner_user_id = ?) AND status = 'APPROVED'"
   ).bind(candidateId, candidateId).first();
 
   return partner;
@@ -19,131 +19,201 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
 
   const partner = await resolvePartner(request, env);
   if (!partner) {
-    return new Response(JSON.stringify({ 
-      error: 'Unauthorized: Valid approved partner credentials required. Tenant isolated.' 
+    return new Response(JSON.stringify({
+      error: 'Unauthorized: Valid approved partner credentials required. Tenant isolated.'
     }), { status: 401, headers: corsHeaders });
   }
 
   const partnerId = partner.id;
 
-  // 1. Partner Products & SKUs (Tenant Scoped)
+  // 1. Partner Products & SKUs (Tenant Scoped, Per-SKU Row with Option Summary)
   if (url.pathname === '/api/v1/partner/products' && request.method === 'GET') {
     const { results: products } = await env.DB.prepare(
-      `SELECT p.*, c.name as category_name, s.id as sku_id, s.sku_code, s.stock_quantity, s.sale_price 
-       FROM products p 
-       LEFT JOIN categories c ON p.category_id = c.id 
-       LEFT JOIN product_skus s ON s.product_id = p.id 
-       WHERE p.partner_id = ? 
-       ORDER BY p.created_at DESC`
+      `SELECT p.*, c.name as category_name, c.slug as category_slug,
+              s.id as sku_id, s.sku_code, s.option_combination_json,
+              s.stock_quantity, s.original_price as sku_original_price, s.sale_price, s.status as sku_status
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN product_skus s ON s.product_id = p.id
+       WHERE p.partner_id = ?
+       ORDER BY p.created_at DESC, s.sku_code ASC`
     ).bind(partnerId).all();
+
+    const formatted = products.map(r => {
+      let optSummary = '기본';
+      try {
+        const opt = JSON.parse(r.option_combination_json || '{}');
+        optSummary = Object.entries(opt).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
+      } catch (_) {}
+      return { ...r, option_summary: optSummary };
+    });
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA', partner_id: partnerId,
-      business_name: partner.business_name, count: products.length, data: products
+      business_name: partner.business_name, count: formatted.length, data: formatted
     }), { headers: corsHeaders });
   }
 
-  // 2. Partner Create Single Product
+  // 2. Partner Create Single Product (+ SKUs)
   if (url.pathname === '/api/v1/partner/products' && request.method === 'POST') {
-    const body = await request.json();
-    const prodId = 'prod_' + Date.now();
-    const skuId = 'sku_' + Date.now();
-    const skuCode = body.sku_code || 'SKU-' + Date.now().toString().slice(-6);
+    const body = await request.json().catch(() => ({}));
+    if (!body.title || !body.title.trim()) {
+      return new Response(JSON.stringify({ error: '상품명을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
+    }
+    const prodId = 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+    const skuId = 'sku_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+    const skuCode = (body.sku_code || 'SKU-' + Date.now().toString().slice(-6)).trim();
+    const salePrice = Math.max(100, parseInt(body.price || body.lowest_sale_price || 19900, 10));
+    const origPrice = Math.max(salePrice, parseInt(body.original_price || body.lowest_original_price || Math.round(salePrice * 1.4), 10));
+    const stockQty = Math.max(0, parseInt(body.stock_quantity ?? 100, 10));
 
-    await env.DB.prepare(
-      `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`
-    ).bind(
-      prodId, partnerId, body.category_id || 'sub_w_tops',
-      body.title, body.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
-      body.description_html || '<p>' + (body.title || '') + '</p>',
-      body.original_price || body.price || 30000, body.price || 19900
-    ).run();
-
-    await env.DB.prepare(
-      `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
-       VALUES (?, ?, ?, '{"옵션":"기본"}', ?, ?, ?, 5, 'IN_STOCK')`
-    ).bind(skuId, prodId, skuCode, body.original_price || body.price || 30000, body.price || 19900, body.stock_quantity || 100).run();
-
-    return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', product_id: prodId, sku_id: skuId, message: 'Product created with tenant isolation'
-    }), { status: 201, headers: corsHeaders });
-  }
-
-  // 3. Partner Batch Upload (Excel/CSV Backend API, WO-07)
-  if (url.pathname === '/api/v1/partner/products/batch' && request.method === 'POST') {
-    const body = await request.json();
-    const rawItems = Array.isArray(body) ? body : (body.items || []);
-    if (!rawItems.length) {
-      return new Response(JSON.stringify({ error: 'No items provided for batch import' }), { status: 400, headers: corsHeaders });
+    let catId = body.category_id || 'sub_w_tops';
+    if (body.category_slug) {
+      const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(body.category_slug, body.category_slug).first();
+      if (catRow) catId = catRow.id;
     }
 
-    const batch = [];
-    const createdIds = [];
+    const optJson = body.option_combination_json
+      ? (typeof body.option_combination_json === 'string' ? body.option_combination_json : JSON.stringify(body.option_combination_json))
+      : '{"옵션":"기본 표준형"}';
 
-    for (let i = 0; i < rawItems.length; i++) {
-      const it = rawItems[i];
-      const prodId = `prod_batch_${Date.now()}_${i}`;
-      const skuId = `sku_batch_${Date.now()}_${i}`;
-      const title = it.title || `대량등록 상품 #${i + 1}`;
-      const skuCode = it.sku_code || `SKU-B-${Date.now()}-${i}`;
-      const origPrice = parseInt(it.lowest_original_price || it.original_price || 30000, 10);
-      const salePrice = parseInt(it.lowest_sale_price || it.sale_price || it.price || 20000, 10);
-      const stock = Math.max(0, parseInt(it.stock_quantity || 100, 10));
-      const catId = it.category_id || it.category_slug || 'sub_w_tops';
-
-      batch.push(env.DB.prepare(
+    await env.DB.batch([
+      env.DB.prepare(
         `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`
-      ).bind(prodId, partnerId, catId, title, it.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500', it.description_html || `<p>${title}</p>`, origPrice, salePrice));
-
-      batch.push(env.DB.prepare(
+      ).bind(
+        prodId, partnerId, catId,
+        body.title.trim(),
+        body.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
+        body.description_html || `<p>${body.title.trim()}</p>`,
+        origPrice, salePrice
+      ),
+      env.DB.prepare(
         `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 5, 'IN_STOCK')`
-      ).bind(skuId, prodId, skuCode, JSON.stringify(it.options || { 옵션: '기본' }), origPrice, salePrice, stock));
+         VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?)`
+      ).bind(skuId, prodId, skuCode, optJson, origPrice, salePrice, stockQty, stockQty > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK')
+    ]);
 
-      createdIds.push({ product_id: prodId, sku_id: skuId, title, sku_code: skuCode });
-    }
-
-    await env.DB.batch(batch);
     return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', imported_count: rawItems.length, data: createdIds
+      success: true, brand: 'OLMOA', product_id: prodId, sku_id: skuId, sku_code: skuCode,
+      message: '신규 상품 및 SKU가 D1 카탈로그에 등록되었습니다.'
     }), { status: 201, headers: corsHeaders });
   }
 
-  // 4. Partner Update SKU Stock (Safe Single SKU Target, WO-07)
+  // 3. Partner CSV/JSON Bulk Product Upload (POST /api/v1/partner/products/bulk)
+  if (url.pathname === '/api/v1/partner/products/bulk' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const rows = Array.isArray(body.items) ? body.items : [];
+    if (rows.length === 0) {
+      return new Response(JSON.stringify({ error: '업로드할 상품 데이터 배열(items)이 비어 있습니다.' }), { status: 400, headers: corsHeaders });
+    }
+
+    const stmts = [];
+    const createdIds = [];
+    let idx = 0;
+
+    for (const row of rows.slice(0, 200)) {
+      idx++;
+      const title = (row.title || '').trim();
+      if (!title) continue;
+
+      let catId = 'sub_w_tops';
+      const slugOrCat = (row.category_slug || row.category_id || '').trim();
+      if (slugOrCat) {
+        const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(slugOrCat, slugOrCat).first();
+        if (catRow) catId = catRow.id;
+      }
+
+      const prodId = `prod_blk_${Date.now()}_${idx}`;
+      const skuId = `sku_blk_${Date.now()}_${idx}`;
+      const skuCode = (row.sku_code || `SKU-BLK-${Date.now().toString().slice(-5)}-${idx}`).trim();
+      const salePrice = Math.max(100, parseInt(row.lowest_sale_price || row.sale_price || row.price || 15900, 10));
+      const origPrice = Math.max(salePrice, parseInt(row.lowest_original_price || row.original_price || Math.round(salePrice * 1.35), 10));
+      const stockQty = Math.max(0, parseInt(row.stock_quantity ?? 100, 10));
+      const thumb = (row.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500').trim();
+      const optJson = row.option_json || '{"옵션":"기본"}';
+
+      stmts.push(
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`
+        ).bind(prodId, partnerId, catId, title, thumb, `<p>${title} 정품 직배송 상품입니다.</p>`, origPrice, salePrice)
+      );
+      stmts.push(
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?)`
+        ).bind(skuId, prodId, skuCode, optJson, origPrice, salePrice, stockQty, stockQty > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK')
+      );
+      createdIds.push({ product_id: prodId, sku_id: skuId, sku_code: skuCode, title });
+    }
+
+    if (stmts.length > 0) {
+      await env.DB.batch(stmts);
+    }
+
+    const bulkData = { inserted_count: createdIds.length, imported_count: createdIds.length, products: createdIds, items: createdIds };
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      partner_id: partnerId,
+      ...bulkData,
+      data: bulkData,
+      message: `총 ${createdIds.length}건의 신규 SKU 상품이 D1 데이터베이스에 일괄 등록되었습니다.`
+    }), { status: 201, headers: corsHeaders });
+  }
+
+  // 4. Partner Update SKU Stock & Price (Enforce Ownership + Individual SKU Targeting)
   if (url.pathname.startsWith('/api/v1/partner/products/') && url.pathname.endsWith('/stock') && (request.method === 'PUT' || request.method === 'PATCH')) {
-    const prodId = url.pathname.split('/')[5];
-    const body = await request.json();
+    const targetId = url.pathname.split('/')[5];
+    const body = await request.json().catch(() => ({}));
     const newStock = Math.max(0, parseInt(body.stock_quantity, 10));
+    const skuIdParam = body.sku_id || targetId;
 
-    const ownsProduct = await env.DB.prepare('SELECT id FROM products WHERE id = ? AND partner_id = ?').bind(prodId, partnerId).first();
-    if (!ownsProduct) {
-      return new Response(JSON.stringify({ error: 'Forbidden: Tenant mismatch. Product not owned by partner.' }), { status: 403, headers: corsHeaders });
+    // Verify ownership via product or SKU join
+    const ownedSku = await env.DB.prepare(
+      `SELECT s.id as sku_id, s.product_id, s.stock_quantity
+       FROM product_skus s
+       JOIN products p ON s.product_id = p.id
+       WHERE (s.id = ? OR p.id = ?) AND p.partner_id = ?
+       LIMIT 1`
+    ).bind(skuIdParam, targetId, partnerId).first();
+
+    if (!ownedSku) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Tenant mismatch. Product/SKU not owned by partner.' }), { status: 403, headers: corsHeaders });
     }
 
-    if (body.sku_id) {
-      await env.DB.prepare(
-        'UPDATE product_skus SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND product_id = ?'
-      ).bind(newStock, body.sku_id, prodId).run();
-    } else {
-      await env.DB.prepare(
-        'UPDATE product_skus SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?'
-      ).bind(newStock, prodId).run();
-    }
+    const newStatus = newStock <= 0 ? 'OUT_OF_STOCK' : 'IN_STOCK';
+    const delta = newStock - (ownedSku.stock_quantity || 0);
+
+    // If specific sku_id was supplied or targetId matches a sku_id, update only that SKU
+    const isExactSku = Boolean(body.sku_id || targetId.startsWith('sku_'));
+    const updateQuery = isExactSku
+      ? 'UPDATE product_skus SET stock_quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      : 'UPDATE product_skus SET stock_quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?';
+    const bindKey = isExactSku ? ownedSku.sku_id : ownedSku.product_id;
+
+    await env.DB.batch([
+      env.DB.prepare(updateQuery).bind(newStock, newStatus, bindKey),
+      env.DB.prepare(
+        `INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
+         VALUES (?, ?, 'MANUAL_ADJUST', ?, ?, ?, ?)`
+      ).bind(`ldg_adj_${Date.now()}`, ownedSku.sku_id, delta, newStock, partnerId, `adj_${ownedSku.sku_id}_${Date.now()}`)
+    ]);
 
     return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', product_id: prodId, sku_id: body.sku_id || 'all', stock_quantity: newStock, message: 'Stock updated safely'
+      success: true, brand: 'OLMOA', product_id: ownedSku.product_id, sku_id: ownedSku.sku_id,
+      stock_quantity: newStock, status: newStatus, message: 'Stock and ledger updated'
     }), { headers: corsHeaders });
   }
 
   // 5. Partner Sub-Orders (Strictly Isolated to Partner)
   if (url.pathname === '/api/v1/partner/orders' && request.method === 'GET') {
     const { results: subOrders } = await env.DB.prepare(
-      `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.shipping_postal_code, o.created_at as order_date
-       FROM sub_orders s 
-       JOIN orders o ON s.parent_order_id = o.id 
-       WHERE s.partner_id = ? 
+      `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.shipping_postal_code, o.shipping_memo, o.created_at as order_date
+       FROM sub_orders s
+       JOIN orders o ON s.parent_order_id = o.id
+       WHERE s.partner_id = ?
        ORDER BY s.created_at DESC`
     ).bind(partnerId).all();
 
@@ -155,54 +225,21 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', partner_id: partnerId, count: subOrders.length, data: subOrders }), { headers: corsHeaders });
   }
 
-  // 6. Partner Settlements Ledger (Real D1 Ledger API, WO-07)
-  if (url.pathname === '/api/v1/partner/settlements' && request.method === 'GET') {
-    const { results: settlements } = await env.DB.prepare(
-      `SELECT st.*, so.sub_order_no, so.status as order_status, so.created_at as order_date
-       FROM settlements st
-       JOIN sub_orders so ON st.sub_order_id = so.id
-       WHERE st.partner_id = ?
-       ORDER BY st.created_at DESC`
-    ).bind(partnerId).all();
-
-    const sumRow = await env.DB.prepare(
-      `SELECT 
-         COALESCE(SUM(gross_amount), 0) as total_gross,
-         COALESCE(SUM(commission_amount), 0) as total_commission,
-         COALESCE(SUM(shipping_fee), 0) as total_shipping,
-         COALESCE(SUM(net_payout_amount), 0) as total_payout
-       FROM settlements
-       WHERE partner_id = ? AND status != 'CANCELLED'`
-    ).bind(partnerId).first();
-
-    return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', partner_id: partnerId,
-      summary: {
-        totalGross: sumRow ? sumRow.total_gross : 0,
-        commission: sumRow ? sumRow.total_commission : 0,
-        shippingSettled: sumRow ? sumRow.total_shipping : 0,
-        netPayout: sumRow ? sumRow.total_payout : 0
-      },
-      count: settlements.length,
-      data: settlements
-    }), { headers: corsHeaders });
-  }
-
-  // 7. Partner Update Shipment (Must Own Sub-Order)
+  // 6. Partner Update Shipment (Must Own Sub-Order)
   if (url.pathname.startsWith('/api/v1/partner/orders/') && url.pathname.endsWith('/shipment') && (request.method === 'PUT' || request.method === 'POST')) {
     const subOrderId = url.pathname.split('/')[5];
-    const body = await request.json();
-    const carrier = body.carrier || 'CJ대한통운';
-    const trackingNo = body.tracking_number;
+    const body = await request.json().catch(() => ({}));
+    const carrier = body.carrier || body.carrier_code || 'CJ대한통운';
+    const trackingNo = (body.tracking_number || '').trim();
 
-    const subOrder = await env.DB.prepare('SELECT id FROM sub_orders WHERE id = ? AND partner_id = ?').bind(subOrderId, partnerId).first();
+    const subOrder = await env.DB.prepare('SELECT id, status FROM sub_orders WHERE id = ? AND partner_id = ?').bind(subOrderId, partnerId).first();
     if (!subOrder) {
       return new Response(JSON.stringify({ error: 'Forbidden: Sub-order not found or belongs to another partner.' }), { status: 403, headers: corsHeaders });
     }
 
     await env.DB.prepare(
-      `UPDATE sub_orders 
-       SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+      `UPDATE sub_orders
+       SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND partner_id = ?`
     ).bind(carrier, trackingNo, subOrderId, partnerId).run();
 
@@ -211,16 +248,96 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 8. Partner Metrics
+  // 7. Partner Live Settlements Ledger (GET /api/v1/partner/settlements)
+  if (url.pathname === '/api/v1/partner/settlements' && request.method === 'GET') {
+    const { results: settlements } = await env.DB.prepare(
+      `SELECT st.*, sub.sub_order_no, sub.status as sub_order_status, o.order_no, o.created_at as order_date
+       FROM settlements st
+       LEFT JOIN sub_orders sub ON st.sub_order_id = sub.id
+       LEFT JOIN orders o ON sub.parent_order_id = o.id
+       WHERE st.partner_id = ?
+       ORDER BY st.created_at DESC`
+    ).bind(partnerId).all();
+
+    const activeRows = settlements.filter(s => s.status !== 'CANCELLED');
+    const summary = {
+      totalGross: activeRows.reduce((sum, s) => sum + (s.gross_amount || 0), 0),
+      commission: activeRows.reduce((sum, s) => sum + (s.commission_amount || 0), 0),
+      shippingSettled: activeRows.reduce((sum, s) => sum + (s.shipping_fee || 0), 0),
+      netPayout: activeRows.reduce((sum, s) => sum + (s.net_payout_amount || 0), 0),
+      pendingCount: activeRows.filter(s => s.status === 'PENDING').length,
+      settledCount: activeRows.filter(s => s.status === 'SETTLED').length
+    };
+
+    const mappedSettlements = settlements.map(s => ({
+      ...s,
+      order_id: s.order_no || s.sub_order_no || s.sub_order_id,
+      settlement_status: s.status === 'SETTLED' ? 'PAID' : s.status
+    }));
+    const fullSummary = {
+      ...summary,
+      gross_sales: summary.totalGross,
+      total_commission: summary.commission,
+      net_payout: summary.netPayout,
+      paid_amount: activeRows.filter(s => s.status === 'SETTLED').reduce((sum, s) => sum + (s.net_payout_amount || 0), 0),
+      pending_amount: activeRows.filter(s => s.status === 'PENDING').reduce((sum, s) => sum + (s.net_payout_amount || 0), 0)
+    };
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      partner_id: partnerId,
+      business_name: partner.business_name,
+      summary: fullSummary,
+      count: mappedSettlements.length,
+      settlements: mappedSettlements,
+      data: { settlements: mappedSettlements, summary: fullSummary }
+    }), { headers: corsHeaders });
+  }
+
+  // 8. Partner Product Q&A Management (GET /api/v1/partner/qna & POST /api/v1/partner/qna/:id/answer)
+  if (url.pathname === '/api/v1/partner/qna' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT q.*, p.title as product_title
+       FROM product_qna q
+       JOIN products p ON q.product_id = p.id
+       WHERE q.partner_id = ?
+       ORDER BY q.created_at DESC`
+    ).bind(partnerId).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  if (url.pathname.match(/^\/api\/v1\/partner\/qna\/[^\/]+\/answer$/) && request.method === 'POST') {
+    const qnaId = url.pathname.split('/')[5];
+    const body = await request.json().catch(() => ({}));
+    if (!body.answer || !body.answer.trim()) {
+      return new Response(JSON.stringify({ error: '답변 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
+    }
+    await env.DB.prepare(
+      `UPDATE product_qna SET answer = ?, status = 'ANSWERED', answered_at = CURRENT_TIMESTAMP WHERE id = ? AND partner_id = ?`
+    ).bind(body.answer.trim(), qnaId, partnerId).run();
+    return new Response(JSON.stringify({ success: true, qna_id: qnaId, status: 'ANSWERED' }), { headers: corsHeaders });
+  }
+
+  // 9. Partner Metrics (Excludes CANCELLED Orders)
   if (url.pathname === '/api/v1/partner/metrics' && request.method === 'GET') {
     const prodRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products WHERE partner_id = ?').bind(partnerId).first();
-    const orderRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(total_amount) as total_sales FROM sub_orders WHERE partner_id = ? AND status != 'CANCELLED'").bind(partnerId).first();
+    const orderRes = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt, SUM(total_amount) as total_sales FROM sub_orders WHERE partner_id = ? AND status != 'CANCELLED'"
+    ).bind(partnerId).first();
+    const stlRes = await env.DB.prepare(
+      "SELECT SUM(net_payout_amount) as net_payout FROM settlements WHERE partner_id = ? AND status != 'CANCELLED'"
+    ).bind(partnerId).first();
+    const qnaRes = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM product_qna WHERE partner_id = ? AND status = 'WAITING'"
+    ).bind(partnerId).first();
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA', partner_id: partnerId, business_name: partner.business_name,
       products_count: prodRes ? prodRes.cnt : 0,
       orders_count: orderRes ? orderRes.cnt : 0,
-      total_sales_amount: orderRes && orderRes.total_sales ? orderRes.total_sales : 0
+      total_sales_amount: orderRes && orderRes.total_sales ? orderRes.total_sales : 0,
+      settlement_expected_amount: stlRes && stlRes.net_payout ? stlRes.net_payout : 0,
+      waiting_qna_count: qnaRes ? qnaRes.cnt : 0
     }), { headers: corsHeaders });
   }
 
