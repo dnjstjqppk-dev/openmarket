@@ -19,10 +19,13 @@
     "test:remote": "node tests/full_platform_e2e.js",
     "test": "npm run test:go && npm run test:e2e",
     "lint": "echo \"All files linted\"",
-    "deploy:storefront": "cd apps/storefront && npx wrangler deploy",
-    "deploy:admin": "cd apps/admin && npx wrangler deploy",
-    "deploy:partner": "cd apps/partner && npx wrangler deploy",
-    "deploy:api": "cd apps/cloudflare-gateway && npx wrangler deploy"
+    "deploy": "npm run deploy:all",
+    "deploy:all": "npm run build && npx wrangler deploy --config apps/cloudflare-gateway/wrangler.jsonc && npx wrangler deploy --config apps/storefront/wrangler.jsonc && npx wrangler deploy --config apps/admin/wrangler.jsonc && npx wrangler deploy --config apps/partner/wrangler.jsonc && npx wrangler deploy",
+    "deploy:root": "npx wrangler deploy",
+    "deploy:storefront": "npm run build:storefront && npx wrangler deploy --config apps/storefront/wrangler.jsonc",
+    "deploy:admin": "npm run build:admin && npx wrangler deploy --config apps/admin/wrangler.jsonc",
+    "deploy:partner": "npm run build:partner && npx wrangler deploy --config apps/partner/wrangler.jsonc",
+    "deploy:api": "npx wrangler deploy --config apps/cloudflare-gateway/wrangler.jsonc"
   },
   "keywords": [
     "olmoa",
