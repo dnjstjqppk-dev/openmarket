@@ -282,7 +282,150 @@ async function runTests() {
   }
   console.log('[PASS] 13. Admin Session Token Auth (No 401 Self-Lockout) & Escrow Settlement Approval');
 
-  console.log('=== ALL 13 E2E VERIFICATION SUITES PASSED 100% ===');
+  // 14. Customer Self-Registration & Welcome Credit Injection
+  const testEmail = `newbuyer_${Date.now()}@olmoa.com`;
+  const regRes = await callApi('/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: testEmail,
+      password: 'testpassword123',
+      full_name: '신규고객',
+      phone: '010-9999-8888'
+    })
+  });
+  assert.equal(regRes.status, 201);
+  assert.equal(regRes.json.success, true);
+  assert.equal(regRes.json.data.welcome_credit, 10000);
+  const newCustId = regRes.json.data.customer_id;
+
+  const profileRes = await callApi('/api/v1/auth/me', {
+    headers: { 'X-Customer-Id': newCustId }
+  });
+  assert.equal(profileRes.status, 200);
+  assert.equal(profileRes.json.data.credit_balance, 10000);
+  console.log('[PASS] 14. Customer Self-Registration (/api/v1/auth/register) & Welcome Credit Injection');
+
+  // 15. Address Book, Customer Notifications & Dynamic Banners
+  const bnrRes = await callApi('/api/v1/banners');
+  assert.equal(bnrRes.status, 200);
+  assert.ok(bnrRes.json.data.length >= 3);
+
+  const addrRes = await callApi('/api/v1/addresses', {
+    headers: { 'X-Customer-Id': 'u_customer_001' }
+  });
+  assert.equal(addrRes.status, 200);
+  assert.ok(addrRes.json.data.length >= 2);
+
+  const notiRes = await callApi('/api/v1/notifications', {
+    headers: { 'X-Customer-Id': 'u_customer_001' }
+  });
+  assert.equal(notiRes.status, 200);
+  assert.ok(notiRes.json.data.length >= 3);
+  assert.ok(notiRes.json.unread_count >= 2);
+  console.log('[PASS] 15. Address Book, Notifications & Dynamic Promotion Banners Engine');
+
+  const addressHeaders = { 'X-Customer-Id': 'u_customer_001', 'Content-Type': 'application/json' };
+  for (const addressId of ['missing_address', 'addr_001']) {
+    const response = await callApi(`/api/v1/addresses/${addressId}/default`, {
+      method: 'PUT', headers: { 'X-Customer-Id': addressId === 'addr_001' ? newCustId : 'u_customer_001' }
+    });
+    assert.equal(response.status, 404);
+    assert.equal(db.prepare('SELECT is_default FROM user_addresses WHERE id = ?').get('addr_001').is_default, 1);
+  }
+  const setDefault = await callApi('/api/v1/addresses/addr_002/default', { method: 'PUT', headers: addressHeaders });
+  assert.equal(setDefault.status, 200);
+  assert.equal(db.prepare('SELECT id FROM user_addresses WHERE user_id = ? AND is_default = 1').get('u_customer_001').id, 'addr_002');
+
+  db.exec(`CREATE TRIGGER reject_test_address BEFORE INSERT ON user_addresses
+    WHEN NEW.recipient_name = 'reject_test' BEGIN SELECT RAISE(ABORT, 'injected insert failure'); END`);
+  const failedInsert = await callApi('/api/v1/addresses', {
+    method: 'POST', headers: addressHeaders,
+    body: JSON.stringify({ recipient_name: 'reject_test', phone: '010-1234-5678', address_line1: 'Test address', is_default: true })
+  });
+  assert.equal(failedInsert.status, 500);
+  assert.equal(db.prepare('SELECT id FROM user_addresses WHERE user_id = ? AND is_default = 1').get('u_customer_001').id, 'addr_002');
+  db.exec('DROP TRIGGER reject_test_address');
+  console.log('[PASS] 16. Default Address Ownership, Missing Address & Failed Insert Rollback');
+
+  // 17. Single Order Detail Items & Fulfillment Population
+  const orderDetailRes = await callApi(`/api/v1/orders/${orderId}`, {
+    headers: { 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(orderDetailRes.status, 200);
+  const orderDetailJson = orderDetailRes.json;
+  assert.ok(Array.isArray(orderDetailJson.data.items));
+  assert.ok(orderDetailJson.data.items.length >= 1);
+  assert.ok(orderDetailJson.data.items[0].partner_name);
+  assert.ok(orderDetailJson.data.items[0].carrier);
+  assert.ok(orderDetailJson.data.shipping_address_line1);
+  console.log('[PASS] 17. Single Order Detail Items & Fulfillment Population');
+
+  // 18. Admin Banners & Notification Broadcast Management
+  const newBannerRes = await callApi('/api/v1/admin/banners', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      title: '골든위크 특별 할인',
+      subtitle: '전 상품 최대 80% 할인',
+      badge_text: 'GOLDEN WEEK',
+      bg_gradient: 'from-amber-500 to-rose-600',
+      display_order: 10
+    })
+  });
+  assert.equal(newBannerRes.status, 201);
+  const newBannerJson = newBannerRes.json;
+  const createdBannerId = newBannerJson.data.id;
+  assert.equal(newBannerJson.data.title, '골든위크 특별 할인');
+
+  const adminBannersList = await callApi('/api/v1/admin/banners', {
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  });
+  assert.equal(adminBannersList.status, 200);
+  const bannersJson = adminBannersList.json;
+  assert.ok(bannersJson.data.some(b => b.id === createdBannerId));
+
+  const updateBanner = await callApi(`/api/v1/admin/banners/${createdBannerId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+    body: JSON.stringify({ is_active: false })
+  });
+  assert.equal(updateBanner.status, 200);
+  const updateBannerJson = updateBanner.json;
+  assert.equal(updateBannerJson.data.is_active, 0);
+
+  // Broadcast Notification
+  const broadcastRes = await callApi('/api/v1/admin/notifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      target: 'ALL',
+      title: '플랫폼 정기 업데이트 완료',
+      message: '새로운 배송지 관리 및 혜택이 적용되었습니다.',
+      type: 'SYSTEM',
+      action_url: '/orders'
+    })
+  });
+  assert.equal(broadcastRes.status, 201);
+  const broadcastJson = broadcastRes.json;
+  assert.ok(broadcastJson.broadcast_count >= 1);
+
+  const adminNotifs = await callApi('/api/v1/admin/notifications', {
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  });
+  assert.equal(adminNotifs.status, 200);
+  const adminNotifsJson = adminNotifs.json;
+  assert.ok(adminNotifsJson.data.some(n => n.title === '플랫폼 정기 업데이트 완료'));
+
+  // Clean up test banner
+  const deleteBannerRes = await callApi(`/api/v1/admin/banners/${createdBannerId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  });
+  assert.equal(deleteBannerRes.status, 200);
+  console.log('[PASS] 18. Admin Banners & Notification Broadcast Engine');
+
+  console.log('=== ALL 18 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 

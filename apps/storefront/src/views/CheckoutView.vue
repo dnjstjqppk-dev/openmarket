@@ -25,20 +25,51 @@ const selectedCouponCode = ref('')
 const creditBalance = ref(5000)
 const useCreditFlag = ref(false)
 
+const savedAddresses = ref<any[]>([])
+const selectedAddressId = ref('')
+const saveToAddressBook = ref(false)
+const deliveryMemo = ref('문 앞 (부재 시 경비실)')
+
+const selectAddress = (addr: any) => {
+  selectedAddressId.value = addr.id
+  recipientName.value = addr.recipient_name
+  phone.value = addr.phone
+  zipCode.value = addr.postal_code
+  address.value = addr.address_line1
+  detailAddress.value = addr.address_line2 || ''
+}
+
+const clearToNewAddress = () => {
+  selectedAddressId.value = ''
+  recipientName.value = auth.user?.name || ''
+  phone.value = ''
+  zipCode.value = ''
+  address.value = ''
+  detailAddress.value = ''
+}
+
 onMounted(async () => {
   const cid = auth.user?.id || 'cust_demo_001'
   try {
-    const [coupRes, credRes] = await Promise.all([
+    const [coupRes, credRes, addrRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`),
-      fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { 'X-Customer-Id': cid } })
+      fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { 'X-Customer-Id': cid } }),
+      fetch(`${API_BASE_URL}/api/v1/addresses`, { headers: { 'X-Customer-Id': cid } }).catch(() => ({ json: async () => ({ success: false }) }))
     ])
     const coupJson = await coupRes.json()
     const credJson = await credRes.json()
+    const addrJson = await addrRes.json().catch(() => ({}))
+
     if (coupJson.success && Array.isArray(coupJson.data)) {
       availableCoupons.value = coupJson.data
     }
     if (credJson.success && credJson.data) {
       creditBalance.value = Number(credJson.data.balance || 0)
+    }
+    if (addrJson?.success && Array.isArray(addrJson.data) && addrJson.data.length > 0) {
+      savedAddresses.value = addrJson.data
+      const defaultAddr = addrJson.data.find((a: any) => a.is_default) || addrJson.data[0]
+      if (defaultAddr) selectAddress(defaultAddr)
     }
   } catch {}
 })
@@ -129,7 +160,38 @@ const submitOrder = async () => {
       <div class="lg:col-span-7 space-y-6">
         <!-- Shipping Address Card -->
         <div class="bg-white rounded-2xl p-6 border border-gray-200/80">
-          <h2 class="text-base font-black text-gray-900 mb-4">1. Shipping Destination</h2>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base font-black text-gray-900">1. Shipping Destination (배송지 정보)</h2>
+            <span v-if="savedAddresses.length > 0" class="text-xs font-semibold text-[#FF5000]">주소록 연동 완료</span>
+          </div>
+
+          <!-- Saved Address Selector Chips -->
+          <div v-if="savedAddresses.length > 0" class="mb-4 space-y-2">
+            <label class="block text-xs font-bold text-gray-700">저장된 배송지 선택</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div
+                v-for="a in savedAddresses"
+                :key="a.id"
+                @click="selectAddress(a)"
+                :class="['p-3 rounded-xl border cursor-pointer transition text-xs', selectedAddressId === a.id ? 'border-[#FF5000] bg-orange-50/40 ring-1 ring-[#FF5000]' : 'border-gray-200 hover:border-gray-300 bg-white']"
+              >
+                <div class="flex items-center justify-between mb-1">
+                  <span class="font-bold text-gray-900">{{ a.recipient_name }}</span>
+                  <span v-if="a.is_default" class="px-1.5 py-0.5 rounded bg-orange-100 text-[#FF5000] text-[10px] font-bold">기본 배송지</span>
+                </div>
+                <p class="text-gray-600 truncate text-[11px]">{{ a.address_line1 }} {{ a.address_line2 || '' }}</p>
+                <p class="text-gray-400 text-[10px] mt-0.5">{{ a.phone }}</p>
+              </div>
+
+              <div
+                @click="clearToNewAddress"
+                :class="['p-3 rounded-xl border border-dashed cursor-pointer transition text-xs flex items-center justify-center gap-1.5', !selectedAddressId ? 'border-[#FF5000] text-[#FF5000] bg-orange-50/30 font-bold' : 'border-gray-300 text-gray-500 hover:bg-gray-50']"
+              >
+                <span>+</span> 신규 배송지 직접 입력
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
               <label class="block font-bold text-gray-700 mb-1">Recipient Name</label>

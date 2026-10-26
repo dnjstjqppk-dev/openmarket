@@ -1,0 +1,18 @@
+{
+  "name": "OLMOA (올모아) - 글로벌 오픈마켓",
+  "short_name": "OLMOA",
+  "description": "글로벌 종합 쇼핑몰 올모아(OLMOA). 전 세계 인기 상품, 패션, 전자, 라이프스타일 최저가 & 무료배송.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FF5000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/olmoa-symbol.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

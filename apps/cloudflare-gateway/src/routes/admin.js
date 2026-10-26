@@ -151,5 +151,120 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, claim_id: clmId, status: newStatus }), { headers: corsHeaders });
   }
 
+  // 9. Admin Banners Management
+  if (url.pathname === '/api/v1/admin/banners' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM banners ORDER BY display_order ASC, created_at DESC'
+    ).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/admin/banners' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const bannerId = 'bnr_' + Date.now();
+    const title = (body.title || '신규 프로모션').trim();
+    const subtitle = (body.subtitle || '').trim();
+    const badgeText = (body.badge_text || 'SPECIAL').trim();
+    const imageUrl = (body.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200').trim();
+    const linkUrl = (body.link_url || '/deals').trim();
+    const bgGradient = (body.bg_gradient || 'from-orange-500 to-red-600').trim();
+    const displayOrder = parseInt(body.display_order ?? 0, 10);
+    const isActive = body.is_active === false || body.is_active === 0 ? 0 : 1;
+
+    await env.DB.prepare(
+      'INSERT INTO banners (id, title, subtitle, badge_text, image_url, link_url, bg_gradient, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(bannerId, title, subtitle, badgeText, imageUrl, linkUrl, bgGradient, displayOrder, isActive).run();
+
+    const created = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bannerId).first();
+    return new Response(JSON.stringify({ success: true, message: '프로모션 배너가 등록되었습니다.', data: created }), { status: 201, headers: corsHeaders });
+  }
+
+  const adminBannerMatch = url.pathname.match(/^\/api\/v1\/admin\/banners\/([a-zA-Z0-9_-]+)/);
+  if (adminBannerMatch) {
+    const bnrId = adminBannerMatch[1];
+    if (request.method === 'PUT' || request.method === 'PATCH') {
+      const body = await request.json().catch(() => ({}));
+      const existing = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bnrId).first();
+      if (!existing) {
+        return new Response(JSON.stringify({ error: 'Banner not found' }), { status: 404, headers: corsHeaders });
+      }
+      const isActive = body.is_active !== undefined ? (body.is_active ? 1 : 0) : existing.is_active;
+      const displayOrder = body.display_order !== undefined ? parseInt(body.display_order, 10) : existing.display_order;
+      const title = body.title ? body.title.trim() : existing.title;
+      const subtitle = body.subtitle !== undefined ? body.subtitle.trim() : existing.subtitle;
+      const badgeText = body.badge_text !== undefined ? body.badge_text.trim() : existing.badge_text;
+      const bgGradient = body.bg_gradient ? body.bg_gradient.trim() : existing.bg_gradient;
+      const linkUrl = body.link_url ? body.link_url.trim() : existing.link_url;
+
+      await env.DB.prepare(
+        'UPDATE banners SET title = ?, subtitle = ?, badge_text = ?, bg_gradient = ?, link_url = ?, display_order = ?, is_active = ? WHERE id = ?'
+      ).bind(title, subtitle, badgeText, bgGradient, linkUrl, displayOrder, isActive, bnrId).run();
+
+      const updated = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bnrId).first();
+      return new Response(JSON.stringify({ success: true, message: '배너가 수정되었습니다.', data: updated }), { headers: corsHeaders });
+    }
+    if (request.method === 'DELETE') {
+      await env.DB.prepare('DELETE FROM banners WHERE id = ?').bind(bnrId).run();
+      return new Response(JSON.stringify({ success: true, message: '배너가 삭제되었습니다.' }), { headers: corsHeaders });
+    }
+  }
+
+  // 10. Admin Notification Broadcasting & Management
+  if (url.pathname === '/api/v1/admin/notifications' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT n.*, u.email as user_email, u.full_name as user_name
+       FROM notifications n
+       LEFT JOIN users u ON n.user_id = u.id
+       ORDER BY n.created_at DESC LIMIT 100`
+    ).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/admin/notifications' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const target = body.target || 'ALL';
+    const title = (body.title || '올모아 공지사항').trim();
+    const message = (body.message || '').trim();
+    const type = ['ORDER_STATUS', 'DISCOUNT', 'CREDIT_GRANTED', 'SYSTEM'].includes(body.type) ? body.type : 'SYSTEM';
+    const actionUrl = (body.action_url || body.link_url || '/').trim();
+
+    if (!title || !message) {
+      return new Response(JSON.stringify({ error: '알림 제목과 메시지는 필수 항목입니다.' }), { status: 400, headers: corsHeaders });
+    }
+
+    let targetUserIds = [];
+    if (target === 'ALL') {
+      const { results: users } = await env.DB.prepare("SELECT id FROM users WHERE role = 'CUSTOMER' OR role = 'USER'").all();
+      targetUserIds = users.map(u => u.id);
+      if (targetUserIds.length === 0) {
+        targetUserIds = ['u_customer_001'];
+      }
+    } else {
+      targetUserIds = [target];
+    }
+
+    const stmts = targetUserIds.map((uid, idx) => {
+      const notiId = 'notif_adm_' + Date.now() + '_' + idx;
+      return env.DB.prepare(
+        'INSERT INTO notifications (id, user_id, title, message, type, action_url) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(notiId, uid, title, message, type, actionUrl);
+    });
+
+    if (stmts.length > 0) {
+      if (env.DB.batch) {
+        await env.DB.batch(stmts);
+      } else {
+        for (const s of stmts) await s.run();
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      broadcast_count: targetUserIds.length,
+      message: `총 ${targetUserIds.length}명의 고객에게 알림이 성공적으로 발송되었습니다.`
+    }), { status: 201, headers: corsHeaders });
+  }
+
   return null;
 }
+

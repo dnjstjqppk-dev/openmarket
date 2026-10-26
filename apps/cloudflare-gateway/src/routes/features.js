@@ -321,5 +321,112 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
+  // 10. Dynamic Promotional Banners
+  if (url.pathname === '/api/v1/banners' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM banners WHERE is_active = 1 ORDER BY display_order ASC, created_at DESC'
+    ).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  // 11. Multi-Address Book Management (Customer)
+  if (url.pathname === '/api/v1/addresses') {
+    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    if (request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        'SELECT * FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC'
+      ).bind(customerId).all();
+      return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+    }
+    if (request.method === 'POST') {
+      const b = await request.json().catch(() => ({}));
+      const recipientName = (b.recipient_name || b.name || '').trim();
+      const phone = (b.phone || '').trim();
+      const postalCode = (b.postal_code || b.zip || '00000').trim();
+      const addressLine1 = (b.address_line1 || b.address || '').trim();
+      const addressLine2 = (b.address_line2 || b.detail_address || '').trim();
+      const isDefault = b.is_default ? 1 : 0;
+      const note = (b.delivery_note || b.note || '').trim();
+
+      if (!recipientName || !phone || !addressLine1) {
+        return new Response(JSON.stringify({ error: '수령인, 연락처, 주소는 필수 입력 항목입니다.' }), { status: 400, headers: corsHeaders });
+      }
+
+      const addrId = 'addr_' + Date.now();
+      if (isDefault) {
+        if (env.DB.batch) {
+          await env.DB.batch([
+            env.DB.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').bind(customerId),
+            env.DB.prepare(
+              'INSERT INTO user_addresses (id, user_id, recipient_name, phone, postal_code, address_line1, address_line2, is_default, delivery_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ).bind(addrId, customerId, recipientName, phone, postalCode, addressLine1, addressLine2, isDefault, note)
+          ]);
+        } else {
+          await env.DB.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').bind(customerId).run();
+          await env.DB.prepare(
+            'INSERT INTO user_addresses (id, user_id, recipient_name, phone, postal_code, address_line1, address_line2, is_default, delivery_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(addrId, customerId, recipientName, phone, postalCode, addressLine1, addressLine2, isDefault, note).run();
+        }
+      } else {
+        await env.DB.prepare(
+          'INSERT INTO user_addresses (id, user_id, recipient_name, phone, postal_code, address_line1, address_line2, is_default, delivery_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(addrId, customerId, recipientName, phone, postalCode, addressLine1, addressLine2, isDefault, note).run();
+      }
+
+      const created = await env.DB.prepare('SELECT * FROM user_addresses WHERE id = ?').bind(addrId).first();
+      return new Response(JSON.stringify({ success: true, message: '배송지가 등록되었습니다.', data: created }), { status: 201, headers: corsHeaders });
+    }
+  }
+
+  const addrMatch = url.pathname.match(/^\/api\/v1\/addresses\/([a-zA-Z0-9_-]+)/);
+  if (addrMatch) {
+    const addrId = addrMatch[1];
+    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    if (url.pathname.endsWith('/default') && (request.method === 'PUT' || request.method === 'POST')) {
+      const exists = await env.DB.prepare('SELECT id FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).first();
+      if (!exists) {
+        return new Response(JSON.stringify({ error: 'Address not found or unauthorized' }), { status: 404, headers: corsHeaders });
+      }
+      if (env.DB.batch) {
+        await env.DB.batch([
+          env.DB.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').bind(customerId),
+          env.DB.prepare('UPDATE user_addresses SET is_default = 1 WHERE id = ? AND user_id = ?').bind(addrId, customerId)
+        ]);
+      } else {
+        await env.DB.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').bind(customerId).run();
+        await env.DB.prepare('UPDATE user_addresses SET is_default = 1 WHERE id = ? AND user_id = ?').bind(addrId, customerId).run();
+      }
+      return new Response(JSON.stringify({ success: true, message: '기본 배송지로 설정되었습니다.' }), { headers: corsHeaders });
+    }
+    if (request.method === 'DELETE') {
+      const exists = await env.DB.prepare('SELECT id FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).first();
+      if (!exists) {
+        return new Response(JSON.stringify({ error: 'Address not found or unauthorized' }), { status: 404, headers: corsHeaders });
+      }
+      await env.DB.prepare('DELETE FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).run();
+      return new Response(JSON.stringify({ success: true, message: '배송지가 삭제되었습니다.' }), { headers: corsHeaders });
+    }
+  }
+
+  // 12. Customer Notifications & Alerts
+  if (url.pathname === '/api/v1/notifications') {
+    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    if (request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20'
+      ).bind(customerId).all();
+      const unreadCount = results.filter(n => Number(n.is_read) === 0).length;
+      return new Response(JSON.stringify({ success: true, unread_count: unreadCount, count: results.length, data: results }), { headers: corsHeaders });
+    }
+  }
+
+  const notiMatch = url.pathname.match(/^\/api\/v1\/notifications\/([a-zA-Z0-9_-]+)\/read$/);
+  if (notiMatch && (request.method === 'PUT' || request.method === 'POST')) {
+    const notiId = notiMatch[1];
+    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').bind(notiId, customerId).run();
+    return new Response(JSON.stringify({ success: true, message: '알림을 읽음 처리했습니다.' }), { headers: corsHeaders });
+  }
+
   return null;
 }

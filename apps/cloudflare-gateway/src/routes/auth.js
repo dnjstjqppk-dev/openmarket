@@ -85,6 +85,54 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
+  // 1-1. Customer Registration (Real D1 Insertion + Welcome Credit)
+  if (url.pathname === '/api/v1/auth/register' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const email = (body.email || '').trim().toLowerCase();
+    const password = (body.password || '').trim();
+    const fullName = (body.full_name || body.name || '').trim();
+    const phone = (body.phone || '010-0000-0000').trim();
+
+    if (!email || !password || !fullName) {
+      return new Response(JSON.stringify({ error: '이메일, 비밀번호, 성명은 필수 항목입니다.' }), { status: 400, headers: corsHeaders });
+    }
+
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
+    if (existing) {
+      return new Response(JSON.stringify({ error: '이미 등록된 이메일 계정입니다.' }), { status: 409, headers: corsHeaders });
+    }
+
+    const userId = `u_customer_${Date.now()}`;
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active)
+       VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`
+    ).bind(userId, email, `hash_${password}`, fullName, phone).run();
+
+    // Welcome Credit Bonus (10,000 KRW)
+    const creditId = `cred_${Date.now()}`;
+    await env.DB.prepare(
+      `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
+       VALUES (?, ?, 10000, 10000, '신규 가입 웰컴 크레딧 지급', 'WELCOME_BONUS')`
+    ).bind(creditId, userId).run().catch(() => {});
+
+    const payload = {
+      role: 'ROLE_CUSTOMER',
+      token: userId,
+      customer_id: userId,
+      user: { id: userId, email, full_name: fullName, phone, role: 'ROLE_CUSTOMER' },
+      welcome_credit: 10000,
+      expiresIn: 86400
+    };
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      message: '회원가입이 완료되었습니다. 10,000원 웰컴 크레딧이 지급되었습니다.',
+      ...payload,
+      data: payload
+    }), { status: 201, headers: corsHeaders });
+  }
+
   // 2. Customer / Partner Profile & Balance Lookup
   if (url.pathname === '/api/v1/auth/me' && request.method === 'GET') {
     const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';

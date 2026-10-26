@@ -30,3 +30,12 @@ Global,Multi-Currency Live Rate Conversion,VERIFIED,useLocaleStore converts pric
 Global,Multi-Language UI Translations,VERIFIED,Reactive KR/EN/JA localized strings across views,None (100% Implemented),PASS,Completed
 Footer,Policy & Legal Compliance Links,VERIFIED,Electronic commerce terms privacy and refund views mounted,None (100% Implemented),PASS,Completed
 Mobile,Flutter App Production API Sync,VERIFIED,Mobile service synchronized with live olmoa-api endpoints,None (100% Implemented),PASS,Completed
+Address,Customer Multi-Address Book Management,VERIFIED,user_addresses in D1 with default address selector in checkout,None (100% Implemented),PASS,Completed
+Notifications,Customer Notification Alert Center,VERIFIED,notifications in D1 with unread badge and dropdown in App.vue,None (100% Implemented),PASS,Completed
+Marketing,Dynamic Promotion Banner Carousel,VERIFIED,banners in D1 with auto-rotating slides and swipe controls,None (100% Implemented),PASS,Completed
+Mobile UX,Mobile Sticky Bottom Navigation Bar,VERIFIED,Fixed bottom nav with Home/Categories/Deals/Cart/Orders on mobile,None (100% Implemented),PASS,Completed
+37:Admin Marketing,Promotional Banner CRUD Management,VERIFIED,/marketing view with live preview and toggle active/inactive in D1,None (100% Implemented),PASS,Completed
+38:Admin Broadcast,System Notification Broadcast Center,VERIFIED,Broadcast push notification to ALL customers or targeted user in D1,None (100% Implemented),PASS,Completed
+39:Partner Mobile UX,Partner Mobile Sticky Bottom Bar & Responsive Cards,VERIFIED,Mobile sticky bottom nav and card layouts with one-click address copy,None (100% Implemented),PASS,Completed
+40:Order Inspection,Storefront Order Detail Delivery & Tracking Sync,VERIFIED,Full delivery address and item fulfillment carrier tracking with copy,None (100% Implemented),PASS,Completed
+41:PWA Support,Storefront Web App Manifest & Mobile Meta Tags,VERIFIED,manifest.webmanifest with theme-color and standalone mobile display,None (100% Implemented),PASS,Completed

@@ -38,3 +38,9 @@ Thumbs.db
 .env.*.local
 *.pem
 *.key
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies

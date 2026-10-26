@@ -479,11 +479,22 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       const { results: subOrders } = await env.DB.prepare(
         'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
       ).bind(ord.id).all();
+      const allItems = [];
       for (const sub of subOrders) {
         const { results: subItems } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
         sub.items = subItems;
+        for (const it of subItems) {
+          allItems.push({
+            ...it,
+            carrier: sub.carrier_code || 'CJ대한통운',
+            tracking_number: sub.tracking_number,
+            status: sub.status,
+            partner_name: sub.business_name
+          });
+        }
       }
       ord.sub_orders = subOrders;
+      ord.items = allItems;
     }
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, customer_id: targetCustomer, data: orders }), { headers: corsHeaders });
   }
@@ -507,11 +518,23 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
     ).bind(order.id).all();
 
+    const allItems = [];
     for (const sub of subOrders) {
       const { results: subItems } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
       sub.items = subItems;
+      for (const it of subItems) {
+        allItems.push({
+          ...it,
+          carrier: sub.carrier_code || 'CJ대한통운',
+          tracking_number: sub.tracking_number,
+          status: sub.status,
+          partner_name: sub.business_name,
+          partner_id: sub.partner_id
+        });
+      }
     }
     order.sub_orders = subOrders;
+    order.items = allItems;
 
     const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(order.id).all();
     order.claims = claims;

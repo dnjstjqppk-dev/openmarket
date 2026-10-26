@@ -155,6 +155,75 @@ async function testIntegrations() {
   assert(selJson.data?.direct_crawling_allowed === false, 'Selbym direct crawling is prohibited (false)');
 }
 
+async function testCustomerRegistration() {
+  console.log('\n--- 6. Testing Customer Self-Registration & Welcome Bonus ---');
+  const uniqueEmail = `edge_buyer_${Date.now()}@olmoa.com`;
+  const regRes = await safeFetch(`${API_BASE}/api/v1/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: uniqueEmail,
+      password: 'edge_secure_pwd_2026',
+      full_name: '상용화 고객',
+      phone: '010-8888-7777'
+    })
+  });
+  const regJson = await regRes.json();
+  assert(regRes.status === 201 && regJson.success, 'Customer registration returns 201 Created');
+  assert(regJson.data?.welcome_credit === 10000, 'Customer receives 10,000 KRW welcome credit');
+
+  // Verify duplicate registration rejection (409)
+  const dupRes = await safeFetch(`${API_BASE}/api/v1/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: uniqueEmail,
+      password: 'edge_secure_pwd_2026',
+      full_name: '상용화 고객',
+      phone: '010-8888-7777'
+    })
+  });
+  assert(dupRes.status === 409, 'Duplicate customer email registration is rejected (409)');
+}
+
+async function testDynamicBannersAndAddresses() {
+  console.log('\n--- 7. Testing Dynamic Banners, Address Book & Notifications ---');
+  // Banners
+  const bnrRes = await safeFetch(`${API_BASE}/api/v1/banners`);
+  const bnrJson = await bnrRes.json();
+  assert(bnrRes.status === 200 && bnrJson.data?.length >= 3, 'Banners returns >= 3 active promotion slides');
+
+  // Addresses
+  const addrRes = await safeFetch(`${API_BASE}/api/v1/addresses`, {
+    headers: { 'X-Customer-Id': 'u_customer_001' }
+  });
+  const addrJson = await addrRes.json();
+  assert(addrRes.status === 200 && addrJson.data?.length >= 2, 'Addresses returns customer address book (>= 2)');
+
+  // Notifications
+  const notiRes = await safeFetch(`${API_BASE}/api/v1/notifications`, {
+    headers: { 'X-Customer-Id': 'u_customer_001' }
+  });
+  const notiJson = await notiRes.json();
+  assert(notiRes.status === 200 && notiJson.unread_count >= 1, 'Notifications returns real unread alerts');
+}
+
+async function testAdminBannersAndNotifications() {
+  console.log('\n--- 8. Testing Admin Banners & Notifications Management ---');
+  const token = 'olmoa_admin_sec_2026';
+  const bannersRes = await safeFetch(`${API_BASE}/api/v1/admin/banners`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const bannersJson = await bannersRes.json();
+  assert(bannersRes.status === 200 && Array.isArray(bannersJson.data), 'Admin banners API returns banners array');
+
+  const notifsRes = await safeFetch(`${API_BASE}/api/v1/admin/notifications`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const notifsJson = await notifsRes.json();
+  assert(notifsRes.status === 200 && Array.isArray(notifsJson.data), 'Admin notifications API returns notifications array');
+}
+
 async function runAll() {
   console.log('====================================================');
   console.log(' OLMOA E2E PRODUCTION VERIFICATION SUITE');
@@ -166,6 +235,9 @@ async function runAll() {
   await testPartnerTenantIsolation();
   await testOrderRestockingFlow();
   await testIntegrations();
+  await testCustomerRegistration();
+  await testDynamicBannersAndAddresses();
+  await testAdminBannersAndNotifications();
 
   console.log('\n====================================================');
   console.log(` RESULTS: Passed: ${passed}, Failed: ${failed}`);

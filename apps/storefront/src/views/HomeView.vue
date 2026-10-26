@@ -15,7 +15,22 @@ const activeCategorySlug = ref('ALL')
 const sortBy = ref<'popular' | 'price_asc' | 'price_desc' | 'discount'>('popular')
 
 const countdown = ref('04:59:42')
+const banners = ref<any[]>([])
+const currentBannerIdx = ref(0)
 let timer: any = null
+let bannerTimer: any = null
+
+const nextBanner = () => {
+  if (banners.value.length > 0) {
+    currentBannerIdx.value = (currentBannerIdx.value + 1) % banners.value.length
+  }
+}
+
+const prevBanner = () => {
+  if (banners.value.length > 0) {
+    currentBannerIdx.value = (currentBannerIdx.value - 1 + banners.value.length) % banners.value.length
+  }
+}
 
 const updateCountdown = () => {
   const now = new Date()
@@ -28,21 +43,27 @@ const updateCountdown = () => {
 onMounted(async () => {
   updateCountdown()
   timer = setInterval(updateCountdown, 1000)
+  bannerTimer = setInterval(nextBanner, 5000)
   try {
-    const [prodRes, catRes, flashRes] = await Promise.all([
+    const [prodRes, catRes, flashRes, bnrRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/products`),
       fetch(`${API_BASE_URL}/api/v1/categories`),
-      fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`)
+      fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`),
+      fetch(`${API_BASE_URL}/api/v1/banners`).catch(() => ({ json: () => ({ success: false }) }))
     ])
     const prodJson = await prodRes.json()
     const catJson = await catRes.json()
     const flashJson = await flashRes.json()
+    const bnrJson = await bnrRes.json().catch(() => ({}))
 
     if (prodJson.success) products.value = prodJson.data
     if (catJson.success && Array.isArray(catJson.data)) {
       categories.value = catJson.data.filter((c: any) => Number(c.depth) === 0)
     }
     if (flashJson.success) lightningCampaign.value = flashJson.data
+    if (bnrJson?.success && Array.isArray(bnrJson.data) && bnrJson.data.length > 0) {
+      banners.value = bnrJson.data
+    }
   } catch (e) {
     console.error('Failed to fetch storefront data:', e)
   } finally {
@@ -52,6 +73,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (bannerTimer) clearInterval(bannerTimer)
 })
 
 const getDiscountPercent = (sale: number, orig: number) => {
@@ -110,33 +132,33 @@ const quickAdd = (e: Event, product: any) => {
 
 <template>
   <div class="pb-16">
-    <!-- Hero Promotional Banner -->
-    <section class="bg-gradient-to-r from-[#FF5000] via-[#E60023] to-[#B8001F] text-white py-6 px-4 shadow-inner">
-      <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">
+    <!-- Hero Promotional Banner Carousel (Dynamic D1 Data) -->
+    <section class="relative bg-gradient-to-r from-[#FF5000] via-[#E60023] to-[#B8001F] text-white py-6 px-4 shadow-inner overflow-hidden">
+      <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
         <div class="max-w-2xl">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 text-xs font-extrabold uppercase tracking-wider mb-3 backdrop-blur-xs">
             <span class="w-2 h-2 rounded-full bg-[#FFE600] animate-ping"></span>
-            Global Direct OpenMarket • 42 Root Categories Live
+            {{ banners[currentBannerIdx]?.badge_text || 'Global Direct OpenMarket • 42 Root Categories Live' }}
           </div>
           <h1 class="text-3xl sm:text-5xl font-black tracking-tight leading-none mb-3">
-            DIRECT FACTORY DEALS <span class="text-[#FFE600]">UP TO 70% OFF</span>
+            {{ banners[currentBannerIdx]?.title || 'DIRECT FACTORY DEALS UP TO 70% OFF' }}
           </h1>
           <p class="text-white/90 text-sm sm:text-base font-medium mb-5">
-            Every order is backed by our 30-day Price-Match Adjustment Guarantee, 90-day Free Returns, and 1% Purchase Confirmation Reward Credits.
+            {{ banners[currentBannerIdx]?.subtitle || 'Every order is backed by our 30-day Price-Match Adjustment Guarantee, 90-day Free Returns, and 1% Purchase Confirmation Reward Credits.' }}
           </p>
-          <div class="flex flex-wrap gap-3">
-            <RouterLink to="/channel/lightning-deals" class="px-5 py-2.5 rounded-full bg-[#FFE600] text-black font-black text-xs sm:text-sm hover:bg-yellow-300 transition-colors shadow-md">
-              ⚡ Shop Lightning Deals
+          <div class="flex flex-wrap items-center gap-3">
+            <RouterLink :to="banners[currentBannerIdx]?.link_url || '/channel/lightning-deals'" class="px-5 py-2.5 rounded-full bg-[#FFE600] text-black font-black text-xs sm:text-sm hover:bg-yellow-300 transition-colors shadow-md">
+              ⚡ 지금 특가 확인하기
             </RouterLink>
             <RouterLink to="/coupons" class="px-5 py-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xs transition-colors">
-              🎟️ Claim ₩15,000 Coupon Pack
+              🎟️ 10,000원 웰컴 크레딧
             </RouterLink>
           </div>
         </div>
 
         <div class="grid grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
           <RouterLink to="/coupons" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-[#FFE600]">₩5,000</div>
+            <div class="text-2xl font-black text-[#FFE600]">₩10,000</div>
             <div class="text-[11px] text-white/90 font-medium mt-0.5">Instant Welcome Credit</div>
           </RouterLink>
           <RouterLink to="/policy/shipping" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
@@ -147,6 +169,23 @@ const quickAdd = (e: Event, product: any) => {
             <div class="text-2xl font-black text-[#FFE600]">90 Days</div>
             <div class="text-[11px] text-white/90 font-medium mt-0.5">Free Return Window</div>
           </RouterLink>
+        </div>
+      </div>
+
+      <!-- Banner Slide Indicator Controls -->
+      <div v-if="banners.length > 1" class="max-w-[1440px] mx-auto mt-4 flex items-center justify-between relative z-10 px-2">
+        <div class="flex items-center gap-1.5">
+          <button
+            v-for="(_, idx) in banners"
+            :key="idx"
+            @click="currentBannerIdx = idx"
+            :class="['h-1.5 rounded-full transition-all duration-300 cursor-pointer', currentBannerIdx === idx ? 'w-6 bg-[#FFE600]' : 'w-2 bg-white/40 hover:bg-white/70']"
+            :title="`Slide ${idx + 1}`"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="prevBanner" class="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center text-xs transition cursor-pointer" title="Previous Banner">‹</button>
+          <button @click="nextBanner" class="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center text-xs transition cursor-pointer" title="Next Banner">›</button>
         </div>
       </div>
     </section>

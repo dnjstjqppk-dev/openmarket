@@ -37,6 +37,6 @@
 - **Platform Admin Role (`u_admin_001`)**: Can log in with `ADMIN_SECRET` / session token, monitor platform metrics, approve/suspend products, verify partner onboarding, and audit inventory ledger transactions.
 
 ## 7. Full URL & Routing Audit Summary
-All 34 platform routes have been registered and audited (see [FULL_URL_AUDIT.csv](file:///c:/Users/dnjst/Desktop/openmarket/reports/FULL_URL_AUDIT.csv)):
-- **SPA Deep Linking**: Cloudflare Pages/Worker asset configuration (`not_found_handling = "single-page-application"`) ensures direct URL accesses and browser refreshes on `/category/*`, `/product/*`, `/cart`, `/checkout`, `/orders`, `/channel/*`, `/policy/*` return `200 OK` without `404 Not Found` errors.
-- **Commercial Routes Activated**: 5 promotional channel, wallet, and support routes are active in `apps/storefront/src/router/index.ts` (`/channel/lightning-deals`, `/channel/best-sellers`, `/wishlist`, `/coupons`, `/support`).
+All 42 platform routes have been registered and audited (see [FULL_URL_AUDIT.csv](file:///c:/Users/dnjst/Desktop/openmarket/reports/FULL_URL_AUDIT.csv)):
+- **SPA Deep Linking**: Cloudflare Pages/Worker asset configuration (`not_found_handling = "single-page-application"`) ensures direct URL accesses and browser refreshes on `/category/*`, `/product/*`, `/cart`, `/checkout`, `/orders`, `/channel/*`, `/policy/*`, `/legal/*`, `/register`, `/login`, `/addresses` return `200 OK` without `404 Not Found` errors.
+- **Commercial Routes Activated**: 13 promotional channel, wallet, customer auth, address management, and legal routes are active in `apps/storefront/src/router/index.ts` (`/channel/lightning-deals`, `/channel/best-sellers`, `/wishlist`, `/coupons`, `/addresses`, `/support`, `/login`, `/register`, `/legal/terms`, `/legal/privacy`, `/legal/refund`, etc.).

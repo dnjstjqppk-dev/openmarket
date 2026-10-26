@@ -4,13 +4,15 @@ import DashboardView from '../views/DashboardView.vue';
 import PartnerVerifyView from '../views/PartnerVerifyView.vue';
 import ProductManageView from '../views/ProductManageView.vue';
 import LedgerAuditView from '../views/LedgerAuditView.vue';
+import MarketingView from '../views/MarketingView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView },
   { path: '/', name: 'dashboard', component: DashboardView },
-  { path: '/partners', name: 'partners', component: PartnerVerifyView },
   { path: '/products', name: 'products', component: ProductManageView },
-  { path: '/ledger', name: 'ledger', component: LedgerAuditView }
+  { path: '/partners', name: 'partners', component: PartnerVerifyView },
+  { path: '/ledger', name: 'ledger', component: LedgerAuditView },
+  { path: '/marketing', name: 'marketing', component: MarketingView }
 ];
 
 const router = createRouter({

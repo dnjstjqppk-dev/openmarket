@@ -29,7 +29,39 @@ const handleLogout = () => {
   router.push('/')
 }
 
+const notifications = ref<any[]>([])
+const unreadNotiCount = ref(0)
+const showNotiDropdown = ref(false)
+
+async function fetchNotifications() {
+  try {
+    const custId = localStorage.getItem('olmoa_customer_id') || 'u_customer_001'
+    const res = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
+      headers: { 'X-Customer-Id': custId }
+    })
+    const json = await res.json()
+    if (json.success && Array.isArray(json.data)) {
+      notifications.value = json.data
+      unreadNotiCount.value = json.unread_count || 0
+    }
+  } catch {}
+}
+
+async function markNotiRead(noti: any) {
+  if (noti.is_read) return
+  noti.is_read = 1
+  if (unreadNotiCount.value > 0) unreadNotiCount.value--
+  try {
+    const custId = localStorage.getItem('olmoa_customer_id') || 'u_customer_001'
+    await fetch(`${API_BASE_URL}/api/v1/notifications/${noti.id}/read`, {
+      method: 'PUT',
+      headers: { 'X-Customer-Id': custId }
+    })
+  } catch {}
+}
+
 onMounted(async () => {
+  fetchNotifications()
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
     const json = await res.json()
@@ -203,6 +235,47 @@ onMounted(async () => {
             <span class="hidden lg:inline">{{ locale.t('wishlist') }}</span>
           </RouterLink>
 
+          <!-- Notifications Bell Dropdown -->
+          <div class="relative" @mouseleave="showNotiDropdown = false">
+            <button
+              @click="showNotiDropdown = !showNotiDropdown"
+              class="relative flex items-center p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-700 cursor-pointer"
+              title="Notifications"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span v-if="unreadNotiCount > 0" class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#E60023] ring-2 ring-white animate-pulse"></span>
+            </button>
+
+            <!-- Notifications Dropdown Flyout -->
+            <div
+              v-if="showNotiDropdown"
+              class="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
+            >
+              <div class="p-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <span class="text-xs font-black text-gray-900">알림 센터 ({{ unreadNotiCount }}건 미확인)</span>
+                <span class="text-[10px] text-gray-400">OLMOA Alerts</span>
+              </div>
+              <div class="max-h-72 overflow-y-auto divide-y divide-gray-100">
+                <div
+                  v-for="n in notifications"
+                  :key="n.id"
+                  @click="markNotiRead(n); if (n.action_url) router.push(n.action_url); showNotiDropdown = false"
+                  :class="['p-3 text-xs cursor-pointer hover:bg-orange-50/40 transition-colors', Number(n.is_read) === 0 ? 'bg-orange-50/20 font-bold' : 'text-gray-600']"
+                >
+                  <div class="flex items-center justify-between gap-1 mb-1">
+                    <span class="text-gray-900 text-xs font-bold truncate">{{ n.title }}</span>
+                    <span v-if="Number(n.is_read) === 0" class="w-1.5 h-1.5 rounded-full bg-[#FF5000] shrink-0"></span>
+                  </div>
+                  <p class="text-[11px] text-gray-500 leading-snug">{{ n.message }}</p>
+                  <span class="text-[9px] text-gray-400 mt-1 block">{{ new Date(n.created_at).toLocaleDateString() }}</span>
+                </div>
+                <div v-if="notifications.length === 0" class="p-6 text-center text-xs text-gray-400">
+                  수신된 알림이 없습니다.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Shopping Cart -->
           <RouterLink to="/cart" class="relative flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-orange-50 hover:bg-orange-100 text-[#FF5000] transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
@@ -232,10 +305,58 @@ onMounted(async () => {
       </div>
     </header>
 
-    <!-- Main View Router -->
-    <main class="flex-1">
+    <!-- Main View Router with Mobile Padding for Bottom Nav -->
+    <main class="flex-1 pb-20 md:pb-0">
       <RouterView />
     </main>
+
+    <!-- Mobile Sticky Bottom Navigation Bar (Temu Standard Parity) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 px-2 py-1 shadow-lg flex items-center justify-around text-[10px] font-bold">
+      <RouterLink
+        to="/"
+        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <span>홈</span>
+      </RouterLink>
+
+      <RouterLink
+        to="/categories"
+        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path.startsWith('/categor') ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+        <span>카테고리</span>
+      </RouterLink>
+
+      <RouterLink
+        to="/channel/lightning-deals"
+        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path.includes('lightning') ? 'text-[#E60023]' : 'text-gray-500 hover:text-gray-900']"
+      >
+        <svg class="w-5 h-5 text-[#E60023]" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+        <span>번개특가</span>
+      </RouterLink>
+
+      <RouterLink
+        to="/cart"
+        :class="['relative flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/cart' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
+      >
+        <div class="relative">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span v-if="cart.totalCount > 0" class="absolute -top-1 -right-2 px-1 text-[9px] font-black bg-[#FF5000] text-white rounded-full leading-tight">
+            {{ cart.totalCount }}
+          </span>
+        </div>
+        <span>장바구니</span>
+      </RouterLink>
+
+      <RouterLink
+        :to="auth.isAuthenticated ? '/orders' : '/login'"
+        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/orders' || $route.path === '/login' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <span>{{ auth.isAuthenticated ? '마이' : '로그인' }}</span>
+      </RouterLink>
+    </nav>
 
     <!-- Footer with Korean Electronic Commerce Act Disclosures -->
     <footer class="bg-[#111111] text-gray-400 text-xs mt-16 border-t border-gray-800">

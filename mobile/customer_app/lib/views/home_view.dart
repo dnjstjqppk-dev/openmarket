@@ -17,6 +17,7 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   final ApiService _apiService = ApiService();
   List<Product> _products = [];
+  List<Map<String, dynamic>> _banners = [];
   bool _isLoading = true;
 
   @override
@@ -26,10 +27,14 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> _loadProducts() async {
-    final list = await _apiService.fetchProducts();
+    final results = await Future.wait([
+      _apiService.fetchProducts(),
+      _apiService.fetchBanners(),
+    ]);
     if (mounted) {
       setState(() {
-        _products = list;
+        _products = results[0] as List<Product>;
+        _banners = results[1] as List<Map<String, dynamic>>;
         _isLoading = false;
       });
     }
@@ -59,30 +64,36 @@ class _HomeViewState extends State<HomeView> {
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'GLOBAL MEGA SALE',
-                          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                          _banners.isNotEmpty && _banners[0]['badge_text'] != null
+                              ? _banners[0]['badge_text']
+                              : 'GLOBAL MEGA SALE',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          '최대 90% 할인 직구 특가',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                          _banners.isNotEmpty && _banners[0]['title'] != null
+                              ? _banners[0]['title']
+                              : '최대 90% 할인 직구 특가',
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          '전 상품 무료배송 & 최저가 보장제',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
+                          _banners.isNotEmpty && _banners[0]['subtitle'] != null
+                              ? _banners[0]['subtitle']
+                              : '전 상품 무료배송 & 최저가 보장제',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.bolt, color: Colors.amberAccent, size: 48),
+                  const Icon(Icons.bolt, color: Colors.amberAccent, size: 48),
                 ],
               ),
             ),

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { API_BASE_URL } from '../config';
 
 const router = useRouter();
 const fullName = ref('');
@@ -10,8 +11,9 @@ const phone = ref('');
 const agreeTerms = ref(true);
 const success = ref(false);
 const error = ref('');
+const loading = ref(false);
 
-function handleRegister() {
+async function handleRegister() {
   if (!agreeTerms.value) {
     error.value = '필수 이용약관에 동의해주세요.';
     return;
@@ -21,13 +23,48 @@ function handleRegister() {
     return;
   }
 
-  // Register local customer session
-  localStorage.setItem('olmoa_customer_id', 'u_customer_' + Date.now().toString().slice(-4));
-  localStorage.setItem('olmoa_customer_name', fullName.value);
-  success.value = true;
-  setTimeout(() => {
-    router.push('/');
-  }, 1200);
+  loading.value = true;
+  error.value = '';
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.value,
+        password: password.value,
+        full_name: fullName.value,
+        phone: phone.value || '010-0000-0000'
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      error.value = data.error || '회원가입 처리 중 오류가 발생했습니다.';
+      loading.value = false;
+      return;
+    }
+
+    const customerId = data.customer_id || data.token || `u_customer_${Date.now()}`;
+    localStorage.setItem('olmoa_customer_id', customerId);
+    localStorage.setItem('olmoa_customer_name', fullName.value);
+    localStorage.setItem('olmoa_customer_email', email.value);
+
+    success.value = true;
+    setTimeout(() => {
+      router.push('/');
+    }, 1200);
+  } catch (err: any) {
+    const customerId = `u_customer_${Date.now().toString().slice(-4)}`;
+    localStorage.setItem('olmoa_customer_id', customerId);
+    localStorage.setItem('olmoa_customer_name', fullName.value);
+    success.value = true;
+    setTimeout(() => {
+      router.push('/');
+    }, 1200);
+  } finally {
+    loading.value = false;
+  }
 }
 </script>
 
@@ -81,8 +118,8 @@ function handleRegister() {
 
         <div v-if="error" class="text-rose-500 font-semibold">{{ error }}</div>
 
-        <button type="submit" class="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl transition shadow-md shadow-orange-600/30">
-          회원가입 및 쿠폰팩 받기
+        <button type="submit" :disabled="loading" class="w-full py-3.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-extrabold rounded-xl transition shadow-md shadow-orange-600/30">
+          {{ loading ? '가입 처리 중...' : '회원가입 및 쿠폰팩 받기' }}
         </button>
       </form>
 

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
 const router = useRouter();
+const route = useRoute();
 const isLoggedIn = ref(false);
+const mobileMenuOpen = ref(false);
 
 const checkAuth = () => {
   isLoggedIn.value = !!localStorage.getItem('admin_token');
@@ -14,6 +16,10 @@ const handleLogout = () => {
   isLoggedIn.value = false;
   router.push('/login');
 };
+
+watch(() => route.path, () => {
+  mobileMenuOpen.value = false;
+});
 
 onMounted(() => {
   checkAuth();
@@ -30,12 +36,14 @@ onMounted(() => {
             <span class="text-xl font-black tracking-tight text-white">
               <span class="text-orange-500">O</span>LMOA <span class="text-orange-400 text-xs font-bold">ADMIN</span>
             </span>
-            <span class="bg-indigo-900 text-indigo-200 border border-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded">
+            <span class="hidden sm:inline-block bg-indigo-900 text-indigo-200 border border-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded">
               ROLE_SUPER_ADMIN
             </span>
           </div>
         </div>
-        <nav class="flex items-center gap-1 text-xs">
+
+        <!-- Desktop Navigation -->
+        <nav class="hidden md:flex items-center gap-1 text-xs">
           <router-link to="/" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             대시보드
           </router-link>
@@ -48,10 +56,48 @@ onMounted(() => {
           <router-link to="/ledger" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             에스크로 원장
           </router-link>
+          <router-link to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            마케팅·배너
+          </router-link>
         </nav>
-        <button @click="handleLogout" class="bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-white px-3 py-1.5 rounded text-xs transition">
-          <i class="fa-solid fa-right-from-bracket mr-1"></i>로그아웃
-        </button>
+
+        <div class="flex items-center gap-2">
+          <button @click="handleLogout" class="hidden sm:flex items-center bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-white px-3 py-1.5 rounded text-xs transition cursor-pointer">
+            <i class="fa-solid fa-right-from-bracket mr-1.5"></i>로그아웃
+          </button>
+          <!-- Mobile Hamburger Toggle -->
+          <button
+            @click="mobileMenuOpen = !mobileMenuOpen"
+            class="md:hidden p-2 text-slate-300 hover:text-white focus:outline-none"
+            aria-label="Toggle Navigation"
+          >
+            <i :class="mobileMenuOpen ? 'fa-solid fa-xmark text-lg' : 'fa-solid fa-bars text-lg'"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Dropdown -->
+      <div v-if="mobileMenuOpen" class="md:hidden border-t border-slate-800 bg-slate-900/98 px-4 py-3 space-y-1">
+        <router-link to="/" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          대시보드
+        </router-link>
+        <router-link to="/products" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          상품 관리
+        </router-link>
+        <router-link to="/partners" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          셀러 심사
+        </router-link>
+        <router-link to="/ledger" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          에스크로 원장
+        </router-link>
+        <router-link to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          마케팅·배너 & 알림 센터
+        </router-link>
+        <div class="pt-2 border-t border-slate-800">
+          <button @click="handleLogout" class="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-slate-800 rounded font-medium">
+            <i class="fa-solid fa-right-from-bracket mr-1.5"></i>로그아웃
+          </button>
+        </div>
       </div>
     </header>
 

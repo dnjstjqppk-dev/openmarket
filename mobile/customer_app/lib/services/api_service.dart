@@ -38,6 +38,43 @@ class ApiService {
         ],
       );
 
+  Future<List<Map<String, dynamic>>> fetchBanners() => ApiService.getBanners();
+
+  static Future<List<Map<String, dynamic>>> getBanners() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/banners');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(res.body);
+        final List<dynamic> list = body['data'] ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAddresses({String customerId = defaultCustomerId}) =>
+      ApiService.getAddresses(customerId: customerId);
+
+  static Future<List<Map<String, dynamic>>> getAddresses({String customerId = defaultCustomerId}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/addresses');
+      final res = await http.get(uri, headers: {
+        'X-Customer-Id': customerId,
+      }).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(res.body);
+        final List<dynamic> list = body['data'] ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   // Static methods
   static Future<List<Product>> fetchProductsStatic({String? categorySlug, String? query}) =>
       getProducts(categorySlug: categorySlug, query: query);

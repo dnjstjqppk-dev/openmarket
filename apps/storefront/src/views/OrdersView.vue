@@ -70,9 +70,14 @@ onMounted(loadOrders)
         <h1 class="text-2xl font-black text-gray-900">My Orders & Delivery Guarantee</h1>
         <p class="text-xs text-gray-500 mt-0.5">Confirm purchase to earn +1% Olmoa Credits or request a 90-day free return / 30-day price match.</p>
       </div>
-      <RouterLink to="/coupons" class="text-xs font-bold text-[#FF5000] hover:underline">
-        View My Reward Credits & Coupons →
-      </RouterLink>
+      <div class="flex items-center gap-3">
+        <RouterLink to="/addresses" class="text-xs font-bold text-gray-700 hover:text-[#FF5000] px-3 py-1.5 rounded-lg border border-gray-200 bg-white shadow-xs">
+          📍 배송지 관리
+        </RouterLink>
+        <RouterLink to="/coupons" class="text-xs font-bold text-[#FF5000] hover:underline">
+          View My Reward Credits & Coupons →
+        </RouterLink>
+      </div>
     </div>
 
     <div v-if="actionMsg" class="mb-4 p-3.5 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-[#00A862]">

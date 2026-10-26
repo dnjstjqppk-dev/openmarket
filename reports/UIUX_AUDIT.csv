@@ -14,3 +14,9 @@ UX12,/settlements,Desktop,SettlementView.vue Ledger,Hardcoded 48.2M KRW mock tab
 UX13,Global Footer,Desktop/Mobile,App.vue Footer Links,All 8 policy links were href=# dead links,VERIFIED_RESOLVED,Created /support and /policy views and wired real legal markdown,PASS
 UX14,Global Header,Desktop/Mobile,App.vue Currency Select,Changing currency did not recalculate prices,VERIFIED_RESOLVED,Implemented useLocaleStore with live KRW/USD/JPY exchange rate engine,PASS
 UX15,/cart,Mobile (< 640px),CartView.vue Summary,Checkout required scrolling past cart,VERIFIED_RESOLVED,Responsive cart summary with 30000 KRW free shipping progress bar,PASS
+UX16,Global App,Mobile (< 768px),App.vue Bottom Nav,Lack of persistent mobile app bottom navigation,VERIFIED_RESOLVED,Added fixed mobile bottom tab bar (Home/Categories/Deals/Cart/Account) with badge,PASS
+UX17,/checkout,Desktop/Mobile,CheckoutView.vue Address,No address book selection for repeat buyers,VERIFIED_RESOLVED,Added multi-address book selector chips and D1 address persistence,PASS
+UX18,/marketing,Desktop/Mobile,MarketingView.vue,No administrative banner control or notification broadcast tool,VERIFIED_RESOLVED,Created visual banner manager with gradient preview and notification broadcast engine,PASS
+UX19,/shipments,Mobile (< 768px),ShipmentView.vue & App.vue,Partner order table was difficult to operate on mobile phones,VERIFIED_RESOLVED,Added mobile sticky bottom bar and responsive order cards with one-click address copy,PASS
+UX20,/orders/:id,Desktop/Mobile,OrderDetailView.vue,Missing shipping destination card and carrier tracking copy,VERIFIED_RESOLVED,Added full delivery info card payment breakdown and copyable carrier tracking,PASS
+UX21,Global PWA,Mobile Browser,index.html & manifest,Missing Add-to-HomeScreen manifest and theme-color styling,VERIFIED_RESOLVED,Added manifest.webmanifest with orange theme-color and standalone mobile display,PASS
