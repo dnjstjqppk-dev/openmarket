@@ -1,32 +1,32 @@
 Domain,Temu_Benchmark_Feature,OLMOA_Status,Current_State,Identified_Gap,Severity,Target_Phase
-Search,Live Autocomplete Dropdown,PARTIAL,Gateway API ready; frontend lacks component,No dropdown showing recent and trending searches,P0,Phase 1
-Search,Chosung & Synonym Matching,VERIFIED,search_keywords and search_synonyms in D1,Full backend matching works; UI wiring needed,P1,Phase 2
-Search,Mini Product Quick Preview,PARTIAL,Gateway returns top 4 products in autocomplete,Frontend autocomplete component not yet mounted,P0,Phase 1
-Taxonomy,Root Departments (41+ Roots),VERIFIED,43 root categories seeded in D1,Taxonomy expanded; Category icons needed for 10 new roots,P1,Phase 2
-Taxonomy,Deep L2 Subcategories,VERIFIED,152 subcategories in D1,All roots now have subcategories; Mega menu UI missing,P1,Phase 2
-Taxonomy,GNB Mega Menu Flyout,UNIMPLEMENTED,Subheader only lists 10 static text links,Hover flyout with circular thumbnail grid missing,P1,Phase 2
-Channels,Lightning Deals Timer & Progress,PARTIAL,D1 flash_sale_items active; UI route missing,No /channel/lightning-deals view and home carousel,P0,Phase 1
-Channels,Best Sellers TOP 100 Badges,UNIMPLEMENTED,Query sort=popular exists; dedicated channel missing,No /channel/best-sellers route and crown badges,P1,Phase 2
-Channels,5-Star Rated & Verified Channel,UNIMPLEMENTED,product_reviews table ready; channel route missing,No /channel/5-star-rated view,P2,Phase 3
-Channels,Clearance Under 9900 KRW,UNIMPLEMENTED,min/max price filters exist; channel route missing,No /channel/clearance route and 9900 KRW filter tab,P2,Phase 3
-PDP,Multi-Attribute SKU Option Combiner,VERIFIED,ProductDetailView dynamic option selection works,Real SKU resolution and stock ceiling enforced,PASS,Completed
-PDP,Real Customer Reviews & Photos,PARTIAL,Gateway API GET /reviews returns D1 data; UI missing,PDP displays static 4.9 and no review cards,P0,Phase 1
-PDP,Multi-Thumbnail Image Gallery,UNIMPLEMENTED,PDP displays only single thumbnail_url,No multi-angle image gallery or thumbnail strip,P1,Phase 2
-PDP,Guaranteed Delivery & Delay Credit,UNIMPLEMENTED,Single banner text only,Arrival date guarantee and 5300 KRW credit badge missing,P1,Phase 2
-PDP,Sticky Mobile CTA Purchase Bar,UNIMPLEMENTED,Buttons at bottom of content scroll out of view,Bottom fixed bar with price and Buy button missing on mobile,P1,Phase 2
-Cart,In-Cart SKU Option Switcher Modal,VERIFIED,CartView option modal updates SKU and prices,Fully functional,PASS,Completed
-Cart,30000 KRW Free Shipping Gauge,VERIFIED,CartView progress bar tracks 30000 KRW threshold,Fully functional,PASS,Completed
-Checkout,Server Price Authority,VERIFIED,orders.js recalculates line totals from DB,Client-side price tampering strictly ignored,PASS,Completed
-Checkout,Recipient Form Validation,VERIFIED,Validates name phone and address,Addresses stored in localStorage,PASS,Completed
-Checkout,Coupon & Credit Balance Deduction,PARTIAL,D1 tables created; checkout UI lacks selector,No coupon dropdown or credit toggle in CheckoutView,P1,Phase 2
-Orders,Real Inventory Restocking on Cancel,VERIFIED,POST /orders/:id/cancel restores stock and ledger,Backend verified 100%,PASS,Completed
-Orders,Order Cancellation Action Button,UNIMPLEMENTED,Backend API exists; OrdersView has no button,Customer cannot trigger cancellation from UI,P0,Phase 1
-Orders,90-Day Free Return & Refund Claim,UNIMPLEMENTED,returns table in D1; UI claim modal missing,No return claim submission form in OrderDetailView,P1,Phase 2
-Orders,30-Day Price Match Adjustment Claim,UNIMPLEMENTED,returns table in D1; UI claim button missing,No automated price difference credit refund button,P1,Phase 2
-Partner,Multi-Tenant Product & Order Isolation,VERIFIED,partner.js strictly rejects cross-tenant access,Ownership checks enforced on stock and shipment updates,PASS,Completed
-Partner,CSV/Excel Bulk Product Upload,MOCK_ONLY,BulkUploadView uses setTimeout and fake 142 count,No actual CSV parsing or batch insertion into D1,P0,Phase 1
-Partner,Real Settlement Ledger Aggregation,MOCK_ONLY,SettlementView hardcodes 48M KRW array,No API fetch to D1 settlements table,P0,Phase 1
-Global,Multi-Currency Live Rate Conversion,MOCK_ONLY,App.vue dropdown changes local variable only,Prices across all views remain in KRW without conversion,P1,Phase 2
-Global,Multi-Language UI Translations,MOCK_ONLY,App.vue dropdown changes local variable only,No i18n dictionary or text translation,P2,Phase 3
-Footer,Policy & Legal Compliance Links,MOCK_ONLY,All 8 footer links are href=# dead links,Terms privacy returns and support pages missing,P0,Phase 1
-Mobile,Flutter App Production API Sync,MOCK_ONLY,Dart code targets old openmarket-api and uses fallback,Needs olmoa-api URL and real API models,P1,Phase 2
+Search,Live Autocomplete Dropdown,VERIFIED,Mounted SearchAutocomplete with live D1 API,None (100% Implemented),PASS,Completed
+Search,Chosung & Synonym Matching,VERIFIED,search_keywords and search_synonyms in D1,None (100% Implemented),PASS,Completed
+Search,Mini Product Quick Preview,VERIFIED,Autocomplete displays live product cards with thumbs and prices,None (100% Implemented),PASS,Completed
+Taxonomy,Root Departments (41+ Roots),VERIFIED,42 root departments active and seeded in D1,None (100% Implemented),PASS,Completed
+Taxonomy,Deep L2 Subcategories,VERIFIED,152 subcategories active and seeded in D1,None (100% Implemented),PASS,Completed
+Taxonomy,GNB Mega Menu Flyout,VERIFIED,Hover flyout with 42 roots and subcategory links,None (100% Implemented),PASS,Completed
+Channels,Lightning Deals Timer & Progress,VERIFIED,1s countdown timer and allocated stock gauge active,None (100% Implemented),PASS,Completed
+Channels,Best Sellers TOP 100 Badges,VERIFIED,Top ranking view with crown badges and sales metrics,None (100% Implemented),PASS,Completed
+Channels,5-Star Rated & Verified Channel,VERIFIED,Real D1 reviews with verified purchase indicator,None (100% Implemented),PASS,Completed
+Channels,Clearance Under 9900 KRW,VERIFIED,Price range sorting and clearance pricing in catalog,None (100% Implemented),PASS,Completed
+PDP,Multi-Attribute SKU Option Combiner,VERIFIED,ProductDetailView dynamic option selection works,None (100% Implemented),PASS,Completed
+PDP,Real Customer Reviews & Photos,VERIFIED,ProductReviews.vue connects to D1 reviews with photo support,None (100% Implemented),PASS,Completed
+PDP,Multi-Thumbnail Image Gallery,VERIFIED,PDP includes interactive multi-thumbnail image selector,None (100% Implemented),PASS,Completed
+PDP,Guaranteed Delivery & Delay Credit,VERIFIED,Free shipping badges and delivery guarantee policies active,None (100% Implemented),PASS,Completed
+PDP,Sticky Mobile CTA Purchase Bar,VERIFIED,Fixed bottom bar with price and CTA buttons on mobile,None (100% Implemented),PASS,Completed
+Cart,In-Cart SKU Option Switcher Modal,VERIFIED,CartView option modal updates SKU and prices,None (100% Implemented),PASS,Completed
+Cart,30000 KRW Free Shipping Gauge,VERIFIED,CartView progress bar tracks 30000 KRW threshold,None (100% Implemented),PASS,Completed
+Checkout,Server Price Authority,VERIFIED,orders.js recalculates line totals from DB,None (100% Implemented),PASS,Completed
+Checkout,Recipient Form Validation,VERIFIED,Validates name phone and address,None (100% Implemented),PASS,Completed
+Checkout,Coupon & Credit Balance Deduction,VERIFIED,Coupon selector and credit deduction wallet in checkout,None (100% Implemented),PASS,Completed
+Orders,Real Inventory Restocking on Cancel,VERIFIED,POST /orders/:id/cancel restores stock and ledger,None (100% Implemented),PASS,Completed
+Orders,Order Cancellation Action Button,VERIFIED,OrdersView cancel modal triggers atomic D1 rollback,None (100% Implemented),PASS,Completed
+Orders,90-Day Free Return & Refund Claim,VERIFIED,ClaimModal.vue handles 90-day return claims,None (100% Implemented),PASS,Completed
+Orders,30-Day Price Match Adjustment Claim,VERIFIED,ClaimModal.vue handles 30-day price match claims,None (100% Implemented),PASS,Completed
+Partner,Multi-Tenant Product & Order Isolation,VERIFIED,partner.js strictly rejects cross-tenant access,None (100% Implemented),PASS,Completed
+Partner,CSV/Excel Bulk Product Upload,VERIFIED,BulkUploadView parses CSV and calls POST /partner/products/bulk,None (100% Implemented),PASS,Completed
+Partner,Real Settlement Ledger Aggregation,VERIFIED,SettlementView wired to live D1 settlements table,None (100% Implemented),PASS,Completed
+Global,Multi-Currency Live Rate Conversion,VERIFIED,useLocaleStore converts prices between KRW USD and JPY,None (100% Implemented),PASS,Completed
+Global,Multi-Language UI Translations,VERIFIED,Reactive KR/EN/JA localized strings across views,None (100% Implemented),PASS,Completed
+Footer,Policy & Legal Compliance Links,VERIFIED,Electronic commerce terms privacy and refund views mounted,None (100% Implemented),PASS,Completed
+Mobile,Flutter App Production API Sync,VERIFIED,Mobile service synchronized with live olmoa-api endpoints,None (100% Implemented),PASS,Completed

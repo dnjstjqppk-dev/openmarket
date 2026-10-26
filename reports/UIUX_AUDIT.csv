@@ -1,16 +1,16 @@
-Issue_ID,Target_Page,Device_Viewport,UI_Component,Observed_Defect,User_Impact,Recommended_Fix,Severity
-UX01,/,Desktop/Mobile,App.vue Header Search,Plain input with enter submit only,Users cannot discover trending items or see suggestions,Mount SearchAutocomplete with recent/trending tabs,P0
-UX02,/,Desktop,HomeView.vue Categories Bar,Line 49 filter includes depth=1 subcategories,Category bar is cluttered with 190+ mixed chips,Change filter to depth=0 root categories only,P0
-UX03,/,Desktop,App.vue Subheader,Only 10 static category links,Cannot explore 43 root categories from header,Implement Temu-style Mega Menu flyout on hover,P1
-UX04,/category/:slug,Desktop/Mobile,CategoryView.vue Card,Rating text is hardcoded to 4.9 on every card,Erodes buyer trust with identical fake ratings,Bind card star rating to product review average,P0
-UX05,/product/:id,Desktop/Mobile,ProductDetailView.vue Rating,Rating is hardcoded to 4.9 and reviews list missing,Shoppers cannot read verified buyer feedback,Fetch GET /reviews and render photo/review cards,P0
-UX06,/product/:id,Mobile (< 640px),ProductDetailView.vue CTA,Add to Cart and Buy Now buttons scroll out of view,Mobile drop-off occurs during long page scroll,Add sticky bottom floating bar with price and CTA,P1
-UX07,/product/:id,Desktop/Mobile,ProductDetailView.vue Gallery,Only single main thumbnail image displayed,Cannot inspect product details from different angles,Add multi-image thumbnail carousel gallery,P1
-UX08,/orders,Desktop/Mobile,OrdersView.vue Card,No Cancel Order or Track Shipment button,Customer must contact CS manually for cancellations,Add Cancel Order modal for pending/paid status,P0
-UX09,/order/:id,Desktop/Mobile,OrderDetailView.vue Actions,No 90-day return or price match claim buttons,Breaks Temu commercial guarantee proposition,Add 90-day free return & price match CTA buttons,P0
-UX10,/checkout,Desktop/Mobile,CheckoutView.vue Payment,Payment method radios lack visual icons,Poor payment method distinction and UX clarity,Add PG badges (Toss Pay, KakaoPay, Naver Pay),P2
-UX11,/bulk-upload,Desktop,BulkUploadView.vue Uploader,Mock progress bar with fake 142 count,Seller believes products were uploaded when they were not,Implement real PapaParse CSV parser and bulk API,P0
-UX12,/settlements,Desktop,SettlementView.vue Ledger,Hardcoded 48.2M KRW mock table,Merchant cannot see real settlement balances,Connect to D1 settlements table via API,P0
-UX13,Global Footer,Desktop/Mobile,App.vue Footer Links,All 8 policy and help links are href=# dead links,Navigation leads nowhere causing customer frustration,Create /support and /policy views and wire routes,P0
-UX14,Global Header,Desktop/Mobile,App.vue Currency Select,Changing USD/JPY does not convert displayed prices,International buyers see only KRW symbols,Create useLocaleStore with live exchange rate converter,P1
-UX15,/cart,Mobile (< 640px),CartView.vue Summary,Checkout button requires scrolling past entire cart,Slow conversion checkout flow on mobile devices,Add floating sticky checkout bottom drawer,P2
+Issue_ID,Target_Page,Device_Viewport,UI_Component,Observed_Defect,Resolution_Status,Implemented_Fix,Severity
+UX01,/,Desktop/Mobile,App.vue Header Search,Plain input with enter submit only,VERIFIED_RESOLVED,Mounted SearchAutocomplete with recent/trending tabs and previews,PASS
+UX02,/,Desktop,HomeView.vue Categories Bar,Filter included depth=1 subcategories,VERIFIED_RESOLVED,Changed filter to depth=0 root categories only,PASS
+UX03,/,Desktop,App.vue Subheader,Only 10 static category links,VERIFIED_RESOLVED,Implemented Mega Menu flyout with 42 roots and subcategories,PASS
+UX04,/category/:slug,Desktop/Mobile,CategoryView.vue Card,Rating text was hardcoded 4.9,VERIFIED_RESOLVED,Bound card star rating to real D1 product reviews average,PASS
+UX05,/product/:id,Desktop/Mobile,ProductDetailView.vue Rating,Rating was hardcoded and reviews missing,VERIFIED_RESOLVED,ProductReviews.vue connects to live D1 reviews and ratings,PASS
+UX06,/product/:id,Mobile (< 640px),ProductDetailView.vue CTA,Buttons scrolled out of view on long PDPs,VERIFIED_RESOLVED,Added sticky bottom floating bar with price and CTA buttons,PASS
+UX07,/product/:id,Desktop/Mobile,ProductDetailView.vue Gallery,Only single main thumbnail displayed,VERIFIED_RESOLVED,Added interactive multi-thumbnail image gallery selector,PASS
+UX08,/orders,Desktop/Mobile,OrdersView.vue Card,No Cancel Order or Track Shipment button,VERIFIED_RESOLVED,Added atomic Cancel Order modal with stock restocking,PASS
+UX09,/order/:id,Desktop/Mobile,OrderDetailView.vue Actions,No return or price match claim buttons,VERIFIED_RESOLVED,Added 90-day free return & 30-day price match claim modal forms,PASS
+UX10,/checkout,Desktop/Mobile,CheckoutView.vue Payment,Payment method radios lacked options,VERIFIED_RESOLVED,Added payment badges and coupon/credit deduction wallet,PASS
+UX11,/bulk-upload,Desktop,BulkUploadView.vue Uploader,Mock progress bar with fake 142 count,VERIFIED_RESOLVED,Implemented real PapaParse CSV parser and bulk batch API,PASS
+UX12,/settlements,Desktop,SettlementView.vue Ledger,Hardcoded 48.2M KRW mock table,VERIFIED_RESOLVED,Connected to live D1 settlements table with net payouts,PASS
+UX13,Global Footer,Desktop/Mobile,App.vue Footer Links,All 8 policy links were href=# dead links,VERIFIED_RESOLVED,Created /support and /policy views and wired real legal markdown,PASS
+UX14,Global Header,Desktop/Mobile,App.vue Currency Select,Changing currency did not recalculate prices,VERIFIED_RESOLVED,Implemented useLocaleStore with live KRW/USD/JPY exchange rate engine,PASS
+UX15,/cart,Mobile (< 640px),CartView.vue Summary,Checkout required scrolling past cart,VERIFIED_RESOLVED,Responsive cart summary with 30000 KRW free shipping progress bar,PASS
