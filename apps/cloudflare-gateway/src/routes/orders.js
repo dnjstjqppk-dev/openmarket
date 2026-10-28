@@ -558,5 +558,38 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: order }), { headers: corsHeaders });
   }
 
+  // 7. Demo Tracking Progression (Simulated Carrier Milestones)
+  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/advance-tracking$/) && request.method === 'POST') {
+    const ordId = url.pathname.split('/')[4];
+    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
+    if (!hasExplicitAuth) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: corsHeaders });
+    }
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
+    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
+    if (!isAdmin && order.customer_id !== customerId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+    }
+    const { results: subs } = await env.DB.prepare('SELECT * FROM sub_orders WHERE parent_order_id = ?').bind(order.id).all();
+    const nextStatusMap = { 'SHIPPED': 'IN_TRANSIT', 'IN_TRANSIT': 'DELIVERED' };
+    const stmts = [];
+    for (const sub of subs) {
+      const next = nextStatusMap[sub.status];
+      if (next) {
+        if (next === 'IN_TRANSIT') {
+          stmts.push(env.DB.prepare("UPDATE sub_orders SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(sub.id));
+        } else if (next === 'DELIVERED') {
+          stmts.push(env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(sub.id));
+          stmts.push(env.DB.prepare("UPDATE orders SET payment_status = 'DELIVERED' WHERE id = ?").bind(order.id));
+        }
+      }
+    }
+    if (stmts.length > 0) {
+      if (env.DB.batch) await env.DB.batch(stmts);
+      else for (const s of stmts) await s.run();
+    }
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', message: '배송 상태가 다음 단계로 진행되었습니다. (데모)' }), { headers: corsHeaders });
+  }
+
   return null;
 }
