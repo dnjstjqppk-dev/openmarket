@@ -481,11 +481,19 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       ).bind(ord.id).all();
       const allItems = [];
       for (const sub of subOrders) {
-        const { results: subItems } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
+        const { results: subItems } = await env.DB.prepare(`
+          SELECT i.*, s.product_id, p.thumbnail_url
+          FROM order_items i
+          LEFT JOIN product_skus s ON i.sku_id = s.id
+          LEFT JOIN products p ON s.product_id = p.id
+          WHERE i.sub_order_id = ?
+        `).bind(sub.id).all();
         sub.items = subItems;
         for (const it of subItems) {
           allItems.push({
             ...it,
+            product_id: it.product_id,
+            thumbnail_url: it.thumbnail_url,
             carrier: sub.carrier_code || 'CJ대한통운',
             tracking_number: sub.tracking_number,
             status: sub.status,
@@ -520,12 +528,20 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
 
     const allItems = [];
     for (const sub of subOrders) {
-      const { results: subItems } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
+      const { results: subItems } = await env.DB.prepare(`
+          SELECT i.*, s.product_id, p.thumbnail_url
+          FROM order_items i
+          LEFT JOIN product_skus s ON i.sku_id = s.id
+          LEFT JOIN products p ON s.product_id = p.id
+          WHERE i.sub_order_id = ?
+        `).bind(sub.id).all();
       sub.items = subItems;
       for (const it of subItems) {
         allItems.push({
           ...it,
-          carrier: sub.carrier_code || 'CJ대한통운',
+          product_id: it.product_id,
+            thumbnail_url: it.thumbnail_url,
+            carrier: sub.carrier_code || 'CJ대한통운',
           tracking_number: sub.tracking_number,
           status: sub.status,
           partner_name: sub.business_name,

@@ -17,6 +17,7 @@ const router = createRouter({
     { path: '/orders/:id', name: 'order-detail', component: () => import('../views/OrderDetailView.vue') },
     { path: '/search', name: 'search', component: () => import('../views/SearchView.vue') },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
+    { path: '/forgot-password', name: 'forgot-password', component: () => import('../views/ForgotPasswordView.vue') },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue') },
     { path: '/channel/lightning-deals', name: 'lightning-deals', component: () => import('../views/LightningDealsView.vue') },
     { path: '/channel/best-sellers', name: 'best-sellers', component: () => import('../views/BestSellersView.vue') },

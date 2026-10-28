@@ -91,8 +91,8 @@ onMounted(async () => {
           <!-- Language & Currency Selector -->
           <div class="flex items-center gap-1.5 bg-gray-900 px-2 py-0.5 rounded border border-gray-700">
             <select
-              :value="locale.lang"
-              @change="locale.setLang(($event.target as HTMLSelectElement).value as any)"
+              :value="locale.locale"
+              @change="locale.setLocale(($event.target as HTMLSelectElement).value as any)"
               class="bg-transparent text-white text-[11px] font-bold focus:outline-none cursor-pointer"
               aria-label="Select Language"
             >
@@ -306,12 +306,16 @@ onMounted(async () => {
     </header>
 
     <!-- Main View Router with Mobile Padding for Bottom Nav -->
-    <main class="flex-1 pb-20 md:pb-0">
+    <main :class="['flex-1', $route.path.startsWith('/product/') ? 'pb-20 lg:pb-0' : 'pb-24 md:pb-0']">
       <RouterView />
     </main>
 
-    <!-- Mobile Sticky Bottom Navigation Bar (Temu Standard Parity) -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 px-2 py-1 shadow-lg flex items-center justify-around text-[10px] font-bold">
+    <!-- Mobile Sticky Bottom Navigation Bar (Temu Standard Parity, hidden on PDP to show purchase CTA) -->
+    <nav
+      v-if="!$route.path.startsWith('/product/')"
+      class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 px-2 pt-1 shadow-lg flex items-center justify-around text-[10px] font-bold"
+      style="padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0.35rem));"
+    >
       <RouterLink
         to="/"
         :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"

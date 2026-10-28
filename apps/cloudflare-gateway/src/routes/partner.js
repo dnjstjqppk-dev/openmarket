@@ -218,11 +218,51 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ).bind(partnerId).all();
 
     for (const sub of subOrders) {
-      const { results: items } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(sub.id).all();
+      const { results: items } = await env.DB.prepare(`
+        SELECT i.*, s.product_id, p.thumbnail_url
+        FROM order_items i
+        LEFT JOIN product_skus s ON i.sku_id = s.id
+        LEFT JOIN products p ON s.product_id = p.id
+        WHERE i.sub_order_id = ?
+      `).bind(sub.id).all();
       sub.items = items;
     }
 
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', partner_id: partnerId, count: subOrders.length, data: subOrders }), { headers: corsHeaders });
+  }
+
+  // 5.5 Partner Bulk Shipment Update (Must Own Sub-Orders)
+  if (url.pathname === '/api/v1/partner/orders/bulk-shipment' && (request.method === 'PUT' || request.method === 'POST')) {
+    const body = await request.json().catch(() => ({}));
+    const shipments = Array.isArray(body.shipments) ? body.shipments : [];
+    if (!shipments.length) {
+      return new Response(JSON.stringify({ error: 'Shipments list is empty' }), { status: 400, headers: corsHeaders });
+    }
+
+    const stmts = [];
+    let updatedCount = 0;
+    for (const sh of shipments) {
+      if (!sh.sub_order_id || !sh.tracking_number) continue;
+      stmts.push(
+        env.DB.prepare(`
+          UPDATE sub_orders
+          SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND partner_id = ?
+        `).bind(sh.carrier || 'CJ대한통운', sh.tracking_number.trim(), sh.sub_order_id, partnerId)
+      );
+      updatedCount++;
+    }
+
+    if (stmts.length > 0) {
+      await env.DB.batch(stmts);
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      updated_count: updatedCount,
+      message: `총 ${updatedCount}건의 주문 송장이 일괄 등록되고 출고 완료 처리되었습니다.`
+    }), { headers: corsHeaders });
   }
 
   // 6. Partner Update Shipment (Must Own Sub-Order)
@@ -291,6 +331,57 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       count: mappedSettlements.length,
       settlements: mappedSettlements,
       data: { settlements: mappedSettlements, summary: fullSummary }
+    }), { headers: corsHeaders });
+  }
+
+  // 7.5 Partner Profile & Settlement Settings (GET & PUT /api/v1/partner/profile)
+  if (url.pathname === '/api/v1/partner/profile' && request.method === 'GET') {
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      partner_id: partnerId,
+      data: {
+        id: partner.id,
+        business_name: partner.business_name,
+        business_reg_number: partner.business_reg_number,
+        commission_rate: partner.commission_rate,
+        bank_code: partner.bank_code,
+        bank_account_number: partner.bank_account_number,
+        bank_account_holder: partner.bank_account_holder,
+        settlement_cycle: partner.settlement_cycle || 'WEEKLY',
+        return_shipping_address: partner.return_shipping_address || '인천광역시 중구 공항동 물류센터 B동 301호',
+        customer_service_phone: partner.customer_service_phone || '1588-0000',
+        base_shipping_fee: partner.base_shipping_fee,
+        free_shipping_threshold: partner.free_shipping_threshold,
+        status: partner.status
+      }
+    }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/partner/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const body = await request.json().catch(() => ({}));
+    const bName = body.business_name || partner.business_name;
+    const bCode = body.bank_code || partner.bank_code;
+    const bAcc = body.bank_account_number || partner.bank_account_number;
+    const bHolder = body.bank_account_holder || partner.bank_account_holder;
+    const sCycle = body.settlement_cycle || partner.settlement_cycle || 'WEEKLY';
+    const rAddr = body.return_shipping_address || partner.return_shipping_address || '인천광역시 중구 공항동 물류센터 B동 301호';
+    const csPhone = body.customer_service_phone || partner.customer_service_phone || '1588-0000';
+    const sFee = Number(body.base_shipping_fee ?? partner.base_shipping_fee);
+    const sThresh = Number(body.free_shipping_threshold ?? partner.free_shipping_threshold);
+
+    await env.DB.prepare(`
+      UPDATE partners
+      SET business_name = ?, bank_code = ?, bank_account_number = ?, bank_account_holder = ?,
+          settlement_cycle = ?, return_shipping_address = ?, customer_service_phone = ?,
+          base_shipping_fee = ?, free_shipping_threshold = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(bName, bCode, bAcc, bHolder, sCycle, rAddr, csPhone, sFee, sThresh, partnerId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      message: '판매자 정보 및 정산 계좌 설정이 성공적으로 저장되었습니다.'
     }), { headers: corsHeaders });
   }
 

@@ -50,7 +50,34 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 2. Admin Partners List
+  // 2c. Admin Reviews Moderation
+  if (url.pathname === '/api/v1/admin/reviews' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT r.*, p.title as product_title, u.email as reviewer_email
+       FROM product_reviews r
+       LEFT JOIN products p ON r.product_id = p.id
+       LEFT JOIN users u ON r.user_id = u.id
+       ORDER BY r.created_at DESC LIMIT 100`
+    ).all();
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  const adminReviewMatch = url.pathname.match(/^\/api\/v1\/admin\/reviews\/([^\/]+)$/);
+  if (adminReviewMatch && request.method === 'DELETE') {
+    const reviewId = adminReviewMatch[1];
+    await env.DB.prepare('DELETE FROM product_reviews WHERE id = ?').bind(reviewId).run();
+    return new Response(JSON.stringify({ success: true, message: '리뷰가 삭제되었습니다.' }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/admin/users' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT id, email, full_name, phone, role, is_active, created_at,
+              (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
+       FROM users ORDER BY created_at DESC LIMIT 100`
+    ).all();
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+  }
+
   if (url.pathname === '/api/v1/admin/partners' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
       `SELECT p.*, u.email, u.full_name, u.phone,
@@ -263,6 +290,72 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       broadcast_count: targetUserIds.length,
       message: `총 ${targetUserIds.length}명의 고객에게 알림이 성공적으로 발송되었습니다.`
     }), { status: 201, headers: corsHeaders });
+  }
+
+  // 11. Admin Coupon Management
+  if (url.pathname === '/api/v1/admin/coupons' && request.method === 'GET') {
+    const { results } = await env.DB.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all();
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/admin/coupons' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const code = (body.code || '').trim().toUpperCase();
+    const title = (body.title || '').trim();
+    if (!code || !title) {
+      return new Response(JSON.stringify({ error: '쿠폰 코드와 제목은 필수입니다.' }), { status: 400, headers: corsHeaders });
+    }
+    const id = 'coupon_' + Date.now();
+    await env.DB.prepare(
+      `INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, max_discount_amount, expires_at, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    ).bind(
+      id, code, title,
+      body.discount_type === 'PERCENT' ? 'PERCENT' : 'FIXED_AMOUNT',
+      Number(body.discount_value || 0),
+      Number(body.min_order_amount || 0),
+      body.max_discount_amount ? Number(body.max_discount_amount) : null,
+      body.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,10)
+    ).run();
+    return new Response(JSON.stringify({ success: true, message: '쿠폰이 생성되었습니다.', data: { id, code, title } }), { status: 201, headers: corsHeaders });
+  }
+
+  const adminCouponMatch = url.pathname.match(/^\/api\/v1\/admin\/coupons\/([^\/]+)$/);
+  if (adminCouponMatch && request.method === 'DELETE') {
+    const couponId = adminCouponMatch[1];
+    await env.DB.prepare('DELETE FROM coupons WHERE id = ?').bind(couponId).run();
+    return new Response(JSON.stringify({ success: true, message: '쿠폰이 삭제되었습니다.' }), { headers: corsHeaders });
+  }
+
+  // 12. Admin Category Management
+  if (url.pathname === '/api/v1/admin/categories' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      'SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) as product_count FROM categories c ORDER BY c.depth ASC, c.sort_order ASC'
+    ).all();
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  if (url.pathname === '/api/v1/admin/categories' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const name = (body.name || '').trim();
+    const slug = (body.slug || name.toLowerCase().replace(/\s+/g, '-')).trim();
+    if (!name) {
+      return new Response(JSON.stringify({ error: '카테고리명은 필수입니다.' }), { status: 400, headers: corsHeaders });
+    }
+    const id = body.id || ('cat_' + Date.now());
+    const parentId = body.parent_id || null;
+    const depth = parentId ? 1 : 0;
+    await env.DB.prepare(
+      'INSERT INTO categories (id, parent_id, name, slug, depth, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+    ).bind(id, parentId, name, slug, depth, Number(body.sort_order || 0)).run();
+    return new Response(JSON.stringify({ success: true, message: '카테고리가 생성되었습니다.', data: { id, name, slug } }), { status: 201, headers: corsHeaders });
+  }
+
+  const adminCatMatch = url.pathname.match(/^\/api\/v1\/admin\/categories\/([^\/]+)$/);
+  if (adminCatMatch && request.method === 'DELETE') {
+    const catId = adminCatMatch[1];
+    await env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(catId).run();
+    return new Response(JSON.stringify({ success: true, message: '카테고리가 삭제되었습니다.' }), { headers: corsHeaders });
   }
 
   return null;

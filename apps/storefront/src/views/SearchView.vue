@@ -10,6 +10,8 @@ const cartStore = useCartStore();
 
 const query = ref((route.query.q as string) || '');
 const currentSort = ref((route.query.sort as string) || 'popular');
+const minPrice = ref((route.query.min_price as string) || '');
+const maxPrice = ref((route.query.max_price as string) || '');
 const products = ref<any[]>([]);
 const loading = ref(true);
 
@@ -18,7 +20,12 @@ async function fetchSearchResults() {
   try {
     const q = query.value.trim();
     const sort = currentSort.value;
-    const url = `${API_BASE_URL}/api/v1/products?q=${encodeURIComponent(q)}&sort=${sort}`;
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    params.set('sort', sort);
+    if (minPrice.value) params.set('min_price', minPrice.value);
+    if (maxPrice.value) params.set('max_price', maxPrice.value);
+    const url = `${API_BASE_URL}/api/v1/products?${params.toString()}`;
     const res = await fetch(url);
     const json = await res.json();
     if (json.success && json.data) {
@@ -34,7 +41,7 @@ async function fetchSearchResults() {
 }
 
 function handleSearch() {
-  router.push({ path: '/search', query: { q: query.value, sort: currentSort.value } });
+  router.push({ path: '/search', query: { q: query.value, sort: currentSort.value, min_price: minPrice.value || undefined, max_price: maxPrice.value || undefined } });
 }
 
 function changeSort(sort: string) {
@@ -45,6 +52,8 @@ function changeSort(sort: string) {
 watch(() => route.query, () => {
   query.value = (route.query.q as string) || '';
   currentSort.value = (route.query.sort as string) || 'popular';
+  minPrice.value = (route.query.min_price as string) || '';
+  maxPrice.value = (route.query.max_price as string) || '';
   fetchSearchResults();
 });
 
@@ -70,6 +79,13 @@ onMounted(() => {
           검색
         </button>
       </form>
+
+      <div class="flex items-center gap-2 text-xs">
+        <input v-model="minPrice" type="number" placeholder="최소 가격" class="border border-slate-300 rounded-xl px-3 py-2 w-28" />
+        <span class="text-slate-400">~</span>
+        <input v-model="maxPrice" type="number" placeholder="최대 가격" class="border border-slate-300 rounded-xl px-3 py-2 w-28" />
+        <button @click="handleSearch" class="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold">적용</button>
+      </div>
 
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-t border-slate-100 pt-3">
         <div class="text-slate-600">

@@ -5,6 +5,8 @@ import ProductManageView from '../views/ProductManageView.vue';
 import BulkUploadView from '../views/BulkUploadView.vue';
 import ShipmentView from '../views/ShipmentView.vue';
 import SettlementView from '../views/SettlementView.vue';
+import QnaManageView from '../views/QnaManageView.vue';
+import ProfileManageView from '../views/ProfileManageView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -43,6 +45,18 @@ const router = createRouter({
       name: 'settlements',
       component: SettlementView,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/qna',
+      name: 'qna',
+      component: QnaManageView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileManageView,
+      meta: { requiresAuth: true }
     }
   ]
 });
@@ -57,4 +71,3 @@ router.beforeEach((to, _from, next) => {
 });
 
 export default router;
-

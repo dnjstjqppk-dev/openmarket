@@ -420,6 +420,12 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
+  if (url.pathname === '/api/v1/notifications/read-all' && (request.method === 'PUT' || request.method === 'POST')) {
+    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').bind(customerId).run();
+    return new Response(JSON.stringify({ success: true, message: '모든 알림을 읽음 처리했습니다.' }), { headers: corsHeaders });
+  }
+
   const notiMatch = url.pathname.match(/^\/api\/v1\/notifications\/([a-zA-Z0-9_-]+)\/read$/);
   if (notiMatch && (request.method === 'PUT' || request.method === 'POST')) {
     const notiId = notiMatch[1];

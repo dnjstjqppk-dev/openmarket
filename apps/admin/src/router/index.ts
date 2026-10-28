@@ -5,6 +5,11 @@ import PartnerVerifyView from '../views/PartnerVerifyView.vue';
 import ProductManageView from '../views/ProductManageView.vue';
 import LedgerAuditView from '../views/LedgerAuditView.vue';
 import MarketingView from '../views/MarketingView.vue';
+import CategoriesView from '../views/CategoriesView.vue';
+import CouponsView from '../views/CouponsView.vue';
+import ReviewsView from '../views/ReviewsView.vue';
+import OrdersView from '../views/OrdersView.vue';
+import UsersView from '../views/UsersView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView },
@@ -12,6 +17,11 @@ const routes = [
   { path: '/products', name: 'products', component: ProductManageView },
   { path: '/partners', name: 'partners', component: PartnerVerifyView },
   { path: '/ledger', name: 'ledger', component: LedgerAuditView },
+  { path: '/orders', name: 'orders', component: OrdersView },
+  { path: '/users', name: 'users', component: UsersView },
+  { path: '/reviews', name: 'reviews', component: ReviewsView },
+  { path: '/coupons', name: 'coupons', component: CouponsView },
+  { path: '/categories', name: 'categories', component: CategoriesView },
   { path: '/marketing', name: 'marketing', component: MarketingView }
 ];
 

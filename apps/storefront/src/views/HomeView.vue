@@ -49,7 +49,7 @@ onMounted(async () => {
       fetch(`${API_BASE_URL}/api/v1/products`),
       fetch(`${API_BASE_URL}/api/v1/categories`),
       fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`),
-      fetch(`${API_BASE_URL}/api/v1/banners`).catch(() => ({ json: () => ({ success: false }) }))
+      fetch(`${API_BASE_URL}/api/v1/banners`).catch(() => ({ json: async () => ({ success: false }) }))
     ])
     const prodJson = await prodRes.json()
     const catJson = await catRes.json()

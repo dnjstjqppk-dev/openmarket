@@ -569,19 +569,33 @@ const handleAddToCart = (goToCheckout = false) => {
       </div>
 
       <!-- Mobile Sticky Bottom Purchase Bar -->
-      <div class="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white border-t border-gray-200 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xl">
-        <button @click="toggleWishlist" class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-lg">
+      <div
+        class="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white/98 backdrop-blur border-t border-gray-200 px-3 pt-2 flex items-center justify-between gap-2 shadow-2xl"
+        style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));"
+      >
+        <button
+          @click="toggleWishlist"
+          class="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-lg shrink-0 hover:bg-gray-50 active:scale-95 transition"
+          aria-label="찜하기"
+        >
           <span :class="isWishlisted ? 'text-[#E60023]' : 'text-gray-400'">♥</span>
         </button>
-        <div class="flex-1">
-          <div class="text-[10px] text-gray-400 font-bold">Best Direct Price</div>
-          <div class="text-base font-black text-[#E60023]">{{ locale.formatPrice(currentPrice) }}</div>
+        <div class="flex-1 min-w-0 pr-1">
+          <div class="text-[10px] text-gray-500 font-bold truncate">공장직발송 최저가</div>
+          <div class="text-sm sm:text-base font-black text-[#E60023] truncate">{{ locale.formatPrice(currentPrice) }}</div>
         </div>
-        <button @click="handleAddToCart(false)" class="px-4 h-10 rounded-full border-2 border-[#FF5000] text-[#FF5000] text-xs font-black">
-          Add to Cart
+        <button
+          @click="handleAddToCart(false)"
+          class="px-3.5 h-10 rounded-xl border-2 border-[#FF5000] text-[#FF5000] text-xs font-black shrink-0 hover:bg-orange-50 active:scale-95 transition"
+        >
+          장바구니
         </button>
-        <button @click="handleAddToCart(true)" class="px-5 h-10 rounded-full bg-[#FF5000] text-white text-xs font-black">
-          Buy Now
+        <button
+          @click="handleAddToCart(true)"
+          class="px-4 h-10 rounded-xl bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shrink-0 shadow-md active:scale-95 transition flex items-center gap-1"
+        >
+          <span>바로구매</span>
+          <i class="fa-solid fa-bolt text-[10px]"></i>
         </button>
       </div>
     </div>

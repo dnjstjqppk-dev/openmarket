@@ -43,6 +43,31 @@ function handleDemoLogin() {
   password.value = 'customer2026!';
   handleLogin();
 }
+
+async function handleSocialLogin(provider: string) {
+  loading.value = true;
+  error.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/social-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider,
+        email: provider === 'GOOGLE' ? 'google.user@olmoa.com' : 'kakao.user@olmoa.com',
+        name: provider === 'GOOGLE' ? 'Google User' : 'Kakao User'
+      })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      localStorage.setItem('olmoa_customer_id', json.user?.id || 'u_customer_001');
+      localStorage.setItem('olmoa_customer_name', json.user?.full_name || '소셜 사용자');
+      router.push('/');
+      return;
+    }
+  } catch (_) {}
+  error.value = '소셜 로그인에 실패했습니다.';
+  loading.value = false;
+}
 </script>
 
 <template>
@@ -100,6 +125,15 @@ function handleDemoLogin() {
           ⚡ 체험용 1초 원클릭 로그인 (Jane Doe)
         </button>
       </form>
+
+      <div class="flex gap-2">
+        <button type="button" @click="handleSocialLogin('GOOGLE')" class="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition text-xs">
+          Google 로그인
+        </button>
+        <button type="button" @click="handleSocialLogin('KAKAO')" class="flex-1 py-2.5 bg-yellow-300 text-slate-900 font-bold rounded-xl hover:bg-yellow-400 transition text-xs">
+          Kakao 로그인
+        </button>
+      </div>
 
       <div class="pt-4 border-t border-slate-100 text-center text-xs text-slate-500 space-y-2">
         <p>계정이 없으신가요? <router-link to="/register" class="font-bold text-orange-600 hover:underline">회원가입하기</router-link></p>

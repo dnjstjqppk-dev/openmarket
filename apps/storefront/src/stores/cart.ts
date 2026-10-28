@@ -22,12 +22,14 @@ export interface CartItem {
 
 export interface PartnerCartGroup {
   partner_id: string;
+  partner_name: string;
   business_name: string;
   items: CartItem[];
   goods_amount: number;
   shipping_fee: number;
   free_shipping_threshold: number;
   free_shipping_remaining: number;
+  remaining_for_free: number;
 }
 
 const STORAGE_KEY = 'olmoa_cart_items_v3';
@@ -48,8 +50,32 @@ export const useCartStore = defineStore('cart', () => {
     } catch (_) {}
   }
 
-  function addItem(product: any, sku: any, quantity: number = 1) {
-    if (!sku || !sku.id) {
+  function addItem(product: any, sku?: any, quantity: number = 1) {
+  // Support flat-object call style used by newer views
+  if (sku === undefined && product && product.sku_id && product.price != null) {
+    const o = product;
+    const prod = {
+      id: o.product_id,
+      title: o.title,
+      thumbnail_url: o.thumbnail_url,
+      partner_id: o.partner_id || 'pt_001',
+      business_name: o.partner_name || o.business_name,
+      lowest_sale_price: o.price,
+      lowest_original_price: o.original_price,
+      base_shipping_fee: o.base_shipping_fee,
+      free_shipping_threshold: o.free_shipping_threshold
+    };
+    const skuObj = {
+      id: o.sku_id,
+      sale_price: o.price,
+      original_price: o.original_price,
+      stock_quantity: o.stock_quantity != null ? o.stock_quantity : 999,
+      option_combination_json: JSON.stringify({ Option: o.option_Label || o.option_summary || 'Standard' })
+    };
+    return addItem(prod, skuObj, o.quantity || 1);
+  }
+
+  if (!sku || !sku.id) {
       if (product.skus && product.skus.length > 0) {
         sku = product.skus[0];
       } else {
@@ -160,12 +186,14 @@ export const useCartStore = defineStore('cart', () => {
       const fee = threshold > 0 && goods >= threshold ? 0 : baseFee;
       return {
         partner_id: pid,
+        partner_name: groupItems[0].business_name || (pid === 'pt_002' ? 'K-Tech & Lifestyle Official' : 'Global Direct Logistics Ltd.'),
         business_name: groupItems[0].business_name || (pid === 'pt_002' ? 'K-Tech & Lifestyle Official' : 'Global Direct Logistics Ltd.'),
         items: groupItems,
         goods_amount: goods,
         shipping_fee: fee,
         free_shipping_threshold: threshold,
-        free_shipping_remaining: Math.max(0, threshold - goods)
+        free_shipping_remaining: Math.max(0, threshold - goods),
+        remaining_for_free: Math.max(0, threshold - goods)
       };
     });
   });
@@ -178,10 +206,18 @@ export const useCartStore = defineStore('cart', () => {
     return partnerGroups.value.reduce((sum, g) => sum + g.free_shipping_remaining, 0);
   });
   const totalPayAmount = computed(() => totalGoodsAmount.value + shippingFee.value);
+  const totalSavings = computed(() => items.value.reduce((sum, item) => {
+    const orig = item.original_price || item.price;
+    return sum + Math.max(0, (orig - item.price) * item.quantity);
+  }, 0));
+  const partnerShippingBreakdown = partnerGroups;
+  const subtotalAmount = totalGoodsAmount;
+  const finalTotal = totalPayAmount;
 
   return {
     items,
     partnerGroups,
+    partnerShippingBreakdown,
     addItem,
     updateSku,
     removeItem,
@@ -189,8 +225,11 @@ export const useCartStore = defineStore('cart', () => {
     clearCart,
     totalCount,
     totalGoodsAmount,
+    subtotalAmount,
     shippingFee,
     freeShippingRemaining,
-    totalPayAmount
+    totalPayAmount,
+    finalTotal,
+    totalSavings
   };
 });

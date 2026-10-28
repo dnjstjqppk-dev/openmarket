@@ -50,6 +50,21 @@ onMounted(() => {
           <router-link to="/products" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             상품 관리
           </router-link>
+          <router-link to="/orders" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            주문 관리
+          </router-link>
+          <router-link to="/users" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            회원 관리
+          </router-link>
+          <router-link to="/reviews" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            리뷰 모더레이션
+          </router-link>
+          <router-link to="/coupons" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            쿠폰 관리
+          </router-link>
+          <router-link to="/categories" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+            카테고리 관리
+          </router-link>
           <router-link to="/partners" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             셀러 심사
           </router-link>
