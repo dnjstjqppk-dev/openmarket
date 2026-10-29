@@ -508,7 +508,7 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
   }
 
   // 6. Single Order Detail with Strict Ownership Validation
-  if (url.pathname.startsWith('/api/v1/orders/') && request.method === 'GET') {
+  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+$/) && request.method === 'GET') {
     const ordId = url.pathname.replace('/api/v1/orders/', '').trim();
     const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
     if (!hasExplicitAuth) {
@@ -558,7 +558,41 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: order }), { headers: corsHeaders });
   }
 
-  // 7. Demo Tracking Progression (Simulated Carrier Milestones)
+  // 7. Tracking Lookup (GET /api/v1/orders/:id/tracking) — 배송 추적 상세 조회
+  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/tracking$/) && request.method === 'GET') {
+    const ordId = url.pathname.split('/')[4];
+    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
+    if (!hasExplicitAuth) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: corsHeaders });
+    }
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
+    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
+    if (!isAdmin && order.customer_id !== customerId) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+    }
+    const { results: subs } = await env.DB.prepare('SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?').bind(order.id).all();
+    const trackingItems = subs.map(sub => ({
+      sub_order_id: sub.id,
+      partner_name: sub.business_name || null,
+      carrier_code: sub.carrier_code || 'CJ대한통운',
+      tracking_number: sub.tracking_number || null,
+      status: sub.status,
+      shipped_at: sub.shipped_at || null,
+      delivered_at: sub.delivered_at || null,
+      updated_at: sub.updated_at || null
+    }));
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      order_id: order.id,
+      order_no: order.order_no,
+      customer_id: order.customer_id,
+      payment_status: order.payment_status,
+      tracking: trackingItems
+    }), { headers: corsHeaders });
+  }
+
+  // 8. Demo Tracking Progression (Simulated Carrier Milestones)
   if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/advance-tracking$/) && request.method === 'POST') {
     const ordId = url.pathname.split('/')[4];
     const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);

@@ -361,7 +361,47 @@ async function runTests() {
   assert.ok(orderDetailJson.data.shipping_address_line1);
   console.log('[PASS] 17. Single Order Detail Items & Fulfillment Population');
 
-  // 18. Admin Banners & Notification Broadcast Management
+  // 18. 배송 추적 조회 및 단계별 진행 (Tracking Lookup & Progression)
+  // 서브 오더를 출고 완료(SHIPPED) 상태로 직접 설정 (파트너 출고 등록 시뮬레이션)
+  db.prepare("UPDATE sub_orders SET status = 'SHIPPED', carrier_code = 'CJ대한통운', tracking_number = '689201948210', shipped_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?").run(orderId);
+
+  // 18-a. 배송 추적 조회 (GET /api/v1/orders/:id/tracking)
+  const trackingRes = await callApi(`/api/v1/orders/${orderId}/tracking`, {
+    headers: { 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(trackingRes.status, 200);
+  assert.ok(Array.isArray(trackingRes.json.tracking));
+  assert.equal(trackingRes.json.tracking[0].carrier_code, 'CJ대한통운');
+  assert.equal(trackingRes.json.tracking[0].tracking_number, '689201948210');
+  assert.equal(trackingRes.json.tracking[0].status, 'SHIPPED');
+  console.log('[PASS] 18-a. 배송 추적 조회 (운송사, 송장번호, 상태 반환)');
+
+  // 18-b. 배송 상태 진행: SHIPPED → IN_TRANSIT (POST /api/v1/orders/:id/advance-tracking)
+  const advance1 = await callApi(`/api/v1/orders/${orderId}/advance-tracking`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(advance1.status, 200);
+  const trackingAfter1 = await callApi(`/api/v1/orders/${orderId}/tracking`, {
+    headers: { 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(trackingAfter1.json.tracking[0].status, 'IN_TRANSIT');
+  console.log('[PASS] 18-b. 배송 상태 진행 SHIPPED → IN_TRANSIT');
+
+  // 18-c. 배송 상태 진행: IN_TRANSIT → DELIVERED
+  const advance2 = await callApi(`/api/v1/orders/${orderId}/advance-tracking`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(advance2.status, 200);
+  const trackingAfter2 = await callApi(`/api/v1/orders/${orderId}/tracking`, {
+    headers: { 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(trackingAfter2.json.tracking[0].status, 'DELIVERED');
+  assert.equal(trackingAfter2.json.payment_status, 'DELIVERED');
+  console.log('[PASS] 18-c. 배송 상태 진행 IN_TRANSIT → DELIVERED');
+
+  // 19. Admin Banners & Notification Broadcast Management
   const newBannerRes = await callApi('/api/v1/admin/banners', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
@@ -423,9 +463,9 @@ async function runTests() {
     headers: { 'Authorization': `Bearer ${adminToken}` }
   });
   assert.equal(deleteBannerRes.status, 200);
-  console.log('[PASS] 18. Admin Banners & Notification Broadcast Engine');
+  console.log('[PASS] 19. Admin Banners & Notification Broadcast Engine');
 
-  console.log('=== ALL 18 E2E VERIFICATION SUITES PASSED 100% ===');
+  console.log('=== ALL 19 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 
