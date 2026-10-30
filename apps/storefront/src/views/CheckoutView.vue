@@ -112,12 +112,19 @@ const submitOrder = async () => {
       payment_method: paymentMethod.value,
       coupon_code: selectedCouponCode.value || undefined,
       use_credits: appliedCredits.value,
+      recipient_name: recipientName.value,
+      recipient_phone: phone.value,
+      shipping_postal_code: zipCode.value,
+      shipping_address_line1: address.value,
+      shipping_address_line2: detailAddress.value,
+      shipping_memo: deliveryMemo.value || '',
       shipping_address: {
         recipient: recipientName.value,
         phone: phone.value,
         zip: zipCode.value,
         address: address.value,
-        detail: detailAddress.value
+        detail: detailAddress.value,
+        memo: deliveryMemo.value || ''
       },
       items: cart.items.map(i => ({
         product_id: i.product_id,

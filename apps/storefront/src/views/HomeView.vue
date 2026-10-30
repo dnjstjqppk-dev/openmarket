@@ -133,7 +133,7 @@ const quickAdd = (e: Event, product: any) => {
 <template>
   <div class="pb-16">
     <!-- Hero Promotional Banner Carousel (Dynamic D1 Data) -->
-    <section class="relative bg-gradient-to-r from-[#FF5000] via-[#E60023] to-[#B8001F] text-white py-6 px-4 shadow-inner overflow-hidden">
+    <section class="relative bg-gradient-to-r from-[#111111] via-[#FF5000] to-transparent text-white py-6 px-4 shadow-inner overflow-hidden">
       <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
         <div class="max-w-2xl">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 text-xs font-extrabold uppercase tracking-wider mb-3 backdrop-blur-xs">

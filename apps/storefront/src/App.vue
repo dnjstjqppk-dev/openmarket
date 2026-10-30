@@ -206,14 +206,17 @@ onMounted(async () => {
         <!-- Right User Actions -->
         <div class="flex items-center gap-1 sm:gap-2 shrink-0">
           <div v-if="auth.isAuthenticated" class="flex items-center gap-1">
-            <RouterLink to="/orders" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors">
+            <RouterLink to="/profile" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors" title="My Account & Profile">
               <div class="w-7 h-7 rounded-full bg-orange-100 text-[#FF5000] flex items-center justify-center font-black text-xs">
                 {{ auth.user?.name?.charAt(0) || 'U' }}
               </div>
               <div class="hidden xl:flex flex-col text-left leading-tight">
                 <span class="text-[10px] text-gray-500">Hello, {{ auth.user?.name }}</span>
-                <span class="text-xs font-bold text-gray-900">{{ locale.t('orders') }}</span>
+                <span class="text-xs font-bold text-gray-900">마이페이지</span>
               </div>
+            </RouterLink>
+            <RouterLink to="/orders" class="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors text-xs font-bold text-gray-800" title="Orders">
+              <span>{{ locale.t('orders') }}</span>
             </RouterLink>
             <button @click="handleLogout" class="text-[11px] text-gray-400 hover:text-red-600 px-1.5 py-1 cursor-pointer" title="Sign Out">Exit</button>
           </div>
@@ -354,8 +357,8 @@ onMounted(async () => {
       </RouterLink>
 
       <RouterLink
-        :to="auth.isAuthenticated ? '/orders' : '/login'"
-        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/orders' || $route.path === '/login' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
+        :to="auth.isAuthenticated ? '/profile' : '/login'"
+        :class="['flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors', $route.path === '/profile' || $route.path === '/login' ? 'text-[#FF5000]' : 'text-gray-500 hover:text-gray-900']"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         <span>{{ auth.isAuthenticated ? '마이' : '로그인' }}</span>

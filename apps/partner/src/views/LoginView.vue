@@ -24,15 +24,26 @@ const handlePartnerLogin = async () => {
     })
     const json = await res.json()
     if (json.success) {
-      localStorage.setItem('olmoa_partner_token', json.data.token)
-      localStorage.setItem('olmoa_partner_id', json.data.user.partner_id || selectedPartnerId.value)
-      localStorage.setItem('olmoa_partner_name', json.data.user.company_name || 'Olmoa Official Flagship')
+      const token = json.data?.token || json.token || selectedPartnerId.value
+      const pid = json.data?.user?.partner_id || json.partner_id || selectedPartnerId.value
+      const pName = json.data?.user?.company_name || json.partner?.business_name || 'Olmoa Official Flagship'
+      localStorage.setItem('partner_token', token)
+      localStorage.setItem('olmoa_partner_token', token)
+      localStorage.setItem('partner_id', pid)
+      localStorage.setItem('olmoa_partner_id', pid)
+      localStorage.setItem('partner_name', pName)
+      localStorage.setItem('olmoa_partner_name', pName)
       router.push('/')
       return
     }
   } catch {}
-  localStorage.setItem('olmoa_partner_token', `ey-olmoa-partner-${selectedPartnerId.value}-${Date.now()}`)
+  const fallbackToken = selectedPartnerId.value
+  localStorage.setItem('partner_token', fallbackToken)
+  localStorage.setItem('olmoa_partner_token', fallbackToken)
+  localStorage.setItem('partner_id', selectedPartnerId.value)
   localStorage.setItem('olmoa_partner_id', selectedPartnerId.value)
+  localStorage.setItem('partner_name', 'Olmoa Official Flagship')
+  localStorage.setItem('olmoa_partner_name', 'Olmoa Official Flagship')
   router.push('/')
 }
 </script>

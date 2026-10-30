@@ -137,7 +137,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
   }
 
   // 2. Customer / Partner Profile & Balance Lookup
-  if (url.pathname === '/api/v1/auth/me' && request.method === 'GET') {
+  if ((url.pathname === '/api/v1/auth/me' || url.pathname === '/api/v1/auth/profile') && request.method === 'GET') {
     const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
     const user = await env.DB.prepare('SELECT id, email, full_name, phone, role, created_at FROM users WHERE id = ?').bind(customerId).first();
     const creditRow = await env.DB.prepare('SELECT SUM(amount_delta) as balance FROM user_credits WHERE user_id = ?').bind(customerId).first();
@@ -155,6 +155,46 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       }
     }), { headers: corsHeaders });
   }
+
+  // 2-1. Customer Profile & Password Update (PUT /api/v1/auth/profile)
+  if (url.pathname === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    const body = await request.json().catch(() => ({}));
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(customerId).first();
+    if (!user) {
+      return new Response(JSON.stringify({ error: '사용자를 찾을 수 없습니다.' }), { status: 404, headers: corsHeaders });
+    }
+
+    const fullName = (body.full_name || body.name || user.full_name).trim();
+    const phone = (body.phone || user.phone || '010-0000-0000').trim();
+
+    let passwordHash = user.password_hash;
+    if (body.new_password) {
+      if (body.current_password && user.password_hash) {
+        const expectedHash = user.password_hash.startsWith('hash_') ? `hash_${body.current_password}` : body.current_password;
+        if (user.password_hash !== expectedHash && user.password_hash !== body.current_password) {
+          return new Response(JSON.stringify({ error: '현재 비밀번호가 일치하지 않습니다.' }), { status: 400, headers: corsHeaders });
+        }
+      }
+      passwordHash = `hash_${body.new_password}`;
+    }
+
+    await env.DB.prepare(
+      'UPDATE users SET full_name = ?, phone = ?, password_hash = ? WHERE id = ?'
+    ).bind(fullName, phone, passwordHash, customerId).run();
+
+    const updatedUser = await env.DB.prepare('SELECT id, email, full_name, phone, role, created_at FROM users WHERE id = ?').bind(customerId).first();
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      message: '회원 정보가 성공적으로 수정되었습니다.',
+      data: {
+        user: updatedUser
+      }
+    }), { headers: corsHeaders });
+  }
+
 
   // 3. Forgot Password (Demo Simulation)
   if (url.pathname === '/api/v1/auth/forgot-password' && request.method === 'POST') {

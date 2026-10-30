@@ -409,7 +409,63 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, qna_id: qnaId, status: 'ANSWERED' }), { headers: corsHeaders });
   }
 
-  // 9. Partner Metrics (Excludes CANCELLED Orders)
+  // 9. Partner Returns & Claims Management (GET /api/v1/partner/returns & PUT /api/v1/partner/returns/:id/status)
+  if (url.pathname === '/api/v1/partner/returns' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT r.id, r.order_id, r.user_id, r.claim_type, r.reason, r.status, r.refund_amount, r.notes, r.created_at,
+              o.order_no, so.id as sub_order_id, so.sub_order_no, so.goods_amount, so.shipping_fee, so.total_amount,
+              u.email as customer_email, u.full_name as customer_name
+       FROM returns r
+       JOIN orders o ON r.order_id = o.id
+       JOIN sub_orders so ON so.parent_order_id = o.id
+       LEFT JOIN users u ON r.user_id = u.id
+       WHERE so.partner_id = ?
+       ORDER BY r.created_at DESC`
+    ).bind(partnerId).all();
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      partner_id: partnerId,
+      count: results.length,
+      data: results
+    }), { headers: corsHeaders });
+  }
+
+  const partnerReturnMatch = url.pathname.match(/^\/api\/v1\/partner\/returns\/([^\/]+)(?:\/status)?$/);
+  if (partnerReturnMatch && (request.method === 'PUT' || request.method === 'POST')) {
+    const claimId = partnerReturnMatch[1];
+    const body = await request.json().catch(() => ({}));
+    const newStatus = ['APPROVED', 'REJECTED', 'REFUNDED'].includes(body.status) ? body.status : 'APPROVED';
+    const notes = body.notes || body.comment || '';
+
+    // Verify claim belongs to this partner's sub-order
+    const claimOwner = await env.DB.prepare(
+      `SELECT r.id, so.id as sub_order_id
+       FROM returns r
+       JOIN sub_orders so ON so.parent_order_id = r.order_id
+       WHERE r.id = ? AND so.partner_id = ?`
+    ).bind(claimId, partnerId).first();
+
+    if (!claimOwner) {
+      return new Response(JSON.stringify({ error: '해당 반품/클레임 내역을 찾을 수 없거나 권한이 없습니다.' }), { status: 403, headers: corsHeaders });
+    }
+
+    await env.DB.prepare(
+      `UPDATE returns
+       SET status = ?, notes = CASE WHEN ? != '' THEN ? ELSE notes END
+       WHERE id = ?`
+    ).bind(newStatus, notes, notes, claimId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      claim_id: claimId,
+      status: newStatus,
+      notes: notes || undefined
+    }), { headers: corsHeaders });
+  }
+
+  // 10. Partner Metrics (Excludes CANCELLED Orders)
   if (url.pathname === '/api/v1/partner/metrics' && request.method === 'GET') {
     const prodRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products WHERE partner_id = ?').bind(partnerId).first();
     const orderRes = await env.DB.prepare(

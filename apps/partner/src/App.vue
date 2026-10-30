@@ -11,6 +11,11 @@ const partnerName = 'Global Direct Logistics Ltd.';
 
 function handleLogout() {
   localStorage.removeItem('partner_token');
+  localStorage.removeItem('olmoa_partner_token');
+  localStorage.removeItem('partner_id');
+  localStorage.removeItem('olmoa_partner_id');
+  localStorage.removeItem('partner_name');
+  localStorage.removeItem('olmoa_partner_name');
   router.push('/login');
 }
 
@@ -35,6 +40,7 @@ watch(() => route.path, () => {
             <router-link to="/products" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">상품 관리</router-link>
             <router-link to="/bulk-upload" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대량 등록</router-link>
             <router-link to="/shipments" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">주문·배송</router-link>
+            <router-link to="/returns" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">반품·클레임</router-link>
             <router-link to="/settlements" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">정산 내역</router-link>
             <router-link to="/qna" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">Q&A 문의</router-link>
             <router-link to="/profile" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">스토어 설정</router-link>
@@ -77,6 +83,9 @@ watch(() => route.path, () => {
         </router-link>
         <router-link to="/shipments" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           주문·배송 관리
+        </router-link>
+        <router-link to="/returns" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
+          반품·클레임 관리
         </router-link>
         <router-link to="/settlements" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           정산 내역

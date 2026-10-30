@@ -3,13 +3,18 @@ export const API_BASE = API_BASE_URL
 
 export const getPartnerId = (): string => {
   try {
-    return localStorage.getItem('olmoa_partner_id') || 'pt_001'
+    return localStorage.getItem('olmoa_partner_id') || localStorage.getItem('partner_id') || 'pt_001'
   } catch {
     return 'pt_001'
   }
 }
 
-export const getPartnerHeaders = (): Record<string, string> => ({
-  'Content-Type': 'application/json',
-  'X-Partner-Id': getPartnerId()
-})
+export const getPartnerHeaders = (): Record<string, string> => {
+  const pid = getPartnerId()
+  const token = localStorage.getItem('partner_token') || localStorage.getItem('olmoa_partner_token') || pid
+  return {
+    'Content-Type': 'application/json',
+    'X-Partner-Id': pid,
+    'Authorization': `Bearer ${token}`
+  }
+}

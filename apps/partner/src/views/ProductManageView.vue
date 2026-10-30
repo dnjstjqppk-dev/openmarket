@@ -20,16 +20,28 @@ const newProd = ref({
 const loadProducts = async () => {
   loading.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/products`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/products`, {
+      headers: getPartnerHeaders()
+    })
     const json = await res.json()
-    if (json.success) {
-      const pid = getPartnerId()
-      const list = json.data.filter((p: any) => !p.partner_id || p.partner_id === pid)
-      products.value = (list.length > 0 ? list : json.data).map((p: any) => ({
+    if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+      products.value = json.data.map((p: any) => ({
         ...p,
-        editPrice: p.lowest_sale_price,
-        editStock: 100
+        editPrice: p.sale_price ?? p.lowest_sale_price ?? 0,
+        editStock: p.stock_quantity ?? 100
       }))
+    } else {
+      const pubRes = await fetch(`${API_BASE_URL}/api/v1/products`)
+      const pubJson = await pubRes.json()
+      if (pubJson.success && Array.isArray(pubJson.data)) {
+        const pid = getPartnerId()
+        const list = pubJson.data.filter((p: any) => !p.partner_id || p.partner_id === pid)
+        products.value = (list.length > 0 ? list : pubJson.data).map((p: any) => ({
+          ...p,
+          editPrice: p.lowest_sale_price,
+          editStock: 100
+        }))
+      }
     }
   } catch (e) {
     console.error(e)

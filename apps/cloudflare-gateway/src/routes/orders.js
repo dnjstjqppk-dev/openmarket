@@ -178,6 +178,13 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const totalDiscount = couponDiscount + creditDiscount;
     const totalPay = Math.max(0, totalGoods + totalShipping - totalDiscount);
 
+    const recipientName = body.recipient_name || body.shipping_address?.recipient || body.shipping_address?.name || '구매자';
+    const recipientPhone = body.recipient_phone || body.shipping_address?.phone || '010-0000-0000';
+    const addressLine1 = body.shipping_address_line1 || body.shipping_address?.address || body.shipping_address?.line1 || '주소 미입력';
+    const addressLine2 = body.shipping_address_line2 || body.shipping_address?.detail || body.shipping_address?.line2 || '';
+    const postalCode = body.shipping_postal_code || body.shipping_address?.zip || body.shipping_address?.postal_code || '00000';
+    const shippingMemo = body.shipping_memo || body.shipping_address?.memo || '';
+
     // Step C & D: Build Atomic D1 Batch Statements
     const batchStatements = [];
 
@@ -187,9 +194,9 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
          VALUES (?, ?, ?, ?, ?, ?, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?)`
       ).bind(
         orderId, orderNo, customerId, totalGoods, totalShipping, totalDiscount, totalPay,
-        body.recipient_name || '구매자', body.recipient_phone || '010-0000-0000',
-        body.shipping_address_line1 || '주소 미입력', body.shipping_address_line2 || '',
-        body.shipping_postal_code || '00000', body.shipping_memo || ''
+        recipientName, recipientPhone,
+        addressLine1, addressLine2,
+        postalCode, shippingMemo
       )
     );
 

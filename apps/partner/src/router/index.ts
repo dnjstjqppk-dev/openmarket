@@ -7,6 +7,7 @@ import ShipmentView from '../views/ShipmentView.vue';
 import SettlementView from '../views/SettlementView.vue';
 import QnaManageView from '../views/QnaManageView.vue';
 import ProfileManageView from '../views/ProfileManageView.vue';
+import ReturnsManageView from '../views/ReturnsManageView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -41,6 +42,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/returns',
+      name: 'returns',
+      component: ReturnsManageView,
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/settlements',
       name: 'settlements',
       component: SettlementView,
@@ -62,7 +69,7 @@ const router = createRouter({
 });
 
 router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem('partner_token');
+  const token = localStorage.getItem('partner_token') || localStorage.getItem('olmoa_partner_token');
   if (to.meta.requiresAuth && !token) {
     next('/login');
   } else {
