@@ -1,0 +1,35 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "olmoa",
+    "OLMOA",
+    "LMOA",
+    "openmarket",
+    "temu",
+    "wrangler",
+    "pinia",
+    "tailwindcss",
+    "frontends",
+    "Frontends",
+    "idempotency",
+    "Idempotency",
+    "suborder",
+    "suborders",
+    "SKUs",
+    "skus",
+    "selbym",
+    "notif",
+    "notifs",
+    "cust",
+    "kakao",
+    "toss",
+    "naver"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.git/**",
+    "package-lock.json"
+  ]
+}
