@@ -160,8 +160,26 @@ const submitOrder = async () => {
 </script>
 
 <template>
-  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8">
-    <h1 class="text-2xl font-black text-gray-900 mb-6">Secure Direct Checkout</h1>
+  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <!-- 3-Step Checkout Progress Indicator -->
+    <div class="flex items-center justify-center gap-2 sm:gap-4 text-xs font-bold bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs">
+      <RouterLink to="/cart" class="flex items-center gap-1.5 text-slate-400 hover:text-slate-600">
+        <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[11px] font-black">1</span>
+        <span>장바구니</span>
+      </RouterLink>
+      <span class="text-slate-300">──</span>
+      <div class="flex items-center gap-1.5 text-[#FF5000]">
+        <span class="w-6 h-6 rounded-full bg-[#FF5000] text-white flex items-center justify-center text-[11px] font-black shadow-xs">2</span>
+        <span>주문 / 결제 (진행중)</span>
+      </div>
+      <span class="text-slate-300">──</span>
+      <div class="flex items-center gap-1.5 text-slate-300">
+        <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black">3</span>
+        <span>주문완료</span>
+      </div>
+    </div>
+
+    <h1 class="text-xl sm:text-2xl font-black text-gray-900">Secure Direct Checkout (안심 에스크로 결제)</h1>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div class="lg:col-span-7 space-y-6">
@@ -324,6 +342,13 @@ const submitOrder = async () => {
           >
             {{ submitting ? 'Executing Atomic D1 Transaction...' : `Pay ${locale.formatPrice(netPayableTotal)} Now` }}
           </button>
+
+          <!-- Security Assurance Trust Badges -->
+          <div class="flex items-center justify-around gap-2 pt-4 mt-4 border-t border-gray-100 text-[10px] text-gray-400 font-bold">
+            <span class="flex items-center gap-1">🔒 256-Bit SSL 보안</span>
+            <span class="flex items-center gap-1">🛡️ 에스크로 안전결제</span>
+            <span class="flex items-center gap-1">✨ 90일 무료반품</span>
+          </div>
         </div>
       </div>
     </div>

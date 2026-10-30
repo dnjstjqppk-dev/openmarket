@@ -319,7 +319,7 @@ const handleAddToCart = (goToCheckout = false) => {
             </div>
 
             <!-- Flash Deal Price Banner -->
-            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200/80 rounded-xl p-4 mb-6">
+            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200/80 rounded-2xl p-4 mb-4">
               <div class="flex items-baseline gap-3">
                 <span class="text-3xl font-black text-[#E60023] tracking-tight">
                   {{ locale.formatPrice(currentPrice) }}
@@ -334,6 +334,22 @@ const handleAddToCart = (goToCheckout = false) => {
               <p class="text-[11px] text-gray-600 mt-1.5 font-medium">
                 ✓ Price includes VAT • Earn <strong class="text-[#FF5000]">{{ locale.formatPrice(Math.round(currentPrice * 0.01)) }}</strong> (1%) Olmoa Credit upon purchase confirmation
               </p>
+            </div>
+
+            <!-- Express Delivery Guarantee Badge -->
+            <div class="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 mb-6 flex items-center justify-between shadow-xs">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                  <i class="fa-solid fa-truck-fast"></i>
+                </div>
+                <div>
+                  <span class="text-xs font-black text-emerald-950 block">오늘 24:00 전 주문 시 내일 100% 도착 보장</span>
+                  <span class="text-[11px] text-emerald-700">올모아 공장 직발송 무료배송 & 90일 무료 반품 안심 케어</span>
+                </div>
+              </div>
+              <span class="hidden sm:inline-block text-[11px] font-extrabold text-emerald-800 bg-white px-2.5 py-1 rounded-full border border-emerald-300">
+                도착보장제
+              </span>
             </div>
 
             <!-- SKU Option Selector -->

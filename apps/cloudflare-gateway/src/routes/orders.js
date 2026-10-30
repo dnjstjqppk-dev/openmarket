@@ -632,5 +632,81 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', message: '배송 상태가 다음 단계로 진행되었습니다. (데모)' }), { headers: corsHeaders });
   }
 
+  // 9. Payment Webhook Receiver (Toss Payments / PortOne / Direct PG)
+  if (url.pathname === '/api/v1/payments/webhook' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const orderNo = body.orderId || body.order_no || body.order_id;
+    const paymentKey = body.paymentKey || body.payment_key || `pg_${Date.now()}`;
+    const status = (body.status || 'DONE').toUpperCase();
+
+    if (!orderNo) {
+      return new Response(JSON.stringify({ error: 'orderId or order_no is required.' }), { status: 400, headers: corsHeaders });
+    }
+
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE order_no = ? OR id = ?').bind(orderNo, orderNo).first();
+    if (!order) {
+      return new Response(JSON.stringify({ error: 'Order not found.' }), { status: 404, headers: corsHeaders });
+    }
+
+    if (['DONE', 'PAID', 'CONFIRMED'].includes(status)) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE orders SET payment_status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(order.id),
+        env.DB.prepare("UPDATE sub_orders SET status = 'PAYMENT_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ? AND status = 'PENDING'").bind(order.id)
+      ]);
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      message: 'Payment webhook event processed successfully.',
+      data: {
+        order_id: order.id,
+        order_no: order.order_no,
+        payment_key: paymentKey,
+        status: 'PAID'
+      }
+    }), { headers: corsHeaders });
+  }
+
+  // 10. Automated Delivery 7-Day Purchase Confirmation (D1 Cron Worker Engine)
+  if ((url.pathname === '/api/v1/orders/cron/auto-confirm' || url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/auto-confirm$/)) && (request.method === 'POST' || request.method === 'GET')) {
+    const isSingle = url.pathname.includes('/orders/') && !url.pathname.includes('/cron/');
+    const singleOrderId = isSingle ? url.pathname.split('/')[4] : null;
+
+    let confirmedCount = 0;
+    if (singleOrderId) {
+      const subOrders = await env.DB.prepare(
+        "SELECT id FROM sub_orders WHERE (parent_order_id = ? OR id = ?) AND status = 'DELIVERED'"
+      ).bind(singleOrderId, singleOrderId).all();
+
+      for (const so of (subOrders.results || [])) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE sub_orders SET status = 'PURCHASE_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(so.id),
+          env.DB.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id = ?").bind(so.id)
+        ]);
+        confirmedCount++;
+      }
+    } else {
+      const subOrders = await env.DB.prepare(
+        "SELECT id FROM sub_orders WHERE status = 'DELIVERED'"
+      ).all();
+
+      for (const so of (subOrders.results || [])) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE sub_orders SET status = 'PURCHASE_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(so.id),
+          env.DB.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id = ?").bind(so.id)
+        ]);
+        confirmedCount++;
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      message: `배송완료 건에 대해 ${confirmedCount}건의 구매확정 및 정산 대기 상태 전환이 완료되었습니다.`,
+      confirmed_count: confirmedCount
+    }), { headers: corsHeaders });
+  }
+
   return null;
 }

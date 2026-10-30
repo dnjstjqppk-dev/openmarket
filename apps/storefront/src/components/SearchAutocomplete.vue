@@ -21,6 +21,26 @@ const recentKeywords = ref<string[]>([]);
 
 let debounceTimer: any = null;
 
+const placeholderIndex = ref(0);
+const tickers = [
+  '🔥 실시간 1위: 노이즈캔슬링 블루투스 헤드폰',
+  '⚡ 실시간 2위: 초경량 무선 진공 청소기',
+  '🏷️ 실시간 3위: 올모아 팩토리 캠핑 텐트',
+  '❄️ 실시간 4위: 프리미엄 기모 오버핏 후드',
+  '🎧 실시간 5위: 마그네틱 고속 무선충전 거치대'
+];
+let tickerTimer: any = null;
+
+onMounted(() => {
+  tickerTimer = setInterval(() => {
+    placeholderIndex.value = (placeholderIndex.value + 1) % tickers.length;
+  }, 2600);
+});
+
+onUnmounted(() => {
+  if (tickerTimer) clearInterval(tickerTimer);
+});
+
 try {
   const saved = localStorage.getItem('olmoa_recent_searches');
   if (saved) recentKeywords.value = JSON.parse(saved);
@@ -126,7 +146,7 @@ onUnmounted(() => {
         @focus="onFocus"
         @input="onInput"
         type="text"
-        placeholder="초성(ㅇㅇㅍ), 브랜드, 카테고리, 특가 상품 실시간 검색..."
+        :placeholder="isOpen ? '초성(ㅇㅇㅍ), 브랜드, 카테고리, 특가 상품 검색...' : tickers[placeholderIndex]"
         class="w-full pl-5 pr-20 py-2.5 sm:py-3 rounded-full border-2 border-orange-500 bg-orange-50/20 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition"
       />
       <button

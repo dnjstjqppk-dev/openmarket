@@ -101,15 +101,18 @@ const sortedProducts = computed(() => {
         v-for="product in sortedProducts"
         :key="product.id"
         :to="`/product/${product.slug}`"
-        class="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#FF5000] hover:shadow-lg transition-all flex flex-col"
+        class="group bg-white rounded-2xl overflow-hidden border border-slate-200/80 hover:border-[#FF5000] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col relative"
       >
         <div class="aspect-square bg-gray-100 overflow-hidden relative">
-          <img :src="product.thumbnail_url" :alt="product.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+          <img :src="product.thumbnail_url" :alt="product.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         </div>
-        <div class="p-3 flex-1 flex flex-col justify-between">
+        <div class="p-3.5 flex-1 flex flex-col justify-between">
           <div>
-            <span class="text-[10px] font-bold text-gray-400 uppercase">{{ product.brand }}</span>
-            <h3 class="text-xs font-semibold text-gray-800 line-clamp-2 mt-0.5 mb-2 group-hover:text-[#FF5000]">{{ product.title }}</h3>
+            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">{{ product.brand }}</span>
+              <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-1.5 py-0.2 rounded-full inline-flex items-center">🚀 무료배송</span>
+            </div>
+            <h3 class="text-xs font-bold text-slate-800 line-clamp-2 mt-0.5 mb-2 group-hover:text-[#FF5000] transition-colors leading-snug">{{ product.title }}</h3>
           </div>
           <div>
             <div class="text-base font-black text-gray-900">{{ locale.formatPrice(product.lowest_sale_price) }}</div>

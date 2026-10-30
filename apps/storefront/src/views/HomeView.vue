@@ -299,7 +299,7 @@ const quickAdd = (e: Event, product: any) => {
           v-for="product in filteredProducts"
           :key="product.id"
           :to="`/product/${product.slug}`"
-          class="group bg-white rounded-xl overflow-hidden border border-gray-200/80 hover:border-[#FF5000] hover:shadow-xl transition-all duration-200 flex flex-col"
+          class="group bg-white rounded-2xl overflow-hidden border border-slate-200/80 hover:border-[#FF5000] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col relative"
         >
           <div class="relative aspect-square bg-gray-100 overflow-hidden">
             <img
@@ -310,25 +310,26 @@ const quickAdd = (e: Event, product: any) => {
             />
             <div
               v-if="getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) > 0"
-              class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded shadow-xs"
+              class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded-lg shadow-sm"
             >
               -{{ getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) }}%
             </div>
             <div
               v-if="(product.total_sold_count || 0) >= 300"
-              class="absolute bottom-2 left-2 bg-black/75 backdrop-blur-xs text-[#FFE600] text-[10px] font-extrabold px-2 py-0.5 rounded flex items-center gap-1"
+              class="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-xs text-[#FFE600] text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1"
             >
               🔥 BEST SELLER
             </div>
           </div>
 
-          <div class="p-3 flex-1 flex flex-col justify-between">
+          <div class="p-3.5 flex-1 flex flex-col justify-between">
             <div>
-              <div class="flex items-center gap-1.5 mb-1">
-                <span class="px-1.5 py-0.5 bg-[#FFE600] text-black text-[9px] font-black rounded uppercase tracking-tighter">CHOICE</span>
-                <span class="text-[11px] font-bold text-gray-500 truncate">{{ product.brand }}</span>
+              <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                <span class="px-1.5 py-0.5 bg-orange-100 text-[#FF5000] text-[9px] font-black rounded uppercase tracking-tighter">CHOICE</span>
+                <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-1.5 py-0.2 rounded-full inline-flex items-center gap-0.5">🚀 무료배송</span>
+                <span class="text-[11px] font-bold text-slate-400 truncate">{{ product.brand }}</span>
               </div>
-              <h2 class="text-xs sm:text-[13px] font-medium text-gray-800 line-clamp-2 leading-snug group-hover:text-[#FF5000] transition-colors mb-2">
+              <h2 class="text-xs sm:text-[13px] font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-[#FF5000] transition-colors mb-2">
                 {{ product.title }}
               </h2>
             </div>

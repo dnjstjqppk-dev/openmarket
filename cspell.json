@@ -24,7 +24,16 @@
     "cust",
     "kakao",
     "toss",
-    "naver"
+    "naver",
+    "pretendard",
+    "Pretendard",
+    "sparkline",
+    "Sparkline",
+    "wishlisted",
+    "Wishlisted",
+    "gangnam",
+    "Gangnam",
+    "orioncactus"
   ],
   "ignorePaths": [
     "**/node_modules/**",
