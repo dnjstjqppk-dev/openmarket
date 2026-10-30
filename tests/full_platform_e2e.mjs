@@ -553,7 +553,138 @@ async function runTests() {
   assert.equal(crossBorderCheckoutRes.json.currency, 'USD');
   console.log('[PASS] 22. Cross-Border Checkout with PCCC, Duty Type & FX Rate');
 
-  console.log('=== ALL 22 E2E VERIFICATION SUITES PASSED 100% ===');
+  // 23. Global Logistics Carriers & 7-Stage Milestone Tracking
+  const carriersRes = await callApi('/api/v1/logistics/carriers');
+  assert.equal(carriersRes.status, 200);
+  assert.equal(carriersRes.json.success, true);
+  assert.ok(carriersRes.json.data.length >= 10);
+  assert.ok(carriersRes.json.data.some((c) => c.code === 'DHL'));
+
+  const cbSubOrderId = crossBorderCheckoutRes.json.order_id;
+  const trackingBeforeRes = await callApi(`/api/v1/logistics/tracking/${cbSubOrderId}`);
+  assert.equal(trackingBeforeRes.status, 200);
+  assert.equal(trackingBeforeRes.json.success, true);
+  assert.equal(trackingBeforeRes.json.data.milestones.length, 7);
+  console.log('[PASS] 23. Global Logistics Carriers & 7-Stage Milestone Tracking (/api/v1/logistics/carriers, /api/v1/logistics/tracking/:id)');
+
+  // 24. Carrier Milestone Webhook Ingestion (7-Stage State Machine)
+  const webhookRes1 = await callApi('/api/v1/logistics/milestone-webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sub_order_id: cbSubOrderId,
+      milestone: 'IN_TRANSIT_AIR',
+      carrier: 'DHL',
+      tracking_number: 'DHL9988776655',
+      location: 'HKG Air Hub',
+      customs_clearance_no: 'UNI-2026-998877',
+      description: 'Departed from Hong Kong International Hub'
+    })
+  });
+  assert.equal(webhookRes1.status, 200);
+  assert.equal(webhookRes1.json.success, true);
+  assert.equal(webhookRes1.json.data.milestone, 'IN_TRANSIT_AIR');
+  assert.equal(webhookRes1.json.data.status, 'IN_TRANSIT');
+
+  const trackingAfterRes = await callApi(`/api/v1/logistics/tracking/${cbSubOrderId}`);
+  assert.equal(trackingAfterRes.status, 200);
+  assert.equal(trackingAfterRes.json.data.current_milestone, 'IN_TRANSIT_AIR');
+  assert.equal(trackingAfterRes.json.data.customs_clearance_no, 'UNI-2026-998877');
+  assert.ok(trackingAfterRes.json.data.logs.length >= 1);
+  console.log('[PASS] 24. Cross-Border Milestone Webhook State Machine (/api/v1/logistics/milestone-webhook)');
+
+  // 25. Partner HS Code & Volumetric Weight Product Registration + Admin KYB Risk Tiering
+  const hsProductRes = await callApi('/api/v1/partner/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Partner-Id': 'pt_001' },
+    body: JSON.stringify({
+      partner_id: 'pt_001',
+      category_id: 'cat_electronics',
+      title: '글로벌 직구 무선 노이즈캔슬링 헤드폰 Pro',
+      base_price: 189000,
+      stock_qty: 120,
+      hs_code: '8517.62',
+      country_origin: 'CN',
+      warehouse_location: 'OVERSEAS_CN_WEIHAI',
+      package_length_cm: 25,
+      package_width_cm: 20,
+      package_height_cm: 12,
+      package_weight_kg: 0.65
+    })
+  });
+  assert.equal(hsProductRes.status, 201);
+  assert.equal(hsProductRes.json.success, true);
+  assert.equal(hsProductRes.json.data.hs_code, '8517.62');
+  assert.equal(hsProductRes.json.data.volumetric_weight_kg, 1.2); // (25*20*12)/5000 = 1.2
+
+  const kybVerifyRes = await callApi('/api/v1/admin/partners/pt_001/verify', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'olmoa_admin_2026' },
+    body: JSON.stringify({
+      verification_status: 'VERIFIED',
+      kyc_status: 'VERIFIED',
+      risk_tier: 'TIER_A',
+      rolling_reserve_pct: 5.0
+    })
+  });
+  assert.equal(kybVerifyRes.status, 200);
+  assert.equal(kybVerifyRes.json.success, true);
+  assert.equal(kybVerifyRes.json.data.risk_tier, 'TIER_A');
+  assert.equal(kybVerifyRes.json.data.rolling_reserve_pct, 5);
+  console.log('[PASS] 25. Partner HS Code / Volumetric Weight Registration & Admin KYB Rolling Reserve Tiering');
+
+  // 26. Central Operations Control Tower, FDS Risk Evaluation & 3-Party Dispute Arbitration
+  const controlTowerRes = await callApi('/api/v1/admin/control-tower', {
+    headers: { 'X-Admin-Key': 'olmoa_admin_2026' }
+  });
+  assert.equal(controlTowerRes.status, 200);
+  assert.equal(controlTowerRes.json.success, true);
+  assert.ok(controlTowerRes.json.data.regional_nodes.length === 4);
+
+  const fdsEvalRes = await callApi('/api/v1/admin/fds/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount_krw: 2500000,
+      pccc: 'P987654321098',
+      ip_country: 'US',
+      card_country: 'KR',
+      velocity_10m: 1
+    })
+  });
+  assert.equal(fdsEvalRes.status, 200);
+  assert.equal(fdsEvalRes.json.success, true);
+  assert.equal(fdsEvalRes.json.data.decision, 'CHALLENGE_3DS');
+  assert.ok(fdsEvalRes.json.data.risk_score >= 40);
+
+  // Create a claim and arbitrate it via 3-party tribunal
+  const claimForDisputeRes = await callApi(`/api/v1/orders/${crossBorderCheckoutRes.json.order_id}/claims`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' },
+    body: JSON.stringify({
+      type: 'RETURN',
+      reason: 'Cross-border package outer box damaged',
+      refund_amount: 15000
+    })
+  });
+  assert.equal(claimForDisputeRes.status, 201);
+  const disputeId = claimForDisputeRes.json.data.claim_id;
+
+  const arbitrateRes = await callApi(`/api/v1/admin/disputes/${disputeId}/arbitrate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'olmoa_admin_2026' },
+    body: JSON.stringify({
+      ruling: 'BUYER_WIN_FULL_REFUND',
+      refund_amount: 15000,
+      admin_note: 'Verified carrier transit damage photo; full refund approved.'
+    })
+  });
+  assert.equal(arbitrateRes.status, 200);
+  assert.equal(arbitrateRes.json.success, true);
+  assert.equal(arbitrateRes.json.data.ruling, 'BUYER_WIN_FULL_REFUND');
+  console.log('[PASS] 26. Central Operations Control Tower, FDS Evaluation & 3-Party Dispute Arbitration Tribunal');
+
+  console.log('=== ALL 26 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 

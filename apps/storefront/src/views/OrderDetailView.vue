@@ -18,6 +18,23 @@ const showClaimModal = ref(false)
 const claimType = ref<'RETURN' | 'EXCHANGE' | 'PRICE_MATCH'>('PRICE_MATCH')
 const claimReason = ref('')
 const claimCompetitorPrice = ref<number>(0)
+const trackingInfo = ref<any>(null)
+const loadingTracking = ref(false)
+
+const loadMilestoneTracking = async (subOrderId: string) => {
+  loadingTracking.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/logistics/tracking/${encodeURIComponent(subOrderId)}`)
+    const json = await res.json()
+    if (json.success) {
+      trackingInfo.value = json.data
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingTracking.value = false
+  }
+}
 
 const copyTracking = (num: string) => {
   navigator.clipboard.writeText(num).then(() => {
@@ -313,7 +330,7 @@ onMounted(loadOrderDetail)
                   SKU: {{ item.sku_id }} • 수량: {{ item.quantity }}개
                 </div>
                 <!-- Tracking Number & Carrier Badge -->
-                <div v-if="item.tracking_number" class="flex items-center gap-2 pt-1">
+                <div v-if="item.tracking_number" class="flex flex-wrap items-center gap-2 pt-1">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold">
                     🚚 {{ item.carrier || 'CJ대한통운' }} • {{ item.tracking_number }}
                   </span>
@@ -323,10 +340,24 @@ onMounted(loadOrderDetail)
                   >
                     {{ copyToast === item.tracking_number ? '✓ 복사됨' : '송장 복사' }}
                   </button>
+                  <button
+                    @click="loadMilestoneTracking(item.sub_order_id || order.id)"
+                    class="text-[11px] px-2.5 py-0.5 bg-[#111827] hover:bg-gray-800 text-white rounded font-bold cursor-pointer"
+                  >
+                    🌐 7단계 글로벌 통관/배송 추적
+                  </button>
                 </div>
-                <div v-else class="pt-1 text-[11px] text-[#00A862] font-semibold flex items-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-[#00A862] animate-pulse"></span>
-                  판매자 출고 준비 중 ({{ item.status || 'PREPARING' }})
+                <div v-else class="pt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#00A862] font-semibold">
+                  <span class="inline-flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-[#00A862] animate-pulse"></span>
+                    판매자 출고 준비 중 ({{ item.status || 'PREPARING' }})
+                  </span>
+                  <button
+                    @click="loadMilestoneTracking(item.sub_order_id || order.id)"
+                    class="text-[11px] px-2.5 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-bold cursor-pointer"
+                  >
+                    🌐 배송 단계 보기
+                  </button>
                 </div>
               </div>
             </div>
@@ -335,6 +366,42 @@ onMounted(loadOrderDetail)
                 {{ locale.formatPrice(item.total_price || (item.unit_price * item.quantity)) }}
               </div>
               <div class="text-[11px] text-gray-400">단가: {{ locale.formatPrice(item.unit_price) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7-Stage Global Milestone Timeline Drawer -->
+        <div v-if="trackingInfo" class="mt-5 pt-5 border-t border-gray-200 bg-slate-50 rounded-xl p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-black text-gray-900 flex items-center gap-1.5">
+                <span>🌐 실시간 글로벌 7단계 통관·배송 타임라인</span>
+                <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-mono">{{ trackingInfo.current_milestone }}</span>
+              </h3>
+              <p class="text-[11px] text-gray-500 mt-0.5">
+                특송사: {{ trackingInfo.carrier || '지정 특송사' }} | 송장번호: {{ trackingInfo.tracking_number || '발급 준비중' }}
+                <span v-if="trackingInfo.customs_clearance_no"> | 통관번호: {{ trackingInfo.customs_clearance_no }}</span>
+              </p>
+            </div>
+            <button @click="trackingInfo = null" class="text-xs text-gray-400 hover:text-gray-700 font-bold">✕ 닫기</button>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-7 gap-2">
+            <div
+              v-for="m in trackingInfo.milestones"
+              :key="m.code"
+              :class="[
+                'p-2.5 rounded-lg border text-left transition-all',
+                m.current ? 'bg-orange-50 border-[#FF5000] ring-1 ring-[#FF5000]' :
+                m.completed ? 'bg-white border-emerald-200' : 'bg-gray-100/70 border-gray-200 opacity-60'
+              ]"
+            >
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-black font-mono" :class="m.completed ? 'text-emerald-600' : 'text-gray-400'">STEP {{ m.step }}</span>
+                <span v-if="m.completed" class="text-emerald-600 text-xs font-black">✓</span>
+              </div>
+              <div class="text-xs font-bold text-gray-900 leading-tight">{{ m.label }}</div>
+              <div class="text-[10px] text-gray-500 mt-1 leading-snug">{{ m.desc }}</div>
             </div>
           </div>
         </div>

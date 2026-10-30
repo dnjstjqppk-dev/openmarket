@@ -224,6 +224,40 @@ async function testAdminBannersAndNotifications() {
   assert(notifsRes.status === 200 && Array.isArray(notifsJson.data), 'Admin notifications API returns notifications array');
 }
 
+
+async function testGlobalOpenMarketEngines() {
+  console.log('\n--- 9. Testing Global OpenMarket Phase 1~3 Engines (PCCC, FX, Logistics, Control Tower, FDS) ---');
+  const pcccRes = await safeFetch(`${API_BASE}/api/v1/customs/validate-pccc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pccc: 'P123456789012', name: '홍길동', phone: '010-1234-5678' })
+  });
+  const pcccJson = await pcccRes.json();
+  assert(pcccRes.status === 200 && pcccJson.verified === true, 'Live PCCC validation returns 200 & verified=true');
+
+  const fxRes = await safeFetch(`${API_BASE}/api/v1/fx/rates`);
+  const fxJson = await fxRes.json();
+  assert(fxRes.status === 200 && fxJson.rates?.USD > 0, 'Live FX rates returns KRW/USD/JPY/EUR/CNY rates');
+
+  const carriersRes = await safeFetch(`${API_BASE}/api/v1/logistics/carriers`);
+  const carriersJson = await carriersRes.json();
+  assert(carriersRes.status === 200 && carriersJson.data?.length >= 10, 'Live Global Logistics Carriers returns >= 10 international/domestic carriers');
+
+  const ctRes = await safeFetch(`${API_BASE}/api/v1/admin/control-tower`, {
+    headers: { 'X-Admin-Secret': ADMIN_SEC }
+  });
+  const ctJson = await ctRes.json();
+  assert(ctRes.status === 200 && ctJson.data?.regional_nodes?.length === 4, 'Live Central Operations Control Tower returns 4 regional edge nodes');
+
+  const fdsRes = await safeFetch(`${API_BASE}/api/v1/admin/fds/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount_krw: 2500000, ip_country: 'US', card_country: 'KR' })
+  });
+  const fdsJson = await fdsRes.json();
+  assert(fdsRes.status === 200 && fdsJson.data?.decision === 'CHALLENGE_3DS', 'Live FDS Risk Evaluator returns CHALLENGE_3DS on cross-country high-value order');
+}
+
 async function runAll() {
   console.log('====================================================');
   console.log(' OLMOA E2E PRODUCTION VERIFICATION SUITE');
@@ -238,6 +272,7 @@ async function runAll() {
   await testCustomerRegistration();
   await testDynamicBannersAndAddresses();
   await testAdminBannersAndNotifications();
+  await testGlobalOpenMarketEngines();
 
   console.log('\n====================================================');
   console.log(` RESULTS: Passed: ${passed}, Failed: ${failed}`);

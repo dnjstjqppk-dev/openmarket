@@ -49,13 +49,19 @@ const showPackingSlipModal = ref(false);
 const packingSlipOrder = ref<SubOrder | null>(null);
 
 const carrierOptions = [
+  'CJ대한통운 국제특송',
+  'DHL Express',
+  'FedEx International',
+  '우체국 국제특송 (EMS)',
+  '차이냐오 글로벌 (Cainiao)',
+  '순풍 익스프레스 (SF Express)',
+  '한진 국제특송',
   'CJ대한통운',
   '우체국택배',
   '한진택배',
   '롯데택배',
   '로젠택배',
-  '경동택배',
-  '한진국제특송 (EMS)'
+  '경동택배'
 ];
 
 const filteredShipments = computed(() => {

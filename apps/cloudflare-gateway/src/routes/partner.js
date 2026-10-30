@@ -77,16 +77,26 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       ? (typeof body.option_combination_json === 'string' ? body.option_combination_json : JSON.stringify(body.option_combination_json))
       : '{"옵션":"기본 표준형"}';
 
+    const hsCode = (body.hs_code || '6109.10').trim();
+    const countryOrigin = (body.country_origin || 'KR').trim().toUpperCase();
+    const pkgLength = Number(body.package_length_cm || 20.0);
+    const pkgWidth = Number(body.package_width_cm || 15.0);
+    const pkgHeight = Number(body.package_height_cm || 10.0);
+    const pkgWeight = Number(body.package_weight_kg || 0.5);
+    const volWeight = Math.round(((pkgLength * pkgWidth * pkgHeight) / 5000) * 100) / 100;
+    const warehouseLoc = body.warehouse_location || 'INCHEON_FBO';
+
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`
+        `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         prodId, partnerId, catId,
         body.title.trim(),
         body.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
         body.description_html || `<p>${body.title.trim()}</p>`,
-        origPrice, salePrice
+        origPrice, salePrice,
+        hsCode, countryOrigin, pkgLength, pkgWidth, pkgHeight, pkgWeight, volWeight, warehouseLoc
       ),
       env.DB.prepare(
         `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
@@ -95,7 +105,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ]);
 
     return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', product_id: prodId, sku_id: skuId, sku_code: skuCode,
+      success: true, brand: 'OLMOA', product_id: prodId, sku_id: skuId, sku_code: skuCode, hs_code: hsCode, country_origin: countryOrigin, volumetric_weight_kg: volWeight, warehouse_location: warehouseLoc, data: { product_id: prodId, sku_id: skuId, sku_code: skuCode, hs_code: hsCode, country_origin: countryOrigin, volumetric_weight_kg: volWeight, warehouse_location: warehouseLoc },
       message: '신규 상품 및 SKU가 D1 카탈로그에 등록되었습니다.'
     }), { status: 201, headers: corsHeaders });
   }
@@ -279,9 +289,15 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
 
     await env.DB.prepare(
       `UPDATE sub_orders
-       SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       SET carrier_code = ?, tracking_number = ?, status = 'SHIPPED', milestone_status = 'SHIPPED', shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND partner_id = ?`
     ).bind(carrier, trackingNo, subOrderId, partnerId).run();
+
+    const trkLogId = `trk_log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    await env.DB.prepare(
+      `INSERT INTO milestone_tracking_logs (id, sub_order_id, carrier_code, tracking_number, stage_code, stage_name, location, description, occurred_at)
+       VALUES (?, ?, ?, ?, 'SHIPPED', '해외 현지 물류센터 출고', 'OLMOA 글로벌 물류센터', '운송장 등록 및 특송사 인계가 완료되었습니다.', CURRENT_TIMESTAMP)`
+    ).bind(trkLogId, subOrderId, carrier, trackingNo).run().catch(() => {});
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA', sub_order_id: subOrderId, carrier, tracking_number: trackingNo, status: 'SHIPPED'

@@ -9,6 +9,8 @@ import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
 import { handleFeatureRoutes } from './routes/features.js';
 import { handleGlobalCustomsAndFxRoutes } from './routes/global-customs-fx.js';
+import { handleGlobalLogisticsRoutes } from './routes/global-logistics.js';
+import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
 
 function buildCorsHeaders(request) {
   const origin = request.headers.get('Origin') || '*';
@@ -110,6 +112,12 @@ export default {
 
         const globalCustomsFxRes = await handleGlobalCustomsAndFxRoutes(request, url, env, corsHeaders);
         if (globalCustomsFxRes) return globalCustomsFxRes;
+
+        const globalLogisticsRes = await handleGlobalLogisticsRoutes(request, url, env, corsHeaders);
+        if (globalLogisticsRes) return globalLogisticsRes;
+
+        const globalGovernanceRes = await handleGlobalGovernanceRoutes(request, url, env, corsHeaders);
+        if (globalGovernanceRes) return globalGovernanceRes;
 
         const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
         if (featureRes) return featureRes;

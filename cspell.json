@@ -71,7 +71,14 @@
     "PCCC",
     "Pccc",
     "Minimis",
-    "unipass"
+    "unipass",
+    "CAINIAO",
+    "Cainiao",
+    "LOGEN",
+    "Incheon",
+    "INCHEON",
+    "WEIHAI",
+    "Weihai"
   ],
   "ignorePaths": [
     "**/node_modules/**",

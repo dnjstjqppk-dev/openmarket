@@ -3,7 +3,7 @@
 
 function verifyAdminAuth(request, env) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const adminHeader = (request.headers.get('X-Admin-Secret') || '').trim();
+  const adminHeader = (request.headers.get('X-Admin-Secret') || request.headers.get('X-Admin-Key') || '').trim();
   const secret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
   return (
     token === secret ||
@@ -89,14 +89,24 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
-  // 3. Admin Verify Partner (Approve / Reject)
+  // 3. Admin Verify Partner (Approve / Reject / Risk Tiering / Rolling Reserve)
   if (url.pathname.startsWith('/api/v1/admin/partners/') && url.pathname.endsWith('/verify') && (request.method === 'PUT' || request.method === 'POST')) {
     const partnerId = url.pathname.split('/')[5];
     const body = await request.json().catch(() => ({}));
-    const status = ['APPROVED', 'REJECTED', 'SUSPENDED'].includes(body.status) ? body.status : 'APPROVED';
+    const status = ['APPROVED', 'REJECTED', 'SUSPENDED', 'PENDING'].includes(body.status) ? body.status : 'APPROVED';
+    const riskTier = body.risk_tier || 'TIER_1_NORMAL';
+    const reservePct = body.rolling_reserve_pct !== undefined ? Number(body.rolling_reserve_pct) : (riskTier === 'TIER_3_HIGH_RISK' ? 10.0 : (riskTier === 'TIER_2_WATCH' ? 5.0 : 0.0));
+    const kycNotes = body.kyc_notes ? String(body.kyc_notes).trim() : null;
 
-    await env.DB.prepare('UPDATE partners SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, partnerId).run();
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', partner_id: partnerId, status }), { headers: corsHeaders });
+    await env.DB.prepare(
+      `UPDATE partners
+       SET status = ?, kyc_status = ?, risk_tier = ?, rolling_reserve_pct = ?, kyc_notes = COALESCE(?, kyc_notes), updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).bind(status, status, riskTier, reservePct, kycNotes, partnerId).run();
+
+    return new Response(JSON.stringify({
+      success: true, brand: 'OLMOA', partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes, data: { partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes }
+    }), { headers: corsHeaders });
   }
 
   // 4. Admin All Products List & Status Management
