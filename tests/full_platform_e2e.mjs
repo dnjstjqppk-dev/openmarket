@@ -465,7 +465,95 @@ async function runTests() {
   assert.equal(deleteBannerRes.status, 200);
   console.log('[PASS] 19. Admin Banners & Notification Broadcast Engine');
 
-  console.log('=== ALL 19 E2E VERIFICATION SUITES PASSED 100% ===');
+  // 20. Real-time PCCC Customs Validation & Uni-Pass Verification API
+  const pcccValidRes = await callApi('/api/v1/customs/validate-pccc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pccc: 'P123456789012',
+      name: '홍길동',
+      phone: '010-1234-5678'
+    })
+  });
+  assert.equal(pcccValidRes.status, 200);
+  assert.equal(pcccValidRes.json.success, true);
+  assert.equal(pcccValidRes.json.verified, true);
+  assert.equal(pcccValidRes.json.data.pccc, 'P123456789012');
+
+  const pcccInvalidRes = await callApi('/api/v1/customs/validate-pccc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pccc: 'INVALID123',
+      name: '홍길동'
+    })
+  });
+  assert.equal(pcccInvalidRes.status, 400);
+  assert.equal(pcccInvalidRes.json.verified, false);
+  console.log('[PASS] 20. Real-time PCCC Customs Validation API (/api/v1/customs/validate-pccc)');
+
+  // 21. Real-time FX Rates & Currency Conversion Engine
+  const fxRatesRes = await callApi('/api/v1/fx/rates');
+  assert.equal(fxRatesRes.status, 200);
+  assert.equal(fxRatesRes.json.success, true);
+  assert.equal(fxRatesRes.json.base_currency, 'KRW');
+  assert.ok(fxRatesRes.json.rates.USD > 0);
+  assert.ok(fxRatesRes.json.inverse_rates.USD >= 1300);
+
+  const dutyEstimateRes = await callApi('/api/v1/customs/estimate-duty', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      goods_amount_krw: 350000,
+      shipping_fee_krw: 15000,
+      country_origin: 'US'
+    })
+  });
+  assert.equal(dutyEstimateRes.status, 200);
+  assert.equal(dutyEstimateRes.json.success, true);
+  assert.equal(dutyEstimateRes.json.data.is_tax_exempt, false); // Over $200
+  assert.ok(dutyEstimateRes.json.data.total_estimated_tax_krw > 0);
+
+  const dutyExemptRes = await callApi('/api/v1/customs/estimate-duty', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      goods_amount_krw: 50000,
+      shipping_fee_krw: 5000,
+      country_origin: 'CN'
+    })
+  });
+  assert.equal(dutyExemptRes.status, 200);
+  assert.equal(dutyExemptRes.json.data.is_tax_exempt, true); // Under $150
+  assert.equal(dutyExemptRes.json.data.total_estimated_tax_krw, 0);
+  console.log('[PASS] 21. Real-time FX Rates & Customs Duty Calculator (/api/v1/fx/rates, /api/v1/customs/estimate-duty)');
+
+  // 22. Cross-Border Checkout with PCCC & DDP
+  const crossBorderCheckoutRes = await callApi('/api/v1/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' },
+    body: JSON.stringify({
+      customer_id: 'u_cust_001',
+      pccc: 'P987654321098',
+      customs_duty_type: 'DDP',
+      estimated_duty_amount: 12500,
+      currency: 'USD',
+      fx_rate: 0.0007246,
+      recipient_name: '글로벌구매자',
+      recipient_phone: '010-9999-8888',
+      shipping_address_line1: '인천광역시 중구 공항로 271',
+      shipping_postal_code: '22382',
+      items: [{ product_id: 'prod_m_01', sku_id: 'sku_prod_m_01', quantity: 1 }]
+    })
+  });
+  assert.equal(crossBorderCheckoutRes.status, 201);
+  assert.equal(crossBorderCheckoutRes.json.success, true);
+  assert.equal(crossBorderCheckoutRes.json.pccc, 'P987654321098');
+  assert.equal(crossBorderCheckoutRes.json.customs_duty_type, 'DDP');
+  assert.equal(crossBorderCheckoutRes.json.currency, 'USD');
+  console.log('[PASS] 22. Cross-Border Checkout with PCCC, Duty Type & FX Rate');
+
+  console.log('=== ALL 22 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 

@@ -8,6 +8,10 @@ interface AdminOrder {
   customer_id: string;
   buyer_email?: string;
   total_pay_amount: number;
+  currency?: string;
+  pccc?: string;
+  pccc_verified?: number;
+  customs_duty_type?: string;
   payment_status: string;
   created_at: string;
 }
@@ -44,8 +48,11 @@ onMounted(loadOrders);
   <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
     <div class="flex items-center justify-between border-b pb-3">
       <div>
-        <h2 class="text-base font-bold text-slate-900">전사 주문 관리</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Cloudflare D1에 적재된 모든 주문을 조회하고 상태를 모니터링합니다.</p>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span>전사 주문 & 글로벌 통관 통합 관리</span>
+          <span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold">PCCC / FX 통합</span>
+        </h2>
+        <p class="text-xs text-slate-500 mt-0.5">Cloudflare D1에 적재된 모든 주문과 해외 통관고유부호(PCCC), 결제 통화를 모니터링합니다.</p>
       </div>
       <div class="flex items-center gap-2">
         <select v-model="statusFilter" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
@@ -55,7 +62,7 @@ onMounted(loadOrders);
           <option value="DELIVERED">배송완료</option>
           <option value="CANCELLED">취소</option>
         </select>
-        <button @click="loadOrders" class="text-xs text-indigo-600 font-bold hover:underline">
+        <button @click="loadOrders" class="text-xs text-indigo-600 font-bold hover:underline cursor-pointer">
           <i class="fa-solid fa-rotate mr-1"></i>새로고침
         </button>
       </div>
@@ -71,7 +78,8 @@ onMounted(loadOrders);
           <tr>
             <th class="p-3">주문번호</th>
             <th class="p-3">구매자</th>
-            <th class="p-3">결제금액</th>
+            <th class="p-3">통관부호 (PCCC)</th>
+            <th class="p-3">결제금액 (통화)</th>
             <th class="p-3">상태</th>
             <th class="p-3">주문일시</th>
           </tr>
@@ -80,7 +88,18 @@ onMounted(loadOrders);
           <tr v-for="o in filteredOrders" :key="o.id" class="hover:bg-slate-50">
             <td class="p-3 font-mono font-bold text-slate-700">{{ o.order_no || o.id }}</td>
             <td class="p-3 text-slate-600">{{ o.buyer_email || o.customer_id }}</td>
-            <td class="p-3 font-bold text-slate-900">₩{{ Number(o.total_pay_amount || 0).toLocaleString() }}</td>
+            <td class="p-3">
+              <span v-if="o.pccc" class="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-[10px]">
+                {{ o.pccc }}
+              </span>
+              <span v-else class="text-slate-400 text-[10px]">국내배송 (면제)</span>
+            </td>
+            <td class="p-3 font-bold text-slate-900">
+              ₩{{ Number(o.total_pay_amount || 0).toLocaleString() }}
+              <span v-if="o.currency && o.currency !== 'KRW'" class="ml-1 text-[10px] text-gray-500 font-mono">
+                ({{ o.currency }})
+              </span>
+            </td>
             <td class="p-3">
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold"
                 :class="{

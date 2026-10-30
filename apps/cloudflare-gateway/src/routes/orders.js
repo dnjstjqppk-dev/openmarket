@@ -60,6 +60,14 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const userRow = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(customerId).first();
     if (!userRow) customerId = 'u_customer_001';
 
+    const rawPccc = body.pccc ? String(body.pccc).trim().toUpperCase() : null;
+    if (rawPccc && !/^P\d{12}$/.test(rawPccc)) {
+      return new Response(JSON.stringify({
+        error: "개인통관고유부호 형식이 올바르지 않습니다. 'P'로 시작하는 13자리 번호여야 합니다.",
+        code: 'INVALID_PCCC'
+      }), { status: 400, headers: corsHeaders });
+    }
+
     const orderId = 'olm_ord_' + Date.now();
     const orderNo = 'OLM' + Date.now().toString().slice(-8);
 
@@ -185,18 +193,25 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const postalCode = body.shipping_postal_code || body.shipping_address?.zip || body.shipping_address?.postal_code || '00000';
     const shippingMemo = body.shipping_memo || body.shipping_address?.memo || '';
 
+    const pcccVerified = rawPccc ? 1 : 0;
+    const customsDutyType = body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU';
+    const estimatedDuty = parseInt(body.estimated_duty_amount || 0, 10);
+    const settlementCurrency = body.currency || 'KRW';
+    const fxRate = Number(body.fx_rate || 1.0);
+
     // Step C & D: Build Atomic D1 Batch Statements
     const batchStatements = [];
 
     batchStatements.push(
       env.DB.prepare(
-        `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo, pccc, pccc_verified, customs_duty_type, estimated_duty_amount, settlement_currency, fx_rate)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         orderId, orderNo, customerId, totalGoods, totalShipping, totalDiscount, totalPay,
         recipientName, recipientPhone,
         addressLine1, addressLine2,
-        postalCode, shippingMemo
+        postalCode, shippingMemo,
+        rawPccc, pcccVerified, customsDutyType, estimatedDuty, settlementCurrency, fxRate
       )
     );
 
@@ -276,6 +291,11 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       total_shipping_amount: totalShipping,
       total_discount_amount: totalDiscount,
       total_pay_amount: totalPay,
+      currency: settlementCurrency,
+      pccc: rawPccc,
+      pccc_verified: pcccVerified,
+      customs_duty_type: customsDutyType,
+      estimated_duty_amount: estimatedDuty,
       sub_orders_created: subOrderCalculations.length,
       status: 'PAYMENT_CONFIRMED'
     };

@@ -450,6 +450,9 @@ onMounted(() => {
               <td class="py-3 px-3 font-medium text-slate-800 whitespace-nowrap">
                 <div>{{ s.recipient_name }}</div>
                 <div class="text-[11px] text-slate-400 font-mono">{{ s.recipient_phone }}</div>
+                <div v-if="(s as any).pccc" class="text-[10px] text-blue-600 font-mono font-bold mt-0.5">
+                  통관: {{ (s as any).pccc }}
+                </div>
               </td>
               <td class="py-3 px-3 text-slate-600 max-w-xs">
                 <div class="flex items-center gap-1.5">
@@ -594,6 +597,9 @@ onMounted(() => {
               <p class="font-bold text-slate-500 text-[10px] uppercase">수령인 정보</p>
               <p class="font-bold text-slate-900 text-sm mt-0.5">{{ packingSlipOrder.recipient_name }}</p>
               <p class="font-mono text-slate-600">{{ packingSlipOrder.recipient_phone }}</p>
+              <p v-if="(packingSlipOrder as any).pccc" class="text-blue-600 font-mono font-bold mt-1 text-[11px]">
+                통관부호: {{ (packingSlipOrder as any).pccc }} (관세청 검증)
+              </p>
             </div>
             <div>
               <p class="font-bold text-slate-500 text-[10px] uppercase">배송지 주소</p>

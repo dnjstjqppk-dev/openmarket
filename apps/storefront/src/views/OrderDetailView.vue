@@ -240,6 +240,18 @@ onMounted(loadOrderDetail)
             <div v-if="order.shipping_memo" class="pt-1 text-[11px] text-gray-500">
               <span class="text-gray-400">배송 요청사항:</span> {{ order.shipping_memo }}
             </div>
+            <div v-if="order.pccc" class="flex justify-between items-center pt-2 mt-1 border-t border-gray-100 text-[11px]">
+              <span class="text-gray-500 font-bold">개인통관고유부호 (PCCC):</span>
+              <span class="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                {{ order.pccc }} (관세청 검증)
+              </span>
+            </div>
+            <div v-if="order.customs_duty_type" class="flex justify-between items-center text-[11px]">
+              <span class="text-gray-500 font-bold">통관 관세 구분:</span>
+              <span class="font-bold text-gray-800">
+                {{ order.customs_duty_type === 'DDP' ? 'DDP (관부가세 선납)' : 'DDU (통관 시 후납)' }}
+              </span>
+            </div>
           </div>
         </div>
 

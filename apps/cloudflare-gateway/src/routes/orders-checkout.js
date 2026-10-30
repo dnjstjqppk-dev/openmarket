@@ -1,5 +1,5 @@
 // apps/cloudflare-gateway/src/routes/orders-checkout.js
-// OLMOA Atomic Checkout Engine: Zero-Trust Pricing, D1 Batch Transaction, Partner Shipping
+// OLMOA Atomic Checkout Engine: Zero-Trust Pricing, D1 Batch Transaction, Partner Shipping, Global Customs & FX
 
 export async function processCheckout(request, env, corsHeaders, auth) {
   const body = await request.json();
@@ -33,10 +33,19 @@ export async function processCheckout(request, env, corsHeaders, auth) {
     return new Response(JSON.stringify({ error: 'Unauthorized: User account not found.' }), { status: 401, headers: corsHeaders });
   }
 
+  // 3. Validate Personal Customs Clearance Code (PCCC) if provided
+  const rawPccc = body.pccc ? String(body.pccc).trim().toUpperCase() : null;
+  if (rawPccc && !/^P\d{12}$/.test(rawPccc)) {
+    return new Response(JSON.stringify({
+      error: "개인통관고유부호 형식이 올바르지 않습니다. 'P'로 시작하는 13자리 번호여야 합니다.",
+      code: 'INVALID_PCCC'
+    }), { status: 400, headers: corsHeaders });
+  }
+
   const orderId = 'olm_ord_' + Date.now();
   const orderNo = 'OLM' + Date.now().toString().slice(-8);
 
-  // 3. Pre-Validate Stock and Calculate Authentic Server Pricing
+  // 4. Pre-Validate Stock and Calculate Authentic Server Pricing
   const resolvedItems = [];
   for (const item of items) {
     if (!item.sku_id) {
@@ -82,7 +91,7 @@ export async function processCheckout(request, env, corsHeaders, auth) {
     });
   }
 
-  // 4. Group by Partner & Compute Real Shipping Fees (WO-04)
+  // 5. Group by Partner & Compute Real Shipping Fees (WO-04)
   const partnerGroups = {};
   for (const it of resolvedItems) {
     if (!partnerGroups[it.partnerId]) partnerGroups[it.partnerId] = [];
@@ -114,16 +123,23 @@ export async function processCheckout(request, env, corsHeaders, auth) {
   }
   const totalPay = totalGoods + totalShipping;
 
-  // 5. Build Atomic D1 Batch (WO-03)
+  // 6. Build Atomic D1 Batch (WO-03)
+  const pcccVerified = rawPccc ? 1 : 0;
+  const customsDutyType = body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU';
+  const estimatedDuty = parseInt(body.estimated_duty_amount || 0, 10);
+  const settlementCurrency = body.currency || 'KRW';
+  const fxRate = Number(body.fx_rate || 1.0);
+
   const batchStatements = [];
   batchStatements.push(env.DB.prepare(
-    `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo)
-     VALUES (?, ?, ?, ?, ?, 0, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo, pccc, pccc_verified, customs_duty_type, estimated_duty_amount, settlement_currency, fx_rate)
+     VALUES (?, ?, ?, ?, ?, 0, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     orderId, orderNo, customerId, totalGoods, totalShipping, totalPay,
     body.recipient_name || '구매자', body.recipient_phone || '010-0000-0000',
     body.shipping_address_line1 || '주소 미입력', body.shipping_address_line2 || '',
-    body.shipping_postal_code || '00000', body.shipping_memo || ''
+    body.shipping_postal_code || '00000', body.shipping_memo || '',
+    rawPccc, pcccVerified, customsDutyType, estimatedDuty, settlementCurrency, fxRate
   ));
 
   for (const sub of subOrderCalculations) {
@@ -168,6 +184,10 @@ export async function processCheckout(request, env, corsHeaders, auth) {
   const responsePayload = {
     order_id: orderId, order_no: orderNo,
     total_goods_amount: totalGoods, total_shipping_amount: totalShipping, total_pay_amount: totalPay,
+    currency: settlementCurrency,
+    pccc: rawPccc,
+    customs_duty_type: customsDutyType,
+    estimated_duty_amount: estimatedDuty,
     sub_orders_created: subOrderCalculations.length, status: 'PAYMENT_CONFIRMED'
   };
 
@@ -175,4 +195,3 @@ export async function processCheckout(request, env, corsHeaders, auth) {
     success: true, brand: 'OLMOA', ...responsePayload, data: responsePayload
   }), { status: 201, headers: corsHeaders });
 }
-

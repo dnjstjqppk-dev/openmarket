@@ -210,7 +210,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   // 5. Partner Sub-Orders (Strictly Isolated to Partner)
   if (url.pathname === '/api/v1/partner/orders' && request.method === 'GET') {
     const { results: subOrders } = await env.DB.prepare(
-      `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.shipping_postal_code, o.shipping_memo, o.created_at as order_date
+      `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.shipping_postal_code, o.shipping_memo, o.pccc, o.pccc_verified, o.customs_duty_type, o.settlement_currency, o.created_at as order_date
        FROM sub_orders s
        JOIN orders o ON s.parent_order_id = o.id
        WHERE s.partner_id = ?

@@ -8,6 +8,7 @@ import { handlePartnerRoutes } from './routes/partner.js';
 import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
 import { handleFeatureRoutes } from './routes/features.js';
+import { handleGlobalCustomsAndFxRoutes } from './routes/global-customs-fx.js';
 
 function buildCorsHeaders(request) {
   const origin = request.headers.get('Origin') || '*';
@@ -106,6 +107,9 @@ export default {
       try {
         const authRes = await handleAuthRoutes(request, url, env, corsHeaders);
         if (authRes) return authRes;
+
+        const globalCustomsFxRes = await handleGlobalCustomsAndFxRoutes(request, url, env, corsHeaders);
+        if (globalCustomsFxRes) return globalCustomsFxRes;
 
         const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
         if (featureRes) return featureRes;
