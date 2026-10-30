@@ -23,3 +23,4 @@ INSERT OR REPLACE INTO exchange_rates (base_currency, target_currency, rate, inv
 ('KRW', 'JPY', 0.1111, 9.0, 1.2),
 ('KRW', 'EUR', 0.0006711, 1490.0, 1.2),
 ('KRW', 'CNY', 0.005208, 192.0, 1.2);
+
