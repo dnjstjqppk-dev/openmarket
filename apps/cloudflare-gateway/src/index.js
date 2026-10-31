@@ -13,6 +13,7 @@ import { handleGlobalLogisticsRoutes } from './routes/global-logistics.js';
 import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
 import { handlePaymentRoutes } from './routes/payments.js';
 import { handleStorageRoutes } from './routes/storage.js';
+import { handleTemuOpsRoutes } from './routes/temu-ops.js';
 
 function buildCorsHeaders(request) {
   const origin = request.headers.get('Origin') || '*';
@@ -126,6 +127,9 @@ export default {
 
         const storageRes = await handleStorageRoutes(request, url, env, corsHeaders);
         if (storageRes) return storageRes;
+
+        const temuOpsRes = await handleTemuOpsRoutes(request, url, env, corsHeaders);
+        if (temuOpsRes) return temuOpsRes;
 
         const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
         if (featureRes) return featureRes;

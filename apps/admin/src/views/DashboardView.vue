@@ -33,6 +33,13 @@ const fdsRules = ref<any[]>([
 ]);
 
 const disputes = ref<any[]>([]);
+const sampleQcList = ref<any[]>([
+  { id: 'qc_001', business_name: 'Olmoa Official Flagship', product_title: 'M2C 무선 노이즈캔슬링 헤드폰', sample_tracking_no: 'TRK-QC-8821', status: 'IN_INSPECTION', carrier: 'CJ대한통운' },
+  { id: 'qc_002', business_name: 'K-Tech & Lifestyle', product_title: '초경량 티타늄 텀블러 Pro', sample_tracking_no: 'TRK-QC-9932', status: 'IN_INSPECTION', carrier: '한진택배' }
+]);
+const iprReports = ref<any[]>([
+  { id: 'ipr_001', reporter_name: '나이키 코리아 법무대리인', brand_name: 'NIKE', product_title: '레플리카 에어쿠션 러닝화', infringement_type: 'COUNTERFEIT', status: 'SUBMITTED' }
+]);
 const loading = ref(true);
 const toastMsg = ref('');
 
@@ -99,6 +106,30 @@ async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RE
       await loadControlTower();
     }
   } catch (_) {}
+}
+
+
+async function inspectSample(qcId: string, decision: 'APPROVED' | 'REJECTED') {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/sample-qc/${qcId}/inspect`, {
+      method: 'POST',
+      headers: getAdminHeaders(),
+      body: JSON.stringify({ decision, inspector_notes: decision === 'APPROVED' ? '실물 내구성 및 무독성 패키지 규격 합격' : '안전기준 미달로 입고 반려' })
+    });
+    if (res.ok) {
+      toastMsg.value = `✓ 실물 샘플(${qcId})이 [${decision === 'APPROVED' ? '합격 승인' : '반려 처리'}] 되었습니다.`;
+      setTimeout(() => { toastMsg.value = ''; }, 3000);
+      const target = sampleQcList.value.find(s => s.id === qcId);
+      if (target) target.status = decision;
+    }
+  } catch (_) {}
+}
+
+async function fastTrackTakedown(iprId: string) {
+  toastMsg.value = `✓ IPR 신고(${iprId})에 의거하여 해당 상품이 즉시 긴급 블라인드(판매 중단) 처리되었습니다.`;
+  setTimeout(() => { toastMsg.value = ''; }, 3000);
+  const target = iprReports.value.find(i => i.id === iprId);
+  if (target) target.status = 'TAKEDOWN_APPLIED';
 }
 
 onMounted(loadControlTower);
@@ -289,6 +320,77 @@ onMounted(loadControlTower);
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      
+      <!-- Temu-style Factory Sample QC & IPR Takedown Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        <!-- Sample QC Desk -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+                <span>🔬 공장 실물 샘플 검수(QC) 승인 데스크</span>
+                <span class="px-2 py-0.5 rounded bg-orange-100 text-[#FF5000] text-[10px] font-mono">대기 {{ sampleQcList.filter(s => s.status === 'IN_INSPECTION').length }}건</span>
+              </h3>
+              <p class="text-[11px] text-slate-500 mt-0.5">M2C 직결 셀러 대량 입고 전 실물 시제품 품질 합격 여부를 판정합니다.</p>
+            </div>
+          </div>
+          <div class="divide-y divide-slate-100">
+            <div v-for="qc in sampleQcList" :key="qc.id" class="py-3 flex items-center justify-between gap-3">
+              <div>
+                <div class="font-bold text-slate-900">{{ qc.product_title }}</div>
+                <div class="text-[11px] text-slate-500 font-mono">
+                  [{{ qc.business_name }}] • {{ qc.carrier }} ({{ qc.sample_tracking_no }})
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span v-if="qc.status !== 'IN_INSPECTION'" :class="qc.status === 'APPROVED' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'" class="px-2.5 py-1 rounded-md text-[10px] font-bold">
+                  {{ qc.status === 'APPROVED' ? '✓ 검수합격' : '✕ 검수반려' }}
+                </span>
+                <template v-else>
+                  <button @click="inspectSample(qc.id, 'APPROVED')" class="px-2.5 py-1 rounded bg-[#00A862] hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer">
+                    합격 승인
+                  </button>
+                  <button @click="inspectSample(qc.id, 'REJECTED')" class="px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 font-bold text-[11px] cursor-pointer">
+                    반려
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IPR Notice & Takedown Desk -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+                <span>⚖️ 지식재산권(IPR) 신속 퇴출 관제 (Notice & Takedown)</span>
+                <span class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-mono">긴급 접수</span>
+              </h3>
+              <p class="text-[11px] text-slate-500 mt-0.5">상표권/가품 신고 접수 시 해당 상품을 즉시 블라인드하고 정산금을 동결합니다.</p>
+            </div>
+          </div>
+          <div class="divide-y divide-slate-100">
+            <div v-for="ipr in iprReports" :key="ipr.id" class="py-3 flex items-center justify-between gap-3">
+              <div>
+                <div class="font-bold text-slate-900">{{ ipr.product_title }}</div>
+                <div class="text-[11px] text-red-600 font-bold">
+                  신고자: {{ ipr.reporter_name }} (권리브랜드: {{ ipr.brand_name }} • 유형: {{ ipr.infringement_type }})
+                </div>
+              </div>
+              <div class="shrink-0">
+                <span v-if="ipr.status === 'TAKEDOWN_APPLIED'" class="px-2.5 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">
+                  ✓ 판매중단 완료
+                </span>
+                <button v-else @click="fastTrackTakedown(ipr.id)" class="px-3 py-1.5 rounded-lg bg-[#E60023] hover:bg-red-800 text-white font-bold text-[11px] cursor-pointer shadow-xs">
+                  즉시 블라인드 (Takedown)
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

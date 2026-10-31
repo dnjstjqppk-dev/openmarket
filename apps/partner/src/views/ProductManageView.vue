@@ -14,6 +14,8 @@ const newProd = ref({
   category_id: 'cat_e_audio',
   original_price: 89000,
   sale_price: 59000,
+  supply_price: 35000,
+  custody_type: 'SEMI_MANAGED',
   stock_quantity: 120,
   hs_code: '6109.10',
   country_origin: 'KR',
@@ -180,6 +182,17 @@ onMounted(loadProducts)
         <div>
           <label class="block font-bold text-gray-700 mb-1">Brand (브랜드)</label>
           <input v-model="newProd.brand" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">입점 운영 모델 (Custody Model)</label>
+          <select v-model="newProd.custody_type" class="w-full h-9 px-2.5 rounded-lg border border-gray-300 bg-white font-bold text-[#FF5000]">
+            <option value="FULL_MANAGED">전탁 모델 (Fully Managed: 공장 도매 공급가 납품)</option>
+            <option value="SEMI_MANAGED">반탁 모델 (Semi-Managed: 현지 창고 자체 직배송)</option>
+          </select>
+        </div>
+        <div v-if="newProd.custody_type === 'FULL_MANAGED'">
+          <label class="block font-bold text-gray-700 mb-1">공장 도매 공급가 (Supply Price KRW)</label>
+          <input v-model.number="newProd.supply_price" type="number" placeholder="공장 출고 납품가" class="w-full h-9 px-3 rounded-lg border border-[#FF5000] bg-orange-50/50 font-bold" />
         </div>
         <div>
           <label class="block font-bold text-gray-700 mb-1">Original Price (정상가 KRW)</label>

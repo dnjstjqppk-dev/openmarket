@@ -466,24 +466,58 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
         }), { status: 201, headers: corsHeaders });
       }
 
-      // 90-Day Free Return or Exchange
-      const refundAmount = order.total_pay_amount;
-      await env.DB.batch([
-        env.DB.prepare(
-          `INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes)
-           VALUES (?, ?, ?, ?, ?, 'REQUESTED', ?, ?)`
-        ).bind(claimId, order.id, order.customer_id, claimType, reason, refundAmount, b.notes || '90일 무료 반품/교환 접수'),
-        env.DB.prepare(
-          `UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?`
-        ).bind(order.id)
-      ]);
+      // 90-Day Free Return or Exchange & Temu-style Returnless Refund Engine
+      const refundAmount = b.refund_amount ? Number(b.refund_amount) : order.total_pay_amount;
+      const isReturnless = Boolean(
+        b.is_returnless === true ||
+        (!b.is_dispute && (refundAmount <= 15000 || order.total_pay_amount <= 15000))
+      );
+      const finalStatus = isReturnless ? 'REFUNDED' : 'REQUESTED';
+      const returnlessReason = isReturnless ? '소액 상품(₩15,000 이하) 테무형 무회수 환불 정책 적용 (수거 생략 즉시 전액 환불)' : null;
 
-      const retData = { claim_id: claimId, claim_type: claimType, type: claimType, status: 'REQUESTED', refund_amount: refundAmount };
+      const batchStatements = [
+        env.DB.prepare(
+          `INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, is_returnless, returnless_reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(claimId, order.id, order.customer_id, claimType, reason, finalStatus, refundAmount, b.notes || (isReturnless ? '무회수 즉시 환불 완료' : '90일 무료 반품/교환 접수'), isReturnless ? 1 : 0, returnlessReason)
+      ];
+
+      if (isReturnless) {
+        batchStatements.push(
+          env.DB.prepare(
+            `UPDATE sub_orders SET status = 'RETURNED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?`
+          ).bind(order.id),
+          env.DB.prepare(
+            `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
+             VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) + ?, '무회수 환불 즉시 환급', ?)`
+          ).bind(`crd_ret_${Date.now()}`, order.customer_id, refundAmount, order.customer_id, refundAmount, claimId)
+        );
+      } else {
+        batchStatements.push(
+          env.DB.prepare(
+            `UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?`
+          ).bind(order.id)
+        );
+      }
+
+      await env.DB.batch(batchStatements);
+
+      const retData = {
+        claim_id: claimId,
+        claim_type: claimType,
+        type: claimType,
+        status: finalStatus,
+        refund_amount: refundAmount,
+        is_returnless: isReturnless,
+        returnless_reason: returnlessReason
+      };
       return new Response(JSON.stringify({
         success: true,
         ...retData,
         data: retData,
-        message: '90일 무료 반품/교환 신청이 접수되었습니다. 지정 택배사 자동 수거가 진행됩니다.'
+        message: isReturnless
+          ? '⚡ 소액 상품 안심 정책(Returnless Refund): 물품 반송 없이 즉시 전액 환불(적립금 환급)되었습니다.'
+          : '90일 무료 반품/교환 신청이 접수되었습니다. 지정 택배사 자동 수거가 진행됩니다.'
       }), { status: 201, headers: corsHeaders });
     }
   }

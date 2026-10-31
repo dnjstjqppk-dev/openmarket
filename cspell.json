@@ -88,7 +88,11 @@
     "pltx",
     "cral",
     "Telno",
-    "tosspayments"
+    "tosspayments",
+    "returnless",
+    "Returnless",
+    "takedown",
+    "Takedown"
   ],
   "ignorePaths": [
     "**/node_modules/**",

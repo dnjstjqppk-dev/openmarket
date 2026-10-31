@@ -664,7 +664,8 @@ async function runTests() {
     body: JSON.stringify({
       type: 'RETURN',
       reason: 'Cross-border package outer box damaged',
-      refund_amount: 15000
+      refund_amount: 15000,
+      is_dispute: true
     })
   });
   assert.equal(claimForDisputeRes.status, 201);
@@ -791,7 +792,103 @@ async function runTests() {
   assert.equal(dispatchRes.json.data.status, 'SENT');
   console.log('[PASS] 30. Real-time AlimTalk/SMS Dispatcher Engine (/api/v1/notifications/dispatch)');
 
-  console.log('=== ALL 30 E2E VERIFICATION SUITES PASSED 100% ===');
+  // 31. Temu-style Returnless Refund (소액 상품 수거 없는 즉시 환불)
+  const returnlessClaimRes = await callApi(`/api/v1/orders/${crossBorderCheckoutRes.json.order_id}/claims`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' },
+    body: JSON.stringify({
+      type: 'RETURN',
+      reason: '소액 액세서리 단순 변심 (무회수 환불 테스트)',
+      refund_amount: 9900
+    })
+  });
+  assert.equal(returnlessClaimRes.status, 201);
+  assert.equal(returnlessClaimRes.json.is_returnless, true);
+  assert.equal(returnlessClaimRes.json.status, 'REFUNDED');
+  console.log('[PASS] 31. Temu-style Returnless Refund Engine (Instant Credit Refund Without Courier Pickup)');
+
+  // 32. Late Delivery Guarantee Compensation (약속일 초과 ₩5,300 보상)
+  const lateCompRes = await callApi(`/api/v1/orders/${crossBorderCheckoutRes.json.order_id}/late-delivery-claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(lateCompRes.status, 200);
+  assert.equal(lateCompRes.json.success, true);
+  assert.equal(lateCompRes.json.data.compensation_amount, 5300);
+
+  // Duplicate claim prevention
+  const lateCompDupRes = await callApi(`/api/v1/orders/${crossBorderCheckoutRes.json.order_id}/late-delivery-claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' }
+  });
+  assert.equal(lateCompDupRes.status, 400);
+  console.log('[PASS] 32. Late Delivery Guarantee Compensation Engine (₩5,300 Automatic Credit Grant)');
+
+  // 33. Body Metric Reviews (Height/Weight/Fit) & Real-time Urgency FOMO Stream
+  const urgencyRes = await callApi('/api/v1/products/prod_m_01/urgency-stats');
+  assert.equal(urgencyRes.status, 200);
+  assert.ok(urgencyRes.json.data.recent_24h_sales > 0);
+  assert.ok(urgencyRes.json.data.viewers_now > 0);
+
+  const reviewRes = await callApi('/api/v1/products/prod_m_01/reviews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_cust_001' },
+    body: JSON.stringify({
+      author_name: '테무직구러',
+      rating: 5,
+      content: '178cm 72kg L사이즈 딱 맞습니다. 가성비 극강입니다.',
+      user_height_cm: 178,
+      user_weight_kg: 72,
+      fit_type: 'TRUE_TO_SIZE'
+    })
+  });
+  assert.equal(reviewRes.status, 201);
+  assert.equal(reviewRes.json.data.fit_type, 'TRUE_TO_SIZE');
+
+  const getReviewsRes = await callApi('/api/v1/products/prod_m_01/reviews');
+  assert.equal(getReviewsRes.status, 200);
+  assert.ok(getReviewsRes.json.data.length >= 1);
+  console.log('[PASS] 33. Body Metric Reviews (Height/Weight/Fit) & Urgency FOMO Stream Engine');
+
+  // 34. Factory Sample QC Verification & Fast-Track IPR Takedown Desk
+  const sampleQcRes = await callApi('/api/v1/partner/sample-qc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Partner-Id': 'pt_001' },
+    body: JSON.stringify({
+      product_title: 'M2C 직결 초경량 게이밍 마우스 Pro',
+      sample_tracking_no: 'TRK-QC-7788',
+      carrier: 'CJ대한통운'
+    })
+  });
+  assert.equal(sampleQcRes.status, 201);
+  const qcId = sampleQcRes.json.data.id;
+
+  const adminInspectRes = await callApi(`/api/v1/admin/sample-qc/${qcId}/inspect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': 'olmoa_admin_2026' },
+    body: JSON.stringify({
+      decision: 'APPROVED',
+      inspector_notes: '센서 정밀도 및 친환경 패키징 전수 검사 통과'
+    })
+  });
+  assert.equal(adminInspectRes.status, 200);
+  assert.equal(adminInspectRes.json.data.status, 'APPROVED');
+
+  const iprReportRes = await callApi('/api/v1/ipr/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reporter_name: '글로벌 브랜드 IP 법무팀',
+      brand_name: 'BrandCorp',
+      target_product_id: 'prod_m_01',
+      infringement_type: 'COUNTERFEIT'
+    })
+  });
+  assert.equal(iprReportRes.status, 201);
+  assert.equal(iprReportRes.json.data.action, 'IMMEDIATE_HIDDEN');
+  console.log('[PASS] 34. Factory Sample QC Inspection & Fast-Track IPR Takedown Protection Engine');
+
+  console.log('=== ALL 34 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 

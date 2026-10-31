@@ -85,6 +85,26 @@ const handleCancelOrder = async () => {
   }
 }
 
+const handleLateDeliveryClaim = async () => {
+  if (!order.value) return
+  const cid = auth.user?.id || 'cust_demo_001'
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/late-delivery-claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid }
+    })
+    const json = await res.json()
+    if (json.success) {
+      statusBanner.value = '🎉 테무형 안심 배송 약속: ₩5,300 지연 보상 적립금이 고객님 계정으로 즉시 입금되었습니다!'
+      await loadOrderDetail()
+    } else {
+      statusBanner.value = `⚠️ ${json.error}`
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 const handleConfirmOrder = async () => {
   if (!order.value) return
   const cid = auth.user?.id || 'cust_demo_001'
@@ -185,10 +205,16 @@ onMounted(loadOrderDetail)
             ⚡ 30일 최저가 차액 보상
           </button>
           <button
+            @click="handleLateDeliveryClaim"
+            class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 text-xs font-black cursor-pointer"
+          >
+            ⚡ 배송 지연 보상 (₩5,300 즉시 지급)
+          </button>
+          <button
             @click="claimType = 'RETURN'; showClaimModal = true"
             class="px-4 py-2 rounded-full bg-gray-100 text-gray-800 hover:bg-gray-200 text-xs font-bold cursor-pointer"
           >
-            ↩ 90일 무료 반품 / 교환
+            ↩ 90일 무료 반품 / 무회수 환불
           </button>
         </div>
       </div>
@@ -218,6 +244,9 @@ onMounted(loadOrderDetail)
             <label class="block font-bold text-gray-700 mb-1">상세 사유 또는 수거 시 전달사항</label>
             <input v-model="claimReason" type="text" placeholder="더 저렴한 링크 또는 택배 기사님 수거 메모를 남겨주세요." class="w-full h-10 px-3 rounded-lg border border-gray-300" />
           </div>
+        </div>
+        <div v-if="claimType === 'RETURN'" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-medium">
+          💡 <strong>테무형 안심 무회수 환불(Returnless Refund):</strong> 결제 금액이 ₩15,000 이하인 경우 택배 기사 수거 대기 없이 즉시 전액 적립금 환급이 완료됩니다.
         </div>
         <div class="flex justify-end gap-2 pt-2">
           <button @click="showClaimModal = false" class="px-4 py-2 rounded-full border border-gray-300 text-xs font-bold">취소</button>

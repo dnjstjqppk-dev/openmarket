@@ -301,6 +301,82 @@ async function testCommercialHardeningEngines() {
   assert(dlvRes.status === 200 && dlvJson.data?.status === 'SENT', 'Live Notification Dispatcher returns 200 OK & status SENT');
 }
 
+async function testTemuCoreEngines() {
+  console.log('\n--- 11. Testing Temu Core Engines (Urgency, Body Metric Reviews, QC, IPR) ---');
+
+  // 1. Urgency stats
+  const urgencyRes = await safeFetch(`${API_BASE}/api/v1/products/prod_001/urgency-stats`);
+  const urgencyJson = await urgencyRes.json();
+  assert(urgencyRes.status === 200 && urgencyJson.data?.recent_24h_sales > 0, 'Urgency Stats returns 200 OK with recent 24h sales');
+  assert(urgencyJson.data?.delivery_guarantee?.late_compensation_krw === 5300, 'Urgency stats specifies ₩5,300 late delivery compensation');
+
+  // 2. Body metric reviews
+  const reviewPostRes = await safeFetch(`${API_BASE}/api/v1/products/prod_001/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': 'u_customer_001' },
+    body: JSON.stringify({
+      author_name: '테무품질검증가',
+      rating: 5,
+      content: '180cm 75kg 체형에 핏감 완벽합니다.',
+      user_height_cm: 180,
+      user_weight_kg: 75,
+      fit_type: 'TRUE_TO_SIZE'
+    })
+  });
+  const reviewPostJson = await reviewPostRes.json();
+  assert(reviewPostRes.status === 201 && reviewPostJson.data?.fit_type === 'TRUE_TO_SIZE', 'Product review with body metrics returns 201 Created');
+
+  const reviewGetRes = await safeFetch(`${API_BASE}/api/v1/products/prod_001/reviews`);
+  const reviewGetJson = await reviewGetRes.json();
+  assert(reviewGetRes.status === 200 && reviewGetJson.data?.length >= 1, 'Product reviews listing returns 200 OK');
+
+  // 3. Partner Sample QC & Admin Inspection
+  const qcPostRes = await safeFetch(`${API_BASE}/api/v1/partner/sample-qc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Partner-Id': 'pt_001' },
+    body: JSON.stringify({
+      product_title: 'M2C 직결 초경량 블루투스 마우스',
+      sample_tracking_no: `TRK-${Date.now()}`,
+      carrier: 'CJ대한통운'
+    })
+  });
+  const qcPostJson = await qcPostRes.json();
+  assert(qcPostRes.status === 201 && qcPostJson.data?.status === 'IN_INSPECTION', 'Partner Sample QC request returns 201 Created');
+
+  const qcId = qcPostJson.data?.id;
+  const qcInspectRes = await safeFetch(`${API_BASE}/api/v1/admin/sample-qc/${qcId}/inspect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': ADMIN_SEC },
+    body: JSON.stringify({
+      decision: 'APPROVED',
+      inspector_notes: '원단 및 안전성 테스트 통과'
+    })
+  });
+  const qcInspectJson = await qcInspectRes.json();
+  assert(qcInspectRes.status === 200 && qcInspectJson.data?.status === 'APPROVED', 'Admin Sample QC inspection returns 200 OK & APPROVED');
+
+  // 4. IPR Fast-Track Notice & Takedown
+  const iprReportRes = await safeFetch(`${API_BASE}/api/v1/ipr/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reporter_name: '글로벌 브랜드 법무팀',
+      brand_name: 'Samsung Electronics',
+      target_product_id: 'prod_001',
+      infringement_type: 'TRADEMARK'
+    })
+  });
+  const iprReportJson = await iprReportRes.json();
+  assert(iprReportRes.status === 201 && iprReportJson.data?.action === 'IMMEDIATE_HIDDEN', 'IPR Notice & Takedown returns 201 Created & IMMEDIATE_HIDDEN');
+
+  // Restore product active status
+  await safeFetch(`${API_BASE}/api/v1/admin/products/prod_001/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': ADMIN_SEC },
+    body: JSON.stringify({ status: 'ACTIVE' })
+  });
+}
+
 async function runAll() {
   console.log('====================================================');
   console.log(' OLMOA E2E PRODUCTION VERIFICATION SUITE');
@@ -317,6 +393,7 @@ async function runAll() {
   await testAdminBannersAndNotifications();
   await testGlobalOpenMarketEngines();
   await testCommercialHardeningEngines();
+  await testTemuCoreEngines();
 
   console.log('\n====================================================');
   console.log(` RESULTS: Passed: ${passed}, Failed: ${failed}`);

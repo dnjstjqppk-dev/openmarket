@@ -162,7 +162,7 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     const ruling = body.ruling || 'FULL_REFUND_TO_BUYER'; // 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER'
     const notes = body.notes || '중앙 분쟁 조정 위원회 직권 판정 완료';
 
-    const newStatus = ruling === 'FULL_REFUND_TO_BUYER' ? 'APPROVED' : 'REJECTED';
+    const newStatus = (ruling === 'FULL_REFUND_TO_BUYER' || ruling === 'BUYER_WIN_FULL_REFUND') ? 'APPROVED' : 'REJECTED';
 
     await env.DB.prepare(
       `UPDATE returns SET status = ?, reason = COALESCE(reason, '') || ' [판정: ' || ? || ']' WHERE id = ?`
