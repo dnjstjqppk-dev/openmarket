@@ -109,12 +109,17 @@
     "Mismapped",
     "changefreq",
     "incoterms",
-    "Incoterms"
+    "Incoterms",
+    "AMOLED",
+    "PFOA",
+    "HEPA"
   ],
   "ignorePaths": [
     "**/node_modules/**",
     "**/dist/**",
     "**/.git/**",
-    "package-lock.json"
+    "package-lock.json",
+    "migrations/backup_*.sql",
+    "scratch/**"
   ]
 }

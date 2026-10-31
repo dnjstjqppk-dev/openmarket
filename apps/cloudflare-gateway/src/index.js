@@ -42,14 +42,17 @@ export default {
     if (url.pathname === '/health' || url.pathname === '/api/health') {
       let dbStatus = 'DISCONNECTED';
       let productCount = 0;
-      let categoryCount = 0;
+      let rootCategoryCount = 0;
+      let totalCategoryCount = 0;
       if (env && env.DB) {
         try {
-          const pRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products').first();
-          const cRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM categories WHERE parent_id IS NULL').first();
+          const pRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM products WHERE status = 'ACTIVE'").first();
+          const cRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM categories WHERE parent_id IS NULL AND is_active = 1').first();
+          const tRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM categories WHERE is_active = 1').first();
           dbStatus = 'CONNECTED_D1';
           productCount = pRes ? pRes.cnt : 0;
-          categoryCount = cRes ? cRes.cnt : 0;
+          rootCategoryCount = cRes ? cRes.cnt : 0;
+          totalCategoryCount = tRes ? tRes.cnt : 0;
         } catch (e) {
           dbStatus = 'ERROR: ' + e.message;
         }
@@ -62,9 +65,24 @@ export default {
         tagline: '내가 찾는 모든 것, 여기.',
         databaseEngine: 'Cloudflare D1 SQL',
         databaseStatus: dbStatus,
-        activeRootCategories: categoryCount,
+        activeRootCategories: rootCategoryCount,
+        totalCategories: totalCategoryCount,
         activeProductsInD1: productCount,
         timestamp: new Date().toISOString()
+      }), { headers: corsHeaders });
+    }
+
+    // 1b. Service Version & Commit Endpoint (GET /api/version)
+    if (url.pathname === '/api/version' || url.pathname === '/version') {
+      return new Response(JSON.stringify({
+        service: 'olmoa-api',
+        brand: 'OLMOA',
+        version: '1.2.0',
+        commit: 'f91ba0e7db9e91c1d45266c4d6ffc22e2e41c461',
+        environment: 'production',
+        deployed_at: new Date().toISOString(),
+        databaseEngine: 'Cloudflare D1 SQL',
+        status: 'ROUTING_ACTIVE'
       }), { headers: corsHeaders });
     }
 

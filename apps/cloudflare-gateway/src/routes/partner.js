@@ -1,5 +1,7 @@
 // apps/cloudflare-gateway/src/routes/partner.js
-// OLMOA Partner Seller Engine: Multi-Tenant Isolation, Per-SKU Stock, CSV Bulk Upload, Live Settlements & Q&A
+// OLMOA Partner Seller Engine
+
+import { computeServerQualityScore } from './catalog.js';
 
 async function resolvePartner(request, env) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
@@ -45,7 +47,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         const opt = JSON.parse(r.option_combination_json || '{}');
         optSummary = Object.entries(opt).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
       } catch (_) {}
-      return { ...r, option_summary: optSummary };
+      return { ...r, option_summary: optSummary, quality_score: computeServerQualityScore(r) };
     });
 
     return new Response(JSON.stringify({

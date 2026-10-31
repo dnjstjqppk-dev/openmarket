@@ -44,3 +44,6 @@ Thumbs.db
 .packages
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# Diagnostics & Scratch
+scratch/

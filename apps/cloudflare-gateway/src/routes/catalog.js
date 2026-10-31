@@ -1,21 +1,71 @@
 // apps/cloudflare-gateway/src/routes/catalog.js
-// OLMOA Catalog Engine: Categories, Products, Real Review Ratings & Seller Mini-Shop
+// OLMOA Catalog Engine: Categories Tree Rollup, Products, Honest Partner Dispatch & Quality Score
+
+export function computeServerQualityScore(product) {
+  if (!product) return 0;
+  let score = 0;
+  const title = String(product.title || '').trim();
+  if (title.length >= 8) score += 20;
+
+  const thumb = String(product.thumbnail_url || '').trim();
+  if (thumb.length > 10 && !thumb.includes('placeholder')) score += 20;
+
+  const desc = String(product.description_html || '').trim();
+  if (desc.length >= 40) score += 25;
+
+  const salePrice = Number(product.lowest_sale_price || product.sale_price || 0);
+  const stock = Number(product.stock_quantity != null ? product.stock_quantity : (product.total_sold_count != null ? 100 : 0));
+  if (salePrice > 0 && stock > 0) score += 15;
+
+  const hsCode = String(product.hs_code || '').trim();
+  if (/^\d{4}(\.\d{2})?$/.test(hsCode)) score += 10;
+
+  const origin = String(product.country_origin || '').trim();
+  if (origin.length >= 2) score += 10;
+
+  return Math.min(100, score);
+}
 
 export async function handleCatalogRoutes(request, url, env, corsHeaders) {
-  // 1. All Categories Tree
+  // 1. All Categories Tree with Bottom-Up Descendant Rollup
   if (url.pathname === '/api/v1/categories' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
       `SELECT c.id, c.parent_id, c.name, c.slug, c.depth, c.sort_order,
-              (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'ACTIVE') as product_count
+              (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'ACTIVE') as direct_count
        FROM categories c
        WHERE c.is_active = 1
-       ORDER BY c.depth ASC, c.sort_order ASC`
+       ORDER BY c.depth DESC, c.sort_order ASC`
     ).all();
+
+    // Roll up product counts bottom-up from leaf subcategories to root categories
+    const countMap = {};
+    for (const c of results) {
+      countMap[c.id] = (countMap[c.id] || 0) + (c.direct_count || 0);
+      if (c.parent_id) {
+        countMap[c.parent_id] = (countMap[c.parent_id] || 0) + (countMap[c.id] || 0);
+      }
+    }
+
+    const tree = results
+      .map(c => ({
+        id: c.id,
+        parent_id: c.parent_id,
+        name: c.name,
+        slug: c.slug,
+        depth: c.depth,
+        sort_order: c.sort_order,
+        product_count: countMap[c.id] || 0
+      }))
+      .sort((a, b) => {
+        if (a.depth !== b.depth) return a.depth - b.depth;
+        return a.sort_order - b.sort_order;
+      });
+
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA',
-      count: results.length,
-      data: results
+      count: tree.length,
+      data: tree
     }), { headers: corsHeaders });
   }
 
@@ -68,7 +118,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
              pc.slug as parent_category_slug,
              pt.business_name, pt.base_shipping_fee, pt.free_shipping_threshold,
              (SELECT s.id FROM product_skus s WHERE s.product_id = p.id ORDER BY s.sale_price ASC LIMIT 1) as default_sku_id,
-             COALESCE((SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id), 4.8) as avg_rating,
+             (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
              COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
@@ -157,23 +207,31 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const buyBoxAnalysis = {
       product_id: product.id,
       evaluated_at: new Date().toISOString(),
+      mode: 'single_supplier_direct',
+      competitive_offers_count: 1,
+      supplier: {
+        partner_id: product.partner_id,
+        partner_name: product.business_name || 'OLMOA DIRECT',
+        sale_price: product.lowest_sale_price,
+        shipping_fee: product.base_shipping_fee || 0,
+        free_shipping_min: product.free_shipping_threshold || 30000,
+        dispatch_type: 'VERIFIED_PARTNER_DIRECT',
+        metrics_status: 'SINGLE_SUPPLIER_STANDALONE'
+      },
       winner: {
         partner_id: product.partner_id,
         partner_name: product.business_name || 'OLMOA DIRECT',
         sale_price: product.lowest_sale_price,
         shipping_fee: product.base_shipping_fee || 0,
         free_shipping_min: product.free_shipping_threshold || 30000,
-        fulfillment_score: 99.4,
-        metrics: {
-          on_time_delivery_pct: 99.6,
-          defect_rate_pct: 0.12,
-          response_rate_pct: 99.8
-        }
+        dispatch_type: 'VERIFIED_PARTNER_DIRECT'
       },
       eligibility: {
         is_buy_box_eligible: true,
+        is_lowest_price_guaranteed: false,
+        selection_reason: 'SINGLE_EXCLUSIVE_SUPPLIER',
         competitive_price_threshold: product.lowest_sale_price,
-        algorithm_rule: 'LOWEST_LANDED_PRICE_AND_TOP_SLA'
+        algorithm_rule: 'DIRECT_PARTNER_CATALOG_OFFER'
       }
     };
 
@@ -194,7 +252,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
               COALESCE(pt.business_name, 'Olmoa Official Flagship') as partner_name,
               c.name as category_name, c.slug as category_slug,
               pt.business_name, pt.business_reg_number, pt.base_shipping_fee, pt.free_shipping_threshold,
-              COALESCE((SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id), 4.8) as avg_rating,
+              (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
               COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count,
               COALESCE((SELECT COUNT(*) FROM product_qna q WHERE q.product_id = p.id), 0) as qna_count
        FROM products p
@@ -241,20 +299,33 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     ];
 
     const buyBox = {
+      mode: 'single_supplier_direct',
       winner_partner_id: product.partner_id,
       winner_partner_name: product.partner_name,
-      competitiveness_score: 99.4,
-      on_time_delivery_pct: 99.6,
-      customer_satisfaction_pct: 99.2,
-      price_advantage_krw: Math.round(product.lowest_sale_price * 0.08),
-      is_lowest_price_guaranteed: true,
-      badge: 'OLMOA CHOICE WINNER'
+      dispatch_type: 'VERIFIED_PARTNER_DIRECT',
+      is_lowest_price_guaranteed: false,
+      price_advantage_krw: 0,
+      badge: '공식 파트너사 직발송'
     };
+
+    const videoUrl = prodId === 'prod_e_01'
+      ? 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'
+      : (product.video_url || null);
+
+    const qualityScore = computeServerQualityScore(product);
 
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA',
-      data: { ...product, skus: parsedSkus, attributes, buy_box: buyBox, volume_discounts: volumeDiscounts }
+      data: {
+        ...product,
+        video_url: videoUrl,
+        quality_score: qualityScore,
+        skus: parsedSkus,
+        attributes,
+        buy_box: buyBox,
+        volume_discounts: volumeDiscounts
+      }
     }), { headers: corsHeaders });
   }
 
@@ -274,7 +345,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
               p.id as slug,
               COALESCE(?, 'OLMOA DIRECT') as brand,
               c.name as category_name, c.slug as category_slug,
-              COALESCE((SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id), 4.9) as avg_rating,
+              (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
               COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id

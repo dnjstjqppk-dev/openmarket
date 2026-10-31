@@ -24,19 +24,34 @@ const loadingTracking = ref(false)
 const showInvoiceModal = ref(false)
 const invoiceData = ref<any>(null)
 const invoiceLoading = ref(false)
+const invoiceError = ref<string>('')
+const invoiceMissingFields = ref<string[]>([])
 
 const loadCommercialInvoice = async () => {
   if (!order.value) return
   invoiceLoading.value = true
   showInvoiceModal.value = true
+  invoiceError.value = ''
+  invoiceMissingFields.value = []
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice`)
+    const cid = auth.user?.id || order.value.customer_id || 'u_customer_001'
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice`, {
+      headers: {
+        'X-Customer-Id': cid
+      }
+    })
     const json = await res.json()
-    if (json.success) {
+    if (res.ok && json.success) {
       invoiceData.value = json.data
+    } else {
+      invoiceData.value = null
+      invoiceError.value = json.error || '통관 인보이스를 불러올 수 없습니다.'
+      if (json.missing_fields) {
+        invoiceMissingFields.value = json.missing_fields
+      }
     }
-  } catch (e) {
-    console.error(e)
+  } catch (e: any) {
+    invoiceError.value = e.message || '인보이스 로딩 오류'
   } finally {
     invoiceLoading.value = false
   }
@@ -265,7 +280,22 @@ onMounted(loadOrderDetail)
           </div>
 
           <div v-if="invoiceLoading" class="py-12 text-center text-xs text-gray-400 animate-pulse">
-            관세청 제출용 전자 인보이스 데이터 불러오는 중...
+            전자 인보이스 데이터 불러오는 중...
+          </div>
+          <div v-else-if="invoiceError" class="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-3">
+            <div class="font-bold flex items-center gap-2 text-sm text-amber-900">
+              <span>⚠️</span>
+              <span>{{ invoiceError }}</span>
+            </div>
+            <div v-if="invoiceMissingFields.length > 0" class="text-[11px] text-amber-800 bg-white/70 p-3 rounded-xl border border-amber-100">
+              <p class="font-bold mb-1">누락된 필수 통관 정보 목록 (Fail-Closed 보안 원칙):</p>
+              <ul class="list-disc pl-5 space-y-0.5 font-mono">
+                <li v-for="f in invoiceMissingFields" :key="f">{{ f }}</li>
+              </ul>
+              <p class="mt-2 text-gray-600 font-sans">
+                올모아는 허위 개인통관고유부호(PCCC)나 가짜 전화번호를 생성하지 않습니다. 통관 정보가 완비된 주문에 한해 상업송장이 발급됩니다.
+              </p>
+            </div>
           </div>
           <div v-else-if="invoiceData" class="space-y-5 text-xs">
             <!-- Header Info -->

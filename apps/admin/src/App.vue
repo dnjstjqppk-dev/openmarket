@@ -121,7 +121,7 @@ onMounted(() => {
     </main>
 
     <footer v-if="isLoggedIn" class="bg-white border-t border-slate-200 py-3 text-center text-[11px] text-slate-500">
-      &copy; 2026 OLMOA Global Operations. All Rights Reserved. (admin.olmoa.com)
+      &copy; 2026 OLMOA Global Operations. All Rights Reserved. • <span class="font-mono text-slate-400">v1.2.0</span> (admin.olmoa.com)
     </footer>
   </div>
 </template>

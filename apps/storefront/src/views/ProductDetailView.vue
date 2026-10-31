@@ -21,7 +21,7 @@ const activeImage = ref('')
 const activeTab = ref<'description' | 'specs' | 'reviews' | 'qna' | 'shipping'>('description')
 
 const reviews = ref<any[]>([])
-const reviewSummary = ref<any>({ count: 0, average_rating: 4.9 })
+const reviewSummary = ref<any>({ count: 0, average_rating: null })
 const newReviewRating = ref(5)
 const newReviewComment = ref('')
 const newReviewHeight = ref<number | ''>('')
@@ -94,8 +94,8 @@ const loadReviews = async (productId: string) => {
     if (json.success) {
       const list = Array.isArray(json.data) ? json.data : (json.data?.reviews || [])
       reviews.value = list
-      const avg = list.length > 0 ? (list.reduce((sum: number, r: any) => sum + (r.rating || 5), 0) / list.length).toFixed(1) : 4.9
-      reviewSummary.value = { count: list.length, average_rating: parseFloat(avg as string) }
+      const avg = list.length > 0 ? (list.reduce((sum: number, r: any) => sum + (r.rating || 5), 0) / list.length).toFixed(1) : null
+      reviewSummary.value = { count: list.length, average_rating: avg ? parseFloat(avg as string) : null }
     }
   } catch {}
 }
@@ -212,6 +212,7 @@ const discountRate = computed(() => {
 })
 
 const volumeTierDiscountPct = computed(() => {
+  if (quantity.value >= 10) return 15
   if (quantity.value >= 5) return 10
   if (quantity.value >= 3) return 5
   return 0
@@ -313,13 +314,13 @@ const handleAddToCart = (goToCheckout = false) => {
             </button>
           </div>
           <!-- 15s Video Showcase Button -->
-          <div class="mt-3">
+          <div v-if="product.video_url" class="mt-3">
             <button
               @click="showVideoModal = true; isVideoPlaying = true"
               class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-gray-900 via-gray-800 to-black hover:opacity-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-xs cursor-pointer transition active:scale-98"
             >
               <span class="w-5 h-5 rounded-full bg-[#E60023] flex items-center justify-center text-[10px] text-white">▶</span>
-              <span>🎬 15초 실물 영상 쇼케이스 (공장 검수 직촬영)</span>
+              <span>🎬 15초 실물 영상 쇼케이스 (시연 샘플 영상)</span>
             </button>
           </div>
         </div>
@@ -346,36 +347,41 @@ const handleAddToCart = (goToCheckout = false) => {
               {{ product.title }}
             </h1>
 
-            <!-- Algorithmic Buy Box Winner Badge (Step 15) -->
-            <div class="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3 mb-4 flex items-center justify-between text-xs">
+            <!-- Verified Partner Direct Dispatch Info -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 flex items-center justify-between text-xs">
               <div class="flex items-center gap-2.5">
-                <div class="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0">
-                  🏆
+                <div class="w-7 h-7 rounded-lg bg-slate-800 text-white flex items-center justify-center font-black text-xs shrink-0">
+                  📦
                 </div>
                 <div>
-                  <div class="font-black text-blue-950 flex items-center gap-1.5">
-                    <span>최적 공급 셀러 선정 (Buy Box Winner)</span>
-                    <span class="px-1.5 py-0.2 bg-blue-200 text-blue-800 text-[10px] font-bold rounded">적격도 99.4점</span>
+                  <div class="font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>공식 인증 파트너사 직발송 (단독 공급)</span>
+                    <span class="px-1.5 py-0.5 bg-slate-200 text-slate-800 text-[10px] font-bold rounded">검증 파트너</span>
                   </div>
-                  <div class="text-[11px] text-blue-700 mt-0.5">
-                    정시 출고율 99.6% • 고객 응대율 99.8% • 타 판매처 대비 공장직거래 최저가 보장
+                  <div class="text-[11px] text-slate-600 mt-0.5">
+                    공장 직접 출고 • 해외 배송 전수 검수 완료 • 정품 보증
                   </div>
                 </div>
               </div>
-              <span class="text-[10px] font-bold text-blue-800 hidden sm:inline-block">
-                {{ product.partner_name || '올모아 직영스토어' }}
+              <span class="text-[10px] font-bold text-slate-700 hidden sm:inline-block">
+                {{ product.partner_name || '올모아 파트너스' }}
               </span>
             </div>
 
             <!-- Rating & Sold Proof -->
             <div class="flex items-center gap-4 text-xs text-gray-600 mb-5 pb-4 border-b border-gray-100">
-              <button @click="activeTab = 'reviews'" class="flex items-center gap-1 text-[#FFB800] font-black text-sm hover:underline cursor-pointer">
-                ★★★★★ <span class="text-gray-900 ml-1">{{ reviewSummary.average_rating || 4.9 }}</span>
-              </button>
-              <span>•</span>
-              <button @click="activeTab = 'reviews'" class="underline hover:text-[#FF5000] cursor-pointer">
-                {{ reviewSummary.count }} Verified Reviews
-              </button>
+              <template v-if="reviewSummary.count > 0 && reviewSummary.average_rating">
+                <button @click="activeTab = 'reviews'" class="flex items-center gap-1 text-[#FFB800] font-black text-sm hover:underline cursor-pointer">
+                  ★★★★★ <span class="text-gray-900 ml-1">{{ reviewSummary.average_rating }}</span>
+                </button>
+                <span>•</span>
+                <button @click="activeTab = 'reviews'" class="underline hover:text-[#FF5000] cursor-pointer">
+                  {{ reviewSummary.count }}개 구매후기
+                </button>
+              </template>
+              <template v-else>
+                <span class="text-gray-500 font-medium">신규 등록 상품 (리뷰 준비중)</span>
+              </template>
               <span>•</span>
               <button @click="activeTab = 'qna'" class="underline hover:text-[#FF5000] cursor-pointer">
                 {{ qnaList.length }} Q&A
@@ -720,7 +726,7 @@ const handleAddToCart = (goToCheckout = false) => {
           <div class="p-4 bg-gradient-to-b from-black/80 to-transparent absolute top-0 left-0 right-0 z-10 flex items-center justify-between text-white">
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span>
-              <span class="text-xs font-black tracking-wider">OLMOA 15초 실물 영상 쇼케이스</span>
+              <span class="text-xs font-black tracking-wider">OLMOA 15초 실물 영상 쇼케이스 (시연 샘플)</span>
             </div>
             <button @click="showVideoModal = false" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white text-sm cursor-pointer">
               ✕
@@ -733,11 +739,11 @@ const handleAddToCart = (goToCheckout = false) => {
               muted
               playsinline
               class="w-full h-full object-cover"
-              src="https://assets.mixkit.co/videos/preview/mixkit-headphones-lying-on-a-table-41712-large.mp4"
+              :src="product.video_url"
             ></video>
             <div class="absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-black/60 backdrop-blur text-white text-xs flex items-center justify-between">
               <span class="font-bold truncate max-w-xs">{{ product.title }}</span>
-              <span class="text-[10px] text-emerald-400 font-bold">✓ 공장 직촬영 인증</span>
+              <span class="text-[10px] text-emerald-400 font-bold">✓ 시연 샘플 영상</span>
             </div>
           </div>
         </div>

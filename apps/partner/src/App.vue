@@ -142,7 +142,7 @@ watch(() => route.path, () => {
 
     <!-- Footer -->
     <footer v-if="!isLoginPage" class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-      &copy; 2026 OLMOA Global Partner Portal. All Rights Reserved. (partner.olmoa.com)
+      &copy; 2026 OLMOA Global Partner Portal. All Rights Reserved. • <span class="font-mono text-slate-400">v1.2.0</span> (partner.olmoa.com)
     </footer>
   </div>
 </template>

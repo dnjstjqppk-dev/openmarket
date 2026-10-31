@@ -109,15 +109,25 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
         optSummary = Object.entries(optObj).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
       } catch (e) {}
 
+      // Volume Tier Discount Policy: 3+ items 5%, 5+ items 10%, 10+ items 15%
+      const volumeDiscountPct = qty >= 10 ? 15 : (qty >= 5 ? 10 : (qty >= 3 ? 5 : 0));
+      const effectiveUnitPrice = volumeDiscountPct > 0
+        ? Math.round(sku.sale_price * (1 - volumeDiscountPct / 100))
+        : sku.sale_price;
+      const volumeDiscount = (sku.sale_price - effectiveUnitPrice) * qty;
+
       resolvedItems.push({
         skuId: sku.id,
         productId: sku.product_id,
         partnerId: sku.partner_id || 'pt_001',
         title: sku.prod_title,
         optionSummary: optSummary,
-        unitPrice: sku.sale_price,
+        baseUnitPrice: sku.sale_price,
+        unitPrice: effectiveUnitPrice,
         quantity: qty,
-        lineTotal: sku.sale_price * qty,
+        volumeDiscountPct,
+        volumeDiscount,
+        lineTotal: effectiveUnitPrice * qty,
         currentStock: sku.stock_quantity,
         baseShippingFee: sku.base_shipping_fee != null ? sku.base_shipping_fee : 3000,
         freeShippingThreshold: sku.free_shipping_threshold != null ? sku.free_shipping_threshold : 30000,
@@ -183,8 +193,10 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       creditDiscount = Math.min(requestedCredit, availBal, Math.max(0, totalGoods + totalShipping - couponDiscount));
     }
 
-    const totalDiscount = couponDiscount + creditDiscount;
-    const totalPay = Math.max(0, totalGoods + totalShipping - totalDiscount);
+    const totalVolumeDiscount = resolvedItems.reduce((acc, it) => acc + it.volumeDiscount, 0);
+    const totalDiscount = totalVolumeDiscount + couponDiscount + creditDiscount;
+    const totalGoodsBase = resolvedItems.reduce((acc, it) => acc + it.baseUnitPrice * it.quantity, 0);
+    const totalPay = Math.max(0, totalGoodsBase + totalShipping - totalDiscount);
 
     const recipientName = body.recipient_name || body.shipping_address?.recipient || body.shipping_address?.name || '구매자';
     const recipientPhone = body.recipient_phone || body.shipping_address?.phone || '010-0000-0000';
@@ -207,7 +219,7 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
         `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo, pccc, pccc_verified, customs_duty_type, estimated_duty_amount, settlement_currency, fx_rate)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
-        orderId, orderNo, customerId, totalGoods, totalShipping, totalDiscount, totalPay,
+        orderId, orderNo, customerId, totalGoodsBase, totalShipping, totalDiscount, totalPay,
         recipientName, recipientPhone,
         addressLine1, addressLine2,
         postalCode, shippingMemo,

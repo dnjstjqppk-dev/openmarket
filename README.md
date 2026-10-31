@@ -12,7 +12,7 @@ OLMOA 플랫폼은 단일 모놀리스가 아닌, 5개의 독립 Cloudflare Work
 
 | 서비스 구분 | Cloudflare Worker 명칭 | 실 배포 운영 URL | 핵심 역할 및 기능 |
 |---|---|---|---|
-| **고객 쇼핑몰 (메인)** | `openmarket` | [https://openmarket.dnjstjqppk.workers.dev](https://openmarket.dnjstjqppk.workers.dev) | 글로벌 핫딜, 33대 카테고리, 검색, 장바구니, 체크아웃 |
+| **고객 쇼핑몰 (메인)** | `openmarket` | [https://openmarket.dnjstjqppk.workers.dev](https://openmarket.dnjstjqppk.workers.dev) | 글로벌 핫딜, 42대 루트 카테고리(전체 194개 분류), 검색, 장바구니, 체크아웃 |
 | **고객 쇼핑몰 (전용)** | `olmoa-storefront` | [https://olmoa-storefront.dnjstjqppk.workers.dev](https://olmoa-storefront.dnjstjqppk.workers.dev) | 전용 Vue 3 + Vite 스토어프론트 엔드포인트 |
 | **통합 관리자 콘솔** | `olmoa-admin` | [https://olmoa-admin.dnjstjqppk.workers.dev](https://olmoa-admin.dnjstjqppk.workers.dev) | 플랫폼 총 거래액(GMV) 관제, 셀러 입점 심사 및 승인 |
 | **파트너 판매자 센터** | `olmoa-partner` | [https://olmoa-partner.dnjstjqppk.workers.dev](https://olmoa-partner.dnjstjqppk.workers.dev) | 입점사 테넌트 격리, SKU 재고 실시간 수정, 송장 출고 |
@@ -31,7 +31,7 @@ flowchart TD
     Partner["입점사 (Partner Hub)"] --> CF_Partner["olmoa-partner.workers.dev"]
     
     CF_Store & CF_Admin & CF_Partner --> CF_API["olmoa-api.workers.dev"]
-    CF_API --> D1[("Cloudflare D1 SQL (33개 카테고리, 52개 실상품, 원자적 재고 감산)")]
+    CF_API --> D1[("Cloudflare D1 SQL (42대 루트 카테고리, 194개 전체 분류, 62개 실상품, 원자적 재고 감산)")]
     CF_API -.-> GoEngine["Go 1.23 Core Engine (backend/)"]
 ```
 
@@ -39,9 +39,9 @@ flowchart TD
 
 ## 3. 핵심 커머스 엔진 무결성 (Zero Mock)
 
-### A. 33대 글로벌 카테고리 계층 (100% 실데이터)
-- Temu 사이트맵 벤치마킹 기반 33개 대분류 및 23개 소분류가 Cloudflare D1에 영구 적재되어 있습니다.
-- 빈 껍데기 카테고리 없이 모든 카테고리에 실상품(고해상도 썸네일, 정상가, 할인가, 판매량, 상세 스펙)이 매핑되어 있습니다.
+### A. 42대 글로벌 카테고리 계층 (194개 전체 분류, 100% 실데이터)
+- Temu 텍소노미 벤치마킹 기반 42개 대분류(루트 depth=0) 및 총 194개 카테고리가 Cloudflare D1에 영구 적재되어 있습니다.
+- 모든 루트 카테고리는 하위 서브카테고리의 활성 실상품(고해상도 썸네일, 정상가, 할인가, 상세 스펙)으로 롤업 집계(Rollup Aggregation)되어 매핑됩니다.
 
 ### B. 원자적 재고 감산 (Atomic Inventory Decrement)
 - 주문 체크아웃 시 D1 레벨에서 `UPDATE product_skus SET stock_quantity = MAX(0, stock_quantity - ?)`를 실행하여 동시성 제어 및 초과 판매(Overselling)를 원천 차단합니다.
@@ -55,8 +55,7 @@ flowchart TD
 
 ## 4. 자동화 E2E 테스트 검증 결과
 
-Cloudflare 프로덕션 실환경에서 10개 전 단계 E2E 자동화 테스트 100% 통과:
-
+[과거 E2E 실행 기록 - Phase 1 배포 기준 (2026-10-26)]:
 ```text
 === OLMOA E2E AUTOMATED TEST SUITE ===
 1. Health Check: Status=UP, DB=CONNECTED_D1, Categories=33, Products=52
@@ -70,6 +69,11 @@ Cloudflare 프로덕션 실환경에서 10개 전 단계 E2E 자동화 테스트
 9. Admin Dashboard: TotalOrders=2, TotalGMV=₩183,600
 === ALL E2E VERIFICATION STEPS PASSED 100% SUCCESSFULLY ===
 ```
+
+[현행 프로덕션 헬스 기준 (2026-11-01)]:
+- **상태**: `status: "UP"`, `databaseStatus: "CONNECTED_D1"`
+- **카테고리**: `activeRootCategories: 42`, `totalCategories: 194`
+- **상품 수**: `activeProductsInD1: 62` (단독 쿼리: `SELECT COUNT(*) FROM products WHERE status = 'ACTIVE'`)
 
 ---
 

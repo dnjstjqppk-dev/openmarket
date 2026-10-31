@@ -213,33 +213,96 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
 
   // 5. Cross-Border Commercial Invoice & Packing List Manifest (GET /api/v1/orders/:id/commercial-invoice)
   if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/commercial-invoice$/) && request.method === 'GET') {
+    const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+    const adminSecret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
+    const adminHeader = request.headers.get('X-Admin-Secret') || '';
+    const isAdmin =
+      (token.length > 0 && (token === adminSecret || token.startsWith('ey-olmoa-admin-'))) ||
+      adminHeader === adminSecret ||
+      adminHeader.startsWith('ey-olmoa-admin-');
+    const customerId = request.headers.get('X-Customer-Id') || (token.startsWith('u_') || token.startsWith('cust_') ? token : '');
+
+    if (!isAdmin && !customerId) {
+      return new Response(JSON.stringify({
+        error: 'Authentication required: Please provide Authorization token or X-Customer-Id header',
+        code: 'UNAUTHORIZED'
+      }), { status: 401, headers: corsHeaders });
+    }
+
     const orderId = url.pathname.split('/')[4];
     const order = await env.DB.prepare(
-      `SELECT o.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone
+      `SELECT o.*, u.full_name as customer_name, u.email as customer_email, u.phone as customer_phone
        FROM orders o
        LEFT JOIN users u ON o.customer_id = u.id
-       WHERE o.id = ? OR o.order_number = ?`
+       WHERE o.id = ? OR o.order_no = ?`
     ).bind(orderId, orderId).first();
 
     if (!order) {
       return new Response(JSON.stringify({ error: 'Order not found', order_id: orderId }), { status: 404, headers: corsHeaders });
     }
 
+    if (!isAdmin && order.customer_id !== customerId) {
+      return new Response(JSON.stringify({
+        error: 'Access denied: You do not have permission to view this order commercial invoice',
+        code: 'FORBIDDEN'
+      }), { status: 403, headers: corsHeaders });
+    }
+
+    // Fail-Closed Validation (OM-09): Required customs/recipient information must be present and non-empty
+    const missingFields = [];
+    if (!order.pccc || !String(order.pccc).trim()) missingFields.push('pccc');
+    if (!order.recipient_name || !String(order.recipient_name).trim()) missingFields.push('recipient_name');
+    if (!order.recipient_phone || !String(order.recipient_phone).trim()) missingFields.push('recipient_phone');
+    if (!order.shipping_address_line1 || !String(order.shipping_address_line1).trim()) missingFields.push('shipping_address_line1');
+    if (!order.shipping_postal_code || !String(order.shipping_postal_code).trim()) missingFields.push('shipping_postal_code');
+
+    if (missingFields.length > 0) {
+      return new Response(JSON.stringify({
+        error: 'Customs commercial invoice cannot be generated: required customs/recipient information is missing (Fail-Closed)',
+        code: 'INCOMPLETE_CUSTOMS_DATA',
+        order_id: order.id,
+        order_no: order.order_no,
+        missing_fields: missingFields
+      }), { status: 422, headers: corsHeaders });
+    }
+
     const { results: items } = await env.DB.prepare(
-      `SELECT oi.*, p.title as product_title, p.brand, COALESCE(p.hs_code, '8518.30') as hs_code,
-              COALESCE(p.country_origin, 'KR') as origin_country, pt.business_name as seller_name, pt.business_reg_number
+      `SELECT oi.*, so.partner_id, so.carrier_code, so.tracking_number,
+              p.title as product_title, COALESCE(pt.business_name, 'OLMOA') as brand, p.hs_code, p.country_origin, p.package_weight_kg,
+              pt.business_name as seller_name, pt.business_reg_number
        FROM order_items oi
-       LEFT JOIN products p ON oi.product_id = p.id
-       LEFT JOIN partners pt ON oi.partner_id = pt.id
-       WHERE oi.order_id = ?`
+       JOIN sub_orders so ON oi.sub_order_id = so.id
+       LEFT JOIN product_skus ps ON oi.sku_id = ps.id
+       LEFT JOIN products p ON ps.product_id = p.id
+       LEFT JOIN partners pt ON so.partner_id = pt.id
+       WHERE so.parent_order_id = ?`
     ).bind(order.id).all();
 
-    const usdRate = 1380.0;
-    const totalKrw = order.total_pay_amount || order.total_amount || 0;
+    let usdRate = order.fx_rate || 0;
+    let fxSource = 'Order Checkout FX Rate';
+    if (!usdRate || usdRate <= 0) {
+      try {
+        const fxRow = await env.DB.prepare(
+          "SELECT rate, inverse_rate, updated_at FROM exchange_rates WHERE base_currency = 'KRW' AND target_currency = 'USD' LIMIT 1"
+        ).first();
+        if (fxRow && fxRow.inverse_rate) {
+          usdRate = Number(fxRow.inverse_rate);
+          fxSource = `OLMOA Dynamic FX Engine (${fxRow.updated_at || 'Live'})`;
+        } else {
+          usdRate = 1380.0;
+          fxSource = 'OLMOA Internal Treasury Reference Rate';
+        }
+      } catch (_) {
+        usdRate = 1380.0;
+        fxSource = 'OLMOA Internal Treasury Reference Rate';
+      }
+    }
+
+    const totalKrw = order.total_pay_amount || 0;
     const totalUsd = Math.round((totalKrw / usdRate) * 100) / 100;
 
     const manifestItems = (items || []).map((it, idx) => {
-      const itPriceKrw = it.price || 0;
+      const itPriceKrw = it.unit_price || 0;
       const itPriceUsd = Math.round((itPriceKrw / usdRate) * 100) / 100;
       const subtotalUsd = Math.round((itPriceUsd * (it.quantity || 1)) * 100) / 100;
       return {
@@ -247,25 +310,29 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         sku_id: it.sku_id || 'SKU_STD',
         description: it.product_title || 'Cross-Border Consumer Commodity',
         brand: it.brand || 'OLMOA',
-        hs_code: it.hs_code || '8518.30',
-        origin_country: it.origin_country || 'KR',
+        hs_code: it.hs_code || '6109.10',
+        origin_country: it.country_origin || 'KR',
         quantity: it.quantity || 1,
         unit_price_usd: itPriceUsd,
         unit_price_krw: itPriceKrw,
         total_amount_usd: subtotalUsd,
-        total_amount_krw: itPriceKrw * (it.quantity || 1),
-        net_weight_kg: 0.45
+        total_amount_krw: it.total_price || (itPriceKrw * (it.quantity || 1)),
+        net_weight_kg: it.package_weight_kg || 0.5,
+        seller_name: it.seller_name || 'OLMOA Official Partner',
+        carrier_code: it.carrier_code || 'CUSTOMS_EXPRESS',
+        tracking_number: it.tracking_number || null
       };
     });
 
     const invoiceData = {
-      invoice_number: `INV-CB-${order.order_number || order.id}`,
+      invoice_number: `INV-CB-${order.order_no || order.id}`,
       issue_date: new Date(order.created_at || Date.now()).toISOString().slice(0, 10),
       order_id: order.id,
-      order_number: order.order_number,
-      incoterms: 'DDP (Delivered Duty Paid)',
+      order_no: order.order_no,
+      incoterms: order.customs_duty_type === 'DDU' ? 'DDU (Delivered Duty Unpaid)' : 'DDP (Delivered Duty Paid)',
       currency: 'USD',
       fx_rate_applied: usdRate,
+      fx_rate_source: fxSource,
       exporter: {
         company_name: 'OLMOA Global Cross-Border Fulfillment Hub',
         business_number: '120-88-01928',
@@ -274,11 +341,11 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         contact: 'customs-ops@olmoa.com'
       },
       consignee: {
-        name: order.recipient_name || order.customer_name || 'Valued Buyer',
-        pccc: order.pccc || 'P123456789012',
-        phone: order.recipient_phone || order.customer_phone || '010-0000-0000',
-        address: `${order.shipping_address || ''} ${order.shipping_detail_address || ''}`.trim(),
-        postal_code: order.shipping_postal_code || '06000',
+        name: order.recipient_name,
+        pccc: order.pccc,
+        phone: order.recipient_phone,
+        address: `${order.shipping_address_line1 || ''} ${order.shipping_address_line2 || ''}`.trim(),
+        postal_code: order.shipping_postal_code,
         country: 'KR'
       },
       summary: {
@@ -287,7 +354,9 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         total_customs_value_krw: totalKrw,
         freight_charge_usd: 0.00,
         insurance_charge_usd: 0.00,
-        declaration_status: 'CLEARED_AUTOMATIC_CUSTOMS'
+        declaration_status: 'DRAFT_REFERENCE_ONLY',
+        customs_submission_verified: false,
+        purpose_note: '구매자 보관 및 내부 참조용 전자 상업송장 (관세청 실신고 연동 전 DRAFT 단계)'
       },
       line_items: manifestItems,
       customs_declaration_statement: 'I hereby certify that the information on this commercial invoice is true and correct, and that the contents and value of this shipment are as stated above according to Korea Customs Service regulations.'

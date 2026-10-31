@@ -24,7 +24,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   // 1. Admin Dashboard Statistics (Excludes CANCELLED Orders from GMV)
   if ((url.pathname === '/api/v1/admin/dashboard' || url.pathname === '/api/v1/admin/metrics') && request.method === 'GET') {
-    const prodRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM products').first();
+    const prodRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM products WHERE status = 'ACTIVE'").first();
     const orderRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(total_pay_amount) as total_gmv FROM orders WHERE payment_status != 'CANCELLED'").first();
     const partnerRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM partners').first();
     const userRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM users').first();

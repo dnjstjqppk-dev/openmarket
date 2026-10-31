@@ -65,8 +65,9 @@ const rankedProducts = computed(() =>
           <div>
             <div class="text-base font-black text-[#E60023]">{{ locale.formatPrice(product.lowest_sale_price) }}</div>
             <div class="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-              <span class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating || 4.8).toFixed(1) }}</span>
-              <span class="font-bold text-gray-800">{{ (product.total_sold_count || 150).toLocaleString() }} sold</span>
+              <span v-if="product.review_count && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
+              <span v-else class="px-1 py-0.2 rounded bg-gray-100 text-gray-600 font-semibold text-[10px]">NEW</span>
+              <span class="font-bold text-gray-800">{{ (product.total_sold_count || 0).toLocaleString() }} sold</span>
             </div>
           </div>
         </div>

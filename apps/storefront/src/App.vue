@@ -438,7 +438,7 @@ onMounted(async () => {
             </div>
           </div>
           <div class="shrink-0 text-right self-end">
-            <p>© 2026 OLMOA Commerce Inc. All rights reserved.</p>
+            <p>© 2026 OLMOA Commerce Inc. All rights reserved. • <span class="font-mono text-gray-500">v1.2.0</span></p>
           </div>
         </div>
       </div>

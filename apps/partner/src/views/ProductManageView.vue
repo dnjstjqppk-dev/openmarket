@@ -313,7 +313,7 @@ onMounted(loadProducts)
             보완 권장 (이미지/상세설명 40자 이상 입력 시 랭킹 가산)
           </span>
         </div>
-        <span class="text-[11px] text-gray-500 font-medium">HS코드 + 대표이미지 + 고시정보 입력 완료 시 검색 알고리즘 상위 노출</span>
+        <span class="text-[11px] text-gray-500 font-medium">HS코드 + 대표이미지 + 고시정보 입력 완료 시 상품 상세 신뢰도 및 품질점수 가점</span>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -567,8 +567,8 @@ onMounted(loadProducts)
               <div class="text-[10px] text-gray-400">Vol: {{ p.volumetric_weight_kg || 0.6 }}kg</div>
             </td>
             <td class="py-3 px-5 text-center">
-              <span class="px-2 py-0.5 rounded font-black text-[11px] inline-block" :class="computeQualityScore(p) >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">
-                ★ {{ computeQualityScore(p) }}점
+              <span class="px-2 py-0.5 rounded font-black text-[11px] inline-block" :class="(p.quality_score ?? computeQualityScore(p)) >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">
+                ★ {{ p.quality_score ?? computeQualityScore(p) }}점
               </span>
             </td>
             <td class="py-3 px-5">

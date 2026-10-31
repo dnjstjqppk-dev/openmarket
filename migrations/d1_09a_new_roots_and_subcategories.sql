@@ -2,16 +2,16 @@
 -- 10 Temu Missing Root Categories (depth=0) & L2 Subcategories
 
 INSERT OR IGNORE INTO categories (id, parent_id, name, slug, depth, sort_order) VALUES
-('cat_curve', NULL, '여성 빅사이즈/플러스 패션', 'womens-curve-clothing', 0, 34),
-('cat_lingerie', NULL, '여성 언더웨어 & 라운지웨어', 'womens-lingerie-lounge', 0, 35),
-('cat_men_plus', NULL, '남성 빅사이즈 & 톨 패션', 'mens-big-tall', 0, 36),
-('cat_men_und', NULL, '남성 언더웨어 & 파자마', 'mens-underwear-sleepwear', 0, 37),
-('cat_women_shoes', NULL, '여성 신발', 'womens-shoes', 0, 38),
-('cat_men_shoes', NULL, '남성 신발', 'mens-shoes', 0, 39),
-('cat_kids_fash', NULL, '키즈 & 주니어 패션', 'kids-fashion', 0, 40),
-('cat_kids_shoes', NULL, '키즈 & 아동 신발', 'kids-shoes', 0, 41),
-('cat_bags', NULL, '가방 & 캐리어', 'bags-luggage', 0, 42),
-('cat_beach', NULL, '비치웨어 & 스윔웨어', 'beachwear', 0, 43);
+('cat_curve', NULL, '여성 빅사이즈/플러스 패션', 'womens-curve-clothing', 0, 33),
+('cat_lingerie', NULL, '여성 언더웨어 & 라운지웨어', 'womens-lingerie-lounge', 0, 34),
+('cat_men_plus', NULL, '남성 빅사이즈 & 톨 패션', 'mens-big-tall', 0, 35),
+('cat_men_und', NULL, '남성 언더웨어 & 파자마', 'mens-underwear-sleepwear', 0, 36),
+('cat_women_shoes', NULL, '여성 신발', 'womens-shoes', 0, 37),
+('cat_men_shoes', NULL, '남성 신발', 'mens-shoes', 0, 38),
+('cat_kids_fash', NULL, '키즈 & 주니어 패션', 'kids-fashion', 0, 39),
+('cat_kids_shoes', NULL, '키즈 & 아동 신발', 'kids-shoes', 0, 40),
+('cat_bags', NULL, '가방 & 캐리어', 'bags-luggage', 0, 41),
+('cat_beach', NULL, '비치웨어 & 스윔웨어', 'beachwear', 0, 42);
 
 -- L2 for 10 Missing Root Categories
 INSERT OR IGNORE INTO categories (id, parent_id, name, slug, depth, sort_order) VALUES
