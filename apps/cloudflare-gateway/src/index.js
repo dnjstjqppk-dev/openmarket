@@ -78,7 +78,7 @@ export default {
         service: 'olmoa-api',
         brand: 'OLMOA',
         version: '1.2.0',
-        commit: 'f91ba0e7db9e91c1d45266c4d6ffc22e2e41c461',
+        commit: 'e8e7d84ef717961d02fe396ecd759fc7c1c2d5aa',
         environment: 'production',
         deployed_at: new Date().toISOString(),
         databaseEngine: 'Cloudflare D1 SQL',
