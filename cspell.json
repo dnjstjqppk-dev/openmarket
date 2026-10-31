@@ -92,7 +92,22 @@
     "returnless",
     "Returnless",
     "takedown",
-    "Takedown"
+    "Takedown",
+    "newbuyer",
+    "testpassword",
+    "pgcrypto",
+    "giftcards",
+    "Helpdesk",
+    "hscode",
+    "crossbody",
+    "shapewear",
+    "tshirts",
+    "rfid",
+    "RFID",
+    "SHINHAN",
+    "KOOKMIN",
+    "Mismapped",
+    "changefreq"
   ],
   "ignorePaths": [
     "**/node_modules/**",

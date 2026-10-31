@@ -198,7 +198,7 @@ export async function handleTemuOpsRoutes(request, url, env, corsHeaders) {
     const reporter = (body.reporter_name || '권리자 대리인').trim();
     const brandName = (body.brand_name || 'Global Brand Inc.').trim();
     const targetProdId = body.target_product_id;
-    const infrType = body.infringement_type || 'COUNTERFEIT';
+    const infringementType = body.infringement_type || 'COUNTERFEIT';
     const evidenceUrl = body.evidence_url || 'https://evidence.olmoa.com/cert.pdf';
     const reportId = `ipr_${Date.now()}`;
 
@@ -210,7 +210,7 @@ export async function handleTemuOpsRoutes(request, url, env, corsHeaders) {
       env.DB.prepare(
         `INSERT INTO ipr_takedown_reports (id, reporter_name, brand_name, target_product_id, infringement_type, evidence_url, status)
          VALUES (?, ?, ?, ?, ?, ?, 'SUBMITTED')`
-      ).bind(reportId, reporter, brandName, targetProdId, infrType, evidenceUrl),
+      ).bind(reportId, reporter, brandName, targetProdId, infringementType, evidenceUrl),
       // Fast-track auto-hide suspicious product immediately to prevent legal liability
       env.DB.prepare("UPDATE products SET status = 'HIDDEN', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(targetProdId)
     ]);
