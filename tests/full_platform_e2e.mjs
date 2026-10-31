@@ -684,7 +684,114 @@ async function runTests() {
   assert.equal(arbitrateRes.json.data.ruling, 'BUYER_WIN_FULL_REFUND');
   console.log('[PASS] 26. Central Operations Control Tower, FDS Evaluation & 3-Party Dispute Arbitration Tribunal');
 
-  console.log('=== ALL 26 E2E VERIFICATION SUITES PASSED 100% ===');
+  // 27. Web Crypto PBKDF2 Password Hashing & Standard HMAC-SHA256 JWT
+  const pbkdfUserEmail = `secure_pbkdf_${Date.now()}@olmoa.com`;
+  const regPbkdfRes = await callApi('/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: pbkdfUserEmail,
+      password: 'Enterprise_Secure_Pwd_2026!',
+      full_name: '보안강화고객'
+    })
+  });
+  assert.equal(regPbkdfRes.status, 201);
+  assert.ok(regPbkdfRes.json.token.includes('.')); // Standard 3-part JWT header.payload.signature
+
+  // Verify stored hash in D1 is PBKDF2 format
+  const dbUser = db.prepare('SELECT password_hash FROM users WHERE email = ?').get(pbkdfUserEmail);
+  assert.ok(dbUser.password_hash.startsWith('pbkdf2:100000:'));
+
+  // Test Login with PBKDF2
+  const loginPbkdfRes = await callApi('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: pbkdfUserEmail,
+      password: 'Enterprise_Secure_Pwd_2026!'
+    })
+  });
+  assert.equal(loginPbkdfRes.status, 200);
+  assert.ok(loginPbkdfRes.json.token.includes('.'));
+  console.log('[PASS] 27. Web Crypto PBKDF2 Password Hashing & Standard HMAC-SHA256 JWT Authentication');
+
+  // 28. Real PG (Toss Payments) Confirmation & Webhook Engine
+  const payConfigRes = await callApi('/api/v1/payments/config');
+  assert.equal(payConfigRes.status, 200);
+  assert.equal(payConfigRes.json.provider, 'TOSS_PAYMENTS');
+
+  const payConfirmRes = await callApi('/api/v1/payments/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order_id: crossBorderCheckoutRes.json.order_id,
+      payment_key: 'toss_pk_test_live_confirm_9988',
+      amount: crossBorderCheckoutRes.json.total_pay_amount,
+      provider: 'TOSS'
+    })
+  });
+  assert.equal(payConfirmRes.status, 200);
+  assert.equal(payConfirmRes.json.success, true);
+  assert.equal(payConfirmRes.json.data.status, 'PAID');
+  assert.ok(payConfirmRes.json.data.receipt_url.includes('tosspayments.com'));
+
+  // Test Webhook processing
+  const payWebhookRes = await callApi('/api/v1/payments/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      eventType: 'PAYMENT_STATUS_CHANGED',
+      data: {
+        paymentKey: 'toss_pk_test_live_confirm_9988',
+        orderId: crossBorderCheckoutRes.json.order_id,
+        status: 'DONE'
+      }
+    })
+  });
+  assert.equal(payWebhookRes.status, 200);
+  assert.equal(payWebhookRes.json.received, true);
+  console.log('[PASS] 28. Real PG (Toss Payments) Confirmation API & Webhook Processing Engine');
+
+  // 29. Cloudflare R2 & Resilient Media Storage Engine
+  const sampleBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const uploadRes = await callApi('/api/v1/storage/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_data: sampleBase64,
+      file_name: 'test-product-banner.png',
+      content_type: 'image/png',
+      folder: 'products'
+    })
+  });
+  assert.equal(uploadRes.status, 201);
+  assert.equal(uploadRes.json.success, true);
+  assert.ok(uploadRes.json.data.public_url.includes('/api/v1/storage/file/'));
+
+  const fileKey = uploadRes.json.data.file_id;
+  const downloadRes = await callApi(`/api/v1/storage/file/${fileKey}`);
+  assert.equal(downloadRes.status, 200);
+  assert.equal(downloadRes.headers.get('content-type'), 'image/png');
+  console.log('[PASS] 29. Cloudflare R2 / Resilient Media Storage Engine (Upload & Stream)');
+
+  // 30. Real-time AlimTalk/SMS Dispatcher Engine
+  const dispatchRes = await callApi('/api/v1/notifications/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel: 'ALIMTALK',
+      recipient: '010-9999-8888',
+      template_code: 'ORDER_CONFIRMED',
+      title: '올모아 주문 완료',
+      content: '고객님의 해외직구 주문이 성공적으로 접수되어 특송 물류센터로 이관되었습니다.'
+    })
+  });
+  assert.equal(dispatchRes.status, 200);
+  assert.equal(dispatchRes.json.success, true);
+  assert.equal(dispatchRes.json.data.status, 'SENT');
+  console.log('[PASS] 30. Real-time AlimTalk/SMS Dispatcher Engine (/api/v1/notifications/dispatch)');
+
+  console.log('=== ALL 30 E2E VERIFICATION SUITES PASSED 100% ===');
   db.close();
 }
 

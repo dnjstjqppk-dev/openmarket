@@ -11,6 +11,8 @@ import { handleFeatureRoutes } from './routes/features.js';
 import { handleGlobalCustomsAndFxRoutes } from './routes/global-customs-fx.js';
 import { handleGlobalLogisticsRoutes } from './routes/global-logistics.js';
 import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
+import { handlePaymentRoutes } from './routes/payments.js';
+import { handleStorageRoutes } from './routes/storage.js';
 
 function buildCorsHeaders(request) {
   const origin = request.headers.get('Origin') || '*';
@@ -118,6 +120,12 @@ export default {
 
         const globalGovernanceRes = await handleGlobalGovernanceRoutes(request, url, env, corsHeaders);
         if (globalGovernanceRes) return globalGovernanceRes;
+
+        const paymentRes = await handlePaymentRoutes(request, url, env, corsHeaders);
+        if (paymentRes) return paymentRes;
+
+        const storageRes = await handleStorageRoutes(request, url, env, corsHeaders);
+        if (storageRes) return storageRes;
 
         const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
         if (featureRes) return featureRes;

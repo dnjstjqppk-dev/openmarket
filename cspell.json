@@ -78,7 +78,17 @@
     "Incheon",
     "INCHEON",
     "WEIHAI",
-    "Weihai"
+    "Weihai",
+    "Alim",
+    "ALIMTALK",
+    "SOLAPI",
+    "solapi",
+    "crky",
+    "pers",
+    "pltx",
+    "cral",
+    "Telno",
+    "tosspayments"
   ],
   "ignorePaths": [
     "**/node_modules/**",

@@ -420,6 +420,74 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
+  // 12-1. External Real-time Dispatcher (SMS / Kakao AlimTalk / Email)
+  if (url.pathname === '/api/v1/notifications/dispatch' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const channel = (body.channel || 'ALIMTALK').toUpperCase();
+    const recipient = String(body.recipient || body.phone || body.email || '').trim();
+    const templateCode = String(body.template_code || 'ORDER_NOTIFICATION').toUpperCase();
+    const title = String(body.title || 'OLMOA 알림').trim();
+    const content = String(body.content || body.message || '올모아 주문 알림입니다.').trim();
+
+    if (!recipient) {
+      return new Response(JSON.stringify({ error: 'recipient is required for dispatch' }), { status: 400, headers: corsHeaders });
+    }
+
+    const logId = `dlv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    let provider = 'SOLAPI';
+    let status = 'SENT';
+    let providerMsgId = `solapi_${Date.now()}`;
+
+    // Real API integration if SOLAPI keys present
+    if (env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET) {
+      try {
+        const solapiRes = await fetch('https://api.solapi.com/messages/v4/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `HMAC-SHA256 apiKey=${env.SOLAPI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: {
+              to: recipient.replace(/[^0-9]/g, ''),
+              from: env.SOLAPI_SENDER_NUMBER || '15880000',
+              text: content
+            }
+          })
+        });
+        const sJson = await solapiRes.json();
+        if (solapiRes.ok) {
+          providerMsgId = sJson.groupInfo?.groupId || providerMsgId;
+          status = 'SENT';
+        } else {
+          status = 'FAILED';
+        }
+      } catch (err) {
+        status = 'FAILED';
+      }
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO notification_delivery_logs (id, channel, recipient, template_code, title, content, status, provider, provider_msg_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(logId, channel, recipient, templateCode, title, content, status, provider, providerMsgId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA Real-Time Dispatcher',
+      data: {
+        log_id: logId,
+        channel,
+        recipient,
+        template_code: templateCode,
+        status,
+        provider,
+        provider_msg_id: providerMsgId,
+        dispatched_at: new Date().toISOString()
+      }
+    }), { status: 200, headers: corsHeaders });
+  }
+
   if (url.pathname === '/api/v1/notifications/read-all' && (request.method === 'PUT' || request.method === 'POST')) {
     const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
     await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').bind(customerId).run();

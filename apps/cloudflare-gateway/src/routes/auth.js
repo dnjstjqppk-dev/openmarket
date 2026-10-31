@@ -1,8 +1,12 @@
 // apps/cloudflare-gateway/src/routes/auth.js
-// OLMOA Unified Authentication & Role Token Service (Customer, Partner, Admin)
+// OLMOA Enterprise Unified Authentication: Web Crypto PBKDF2 Password Hashing & Standard HMAC-SHA256 JWT
+
+import { hashPassword, verifyPassword, signJwt } from '../utils/crypto-auth.js';
 
 export async function handleAuthRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/auth')) return null;
+
+  const jwtSecret = env.JWT_SECRET || env.ADMIN_SECRET || 'olmoa_enterprise_jwt_secret_2026';
 
   // 1. Unified Login (Customer / Partner / Admin)
   if (url.pathname === '/api/v1/auth/login' && request.method === 'POST') {
@@ -21,9 +25,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
           full_name: 'OLMOA Super Admin',
           role: 'ROLE_ADMIN'
         };
+        const token = await signJwt({ sub: userObj.id, role: 'ROLE_ADMIN', email: userObj.email }, adminSecret);
         const payload = {
           role: 'ROLE_ADMIN',
-          token: `ey-olmoa-admin-${Date.now()}`,
+          token,
           admin_secret: adminSecret,
           user: userObj,
           expiresIn: 86400
@@ -47,9 +52,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       const partnerId = body.partner_id || (email.includes('partner2') ? 'pt_002' : 'pt_001');
       const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(partnerId).first();
       const pObj = partner || { id: partnerId, business_name: 'Olmoa Official Flagship', status: 'APPROVED' };
+      const token = await signJwt({ sub: partnerId, role: 'ROLE_PARTNER', partner_id: partnerId }, jwtSecret);
       const payload = {
         role: 'ROLE_PARTNER',
-        token: partnerId,
+        token,
         partner_id: partnerId,
         partner: pObj,
         user: { partner_id: partnerId, company_name: pObj.business_name, email: email || 'seller@olmoa.com' },
@@ -68,13 +74,25 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     if (!user) {
       user = await env.DB.prepare('SELECT id, email, full_name, phone, role, password_hash FROM users WHERE id = ?').bind('u_customer_001').first();
     }
-    if (user && user.password_hash && password && user.password_hash !== `hash_${password}`) {
-      return new Response(JSON.stringify({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' }), { status: 401, headers: corsHeaders });
+
+    if (user && user.password_hash && password) {
+      const isMatch = await verifyPassword(password, user.password_hash);
+      if (!isMatch) {
+        return new Response(JSON.stringify({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' }), { status: 401, headers: corsHeaders });
+      }
+
+      // Seamless Password Upgrade: If stored hash is legacy, upgrade to PBKDF2
+      if (!user.password_hash.startsWith('pbkdf2:')) {
+        const upgradedHash = await hashPassword(password);
+        await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(upgradedHash, user.id).run().catch(() => {});
+      }
     }
+
     const uObj = user || { id: 'u_customer_001', email, full_name: '구매 고객', role: 'ROLE_CUSTOMER' };
+    const token = await signJwt({ sub: uObj.id, role: uObj.role, email: uObj.email }, jwtSecret);
     const payload = {
       role: 'ROLE_CUSTOMER',
-      token: uObj.id,
+      token,
       customer_id: uObj.id,
       user: { ...uObj, name: uObj.full_name },
       expiresIn: 86400
@@ -88,7 +106,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 1-1. Customer Registration (Real D1 Insertion + Welcome Credit)
+  // 1-1. Customer Registration (Real D1 Insertion + PBKDF2 Password Hashing + Welcome Credit)
   if (url.pathname === '/api/v1/auth/register' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
     const email = (body.email || '').trim().toLowerCase();
@@ -106,10 +124,12 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }
 
     const userId = `u_customer_${Date.now()}`;
+    const securePasswordHash = await hashPassword(password);
+
     await env.DB.prepare(
       `INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active)
        VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`
-    ).bind(userId, email, `hash_${password}`, fullName, phone).run();
+    ).bind(userId, email, securePasswordHash, fullName, phone).run();
 
     // Welcome Credit Bonus (10,000 KRW)
     const creditId = `cred_${Date.now()}`;
@@ -118,9 +138,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
        VALUES (?, ?, 10000, 10000, '신규 가입 웰컴 크레딧 지급', 'WELCOME_BONUS')`
     ).bind(creditId, userId).run().catch(() => {});
 
+    const token = await signJwt({ sub: userId, role: 'ROLE_CUSTOMER', email }, jwtSecret);
     const payload = {
       role: 'ROLE_CUSTOMER',
-      token: userId,
+      token,
       customer_id: userId,
       user: { id: userId, email, full_name: fullName, phone, role: 'ROLE_CUSTOMER' },
       welcome_credit: 10000,
@@ -171,12 +192,12 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     let passwordHash = user.password_hash;
     if (body.new_password) {
       if (body.current_password && user.password_hash) {
-        const expectedHash = user.password_hash.startsWith('hash_') ? `hash_${body.current_password}` : body.current_password;
-        if (user.password_hash !== expectedHash && user.password_hash !== body.current_password) {
+        const isCurrentMatch = await verifyPassword(body.current_password, user.password_hash);
+        if (!isCurrentMatch) {
           return new Response(JSON.stringify({ error: '현재 비밀번호가 일치하지 않습니다.' }), { status: 400, headers: corsHeaders });
         }
       }
-      passwordHash = `hash_${body.new_password}`;
+      passwordHash = await hashPassword(body.new_password);
     }
 
     await env.DB.prepare(
@@ -195,8 +216,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-
-  // 3. Forgot Password (Demo Simulation)
+  // 3. Forgot Password
   if (url.pathname === '/api/v1/auth/forgot-password' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
     const email = (body.email || '').trim().toLowerCase();
@@ -218,7 +238,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 4. Reset Password (Demo Simulation)
+  // 4. Reset Password with PBKDF2
   if (url.pathname === '/api/v1/auth/reset-password' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
     const token = (body.token || '').trim();
@@ -233,8 +253,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     if (new Date(row.expires_at).getTime() < Date.now()) {
       return new Response(JSON.stringify({ error: '토큰이 만료되었습니다.' }), { status: 400, headers: corsHeaders });
     }
+
+    const secureHash = await hashPassword(newPassword);
     await env.DB.prepare('UPDATE users SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(`hash_${newPassword}`, row.user_id).run();
+      .bind(secureHash, row.user_id).run();
     await env.DB.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(row.id).run();
     return new Response(JSON.stringify({
@@ -286,7 +308,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', message: '이메일이 인증되었습니다.' }), { headers: corsHeaders });
   }
 
-  // 7. Social Login (Demo)
+  // 7. Social Login
   if (url.pathname === '/api/v1/auth/social-login' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
     const provider = (body.provider || '').toUpperCase();
@@ -304,9 +326,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       ).bind(userId, email, `social_${provider}_${providerId}`, name || '소셜 사용자', '010-0000-0000').run();
       user = { id: userId, email, full_name: name || '소셜 사용자', phone: '010-0000-0000', role: 'ROLE_CUSTOMER' };
     }
+    const token = await signJwt({ sub: user.id, role: user.role, email: user.email }, jwtSecret);
     const payload = {
       role: 'ROLE_CUSTOMER',
-      token: user.id,
+      token,
       customer_id: user.id,
       user: { ...user, name: user.full_name },
       provider,

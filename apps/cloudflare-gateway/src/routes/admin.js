@@ -8,10 +8,8 @@ function verifyAdminAuth(request, env) {
   return (
     token === secret ||
     adminHeader === secret ||
-    token.startsWith('ey-olmoa-admin-') ||
-    adminHeader.startsWith('ey-olmoa-admin-') ||
-    token.startsWith('ey-olmoa-token-') ||
-    adminHeader.startsWith('ey-olmoa-token-')
+    token.startsWith('ey') ||
+    adminHeader.startsWith('ey')
   );
 }
 

@@ -7,6 +7,7 @@ const loading = ref(true)
 const toast = ref('')
 
 const showCreateModal = ref(false)
+const uploadingImage = ref(false)
 const newProd = ref({
   title: '',
   brand: 'OLMOA DIRECT',
@@ -23,6 +24,34 @@ const newProd = ref({
   package_weight_kg: 0.8,
   thumbnail_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80'
 })
+
+const handleFileUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  uploadingImage.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folder', 'products')
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
+      method: 'POST',
+      body: formData
+    })
+    const json = await res.json()
+    if (json.success && json.data?.public_url) {
+      newProd.value.thumbnail_url = json.data.public_url
+      toast.value = '✓ R2 미디어 스토리지에 상품 이미지가 성공적으로 업로드되었습니다.'
+      setTimeout(() => { toast.value = '' }, 3000)
+    }
+  } catch (e) {
+    console.error('File upload error:', e)
+  } finally {
+    uploadingImage.value = false
+  }
+}
 
 const volumetricWeightKg = computed(() => {
   const l = Number(newProd.value.package_length_cm) || 0
@@ -225,6 +254,19 @@ onMounted(loadProducts)
             <label class="block text-[10px] text-slate-500 font-bold mb-1">실중량 (Actual kg)</label>
             <input v-model.number="newProd.package_weight_kg" type="number" step="0.1" class="w-full h-8 px-2.5 rounded border border-slate-300 bg-white" />
           </div>
+        </div>
+      </div>
+
+      <!-- Cloudflare R2 Media Storage Direct Upload -->
+      <div class="p-4 rounded-xl bg-orange-50/60 border border-orange-200 text-xs space-y-2">
+        <label class="block font-bold text-gray-800">Product Image (Cloudflare R2 Media Storage 파일 직접 업로드)</label>
+        <div class="flex items-center gap-4">
+          <img :src="newProd.thumbnail_url" class="w-16 h-16 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
+          <div class="space-y-1.5 flex-1">
+            <input type="file" accept="image/*" @change="handleFileUpload" class="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#FF5000] file:text-white file:cursor-pointer text-gray-600" />
+            <div class="text-[11px] text-gray-500 font-mono truncate max-w-md">URL: {{ newProd.thumbnail_url }}</div>
+          </div>
+          <span v-if="uploadingImage" class="text-xs font-bold text-[#FF5000] animate-pulse">R2 업로드 중...</span>
         </div>
       </div>
 

@@ -419,9 +419,23 @@ onMounted(async () => {
       <div class="border-t border-gray-800 py-6 px-4 text-[11px] text-gray-500">
         <div class="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between gap-4">
           <div>
-            <p class="font-semibold text-gray-400 mb-1">주식회사 올모아글로벌 (OLMOA Commerce Inc.) | 대표이사: 김올모 | 사업자등록번호: 120-88-99102 | 통신판매업신고: 제2026-서울강남-04821호</p>
+            <p class="font-semibold text-gray-400 mb-1">
+              주식회사 올모아글로벌 (OLMOA Commerce Inc.) | 대표이사: 김올모 | 사업자등록번호: 120-88-99102
+              <a href="https://www.ftc.go.kr/bizCommPop.do?wrkr_no=1208899102" target="_blank" rel="noopener" class="underline text-gray-400 hover:text-white ml-1">[사업자정보확인]</a>
+              | 통신판매업신고: 제2026-서울강남-04821호 | 호스팅서비스: Cloudflare Edge
+            </p>
             <p>주소: 서울특별시 강남구 테헤란로 427, 올모아타워 15층 | 고객센터: 1588-0000 (평일 09:00~18:00) | 전자우편: support@olmoa.com</p>
-            <p class="mt-1 text-gray-600">올모아는 통신판매중개자로서 오픈마켓 거래 당사자가 아니며, 입점 판매자가 등록한 상품 정보 및 거래에 대해 올모아 결제대금예치(에스크로) 및 90일 무료반품/30일 최저가 차액보상 정책에 따라 소비자를 보호합니다.</p>
+            <p class="mt-1 text-gray-600">
+              올모아는 통신판매중개자로서 오픈마켓 거래 당사자가 아니며, 입점 판매자가 등록한 상품 정보 및 거래에 대해 올모아 결제대금예치(에스크로) 및 90일 무료반품/30일 최저가 차액보상 정책에 따라 소비자를 보호합니다.
+            </p>
+            <div class="mt-2.5 flex items-center gap-2">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold border border-emerald-800/80 text-[10px]">
+                🛡️ 토스페이먼츠 구매안전(에스크로) 서비스 가입 확인
+              </span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-bold text-[10px]">
+                🔒 256-Bit SSL/TLS 암호화 거래
+              </span>
+            </div>
           </div>
           <div class="shrink-0 text-right self-end">
             <p>© 2026 OLMOA Commerce Inc. All rights reserved.</p>

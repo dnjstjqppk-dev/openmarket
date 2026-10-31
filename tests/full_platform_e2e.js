@@ -258,6 +258,49 @@ async function testGlobalOpenMarketEngines() {
   assert(fdsRes.status === 200 && fdsJson.data?.decision === 'CHALLENGE_3DS', 'Live FDS Risk Evaluator returns CHALLENGE_3DS on cross-country high-value order');
 }
 
+
+async function testCommercialHardeningEngines() {
+  console.log('\n--- 10. Testing Commercial Hardening (Toss Payments, R2 Storage, Real Dispatcher) ---');
+  // PG Config
+  const payConfigRes = await safeFetch(`${API_BASE}/api/v1/payments/config`);
+  const payConfigJson = await payConfigRes.json();
+  assert(payConfigRes.status === 200 && payConfigJson.provider === 'TOSS_PAYMENTS', 'Live Toss Payments config returns 200 OK & provider TOSS_PAYMENTS');
+
+  // Media Storage Upload & Stream
+  const sampleBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const uploadRes = await safeFetch(`${API_BASE}/api/v1/storage/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_data: sampleBase64,
+      file_name: 'live-product-badge.png',
+      content_type: 'image/png',
+      folder: 'products'
+    })
+  });
+  const uploadJson = await uploadRes.json();
+  assert(uploadRes.status === 201 && uploadJson.success === true, 'Live Media Storage upload returns 201 Created & public_url');
+
+  const fileId = uploadJson.data?.file_id;
+  const streamRes = await safeFetch(`${API_BASE}/api/v1/storage/file/${fileId}`);
+  assert(streamRes.status === 200 && streamRes.headers.get('content-type') === 'image/png', 'Live Media Storage streaming returns 200 OK with image/png');
+
+  // Notification Dispatch
+  const dlvRes = await safeFetch(`${API_BASE}/api/v1/notifications/dispatch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel: 'ALIMTALK',
+      recipient: '010-8888-9999',
+      template_code: 'ORDER_CONFIRMED',
+      title: '올모아 실시간 주문 확인',
+      content: '올모아 라이브 상용화 주문이 안전하게 접수되었습니다.'
+    })
+  });
+  const dlvJson = await dlvRes.json();
+  assert(dlvRes.status === 200 && dlvJson.data?.status === 'SENT', 'Live Notification Dispatcher returns 200 OK & status SENT');
+}
+
 async function runAll() {
   console.log('====================================================');
   console.log(' OLMOA E2E PRODUCTION VERIFICATION SUITE');
@@ -273,6 +316,7 @@ async function runAll() {
   await testDynamicBannersAndAddresses();
   await testAdminBannersAndNotifications();
   await testGlobalOpenMarketEngines();
+  await testCommercialHardeningEngines();
 
   console.log('\n====================================================');
   console.log(` RESULTS: Passed: ${passed}, Failed: ${failed}`);
