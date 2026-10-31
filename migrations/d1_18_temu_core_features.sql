@@ -61,3 +61,4 @@ CREATE TABLE IF NOT EXISTS ipr_takedown_reports (
     processed_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+

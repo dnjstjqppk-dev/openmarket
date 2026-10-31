@@ -173,6 +173,96 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     }), { status: 201, headers: corsHeaders });
   }
 
+  // 4-a. Partner Update Product Price
+  if (url.pathname.startsWith('/api/v1/partner/products/') && url.pathname.endsWith('/price') && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const prodId = url.pathname.split('/')[5];
+    const body = await request.json().catch(() => ({}));
+    const salePrice = Math.max(100, parseInt(body.sale_price, 10));
+    const origPrice = Math.max(salePrice, parseInt(body.original_price || Math.round(salePrice * 1.3), 10));
+
+    const product = await env.DB.prepare('SELECT id FROM products WHERE id = ? AND partner_id = ?').bind(prodId, partnerId).first();
+    if (!product) {
+      return new Response(JSON.stringify({ error: '상품을 찾을 수 없거나 파트너 권한이 없습니다.' }), { status: 404, headers: corsHeaders });
+    }
+
+    await env.DB.batch([
+      env.DB.prepare('UPDATE products SET lowest_sale_price = ?, lowest_original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(salePrice, origPrice, prodId),
+      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(salePrice, origPrice, prodId)
+    ]);
+
+    return new Response(JSON.stringify({
+      success: true,
+      product_id: prodId,
+      lowest_sale_price: salePrice,
+      lowest_original_price: origPrice,
+      message: '상품 가격이 성공적으로 변경되었습니다.'
+    }), { status: 200, headers: corsHeaders });
+  }
+
+  // 4-b. Partner Update Full Product & Detail Page (Description HTML, Specs, Custody)
+  if (url.pathname.match(/^\/api\/v1\/partner\/products\/[^\/]+$/) && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const prodId = url.pathname.split('/')[5];
+    const body = await request.json().catch(() => ({}));
+
+    const product = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND partner_id = ?').bind(prodId, partnerId).first();
+    if (!product) {
+      return new Response(JSON.stringify({ error: '상품을 찾을 수 없거나 파트너 권한이 없습니다.' }), { status: 404, headers: corsHeaders });
+    }
+
+    const title = (body.title || product.title).trim();
+    const descriptionHtml = body.description_html !== undefined ? body.description_html : product.description_html;
+    const thumbUrl = body.thumbnail_url || product.thumbnail_url;
+    const catId = body.category_id || product.category_id;
+    const salePrice = body.sale_price ? Math.max(100, parseInt(body.sale_price, 10)) : product.lowest_sale_price;
+    const origPrice = body.original_price ? Math.max(salePrice, parseInt(body.original_price, 10)) : product.lowest_original_price;
+    const custodyType = body.custody_type || product.custody_type || 'SEMI_MANAGED';
+    const supplyPrice = body.supply_price !== undefined ? (Number(body.supply_price) || 0) : product.supply_price;
+    const hsCode = (body.hs_code || product.hs_code || '6109.10').trim();
+    const countryOrigin = (body.country_origin || product.country_origin || 'KR').trim().toUpperCase();
+    const pkgLength = Number(body.package_length_cm || product.package_length_cm || 20.0);
+    const pkgWidth = Number(body.package_width_cm || product.package_width_cm || 15.0);
+    const pkgHeight = Number(body.package_height_cm || product.package_height_cm || 10.0);
+    const pkgWeight = Number(body.package_weight_kg || product.package_weight_kg || 0.5);
+    const volWeight = Math.round(((pkgLength * pkgWidth * pkgHeight) / 5000) * 100) / 100;
+    const warehouseLoc = body.warehouse_location || product.warehouse_location || 'INCHEON_FBO';
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE products
+         SET title = ?, description_html = ?, thumbnail_url = ?, category_id = ?,
+             lowest_original_price = ?, lowest_sale_price = ?, custody_type = ?, supply_price = ?,
+             hs_code = ?, country_origin = ?, package_length_cm = ?, package_width_cm = ?, package_height_cm = ?,
+             package_weight_kg = ?, volumetric_weight_kg = ?, warehouse_location = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND partner_id = ?`
+      ).bind(
+        title, descriptionHtml, thumbUrl, catId,
+        origPrice, salePrice, custodyType, supplyPrice,
+        hsCode, countryOrigin, pkgLength, pkgWidth, pkgHeight,
+        pkgWeight, volWeight, warehouseLoc,
+        prodId, partnerId
+      ),
+      env.DB.prepare(
+        `UPDATE product_skus
+         SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE product_id = ?`
+      ).bind(salePrice, origPrice, prodId)
+    ]);
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA Partner Catalog',
+      message: '상품 상세정보 및 상세페이지가 성공적으로 업데이트되었습니다.',
+      data: {
+        product_id: prodId,
+        title,
+        description_html: descriptionHtml,
+        thumbnail_url: thumbUrl,
+        sale_price: salePrice,
+        original_price: origPrice
+      }
+    }), { status: 200, headers: corsHeaders });
+  }
+
   // 4. Partner Update SKU Stock & Price (Enforce Ownership + Individual SKU Targeting)
   if (url.pathname.startsWith('/api/v1/partner/products/') && url.pathname.endsWith('/stock') && (request.method === 'PUT' || request.method === 'PATCH')) {
     const targetId = url.pathname.split('/')[5];

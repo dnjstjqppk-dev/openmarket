@@ -664,8 +664,7 @@ async function runTests() {
     body: JSON.stringify({
       type: 'RETURN',
       reason: 'Cross-border package outer box damaged',
-      refund_amount: 15000,
-      is_dispute: true
+      refund_amount: 15000
     })
   });
   assert.equal(claimForDisputeRes.status, 201);
