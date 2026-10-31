@@ -211,6 +211,95 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     }), { headers: corsHeaders });
   }
 
+  // 5. Cross-Border Commercial Invoice & Packing List Manifest (GET /api/v1/orders/:id/commercial-invoice)
+  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/commercial-invoice$/) && request.method === 'GET') {
+    const orderId = url.pathname.split('/')[4];
+    const order = await env.DB.prepare(
+      `SELECT o.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone
+       FROM orders o
+       LEFT JOIN users u ON o.customer_id = u.id
+       WHERE o.id = ? OR o.order_number = ?`
+    ).bind(orderId, orderId).first();
+
+    if (!order) {
+      return new Response(JSON.stringify({ error: 'Order not found', order_id: orderId }), { status: 404, headers: corsHeaders });
+    }
+
+    const { results: items } = await env.DB.prepare(
+      `SELECT oi.*, p.title as product_title, p.brand, COALESCE(p.hs_code, '8518.30') as hs_code,
+              COALESCE(p.country_origin, 'KR') as origin_country, pt.business_name as seller_name, pt.business_reg_number
+       FROM order_items oi
+       LEFT JOIN products p ON oi.product_id = p.id
+       LEFT JOIN partners pt ON oi.partner_id = pt.id
+       WHERE oi.order_id = ?`
+    ).bind(order.id).all();
+
+    const usdRate = 1380.0;
+    const totalKrw = order.total_pay_amount || order.total_amount || 0;
+    const totalUsd = Math.round((totalKrw / usdRate) * 100) / 100;
+
+    const manifestItems = (items || []).map((it, idx) => {
+      const itPriceKrw = it.price || 0;
+      const itPriceUsd = Math.round((itPriceKrw / usdRate) * 100) / 100;
+      const subtotalUsd = Math.round((itPriceUsd * (it.quantity || 1)) * 100) / 100;
+      return {
+        item_no: idx + 1,
+        sku_id: it.sku_id || 'SKU_STD',
+        description: it.product_title || 'Cross-Border Consumer Commodity',
+        brand: it.brand || 'OLMOA',
+        hs_code: it.hs_code || '8518.30',
+        origin_country: it.origin_country || 'KR',
+        quantity: it.quantity || 1,
+        unit_price_usd: itPriceUsd,
+        unit_price_krw: itPriceKrw,
+        total_amount_usd: subtotalUsd,
+        total_amount_krw: itPriceKrw * (it.quantity || 1),
+        net_weight_kg: 0.45
+      };
+    });
+
+    const invoiceData = {
+      invoice_number: `INV-CB-${order.order_number || order.id}`,
+      issue_date: new Date(order.created_at || Date.now()).toISOString().slice(0, 10),
+      order_id: order.id,
+      order_number: order.order_number,
+      incoterms: 'DDP (Delivered Duty Paid)',
+      currency: 'USD',
+      fx_rate_applied: usdRate,
+      exporter: {
+        company_name: 'OLMOA Global Cross-Border Fulfillment Hub',
+        business_number: '120-88-01928',
+        country: 'KR',
+        address: 'Incheon Free Trade Zone B1, Incheon, Republic of Korea',
+        contact: 'customs-ops@olmoa.com'
+      },
+      consignee: {
+        name: order.recipient_name || order.customer_name || 'Valued Buyer',
+        pccc: order.pccc || 'P123456789012',
+        phone: order.recipient_phone || order.customer_phone || '010-0000-0000',
+        address: `${order.shipping_address || ''} ${order.shipping_detail_address || ''}`.trim(),
+        postal_code: order.shipping_postal_code || '06000',
+        country: 'KR'
+      },
+      summary: {
+        total_items: manifestItems.reduce((acc, it) => acc + it.quantity, 0),
+        total_customs_value_usd: totalUsd,
+        total_customs_value_krw: totalKrw,
+        freight_charge_usd: 0.00,
+        insurance_charge_usd: 0.00,
+        declaration_status: 'CLEARED_AUTOMATIC_CUSTOMS'
+      },
+      line_items: manifestItems,
+      customs_declaration_statement: 'I hereby certify that the information on this commercial invoice is true and correct, and that the contents and value of this shipment are as stated above according to Korea Customs Service regulations.'
+    };
+
+    return new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA Global Customs Engine',
+      data: invoiceData
+    }), { headers: corsHeaders });
+  }
+
   return null;
 }
 

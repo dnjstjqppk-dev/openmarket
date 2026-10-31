@@ -21,6 +21,27 @@ const claimCompetitorPrice = ref<number>(0)
 const trackingInfo = ref<any>(null)
 const loadingTracking = ref(false)
 
+const showInvoiceModal = ref(false)
+const invoiceData = ref<any>(null)
+const invoiceLoading = ref(false)
+
+const loadCommercialInvoice = async () => {
+  if (!order.value) return
+  invoiceLoading.value = true
+  showInvoiceModal.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice`)
+    const json = await res.json()
+    if (json.success) {
+      invoiceData.value = json.data
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    invoiceLoading.value = false
+  }
+}
+
 const loadMilestoneTracking = async (subOrderId: string) => {
   loadingTracking.value = true
   try {
@@ -216,6 +237,117 @@ onMounted(loadOrderDetail)
           >
             ↩ 90일 무료 반품 / 무회수 환불
           </button>
+          <button
+            @click="loadCommercialInvoice"
+            class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-xs font-black cursor-pointer flex items-center gap-1.5"
+            title="관세청 제출용 국제 상업 송장(Commercial Invoice) 및 패킹 리스트 보기"
+          >
+            <i class="fa-solid fa-file-invoice text-xs"></i>
+            <span>📄 전자 통관 인보이스</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Commercial Invoice Modal (Step 29) -->
+      <div v-if="showInvoiceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div class="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl border border-gray-200 space-y-6">
+          <div class="flex items-center justify-between border-b pb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm">
+                <i class="fa-solid fa-plane-departure"></i>
+              </span>
+              <div>
+                <h3 class="text-base font-black text-gray-900">국제 크로스보더 상업송장 (Commercial Invoice)</h3>
+                <p class="text-[11px] text-gray-500 font-mono">Customs Declaration &amp; Packing List Manifest</p>
+              </div>
+            </div>
+            <button @click="showInvoiceModal = false" class="text-xs text-gray-400 hover:text-gray-700 font-bold p-1 cursor-pointer">✕ 닫기</button>
+          </div>
+
+          <div v-if="invoiceLoading" class="py-12 text-center text-xs text-gray-400 animate-pulse">
+            관세청 제출용 전자 인보이스 데이터 불러오는 중...
+          </div>
+          <div v-else-if="invoiceData" class="space-y-5 text-xs">
+            <!-- Header Info -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-gray-50 border border-gray-200">
+              <div>
+                <span class="text-gray-400 text-[10px] block font-bold">Invoice No.</span>
+                <span class="font-mono font-black text-gray-900">{{ invoiceData.invoice_number }}</span>
+              </div>
+              <div>
+                <span class="text-gray-400 text-[10px] block font-bold">Issue Date</span>
+                <span class="font-semibold text-gray-800">{{ invoiceData.issue_date }}</span>
+              </div>
+              <div>
+                <span class="text-gray-400 text-[10px] block font-bold">Incoterms</span>
+                <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-black text-[10px]">{{ invoiceData.incoterms }}</span>
+              </div>
+              <div>
+                <span class="text-gray-400 text-[10px] block font-bold">Declaration FX</span>
+                <span class="font-mono text-gray-700">1 USD = ₩{{ invoiceData.fx_rate_applied }}</span>
+              </div>
+            </div>
+
+            <!-- Exporter / Consignee -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="p-4 rounded-xl border border-gray-200 bg-white">
+                <div class="font-black text-gray-900 text-xs mb-1.5 flex items-center gap-1.5">
+                  <span class="text-blue-600">●</span> Exporter (발송인/수출자)
+                </div>
+                <div class="font-bold text-gray-800">{{ invoiceData.exporter.company_name }}</div>
+                <div class="text-[11px] text-gray-500 mt-1">{{ invoiceData.exporter.address }}</div>
+                <div class="text-[11px] text-gray-500 font-mono mt-0.5">Biz Reg: {{ invoiceData.exporter.business_number }}</div>
+              </div>
+              <div class="p-4 rounded-xl border border-gray-200 bg-white">
+                <div class="font-black text-gray-900 text-xs mb-1.5 flex items-center gap-1.5">
+                  <span class="text-emerald-600">●</span> Consignee (수하인/수입자)
+                </div>
+                <div class="font-bold text-gray-800">{{ invoiceData.consignee.name }}</div>
+                <div class="text-[11px] text-gray-500 mt-1">{{ invoiceData.consignee.address }}</div>
+                <div class="text-[11px] font-mono text-emerald-700 font-bold mt-0.5">PCCC: {{ invoiceData.consignee.pccc }}</div>
+              </div>
+            </div>
+
+            <!-- Manifest Items Table -->
+            <div class="rounded-xl border border-gray-200 overflow-hidden">
+              <table class="w-full text-left border-collapse text-[11px]">
+                <thead class="bg-gray-100 text-gray-600 font-bold border-b">
+                  <tr>
+                    <th class="py-2.5 px-3">No</th>
+                    <th class="py-2.5 px-3">Item Description</th>
+                    <th class="py-2.5 px-3">HS Code</th>
+                    <th class="py-2.5 px-3 text-center">Qty</th>
+                    <th class="py-2.5 px-3 text-right">Unit (USD)</th>
+                    <th class="py-2.5 px-3 text-right">Total (USD)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="it in invoiceData.line_items" :key="it.item_no">
+                    <td class="py-2 px-3 font-mono text-gray-400">{{ it.item_no }}</td>
+                    <td class="py-2 px-3 font-bold text-gray-900">{{ it.description }}</td>
+                    <td class="py-2 px-3 font-mono text-blue-600 font-semibold">{{ it.hs_code }}</td>
+                    <td class="py-2 px-3 text-center font-bold">{{ it.quantity }}</td>
+                    <td class="py-2 px-3 text-right font-mono">${{ it.unit_price_usd.toFixed(2) }}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-900">${{ it.total_amount_usd.toFixed(2) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Customs Declaration Legal Statement -->
+            <div class="p-3 bg-gray-50 rounded-xl text-[10px] text-gray-500 leading-relaxed font-mono border border-gray-200">
+              {{ invoiceData.customs_declaration_statement }}
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <button
+                @click="showInvoiceModal = false"
+                class="px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs cursor-pointer shadow-xs"
+              >
+                확인 및 닫기
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

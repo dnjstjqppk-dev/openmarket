@@ -249,6 +249,18 @@ const updateExistingProduct = async () => {
   }
 }
 
+const computeQualityScore = (p: any) => {
+  if (!p) return 0
+  let score = 0
+  if (p.title && p.title.length >= 8) score += 20
+  if (p.thumbnail_url && !p.thumbnail_url.includes('placeholder')) score += 20
+  if (p.description_html && p.description_html.length >= 40) score += 25
+  if ((p.sale_price || p.price || p.editPrice) > 0 && (p.stock_quantity || p.stock || p.editStock) > 0) score += 15
+  if (p.hs_code) score += 10
+  if (p.country_origin) score += 10
+  return Math.min(100, score)
+}
+
 onMounted(loadProducts)
 </script>
 
@@ -287,6 +299,21 @@ onMounted(loadProducts)
           <p class="text-[11px] text-gray-500">기본 정보, 판매 가격, 물류 스펙 및 상세페이지 내용을 작성하여 카탈로그에 즉시 반영합니다.</p>
         </div>
         <button @click="showCreateModal = false" class="text-xs text-gray-400 hover:text-gray-700 cursor-pointer font-bold">닫기 ✕</button>
+      </div>
+
+      <!-- Listing Quality Score Meter -->
+      <div class="flex flex-wrap items-center justify-between p-3 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-black text-gray-800">등록 품질 점수 (Quality Score):</span>
+          <span class="font-black text-sm text-[#FF5000]">{{ computeQualityScore(newProd) }}/100점</span>
+          <span v-if="computeQualityScore(newProd) >= 80" class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-black">
+            ✓ A+ 리치 상세페이지 최적화
+          </span>
+          <span v-else class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+            보완 권장 (이미지/상세설명 40자 이상 입력 시 랭킹 가산)
+          </span>
+        </div>
+        <span class="text-[11px] text-gray-500 font-medium">HS코드 + 대표이미지 + 고시정보 입력 완료 시 검색 알고리즘 상위 노출</span>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -509,6 +536,7 @@ onMounted(loadProducts)
             <th class="py-3.5 px-5 font-bold">상품 정보</th>
             <th class="py-3.5 px-5 font-bold">원산지 / HS코드</th>
             <th class="py-3.5 px-5 font-bold">물류거점 / 부피중량</th>
+            <th class="py-3.5 px-5 font-bold text-center">품질점수</th>
             <th class="py-3.5 px-5 font-bold">판매가 (KRW)</th>
             <th class="py-3.5 px-5 font-bold">재고 (SKU)</th>
             <th class="py-3.5 px-5 font-bold text-center">상세페이지 &amp; 관리</th>
@@ -537,6 +565,11 @@ onMounted(loadProducts)
             <td class="py-3 px-5">
               <div class="font-semibold text-gray-700 text-[11px]">{{ p.warehouse_location || 'INCHEON_FBO' }}</div>
               <div class="text-[10px] text-gray-400">Vol: {{ p.volumetric_weight_kg || 0.6 }}kg</div>
+            </td>
+            <td class="py-3 px-5 text-center">
+              <span class="px-2 py-0.5 rounded font-black text-[11px] inline-block" :class="computeQualityScore(p) >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">
+                ★ {{ computeQualityScore(p) }}점
+              </span>
             </td>
             <td class="py-3 px-5">
               <input v-model.number="p.editPrice" type="number" class="w-28 h-8 px-2.5 rounded border border-gray-300 font-bold text-gray-900 focus:border-[#FF5000]" />

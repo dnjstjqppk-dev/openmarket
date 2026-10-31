@@ -107,10 +107,10 @@ export async function handleTemuOpsRoutes(request, url, env, corsHeaders) {
 
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      const userId = request.headers.get('X-Customer-Id') || body.user_id || 'u_customer_001';
-      const authorName = body.author_name || '익명 고객';
+      const userId = request.headers.get('X-Customer-Id') || body.user_id || body.customer_id || 'u_customer_001';
+      const authorName = body.author_name || body.customer_name || '익명 고객';
       const rating = Number(body.rating) || 5;
-      const content = (body.content || '사이즈 딱 맞고 배송 빠릅니다. 가성비 최고!').trim();
+      const content = (body.content || body.comment || '사이즈 딱 맞고 배송 빠릅니다. 가성비 최고!').trim();
       const heightCm = body.user_height_cm ? Number(body.user_height_cm) : null;
       const weightKg = body.user_weight_kg ? Number(body.user_weight_kg) : null;
       const fitType = ['TRUE_TO_SIZE', 'RUNS_SMALL', 'RUNS_LARGE'].includes(body.fit_type) ? body.fit_type : 'TRUE_TO_SIZE';

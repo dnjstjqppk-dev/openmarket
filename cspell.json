@@ -107,7 +107,9 @@
     "SHINHAN",
     "KOOKMIN",
     "Mismapped",
-    "changefreq"
+    "changefreq",
+    "incoterms",
+    "Incoterms"
   ],
   "ignorePaths": [
     "**/node_modules/**",
