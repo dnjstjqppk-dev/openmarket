@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -83,9 +83,9 @@ const cancelReasons = [
 const loadOrders = async () => {
   loading.value = true
   try {
-    const cid = auth.user?.id || 'cust_demo_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/orders?customer_id=${encodeURIComponent(cid)}`, {
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success && Array.isArray(json.data)) {
@@ -147,13 +147,13 @@ function openCancelModal(order: Order) {
 async function confirmCancel() {
   if (!orderToCancel.value) return
   isCancelling.value = true
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   const ordId = orderToCancel.value.id
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${ordId}/cancel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({ reason: cancelReason.value })
     })
     const json = await res.json()
@@ -173,11 +173,11 @@ async function confirmCancel() {
 }
 
 const confirmPurchase = async (orderId: string) => {
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${orderId}/confirm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid }
+      headers: { 'Content-Type': 'application/json', ...authHeader() }
     })
     const json = await res.json()
     if (json.success) {
@@ -244,7 +244,7 @@ onMounted(loadOrders)
         <h1 class="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
           <span>📦 나의 주문 내역</span>
           <span class="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-[#FF5000] font-black">
-            30일 최저가 보상 & 90일 안심반품
+            판매가 인하 차액 보상 · 7일 청약철회
           </span>
         </h1>
         <p class="text-xs sm:text-sm text-gray-500 mt-1">
@@ -515,7 +515,7 @@ onMounted(loadOrders)
         <div class="bg-gray-50/60 px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
           <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
             <i class="fa-solid fa-shield-halved text-[#00A862]"></i>
-            <span>30일 최저가 차액 자동보상 & 90일 무조건 무료반품 보장</span>
+            <span>결제 후 30일 내 판매가 인하 시 차액 적립 · 수령 후 7일 내 반품 신청</span>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">

@@ -1,5 +1,6 @@
 <template>
   <div class="max-w-4xl mx-auto bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm space-y-6 text-slate-700 text-xs sm:text-sm leading-relaxed">
+    <div role="note" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">본 문서는 법률 검토 전 초안이며 일부 내용은 실제 서비스 정책과 다를 수 있습니다. 정식 서비스 개시 전 확정됩니다.</div>
     <div class="border-b border-slate-100 pb-4">
       <span class="text-orange-600 font-bold text-xs uppercase tracking-wider">OLMOA Privacy Policy</span>
       <h1 class="text-2xl font-black text-slate-900 mt-1">개인정보처리방침</h1>
@@ -40,7 +41,7 @@
       <router-link to="/" class="font-bold text-orange-600 hover:underline">&larr; 홈으로 돌아가기</router-link>
       <div class="space-x-3">
         <router-link to="/legal/terms" class="hover:text-slate-800">이용약관</router-link>
-        <router-link to="/legal/refund" class="hover:text-slate-800">90일 무료반품규정</router-link>
+        <router-link to="/legal/refund" class="hover:text-slate-800">취소·반품·환불 안내</router-link>
       </div>
     </div>
   </div>

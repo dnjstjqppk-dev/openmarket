@@ -1,778 +1,217 @@
 // apps/cloudflare-gateway/src/routes/orders.js
-// OLMOA Orders Engine: Atomic D1 Batch Transactions, Server Price Authority, Partner Shipping Rules, Coupons/Credits, Cancellation & Claims
+// Customer order API. Identity comes only from the verified JWT (lib/auth.js).
 
-function verifyAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const adminSecret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
-  const adminHeader = request.headers.get('X-Admin-Secret') || '';
-  const isAdmin =
-    (token.length > 0 && (token === adminSecret || token.startsWith('ey-olmoa-admin-'))) ||
-    adminHeader === adminSecret ||
-    adminHeader.startsWith('ey-olmoa-admin-');
-  const rawCustomerHeader = request.headers.get('X-Customer-Id') || (token.startsWith('u_') ? token : '');
-  const hasExplicitAuth = Boolean(rawCustomerHeader || isAdmin);
-  const customerId = rawCustomerHeader || 'u_customer_001';
-  return { isAdmin, customerId, hasExplicitAuth, token };
+import { requireAuth, requireCustomer, authenticate } from '../lib/auth.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { newId, sqlNow } from '../lib/ids.js';
+import { grantCreditStatements } from '../lib/ledger.js';
+import {
+  createOrder, cancelOrder, cancelSubOrder, confirmPurchase, loadOrderBundle, mapDbError, autoConfirmDelivered, expireStaleOrders
+} from '../services/orders.js';
+
+export const RETURN_WINDOW_DAYS_DEFAULT = 7;
+const PRICE_ADJUST_WINDOW_DAYS = 30;
+
+function presentOrder(b) {
+  const { order, subs, items } = b;
+  const subsOut = subs.map((s) => ({
+    id: s.id, sub_order_no: s.sub_order_no, partner_id: s.partner_id, business_name: s.business_name, sales_model: s.sales_model,
+    status: s.status, goods_amount: s.goods_amount, shipping_fee: s.shipping_fee, total_amount: s.total_amount,
+    coupon_discount_allocated: s.coupon_discount_allocated, carrier_code: s.carrier_code, tracking_number: s.tracking_number,
+    shipped_at: s.shipped_at, delivered_at: s.delivered_at, purchase_confirmed_at: s.purchase_confirmed_at,
+    estimated_delivery_date: s.estimated_delivery_date, is_late_compensated: s.is_late_compensated,
+    items: items.filter((i) => i.sub_order_id === s.id)
+  }));
+  return {
+    ...order,
+    checkout_idempotency_key: undefined,
+    sub_orders: subsOut,
+    items: subsOut.flatMap((s) => s.items.map((i) => ({ ...i, status: s.status, partner_name: s.business_name, partner_id: s.partner_id, carrier: s.carrier_code, tracking_number: s.tracking_number })))
+  };
+}
+
+async function ownedBundle(request, env, ordId) {
+  const me = await requireAuth(request, env);
+  const b = await loadOrderBundle(env, ordId);
+  if (!b) throw notFound('주문을 찾을 수 없습니다.');
+  if (me.role !== 'ROLE_ADMIN' && b.order.customer_id !== me.userId) throw forbidden('본인 주문만 조회할 수 있습니다.');
+  return { me, b };
 }
 
 export async function handleOrderRoutes(request, url, env, corsHeaders) {
-  // 1. Checkout (Atomic D1 Batch + Server Price Authority + Partner Shipping + Coupon/Credit Deduction)
-  if ((url.pathname === '/api/v1/orders/checkout' || url.pathname === '/api/v1/orders') && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const items = body.items || [];
-    if (!items.length) {
-      return new Response(JSON.stringify({ error: 'Cart is empty. Valid items required.' }), { status: 400, headers: corsHeaders });
-    }
+  const p = url.pathname;
+  if (!p.startsWith('/api/v1/orders')) return null;
 
-    const idempotencyKey = request.headers.get('X-Idempotency-Key') || body.idempotency_key;
-    if (idempotencyKey) {
-      const existingLedger = await env.DB.prepare(
-        "SELECT reference_id FROM inventory_ledger WHERE idempotency_key = ? OR idempotency_key LIKE ? ESCAPE '\\' LIMIT 1"
-      ).bind(idempotencyKey, `${idempotencyKey}\_%`).first();
-      if (existingLedger) {
-        const ord = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(existingLedger.reference_id).first();
-        if (ord) {
-          const replayData = {
-            order_id: ord.id,
-            order_no: ord.order_no,
-            total_goods_amount: ord.total_goods_amount,
-            total_shipping_amount: ord.total_shipping_amount,
-            total_discount_amount: ord.total_discount_amount,
-            total_pay_amount: ord.total_pay_amount,
-            total_amount: ord.total_pay_amount,
-            status: ord.payment_status
-          };
-          return new Response(JSON.stringify({
-            success: true,
-            brand: 'OLMOA',
-            idempotent_replay: true,
-            ...replayData,
-            data: replayData
-          }), { status: 200, headers: corsHeaders });
-        }
-      }
-    }
+  // Scheduler hooks (admin-triggered; the Worker cron calls the services directly)
+  if (p === '/api/v1/orders/cron/auto-confirm' && request.method === 'POST') {
+    await requireAuth(request, env, ['ROLE_ADMIN']);
+    return json(corsHeaders, { success: true, confirmed_count: await autoConfirmDelivered(env) });
+  }
+  if (p === '/api/v1/orders/cron/expire' && request.method === 'POST') {
+    await requireAuth(request, env, ['ROLE_ADMIN']);
+    return json(corsHeaders, { success: true, expired_count: await expireStaleOrders(env) });
+  }
 
-    let { customerId } = verifyAuth(request, env);
-    if (body.customer_id && typeof body.customer_id === 'string') {
-      customerId = body.customer_id;
-    }
-    const userRow = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(customerId).first();
-    if (!userRow) customerId = 'u_customer_001';
+  // 0. Quote: exact server-side totals for the checkout screen (no writes)
+  if (p === '/api/v1/orders/quote' && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const r = await createOrder(env, me, await readJson(request), null, { dryRun: true });
+    return json(corsHeaders, { success: true, data: r.quote });
+  }
 
-    const rawPccc = body.pccc ? String(body.pccc).trim().toUpperCase() : null;
-    if (rawPccc && !/^P\d{12}$/.test(rawPccc)) {
-      return new Response(JSON.stringify({
-        error: "개인통관고유부호 형식이 올바르지 않습니다. 'P'로 시작하는 13자리 번호여야 합니다.",
-        code: 'INVALID_PCCC'
-      }), { status: 400, headers: corsHeaders });
-    }
-
-    const orderId = 'olm_ord_' + Date.now();
-    const orderNo = 'OLM' + Date.now().toString().slice(-8);
-
-    // Step A: Server Price Lookup & Zero-Fallback SKU Validation with Partner Shipping Policy
-    const resolvedItems = [];
-    for (const item of items) {
-      if (!item.sku_id) {
-        return new Response(JSON.stringify({ error: 'Missing sku_id. Fallback SKUs are forbidden.' }), { status: 400, headers: corsHeaders });
-      }
-      const sku = await env.DB.prepare(
-        `SELECT s.*, p.partner_id, p.title as prod_title,
-                pt.base_shipping_fee, pt.free_shipping_threshold, pt.commission_rate
-         FROM product_skus s
-         JOIN products p ON s.product_id = p.id
-         LEFT JOIN partners pt ON p.partner_id = pt.id
-         WHERE s.id = ?`
-      ).bind(item.sku_id).first();
-
-      if (!sku) {
-        return new Response(JSON.stringify({ error: `Invalid SKU ID: ${item.sku_id}. Zero fallback enforced.` }), { status: 400, headers: corsHeaders });
-      }
-      if (item.product_id && item.product_id !== sku.product_id) {
-        return new Response(JSON.stringify({ error: `SKU ${item.sku_id} does not belong to product ${item.product_id}` }), { status: 400, headers: corsHeaders });
-      }
-
-      const qty = Math.max(1, parseInt(item.quantity || 1, 10));
-      if (sku.stock_quantity < qty) {
-        return new Response(JSON.stringify({
-          error: `Stock insufficient for SKU ${sku.sku_code}`,
-          sku_id: sku.id,
-          available: sku.stock_quantity,
-          requested: qty
-        }), { status: 409, headers: corsHeaders });
-      }
-
-      let optSummary = '기본';
-      try {
-        const optObj = JSON.parse(sku.option_combination_json);
-        optSummary = Object.entries(optObj).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
-      } catch (e) {}
-
-      // Volume Tier Discount Policy: 3+ items 5%, 5+ items 10%, 10+ items 15%
-      const volumeDiscountPct = qty >= 10 ? 15 : (qty >= 5 ? 10 : (qty >= 3 ? 5 : 0));
-      const effectiveUnitPrice = volumeDiscountPct > 0
-        ? Math.round(sku.sale_price * (1 - volumeDiscountPct / 100))
-        : sku.sale_price;
-      const volumeDiscount = (sku.sale_price - effectiveUnitPrice) * qty;
-
-      resolvedItems.push({
-        skuId: sku.id,
-        productId: sku.product_id,
-        partnerId: sku.partner_id || 'pt_001',
-        title: sku.prod_title,
-        optionSummary: optSummary,
-        baseUnitPrice: sku.sale_price,
-        unitPrice: effectiveUnitPrice,
-        quantity: qty,
-        volumeDiscountPct,
-        volumeDiscount,
-        lineTotal: effectiveUnitPrice * qty,
-        currentStock: sku.stock_quantity,
-        baseShippingFee: sku.base_shipping_fee != null ? sku.base_shipping_fee : 3000,
-        freeShippingThreshold: sku.free_shipping_threshold != null ? sku.free_shipping_threshold : 30000,
-        commissionRate: sku.commission_rate != null ? sku.commission_rate / 100.0 : 0.1
-      });
-    }
-
-    // Step B: Group by Partner for Split-Orders & Partner-Specific Shipping Calculation
-    const partnerGroups = {};
-    for (const it of resolvedItems) {
-      if (!partnerGroups[it.partnerId]) partnerGroups[it.partnerId] = [];
-      partnerGroups[it.partnerId].push(it);
-    }
-
-    let totalGoods = 0;
-    let totalShipping = 0;
-    const subOrderCalculations = [];
-    let subIndex = 1;
-
-    for (const [pId, pItems] of Object.entries(partnerGroups)) {
-      const goods = pItems.reduce((acc, it) => acc + it.lineTotal, 0);
-      const baseFee = pItems[0].baseShippingFee;
-      const freeThreshold = pItems[0].freeShippingThreshold;
-      const commRate = pItems[0].commissionRate;
-      const ship = (freeThreshold > 0 && goods >= freeThreshold) ? 0 : baseFee;
-
-      totalGoods += goods;
-      totalShipping += ship;
-      subOrderCalculations.push({
-        subOrderId: `${orderId}_sub_${subIndex}`,
-        subOrderNo: `${orderNo}-${subIndex}`,
-        partnerId: pId,
-        goodsAmount: goods,
-        shippingFee: ship,
-        totalAmount: goods + ship,
-        commissionRate: commRate,
-        items: pItems
-      });
-      subIndex++;
-    }
-
-    // Step B-2: Validate Optional Coupon & User Credits
-    let couponDiscount = 0;
-    let appliedCouponId = null;
-    if (body.coupon_code) {
-      const cpn = await env.DB.prepare('SELECT * FROM coupons WHERE UPPER(code) = UPPER(?) AND is_active = 1').bind(body.coupon_code.trim()).first();
-      if (cpn && totalGoods >= (cpn.min_order_amount || 0)) {
-        if (cpn.discount_type === 'PERCENT') {
-          couponDiscount = Math.round(totalGoods * (cpn.discount_value / 100));
-          if (cpn.max_discount_amount) couponDiscount = Math.min(couponDiscount, cpn.max_discount_amount);
-        } else {
-          couponDiscount = cpn.discount_value;
-        }
-        appliedCouponId = cpn.id;
-      }
-    }
-
-    let creditDiscount = 0;
-    const requestedCredit = parseInt(body.use_credit_amount || body.use_credits || 0, 10);
-    if (requestedCredit > 0) {
-      const credRow = await env.DB.prepare('SELECT SUM(amount_delta) as bal FROM user_credits WHERE user_id = ?').bind(customerId).first();
-      const availBal = credRow && credRow.bal ? Math.max(0, credRow.bal) : 0;
-      creditDiscount = Math.min(requestedCredit, availBal, Math.max(0, totalGoods + totalShipping - couponDiscount));
-    }
-
-    const totalVolumeDiscount = resolvedItems.reduce((acc, it) => acc + it.volumeDiscount, 0);
-    const totalDiscount = totalVolumeDiscount + couponDiscount + creditDiscount;
-    const totalGoodsBase = resolvedItems.reduce((acc, it) => acc + it.baseUnitPrice * it.quantity, 0);
-    const totalPay = Math.max(0, totalGoodsBase + totalShipping - totalDiscount);
-
-    const recipientName = body.recipient_name || body.shipping_address?.recipient || body.shipping_address?.name || '구매자';
-    const recipientPhone = body.recipient_phone || body.shipping_address?.phone || '010-0000-0000';
-    const addressLine1 = body.shipping_address_line1 || body.shipping_address?.address || body.shipping_address?.line1 || '주소 미입력';
-    const addressLine2 = body.shipping_address_line2 || body.shipping_address?.detail || body.shipping_address?.line2 || '';
-    const postalCode = body.shipping_postal_code || body.shipping_address?.zip || body.shipping_address?.postal_code || '00000';
-    const shippingMemo = body.shipping_memo || body.shipping_address?.memo || '';
-
-    const pcccVerified = rawPccc ? 1 : 0;
-    const customsDutyType = body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU';
-    const estimatedDuty = parseInt(body.estimated_duty_amount || 0, 10);
-    const settlementCurrency = body.currency || 'KRW';
-    const fxRate = Number(body.fx_rate || 1.0);
-
-    // Step C & D: Build Atomic D1 Batch Statements
-    const batchStatements = [];
-
-    batchStatements.push(
-      env.DB.prepare(
-        `INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, currency, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo, pccc, pccc_verified, customs_duty_type, estimated_duty_amount, settlement_currency, fx_rate)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'KRW', 'PAID', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        orderId, orderNo, customerId, totalGoodsBase, totalShipping, totalDiscount, totalPay,
-        recipientName, recipientPhone,
-        addressLine1, addressLine2,
-        postalCode, shippingMemo,
-        rawPccc, pcccVerified, customsDutyType, estimatedDuty, settlementCurrency, fxRate
-      )
-    );
-
-    for (const sub of subOrderCalculations) {
-      batchStatements.push(
-        env.DB.prepare(
-          `INSERT INTO sub_orders (id, parent_order_id, sub_order_no, partner_id, shipping_fee, goods_amount, discount_amount, total_amount, status)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'PAYMENT_CONFIRMED')`
-        ).bind(sub.subOrderId, orderId, sub.subOrderNo, sub.partnerId, sub.shippingFee, sub.goodsAmount, sub.totalAmount)
-      );
-
-      const commission = Math.round(sub.goodsAmount * sub.commissionRate);
-      const netPayout = sub.goodsAmount - commission + sub.shippingFee;
-      batchStatements.push(
-        env.DB.prepare(
-          `INSERT INTO settlements (id, sub_order_id, partner_id, gross_amount, shipping_fee, commission_rate, commission_amount, net_payout_amount, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
-        ).bind(`stl_${sub.subOrderId}`, sub.subOrderId, sub.partnerId, sub.goodsAmount, sub.shippingFee, sub.commissionRate, commission, netPayout)
-      );
-
-      for (const it of sub.items) {
-        const itemId = `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        batchStatements.push(
-          env.DB.prepare(
-            `INSERT INTO order_items (id, sub_order_id, sku_id, product_title, option_summary, unit_price, quantity, total_price)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(itemId, sub.subOrderId, it.skuId, it.title, it.optionSummary, it.unitPrice, it.quantity, it.lineTotal)
-        );
-
-        batchStatements.push(
-          env.DB.prepare(
-            `UPDATE product_skus
-             SET stock_quantity = stock_quantity - ?,
-                 status = CASE WHEN stock_quantity - ? <= 0 THEN 'OUT_OF_STOCK' ELSE status END,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = ? AND stock_quantity >= ?`
-          ).bind(it.quantity, it.quantity, it.skuId, it.quantity)
-        );
-
-        const ledgerId = `ldg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const itemIdempotency = idempotencyKey ? `${idempotencyKey}_${it.skuId}` : `auto_${orderId}_${it.skuId}`;
-        batchStatements.push(
-          env.DB.prepare(
-            `INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
-             VALUES (?, ?, 'PURCHASE_DEDUCT', ?, ?, ?, ?)`
-          ).bind(ledgerId, it.skuId, -it.quantity, it.currentStock - it.quantity, orderId, itemIdempotency)
-        );
-
-        batchStatements.push(
-          env.DB.prepare('UPDATE products SET total_sold_count = total_sold_count + ? WHERE id = ?').bind(it.quantity, it.productId)
-        );
-      }
-    }
-
-    if (appliedCouponId) {
-      batchStatements.push(
-        env.DB.prepare('UPDATE user_coupons SET is_used = 1, used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND coupon_id = ?').bind(customerId, appliedCouponId)
-      );
-    }
-
-    if (creditDiscount > 0) {
-      batchStatements.push(
-        env.DB.prepare(
-          `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-           VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) - ?, '주문 결제 적립금 사용', ?)`
-        ).bind(`crd_use_${Date.now()}`, customerId, -creditDiscount, customerId, creditDiscount, orderId)
-      );
-    }
-
-    // Execute Atomic Batch in D1
-    await env.DB.batch(batchStatements);
-
-    const responsePayload = {
-      order_id: orderId,
-      order_no: orderNo,
-      total_goods_amount: totalGoods,
-      total_shipping_amount: totalShipping,
-      total_discount_amount: totalDiscount,
-      total_pay_amount: totalPay,
-      currency: settlementCurrency,
-      pccc: rawPccc,
-      pccc_verified: pcccVerified,
-      customs_duty_type: customsDutyType,
-      estimated_duty_amount: estimatedDuty,
-      sub_orders_created: subOrderCalculations.length,
-      status: 'PAYMENT_CONFIRMED'
+  // 1. Checkout -> READY order (stock/coupon/credit reserved for 30 minutes)
+  if ((p === '/api/v1/orders/checkout' || p === '/api/v1/orders') && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const body = await readJson(request);
+    const r = await createOrder(env, me, body, request.headers.get('X-Idempotency-Key'));
+    const o = r.order;
+    const data = {
+      order_id: o.id, order_no: o.order_no, payment_status: o.payment_status, status: o.payment_status,
+      total_goods_amount: o.total_goods_amount, total_shipping_amount: o.total_shipping_amount,
+      volume_discount_amount: o.volume_discount_amount, coupon_discount_amount: o.coupon_discount_amount,
+      credit_used_amount: o.credit_used_amount, total_discount_amount: o.total_discount_amount,
+      total_pay_amount: o.total_pay_amount, payment_expires_at: o.payment_expires_at, currency: 'KRW',
+      sub_orders_created: r.subOrderCount, idempotent_replay: r.replay
     };
-
-    return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', ...responsePayload, data: responsePayload
-    }), { status: 201, headers: corsHeaders });
+    return json(corsHeaders, { success: true, ...data, data }, r.replay ? 200 : 201);
   }
 
-  // 2. Order Cancellation & Atomic Stock/Settlement/Sales Restoration
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/cancel$/) && request.method === 'POST') {
-    const ordId = url.pathname.split('/')[4];
-    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
-    if (!hasExplicitAuth) {
-      return new Response(JSON.stringify({ error: 'Authentication required: X-Customer-Id header missing' }), { status: 401, headers: corsHeaders });
-    }
-
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden: Cannot cancel another user order' }), { status: 403, headers: corsHeaders });
-    }
-    if (order.payment_status === 'CANCELLED') {
-      return new Response(JSON.stringify({ error: 'Order is already cancelled' }), { status: 400, headers: corsHeaders });
-    }
-
-    // State Machine Guard: Cannot cancel if any sub_order has already shipped or completed
-    const { results: subs } = await env.DB.prepare('SELECT id, status FROM sub_orders WHERE parent_order_id = ?').bind(order.id).all();
-    const hasShipped = subs.some(s => ['SHIPPED', 'DELIVERED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(s.status));
-    if (hasShipped && !isAdmin) {
-      return new Response(JSON.stringify({
-        error: '출고 완료 또는 배송중인 주문은 직접 취소할 수 없습니다. 90일 무료 반품 신청을 이용해 주세요.'
-      }), { status: 409, headers: corsHeaders });
-    }
-
-    const { results: items } = await env.DB.prepare(
-      `SELECT i.sku_id, i.quantity, s.product_id
-       FROM order_items i
-       JOIN sub_orders sub ON i.sub_order_id = sub.id
-       JOIN product_skus s ON i.sku_id = s.id
-       WHERE sub.parent_order_id = ?`
-    ).bind(order.id).all();
-
-    const cancelBatch = [];
-    for (const it of items) {
-      cancelBatch.push(
-        env.DB.prepare("UPDATE product_skus SET stock_quantity = stock_quantity + ?, status = 'IN_STOCK', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(it.quantity, it.sku_id)
-      );
-      cancelBatch.push(
-        env.DB.prepare(
-          "INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key) VALUES (?, ?, 'ORDER_CANCEL', ?, (SELECT stock_quantity FROM product_skus WHERE id = ?) + ?, ?, ?)"
-        ).bind(`ldg_cnl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, it.sku_id, it.quantity, it.sku_id, it.quantity, order.id, `cnl_${order.id}_${it.sku_id}_${Date.now()}`)
-      );
-      cancelBatch.push(
-        env.DB.prepare("UPDATE products SET total_sold_count = MAX(0, total_sold_count - ?) WHERE id = ?").bind(it.quantity, it.product_id)
-      );
-    }
-
-    cancelBatch.push(
-      env.DB.prepare("UPDATE orders SET payment_status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(order.id)
-    );
-    cancelBatch.push(
-      env.DB.prepare("UPDATE sub_orders SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?").bind(order.id)
-    );
-    cancelBatch.push(
-      env.DB.prepare("UPDATE settlements SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id)
-    );
-
-    await env.DB.batch(cancelBatch);
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: 'Order cancelled, inventory restocked, and settlement voided.',
-      order_id: order.id,
-      status: 'CANCELLED'
-    }), { headers: corsHeaders });
+  // 2. List my orders
+  if (p === '/api/v1/orders' && request.method === 'GET') {
+    const me = await requireAuth(request, env);
+    const target = me.role === 'ROLE_ADMIN' && url.searchParams.get('customer_id') ? url.searchParams.get('customer_id') : me.userId;
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10) || 30));
+    const { results } = await env.DB.prepare('SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT ?').bind(target, limit).all();
+    const data = [];
+    for (const r of results) data.push(presentOrder(await loadOrderBundle(env, r.id)));
+    return json(corsHeaders, { success: true, count: data.length, data });
   }
 
-  // 3. Purchase Confirmation (POST /api/v1/orders/:id/confirm -> Escrows released to SETTLED + 1% Buyer Credit)
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/confirm$/) && request.method === 'POST') {
-    const ordId = url.pathname.split('/')[4];
-    const { isAdmin, customerId } = verifyAuth(request, env);
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
-    }
+  const m = p.match(/^\/api\/v1\/orders\/([^/]+)(?:\/(.+))?$/);
+  if (!m) return null;
+  const ordId = decodeURIComponent(m[1]);
+  const action = m[2] || '';
 
-    const rewardCredit = Math.max(100, Math.round((order.total_pay_amount || 0) * 0.01));
-    await env.DB.batch([
-      env.DB.prepare("UPDATE sub_orders SET status = 'COMPLETED', delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?").bind(order.id),
-      env.DB.prepare("UPDATE settlements SET status = 'SETTLED', settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id),
-      env.DB.prepare(
-        `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-         VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) + ?, '구매확정 1% 감사 적립금', ?)`
-      ).bind(`crd_cfm_${Date.now()}`, order.customer_id, rewardCredit, order.customer_id, rewardCredit, order.id)
-    ]);
-
-    const cfmData = { order_id: order.id, status: 'COMPLETED', reward_credit: rewardCredit };
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      ...cfmData,
-      data: cfmData,
-      message: `구매확정이 완료되어 ₩${rewardCredit.toLocaleString()} 적립금이 지급되었습니다.`
-    }), { headers: corsHeaders });
+  if (!action && request.method === 'GET') {
+    const { b } = await ownedBundle(request, env, ordId);
+    const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(b.order.id).all();
+    const { results: refunds } = await env.DB.prepare("SELECT id, sub_order_id, reason_code, pg_amount, credit_amount, status, created_at, completed_at FROM refunds WHERE order_id = ? ORDER BY created_at").bind(b.order.id).all();
+    return json(corsHeaders, { success: true, data: { ...presentOrder(b), claims, refunds } });
   }
 
-  // 4. Customer Return, Exchange & 30-Day Price Match Claims (GET/POST /api/v1/orders/:id/claims)
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/claims$/)) {
-    const ordId = url.pathname.split('/')[4];
-    const { isAdmin, customerId } = verifyAuth(request, env);
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
-    }
+  if (action === 'cancel' && request.method === 'POST') {
+    const me = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
+    const r = await cancelOrder(env, me, ordId, { isAdmin: me.role === 'ROLE_ADMIN' });
+    return json(corsHeaders, { success: true, order_id: ordId, status: r.status, refund: r.refund, warnings: r.warnings || [], message: r.refund ? '주문이 취소되고 결제가 환불되었습니다.' : '결제 전 주문이 취소되었습니다.' });
+  }
 
+  const subCancel = action.match(/^sub-orders\/([^/]+)\/cancel$/);
+  if (subCancel && request.method === 'POST') {
+    const me = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
+    const r = await cancelSubOrder(env, me, ordId, decodeURIComponent(subCancel[1]), { isAdmin: me.role === 'ROLE_ADMIN' });
+    return json(corsHeaders, { success: true, status: r.status, refund: r.refund, warnings: r.warnings || [] });
+  }
+
+  if (action === 'confirm' && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const r = await confirmPurchase(env, me, ordId);
+    const data = { order_id: ordId, confirmed_sub_orders: r.confirmed, reward_credit: r.reward, status: 'PURCHASE_CONFIRMED' };
+    return json(corsHeaders, { success: true, ...data, data, message: r.reward > 0 ? `구매확정 완료 · ${r.reward.toLocaleString()}원 적립` : '구매확정이 완료되었습니다.' });
+  }
+
+  if (action === 'tracking' && request.method === 'GET') {
+    const { b } = await ownedBundle(request, env, ordId);
+    const tracking = [];
+    for (const s of b.subs) {
+      const { results: logs } = await env.DB.prepare('SELECT stage_code, stage_name, location, description, occurred_at FROM milestone_tracking_logs WHERE sub_order_id = ? ORDER BY occurred_at').bind(s.id).all();
+      tracking.push({ sub_order_id: s.id, partner_name: s.business_name, carrier_code: s.carrier_code, tracking_number: s.tracking_number, status: s.status, shipped_at: s.shipped_at, delivered_at: s.delivered_at, events: logs });
+    }
+    return json(corsHeaders, { success: true, order_id: b.order.id, order_no: b.order.order_no, payment_status: b.order.payment_status, tracking, carrier_api: 'NOT_INTEGRATED' });
+  }
+
+  // Development-only carrier simulation (never in production, admin only)
+  if (action === 'advance-tracking' && request.method === 'POST') {
+    if (env.ENVIRONMENT === 'production') return null;
+    await requireAuth(request, env, ['ROLE_ADMIN']);
+    const b = await loadOrderBundle(env, ordId);
+    if (!b) throw notFound();
+    const st = [];
+    for (const s of b.subs) {
+      if (s.status === 'SHIPPED') st.push(env.DB.prepare("UPDATE sub_orders SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'SHIPPED'").bind(s.id));
+      if (s.status === 'IN_TRANSIT') st.push(env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'IN_TRANSIT'").bind(s.id));
+    }
+    if (st.length) await env.DB.batch(st);
+    return json(corsHeaders, { success: true, simulated: true, message: '배송 단계 시뮬레이션 (개발 환경 전용)' });
+  }
+
+  // Claims: list / request return-exchange / price adjustment
+  if (action === 'claims') {
+    const { me, b } = await ownedBundle(request, env, ordId);
     if (request.method === 'GET') {
-      const { results } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(order.id).all();
-      return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+      const { results } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(b.order.id).all();
+      return json(corsHeaders, { success: true, count: results.length, data: results });
     }
+    if (request.method !== 'POST') return null;
+    if (me.role !== 'ROLE_CUSTOMER') throw forbidden();
+    const body = await readJson(request);
+    const rawType = String(body.claim_type || body.type || 'RETURN').toUpperCase();
+    const type = rawType === 'PRICE_MATCH' ? 'PRICE_ADJUSTMENT' : rawType;
+    if (!['RETURN', 'EXCHANGE', 'PRICE_ADJUSTMENT'].includes(type)) throw bad('INVALID_CLAIM_TYPE', '클레임 유형이 올바르지 않습니다.');
+    const reason = str(body.reason, { field: '사유', max: 500 }) || '고객 요청';
+    const claimId = newId('clm');
 
-    if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
-      const rawType = (b.claim_type || b.type || 'RETURN').toUpperCase();
-      const claimType = rawType === 'PRICE_MATCH' ? 'PRICE_ADJUSTMENT' : (['RETURN', 'EXCHANGE', 'PRICE_ADJUSTMENT'].includes(rawType) ? rawType : 'RETURN');
-      const reason = (b.reason || '고객 요청 클레임').trim();
-      const claimId = `clm_${Date.now()}`;
-
-      if (claimType === 'PRICE_ADJUSTMENT') {
-        // Calculate price drop or provide guaranteed price-match credit (5% minimum guaranteed adjustment credit if no drop)
-        const { results: ordItems } = await env.DB.prepare(
-          `SELECT i.unit_price, i.quantity, s.sale_price as current_sale_price
-           FROM order_items i
-           JOIN sub_orders sub ON i.sub_order_id = sub.id
-           JOIN product_skus s ON i.sku_id = s.id
-           WHERE sub.parent_order_id = ?`
-        ).bind(order.id).all();
-
-        let diffTotal = 0;
-        for (const it of ordItems) {
-          if (it.unit_price > it.current_sale_price) {
-            diffTotal += (it.unit_price - it.current_sale_price) * it.quantity;
-          }
-        }
-        if (diffTotal <= 0) {
-          diffTotal = Math.max(1000, Math.round(order.total_goods_amount * 0.05));
-        }
-
+    if (type === 'PRICE_ADJUSTMENT') {
+      if (!['PAID', 'PARTIAL_REFUNDED'].includes(b.order.payment_status) || !b.order.paid_at) throw conflict('NOT_ELIGIBLE', '결제 완료된 주문만 신청할 수 있습니다.');
+      if (b.order.paid_at < sqlNow(-PRICE_ADJUST_WINDOW_DAYS * 86400000)) throw conflict('WINDOW_EXPIRED', `결제 후 ${PRICE_ADJUST_WINDOW_DAYS}일이 지나 신청할 수 없습니다.`);
+      let diff = 0;
+      for (const it of b.items) {
+        const cur = await env.DB.prepare('SELECT sale_price FROM product_skus WHERE id = ?').bind(it.sku_id).first('sale_price');
+        const remaining = it.quantity - it.refunded_quantity;
+        const curUnit = cur - Math.floor((cur * it.volume_discount_pct * 100 + 5000) / 10000);
+        if (cur !== null && curUnit < it.unit_price && remaining > 0) diff += (it.unit_price - curUnit) * remaining;
+      }
+      if (diff <= 0) throw conflict('NO_PRICE_DROP', '구매 이후 판매가 인하가 확인되지 않습니다.');
+      try {
         await env.DB.batch([
-          env.DB.prepare(
-            `INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes)
-             VALUES (?, ?, ?, 'PRICE_ADJUSTMENT', ?, 'REFUNDED', ?, '30일 최저가 보장제 즉시 적립금 환급 완료')`
-          ).bind(claimId, order.id, order.customer_id, reason, diffTotal),
-          env.DB.prepare(
-            `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-             VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) + ?, '30일 최저가 보상 차액 환급', ?)`
-          ).bind(`crd_pm_${Date.now()}`, order.customer_id, diffTotal, order.customer_id, diffTotal, claimId)
+          env.DB.prepare(`INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, processed_by, processed_at)
+                          VALUES (?, ?, ?, 'PRICE_ADJUSTMENT', ?, 'REFUNDED', ?, '판매가 인하 차액 적립', 'system', CURRENT_TIMESTAMP)`).bind(claimId, b.order.id, me.userId, reason, diff),
+          ...grantCreditStatements(env, { userId: me.userId, amount: diff, reason: '최저가 보상 차액 적립', referenceId: claimId, entityId: b.order.operator_entity_id, txnType: 'PRICE_ADJUSTMENT' })
         ]);
-
-        const pmData = { claim_id: claimId, claim_type: 'PRICE_ADJUSTMENT', type: 'PRICE_MATCH', status: 'REFUNDED', refund_amount: diffTotal };
-        return new Response(JSON.stringify({
-          success: true,
-          ...pmData,
-          data: pmData,
-          message: `30일 최저가 보상제에 따라 ₩${diffTotal.toLocaleString()} 크레딧이 즉시 적립되었습니다.`
-        }), { status: 201, headers: corsHeaders });
+      } catch (e) {
+        throw mapDbError(e) ? conflict('ALREADY_ADJUSTED', '이 주문은 이미 최저가 보상을 받았습니다.') : e;
       }
-
-      // 90-Day Free Return or Exchange & Temu-style Returnless Refund Engine
-      const refundAmount = b.refund_amount ? Number(b.refund_amount) : order.total_pay_amount;
-      const isReturnless = Boolean(
-        b.is_returnless === true ||
-        (!b.is_dispute && (refundAmount <= 15000 || order.total_pay_amount <= 15000))
-      );
-      const finalStatus = isReturnless ? 'REFUNDED' : 'REQUESTED';
-      const returnlessReason = isReturnless ? '소액 상품(₩15,000 이하) 테무형 무회수 환불 정책 적용 (수거 생략 즉시 전액 환불)' : null;
-
-      const batchStatements = [
-        env.DB.prepare(
-          `INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, is_returnless, returnless_reason)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(claimId, order.id, order.customer_id, claimType, reason, finalStatus, refundAmount, b.notes || (isReturnless ? '무회수 즉시 환불 완료' : '90일 무료 반품/교환 접수'), isReturnless ? 1 : 0, returnlessReason)
-      ];
-
-      if (isReturnless) {
-        batchStatements.push(
-          env.DB.prepare(
-            `UPDATE sub_orders SET status = 'RETURNED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?`
-          ).bind(order.id),
-          env.DB.prepare(
-            `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-             VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) + ?, '무회수 환불 즉시 환급', ?)`
-          ).bind(`crd_ret_${Date.now()}`, order.customer_id, refundAmount, order.customer_id, refundAmount, claimId)
-        );
-      } else {
-        batchStatements.push(
-          env.DB.prepare(
-            `UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?`
-          ).bind(order.id)
-        );
-      }
-
-      await env.DB.batch(batchStatements);
-
-      const retData = {
-        claim_id: claimId,
-        claim_type: claimType,
-        type: claimType,
-        status: finalStatus,
-        refund_amount: refundAmount,
-        is_returnless: isReturnless,
-        returnless_reason: returnlessReason
-      };
-      return new Response(JSON.stringify({
-        success: true,
-        ...retData,
-        data: retData,
-        message: isReturnless
-          ? '⚡ 소액 상품 안심 정책(Returnless Refund): 물품 반송 없이 즉시 전액 환불(적립금 환급)되었습니다.'
-          : '90일 무료 반품/교환 신청이 접수되었습니다. 지정 택배사 자동 수거가 진행됩니다.'
-      }), { status: 201, headers: corsHeaders });
-    }
-  }
-
-  // 5. Orders List with Strict Role & Header Protection
-  if (url.pathname === '/api/v1/orders' && request.method === 'GET') {
-    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
-    if (!hasExplicitAuth) {
-      return new Response(JSON.stringify({
-        error: 'Authentication required: X-Customer-Id header missing'
-      }), { status: 401, headers: corsHeaders });
+      const data = { claim_id: claimId, claim_type: type, status: 'REFUNDED', refund_amount: diff };
+      return json(corsHeaders, { success: true, ...data, data }, 201);
     }
 
-    const targetCustomer = isAdmin && url.searchParams.get('customer_id') ? url.searchParams.get('customer_id') : customerId;
-    const { results: orders } = await env.DB.prepare(
-      'SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50'
-    ).bind(targetCustomer).all();
-
-    for (const ord of orders) {
-      const { results: subOrders } = await env.DB.prepare(
-        'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
-      ).bind(ord.id).all();
-      const allItems = [];
-      for (const sub of subOrders) {
-        const { results: subItems } = await env.DB.prepare(`
-          SELECT i.*, s.product_id, p.thumbnail_url
-          FROM order_items i
-          LEFT JOIN product_skus s ON i.sku_id = s.id
-          LEFT JOIN products p ON s.product_id = p.id
-          WHERE i.sub_order_id = ?
-        `).bind(sub.id).all();
-        sub.items = subItems;
-        for (const it of subItems) {
-          allItems.push({
-            ...it,
-            product_id: it.product_id,
-            thumbnail_url: it.thumbnail_url,
-            carrier: sub.carrier_code || 'CJ대한통운',
-            tracking_number: sub.tracking_number,
-            status: sub.status,
-            partner_name: sub.business_name
-          });
-        }
-      }
-      ord.sub_orders = subOrders;
-      ord.items = allItems;
+    // RETURN / EXCHANGE: request only; money moves when the seller or operator approves
+    const sub = b.subs.find((s) => s.id === body.sub_order_id) || (b.subs.length === 1 ? b.subs[0] : null);
+    if (!sub) throw bad('SUB_ORDER_REQUIRED', '반품/교환할 판매자 주문(sub_order_id)을 지정해 주세요.');
+    if (sub.status !== 'DELIVERED') throw conflict('NOT_RETURNABLE', '배송 완료 후 구매확정 전 상품만 반품/교환을 신청할 수 있습니다.');
+    const windowDays = parseInt(env.RETURN_WINDOW_DAYS || RETURN_WINDOW_DAYS_DEFAULT, 10);
+    if (sub.delivered_at && sub.delivered_at < sqlNow(-windowDays * 86400000)) throw conflict('WINDOW_EXPIRED', `수령 후 ${windowDays}일이 지나 신청할 수 없습니다.`);
+    const subItems = b.items.filter((i) => i.sub_order_id === sub.id);
+    const lines = Array.isArray(body.items) && body.items.length
+      ? body.items.map((l) => ({ order_item_id: String(l.order_item_id), quantity: Number(l.quantity) }))
+      : subItems.filter((i) => i.quantity > i.refunded_quantity).map((i) => ({ order_item_id: i.id, quantity: i.quantity - i.refunded_quantity }));
+    let estimate = 0;
+    for (const l of lines) {
+      const it = subItems.find((i) => i.id === l.order_item_id);
+      if (!it || !Number.isSafeInteger(l.quantity) || l.quantity < 1 || l.quantity > it.quantity - it.refunded_quantity) throw bad('INVALID_ITEMS', '반품 수량이 올바르지 않습니다.');
+      estimate += Math.floor(((it.pg_alloc + it.credit_alloc) * l.quantity) / it.quantity);
     }
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, customer_id: targetCustomer, data: orders }), { headers: corsHeaders });
-  }
-
-  // 6. Single Order Detail with Strict Ownership Validation
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+$/) && request.method === 'GET') {
-    const ordId = url.pathname.replace('/api/v1/orders/', '').trim();
-    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
-    if (!hasExplicitAuth) {
-      return new Response(JSON.stringify({ error: 'Authentication required: X-Customer-Id header missing' }), { status: 401, headers: corsHeaders });
-    }
-
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden: Access denied to this order' }), { status: 403, headers: corsHeaders });
-    }
-
-    const { results: subOrders } = await env.DB.prepare(
-      'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
-    ).bind(order.id).all();
-
-    const allItems = [];
-    for (const sub of subOrders) {
-      const { results: subItems } = await env.DB.prepare(`
-          SELECT i.*, s.product_id, p.thumbnail_url
-          FROM order_items i
-          LEFT JOIN product_skus s ON i.sku_id = s.id
-          LEFT JOIN products p ON s.product_id = p.id
-          WHERE i.sub_order_id = ?
-        `).bind(sub.id).all();
-      sub.items = subItems;
-      for (const it of subItems) {
-        allItems.push({
-          ...it,
-          product_id: it.product_id,
-            thumbnail_url: it.thumbnail_url,
-            carrier: sub.carrier_code || 'CJ대한통운',
-          tracking_number: sub.tracking_number,
-          status: sub.status,
-          partner_name: sub.business_name,
-          partner_id: sub.partner_id
-        });
-      }
-    }
-    order.sub_orders = subOrders;
-    order.items = allItems;
-
-    const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(order.id).all();
-    order.claims = claims;
-
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', data: order }), { headers: corsHeaders });
-  }
-
-  // 7. Tracking Lookup (GET /api/v1/orders/:id/tracking) — 배송 추적 상세 조회
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/tracking$/) && request.method === 'GET') {
-    const ordId = url.pathname.split('/')[4];
-    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
-    if (!hasExplicitAuth) {
-      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: corsHeaders });
-    }
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
-    }
-    const { results: subs } = await env.DB.prepare('SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?').bind(order.id).all();
-    const trackingItems = subs.map(sub => ({
-      sub_order_id: sub.id,
-      partner_name: sub.business_name || null,
-      carrier_code: sub.carrier_code || 'CJ대한통운',
-      tracking_number: sub.tracking_number || null,
-      status: sub.status,
-      shipped_at: sub.shipped_at || null,
-      delivered_at: sub.delivered_at || null,
-      updated_at: sub.updated_at || null
-    }));
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      order_id: order.id,
-      order_no: order.order_no,
-      customer_id: order.customer_id,
-      payment_status: order.payment_status,
-      tracking: trackingItems
-    }), { headers: corsHeaders });
-  }
-
-  // 8. Demo Tracking Progression (Simulated Carrier Milestones)
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/advance-tracking$/) && request.method === 'POST') {
-    const ordId = url.pathname.split('/')[4];
-    const { isAdmin, customerId, hasExplicitAuth } = verifyAuth(request, env);
-    if (!hasExplicitAuth) {
-      return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: corsHeaders });
-    }
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(ordId, ordId).first();
-    if (!order) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
-    }
-    const { results: subs } = await env.DB.prepare('SELECT * FROM sub_orders WHERE parent_order_id = ?').bind(order.id).all();
-    const nextStatusMap = { 'SHIPPED': 'IN_TRANSIT', 'IN_TRANSIT': 'DELIVERED' };
-    const stmts = [];
-    for (const sub of subs) {
-      const next = nextStatusMap[sub.status];
-      if (next) {
-        if (next === 'IN_TRANSIT') {
-          stmts.push(env.DB.prepare("UPDATE sub_orders SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(sub.id));
-        } else if (next === 'DELIVERED') {
-          stmts.push(env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(sub.id));
-          stmts.push(env.DB.prepare("UPDATE orders SET payment_status = 'DELIVERED' WHERE id = ?").bind(order.id));
-        }
-      }
-    }
-    if (stmts.length > 0) {
-      if (env.DB.batch) await env.DB.batch(stmts);
-      else for (const s of stmts) await s.run();
-    }
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', message: '배송 상태가 다음 단계로 진행되었습니다. (데모)' }), { headers: corsHeaders });
-  }
-
-  // 9. Payment Webhook Receiver (Toss Payments / PortOne / Direct PG)
-  if (url.pathname === '/api/v1/payments/webhook' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const orderNo = body.orderId || body.order_no || body.order_id;
-    const paymentKey = body.paymentKey || body.payment_key || `pg_${Date.now()}`;
-    const status = (body.status || 'DONE').toUpperCase();
-
-    if (!orderNo) {
-      return new Response(JSON.stringify({ error: 'orderId or order_no is required.' }), { status: 400, headers: corsHeaders });
-    }
-
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE order_no = ? OR id = ?').bind(orderNo, orderNo).first();
-    if (!order) {
-      return new Response(JSON.stringify({ error: 'Order not found.' }), { status: 404, headers: corsHeaders });
-    }
-
-    if (['DONE', 'PAID', 'CONFIRMED'].includes(status)) {
-      await env.DB.batch([
-        env.DB.prepare("UPDATE orders SET payment_status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(order.id),
-        env.DB.prepare("UPDATE sub_orders SET status = 'PAYMENT_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ? AND status = 'PENDING'").bind(order.id)
-      ]);
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: 'Payment webhook event processed successfully.',
-      data: {
-        order_id: order.id,
-        order_no: order.order_no,
-        payment_key: paymentKey,
-        status: 'PAID'
-      }
-    }), { headers: corsHeaders });
-  }
-
-  // 10. Automated Delivery 7-Day Purchase Confirmation (D1 Cron Worker Engine)
-  if ((url.pathname === '/api/v1/orders/cron/auto-confirm' || url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/auto-confirm$/)) && (request.method === 'POST' || request.method === 'GET')) {
-    const isSingle = url.pathname.includes('/orders/') && !url.pathname.includes('/cron/');
-    const singleOrderId = isSingle ? url.pathname.split('/')[4] : null;
-
-    let confirmedCount = 0;
-    if (singleOrderId) {
-      const subOrders = await env.DB.prepare(
-        "SELECT id FROM sub_orders WHERE (parent_order_id = ? OR id = ?) AND status = 'DELIVERED'"
-      ).bind(singleOrderId, singleOrderId).all();
-
-      for (const so of (subOrders.results || [])) {
-        await env.DB.batch([
-          env.DB.prepare("UPDATE sub_orders SET status = 'PURCHASE_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(so.id),
-          env.DB.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id = ?").bind(so.id)
-        ]);
-        confirmedCount++;
-      }
-    } else {
-      const subOrders = await env.DB.prepare(
-        "SELECT id FROM sub_orders WHERE status = 'DELIVERED'"
-      ).all();
-
-      for (const so of (subOrders.results || [])) {
-        await env.DB.batch([
-          env.DB.prepare("UPDATE sub_orders SET status = 'PURCHASE_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(so.id),
-          env.DB.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id = ?").bind(so.id)
-        ]);
-        confirmedCount++;
-      }
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: `배송완료 건에 대해 ${confirmedCount}건의 구매확정 및 정산 대기 상태 전환이 완료되었습니다.`,
-      confirmed_count: confirmedCount
-    }), { headers: corsHeaders });
+    const open = await env.DB.prepare("SELECT COUNT(*) c FROM returns WHERE sub_order_id = ? AND status IN ('REQUESTED','APPROVED')").bind(sub.id).first('c');
+    if (open > 0) throw conflict('CLAIM_ALREADY_OPEN', '이미 처리 중인 반품/교환 신청이 있습니다.');
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, items_json, status, refund_amount, notes)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, JSON.stringify(lines), type === 'RETURN' ? estimate : 0, str(body.notes, { max: 500 }) || null),
+      env.DB.prepare("UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'DELIVERED'").bind(sub.id)
+    ]);
+    const data = { claim_id: claimId, claim_type: type, status: 'REQUESTED', estimated_refund_amount: type === 'RETURN' ? estimate : 0 };
+    return json(corsHeaders, { success: true, ...data, data, message: '반품/교환 신청이 접수되었습니다. 판매자 확인 후 환불이 진행됩니다.' }, 201);
   }
 
   return null;
 }
+
+export { authenticate };

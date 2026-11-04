@@ -37,7 +37,7 @@ function handleSubmit() {
               class="py-2 rounded-xl font-bold border transition"
               :class="claimType === 'RETURN' ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-slate-200 text-slate-600'"
             >
-              90일 무료 반품
+              반품 신청
             </button>
             <button 
               type="button" 

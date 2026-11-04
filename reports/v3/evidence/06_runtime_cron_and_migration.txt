@@ -1,0 +1,7 @@
+Real Workers runtime (wrangler dev --local, workerd + local D1) — scheduled() handler verification, 2026-11-04T16:29:57Z
+sku=sku_prod_cel_01 stock_before=248 -> READY order of 2 units (stock 246) -> payment_expires_at forced to past
+POST /cdn-cgi/local/explorer/api/local/scheduled?worker=olmoa-api -> {"outcome":"ok"}
+result: payment_status=EXPIRED, stock_after=248 (reservation released exactly once)
+
+Also: migrations d1_01..d1_20 + dev seed applied to the local D1 runtime without error (scripts/local-db-reset.mjs).
+Runtime-only defect found and fixed: named non-handler export (SERVICE_VERSION) in the Worker entry module prevented workerd from starting.

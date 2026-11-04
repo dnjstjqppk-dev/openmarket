@@ -7,36 +7,37 @@ export interface User {
   email?: string
 }
 
+const KEYS = { token: 'olmoa_token', id: 'olmoa_customer_id', name: 'olmoa_customer_name', email: 'olmoa_customer_email' }
+
+function read(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const storedId = localStorage.getItem('olmoa_customer_id') || 'cust_demo_001'
-  const storedName = localStorage.getItem('olmoa_customer_name') || 'Alex Kim'
+  // A user is only "logged in" when the server issued a token. No demo identity is ever assumed.
+  const token = ref<string | null>(read(KEYS.token))
+  const user = ref<User | null>(token.value && read(KEYS.id)
+    ? { id: read(KEYS.id) as string, name: read(KEYS.name) || '회원', email: read(KEYS.email) || undefined }
+    : null)
 
-  const user = ref<User | null>({
-    id: storedId,
-    name: storedName,
-  })
+  const isAuthenticated = computed(() => !!token.value && !!user.value)
 
-  const isAuthenticated = computed(() => !!user.value)
-
-  function login(newUser: User, token?: string) {
+  function login(newUser: User, newToken: string) {
     user.value = newUser
-    localStorage.setItem('olmoa_customer_id', newUser.id)
-    localStorage.setItem('olmoa_customer_name', newUser.name)
-    if (token) localStorage.setItem('olmoa_token', token)
+    token.value = newToken
+    try {
+      localStorage.setItem(KEYS.token, newToken)
+      localStorage.setItem(KEYS.id, newUser.id)
+      localStorage.setItem(KEYS.name, newUser.name)
+      if (newUser.email) localStorage.setItem(KEYS.email, newUser.email)
+    } catch { /* storage unavailable: session lives in memory only */ }
   }
 
   function logout() {
     user.value = null
-    localStorage.removeItem('olmoa_customer_id')
-    localStorage.removeItem('olmoa_customer_name')
-    localStorage.removeItem('olmoa_token')
+    token.value = null
+    try { Object.values(KEYS).forEach((k) => localStorage.removeItem(k)) } catch { /* ignore */ }
   }
 
-  return {
-    user,
-    isAuthenticated,
-    login,
-    logout,
-  }
+  return { user, token, isAuthenticated, login, logout }
 })
-

@@ -10,6 +10,9 @@ import CouponsView from '../views/CouponsView.vue';
 import ReviewsView from '../views/ReviewsView.vue';
 import OrdersView from '../views/OrdersView.vue';
 import UsersView from '../views/UsersView.vue';
+import BusinessEntitiesView from '../views/BusinessEntitiesView.vue';
+import SuppliersView from '../views/SuppliersView.vue';
+import ReconciliationView from '../views/ReconciliationView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView },
@@ -22,7 +25,10 @@ const routes = [
   { path: '/reviews', name: 'reviews', component: ReviewsView },
   { path: '/coupons', name: 'coupons', component: CouponsView },
   { path: '/categories', name: 'categories', component: CategoriesView },
-  { path: '/marketing', name: 'marketing', component: MarketingView }
+  { path: '/marketing', name: 'marketing', component: MarketingView },
+  { path: '/business', name: 'business', component: BusinessEntitiesView },
+  { path: '/suppliers', name: 'suppliers', component: SuppliersView },
+  { path: '/reconciliation', name: 'reconciliation', component: ReconciliationView }
 ];
 
 const router = createRouter({
@@ -30,13 +36,6 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, from, next) => {
-  const isAuthenticated = localStorage.getItem('admin_token');
-  if (to.name !== 'login' && !isAuthenticated) {
-    next({ name: 'login' });
-  } else {
-    next();
-  }
-});
+// Auth guard lives in main.ts (checks the JWT stored by LoginView).
 
 export default router;

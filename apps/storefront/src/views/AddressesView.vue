@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const auth = useAuthStore()
 const addresses = ref<any[]>([])
@@ -34,9 +34,9 @@ const loadAddresses = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses`, {
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success && Array.isArray(json.data)) {
@@ -51,10 +51,10 @@ const loadAddresses = async () => {
 
 const setDefault = async (addrId: string) => {
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}/default`, {
       method: 'PUT',
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success) {
@@ -68,10 +68,10 @@ const setDefault = async (addrId: string) => {
 const deleteAddress = async (addrId: string) => {
   if (!confirm('해당 배송지를 삭제하시겠습니까?')) return
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}`, {
       method: 'DELETE',
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success) {
@@ -90,12 +90,12 @@ const handleCreateAddress = async () => {
 
   submitting.value = true
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Customer-Id': cid
+        ...authHeader()
       },
       body: JSON.stringify({
         recipient_name: form.value.recipient_name.trim(),

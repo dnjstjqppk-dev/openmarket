@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { API_BASE_URL, getAdminHeaders } from '../config'
+const router = useRouter()
 
 const settlements = ref<any[]>([])
 const inventoryLogs = ref<any[]>([])
@@ -18,8 +20,8 @@ const loadLedgers = async () => {
     const json = await res.json()
     const claimJson = await claimRes.json()
     if (json.success) {
-      settlements.value = json.data.settlements || []
-      inventoryLogs.value = json.data.inventory_ledger || []
+      settlements.value = (Array.isArray(json.data) ? json.data : (json.data.settlements || [])).map((s: any) => ({ ...s, settlement_status: s.status === 'PAID_OUT' ? 'PAID' : s.status }))
+      inventoryLogs.value = Array.isArray(json.data) ? [] : (json.data.inventory_ledger || [])
     }
     if (claimJson.success) {
       claims.value = claimJson.data || []
@@ -31,29 +33,20 @@ const loadLedgers = async () => {
   }
 }
 
-const approveSettlement = async (settlementId: string) => {
-  const res = await fetch(`${API_BASE_URL}/api/v1/admin/settlements/${settlementId}/approve`, {
-    method: 'POST',
-    headers: getAdminHeaders()
-  })
-  const json = await res.json()
-  if (json.success) {
-    actionMsg.value = `✓ Settlement ${settlementId} approved and marked PAID!`
-    await loadLedgers()
-  }
+const approveSettlement = async (_settlementId: string) => {
+  // Individual settlement approval was replaced by per-seller payouts (with post-payout refund deductions).
+  router.push('/reconciliation')
 }
 
 const resolveClaim = async (claimId: string, status: string) => {
   const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claimId}`, {
     method: 'PUT',
     headers: getAdminHeaders(),
-    body: JSON.stringify({ status })
+    body: JSON.stringify(status === 'REJECTED' ? { decision: 'REJECT', notes: prompt('거절 사유') || '' } : { decision: 'APPROVE' })
   })
   const json = await res.json()
-  if (json.success) {
-    actionMsg.value = `✓ Claim ${claimId} updated to ${status}`
-    await loadLedgers()
-  }
+  actionMsg.value = json.success ? `✓ 클레임 ${claimId} 처리 완료 (${json.status})` : `⚠ ${json.error || '처리 실패'}`
+  await loadLedgers()
 }
 
 onMounted(loadLedgers)
@@ -95,7 +88,7 @@ onMounted(loadLedgers)
                   {{ s.settlement_status }}
                 </span>
                 <button
-                  v-if="s.settlement_status === 'PENDING'"
+                  v-if="s.settlement_status === 'ELIGIBLE_FOR_PAYOUT'"
                   @click="approveSettlement(s.id)"
                   class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold cursor-pointer"
                 >

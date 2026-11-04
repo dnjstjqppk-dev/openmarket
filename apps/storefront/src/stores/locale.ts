@@ -10,8 +10,10 @@ export type SupportedCurrency = 'KRW' | 'USD' | 'JPY' | 'EUR';
 
 const DICT: Record<SupportedLocale, Record<string, string>> = {
   'ko-KR': {
+    addToCart: '장바구니 담기',
+    buyNow: '바로 구매',
     slogan: '내가 찾는 모든 것, 여기. (Everything You Seek. All Here.)',
-    promoTop: '⚡ 3만원 이상 무료배송 · 90일 무료반품 · 30일 최저가 차액보상',
+    promoTop: '판매자별 무료배송 기준 적용 · 수령 후 7일 내 반품 신청 · 결제 후 30일 내 판매가 인하 시 차액 적립',
     allCategories: '전체 42개 카테고리',
     lightningDeals: '⚡ 번개특가',
     bestSellers: '👑 베스트 100',
@@ -28,6 +30,8 @@ const DICT: Record<SupportedLocale, Record<string, string>> = {
     dduOption: 'DDU (수입 통관 시 후납)'
   },
   'en-US': {
+    addToCart: 'Add to Cart',
+    buyNow: 'Buy Now',
     slogan: 'Everything You Seek. All Here. — OLMOA Global',
     promoTop: '⚡ Free Shipping $25+ · 90-Day Free Returns · 30-Day Price Match Guarantee',
     allCategories: 'All 42 Categories',

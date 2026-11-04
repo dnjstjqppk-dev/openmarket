@@ -1,21 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { getPartnerName, clearPartnerSession } from './config';
 
 const router = useRouter();
 const route = useRoute();
 const mobileMenuOpen = ref(false);
 
 const isLoginPage = computed(() => route.path === '/login');
-const partnerName = 'Global Direct Logistics Ltd.';
+const partnerName = computed(() => (route.path, getPartnerName()));
 
 function handleLogout() {
-  localStorage.removeItem('partner_token');
-  localStorage.removeItem('olmoa_partner_token');
-  localStorage.removeItem('partner_id');
-  localStorage.removeItem('olmoa_partner_id');
-  localStorage.removeItem('partner_name');
-  localStorage.removeItem('olmoa_partner_name');
+  clearPartnerSession();
   router.push('/login');
 }
 

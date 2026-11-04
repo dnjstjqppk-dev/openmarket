@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -48,10 +48,10 @@ const loadUserProfile = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
       headers: {
-        'X-Customer-Id': cid
+        ...authHeader()
       }
     })
     const json = await res.json()
@@ -77,12 +77,12 @@ const saveProfile = async () => {
   }
   savingProfile.value = true
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'X-Customer-Id': cid
+        ...authHeader()
       },
       body: JSON.stringify({
         full_name: formName.value.trim(),
@@ -122,12 +122,12 @@ const handlePasswordChange = async () => {
 
   changingPassword.value = true
   try {
-    const cid = auth.user?.id || 'u_customer_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'X-Customer-Id': cid
+        ...authHeader()
       },
       body: JSON.stringify({
         current_password: currentPassword.value,

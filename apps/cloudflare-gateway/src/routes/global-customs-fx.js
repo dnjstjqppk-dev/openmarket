@@ -1,3 +1,4 @@
+import { authenticate } from '../lib/auth.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
 
@@ -213,14 +214,9 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
 
   // 5. Cross-Border Commercial Invoice & Packing List Manifest (GET /api/v1/orders/:id/commercial-invoice)
   if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/commercial-invoice$/) && request.method === 'GET') {
-    const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-    const adminSecret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
-    const adminHeader = request.headers.get('X-Admin-Secret') || '';
-    const isAdmin =
-      (token.length > 0 && (token === adminSecret || token.startsWith('ey-olmoa-admin-'))) ||
-      adminHeader === adminSecret ||
-      adminHeader.startsWith('ey-olmoa-admin-');
-    const customerId = request.headers.get('X-Customer-Id') || (token.startsWith('u_') || token.startsWith('cust_') ? token : '');
+    const principal = await authenticate(request, env);
+    const isAdmin = Boolean(principal && principal.role === 'ROLE_ADMIN');
+    const customerId = principal && principal.role === 'ROLE_CUSTOMER' ? principal.userId : '';
 
     if (!isAdmin && !customerId) {
       return new Response(JSON.stringify({

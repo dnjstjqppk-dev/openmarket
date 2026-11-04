@@ -4,7 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const route = useRoute()
 const router = useRouter()
@@ -77,7 +77,8 @@ const loadProductAll = async () => {
       await Promise.all([
         loadReviews(json.data.id),
         loadQna(json.data.id),
-        checkWishlist(json.data.id)
+        checkWishlist(json.data.id),
+        loadSalesStats(json.data.id)
       ])
     }
   } catch (e) {
@@ -113,11 +114,21 @@ const loadQna = async (productId: string) => {
   } catch {}
 }
 
-const checkWishlist = async (productId: string) => {
+const salesStats = ref<any>(null)
+const loadSalesStats = async (productId: string) => {
   try {
-    const cid = auth.user?.id || 'cust_demo_001'
+    const r = await fetch(`${API_BASE_URL}/api/v1/products/${productId}/urgency-stats`)
+    const j = await r.json()
+    salesStats.value = j.success ? j.data : null
+  } catch { salesStats.value = null }
+}
+
+const checkWishlist = async (productId: string) => {
+  if (!auth.isAuthenticated) return
+  try {
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/wishlist?customer_id=${encodeURIComponent(cid)}`, {
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success && Array.isArray(json.data)) {
@@ -128,11 +139,12 @@ const checkWishlist = async (productId: string) => {
 
 const toggleWishlist = async () => {
   if (!product.value) return
-  const cid = auth.user?.id || 'cust_demo_001'
+  if (!auth.isAuthenticated) { router.push({ path: '/login', query: { redirect: route.fullPath } }); return }
+  const cid = auth.user?.id || ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({ customer_id: cid, product_id: product.value.id })
     })
     const json = await res.json()
@@ -147,10 +159,10 @@ const submitReview = async () => {
   reviewSubmitting.value = true
   reviewMsg.value = ''
   try {
-    const cid = auth.user?.id || 'cust_demo_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${product.value.id}/reviews`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({
         customer_id: cid,
         author_name: auth.user?.name || '공식 검증 구매자',
@@ -180,10 +192,10 @@ const submitQuestion = async () => {
   qnaSubmitting.value = true
   qnaMsg.value = ''
   try {
-    const cid = auth.user?.id || 'cust_demo_001'
+    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${product.value.id}/qna`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({
         customer_id: cid,
         customer_name: auth.user?.name || 'Alex Kim',
@@ -406,16 +418,9 @@ const handleAddToCart = (goToCheckout = false) => {
               <p class="text-[11px] text-gray-600 mt-1.5 font-medium">
                 ✓ Price includes VAT • Earn <strong class="text-[#FF5000]">{{ locale.formatPrice(Math.round(currentPrice * 0.01)) }}</strong> (1%) Olmoa Credit upon purchase confirmation
               </p>
-              <!-- Real-time Temu-style Urgency & Scarcity Stream -->
-              <div class="mt-3 pt-2.5 border-t border-orange-200/60 flex flex-wrap items-center gap-3 text-[11px] text-gray-700 font-semibold">
-                <span class="inline-flex items-center gap-1 text-red-600">
-                  <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-                  🔥 최근 24시간 동안 1,420개 판매됨
-                </span>
-                <span>•</span>
-                <span class="text-orange-700">👀 현재 28명이 이 상품을 보는 중</span>
-                <span>•</span>
-                <span class="font-bold text-emerald-700">⚡ 배송 지연 시 ₩5,300 전액 보상</span>
+              <!-- Measured sales signal only (no fabricated viewer counts) -->
+              <div v-if="salesStats && salesStats.recent_24h_sales > 0" class="mt-3 pt-2.5 border-t border-orange-200/60 text-[11px] text-gray-700 font-semibold" data-testid="sales-24h">
+                최근 24시간 {{ salesStats.recent_24h_sales.toLocaleString('ko-KR') }}개 판매
               </div>
             </div>
 
@@ -426,12 +431,12 @@ const handleAddToCart = (goToCheckout = false) => {
                   ✓
                 </div>
                 <div>
-                  <div class="text-xs font-black text-emerald-900">올모아 프리미엄 배송 보증 & 안심 무회수 환불제</div>
-                  <div class="text-[11px] text-emerald-700">약속 배송일 초과 시 ₩5,300 자동 보상 • ₩15,000 이하 상품은 반송 없이 즉시 전액 환불</div>
+                  <div class="text-xs font-black text-emerald-900">배송 지연 보상 안내</div>
+                  <div class="text-[11px] text-emerald-700">배송 예정일을 넘긴 경우 주문 상세에서 지연 보상(적립금 5,300원)을 신청할 수 있습니다.</div>
                 </div>
               </div>
               <span class="text-[10px] font-bold px-2.5 py-1 bg-white text-emerald-800 rounded-full border border-emerald-200 self-start sm:self-auto font-mono">
-                100% Guaranteed
+                신청 시 지급
               </span>
             </div>
 

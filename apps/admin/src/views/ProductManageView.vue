@@ -52,6 +52,20 @@ async function updateStatus(p: AdminProduct, newStatus: 'ACTIVE' | 'HIDDEN') {
   }
 }
 
+async function reviewProduct(p: any, decision: 'APPROVE' | 'REJECT') {
+  const note = decision === 'REJECT' ? (prompt('반려 사유') || '') : ''
+  if (decision === 'REJECT' && !note) return
+  updatingId.value = p.id
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/products/${p.id}/review`, { method: 'POST', headers: getAdminHeaders(), body: JSON.stringify({ decision, note }) })
+    const json = await res.json()
+    if (json.success) { p.review_status = json.review_status; p.status = json.status }
+    else alert(json.error || '처리 실패')
+  } finally {
+    updatingId.value = null
+  }
+}
+
 onMounted(() => {
   loadProducts();
 });
@@ -102,30 +116,17 @@ onMounted(() => {
               {{ p.total_stock !== null ? p.total_stock : 0 }}개
             </td>
             <td class="p-3 text-center">
-              <span 
-                class="px-2 py-0.5 rounded text-[10px] font-bold"
-                :class="p.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'"
-              >
-                {{ p.status === 'ACTIVE' ? '정상 판매중' : '판매 중지' }}
-              </span>
+              <span v-if="p.review_status === 'PENDING'" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">심사 대기</span>
+              <span v-else-if="p.review_status === 'REJECTED'" class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">반려</span>
+              <span v-else class="px-2 py-0.5 rounded text-[10px] font-bold" :class="p.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'">{{ p.status === 'ACTIVE' ? '판매중' : '판매 중지' }}</span>
             </td>
             <td class="p-3 text-center space-x-1.5">
-              <button 
-                v-if="p.status !== 'ACTIVE'"
-                :disabled="updatingId === p.id"
-                @click="updateStatus(p, 'ACTIVE')"
-                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] transition disabled:opacity-50"
-              >
-                판매 승인
-              </button>
-              <button 
-                v-else
-                :disabled="updatingId === p.id"
-                @click="updateStatus(p, 'HIDDEN')"
-                class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold text-[11px] transition disabled:opacity-50"
-              >
-                판매 중지
-              </button>
+              <template v-if="p.review_status === 'PENDING'">
+                <button :disabled="updatingId === p.id" @click="reviewProduct(p, 'APPROVE')" class="px-2.5 py-1 bg-emerald-600 text-white rounded font-bold text-[11px] disabled:opacity-50">심사 승인</button>
+                <button :disabled="updatingId === p.id" @click="reviewProduct(p, 'REJECT')" class="px-2.5 py-1 bg-slate-200 text-slate-800 rounded font-bold text-[11px] disabled:opacity-50">반려</button>
+              </template>
+              <button v-else-if="p.review_status === 'APPROVED' && p.status !== 'ACTIVE'" :disabled="updatingId === p.id" @click="updateStatus(p, 'ACTIVE')" class="px-2.5 py-1 bg-emerald-600 text-white rounded font-bold text-[11px] disabled:opacity-50">판매 재개</button>
+              <button v-else-if="p.status === 'ACTIVE'" :disabled="updatingId === p.id" @click="updateStatus(p, 'HIDDEN')" class="px-2.5 py-1 bg-rose-600 text-white rounded font-bold text-[11px] disabled:opacity-50">판매 중지</button>
             </td>
           </tr>
         </tbody>

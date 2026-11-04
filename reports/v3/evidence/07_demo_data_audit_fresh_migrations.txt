@@ -1,0 +1,8 @@
+{"item":"users_with_unverifiable_seed_hash","n":6}
+{"item":"seed_reviews_not_linked_to_orders","n":10}
+{"item":"products_with_seeded_sold_counts","n":62}
+{"item":"products_using_stock_photo_hotlinks","n":62}
+{"item":"demo_partners_without_verified_payout_account","n":2}
+{"item":"seed_qna_and_inquiries","n":4}
+{"item":"banners_with_unverified_claims","n":1}
+{"item":"operator_entity_active","n":0}

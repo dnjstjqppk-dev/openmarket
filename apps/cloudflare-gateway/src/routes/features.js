@@ -1,4 +1,9 @@
 // apps/cloudflare-gateway/src/routes/features.js
+// Customer engagement features. Identity = verified JWT (requireCustomer / authenticate).
+import { requireCustomer, requireAdmin, authenticate } from '../lib/auth.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { newId, sqlNow } from '../lib/ids.js';
+
 // OLMOA Extended Features: Autocomplete (with Synonyms), Flash Sales, Reviews, Q&A, Coupons, Credits, Wishlist & Support
 
 export async function handleFeatureRoutes(request, url, env, corsHeaders) {
@@ -65,45 +70,38 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         `INSERT INTO search_keywords (id, keyword, normalized_keyword, search_count)
          VALUES (?, ?, ?, 1)
          ON CONFLICT(keyword) DO UPDATE SET search_count = search_count + 1, updated_at = CURRENT_TIMESTAMP`
-      ).bind(`kw_${Date.now()}`, kw, kw.toLowerCase()).run();
+      ).bind(newId('kw'), kw, kw.toLowerCase()).run();
     }
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
-  // 3. Lightning Deals Campaigns
+  // 3. Lightning Deals Campaigns (only a real, currently running campaign; prices shown = prices charged)
   if (url.pathname === '/api/v1/campaigns/lightning' && request.method === 'GET') {
+    const now = sqlNow();
     const campaign = await env.DB.prepare(
-      "SELECT * FROM flash_sale_campaigns WHERE status = 'ACTIVE' LIMIT 1"
-    ).first() || { id: 'fls_today', title: '⚡ OLMOA 오늘의 번개특가 한정 수량 대방출', ends_at: new Date(Date.now() + 36000000).toISOString() };
-
+      "SELECT * FROM flash_sale_campaigns WHERE status = 'ACTIVE' AND starts_at <= ? AND ends_at > ? ORDER BY ends_at LIMIT 1"
+    ).bind(now, now).first();
+    if (!campaign) return json(corsHeaders, { success: true, campaign: null, items: [], data: { campaign: null, deals: [], items: [] } });
     const { results: items } = await env.DB.prepare(
-      `SELECT f.*, p.id as slug, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price, p.partner_id,
-              COALESCE(pt.business_name, 'OLMOA DIRECT') as brand,
-              pt.business_name, s.option_combination_json, s.stock_quantity as sku_stock
-       FROM flash_sale_items f
-       JOIN products p ON f.product_id = p.id
-       LEFT JOIN partners pt ON p.partner_id = pt.id
-       LEFT JOIN product_skus s ON f.sku_id = s.id
-       ORDER BY f.sort_order ASC`
-    ).all();
-
-    const mappedDeals = items.map(it => ({
+      `SELECT f.id, f.product_id, f.sku_id, f.allocated_stock, f.sold_stock, f.sort_order, p.id as slug, p.title, p.thumbnail_url, p.partner_id,
+              pt.business_name AS brand, pt.business_name, COALESCE(s.sale_price, p.lowest_sale_price) AS charged_price,
+              COALESCE(s.original_price, p.lowest_original_price) AS original_price, s.stock_quantity AS sku_stock
+       FROM flash_sale_items f JOIN products p ON f.product_id = p.id LEFT JOIN partners pt ON p.partner_id = pt.id LEFT JOIN product_skus s ON f.sku_id = s.id
+       WHERE f.campaign_id = ? AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' ORDER BY f.sort_order ASC`
+    ).bind(campaign.id).all();
+    // NOTE: checkout charges product_skus.sale_price; a separate deal-price engine is not implemented, so the
+    // displayed deal price is the real charged price and the discount is computed from it (no fabricated numbers).
+    const mappedDeals = items.map((it) => ({
       ...it,
-      deal_price: it.flash_price || it.lowest_sale_price,
-      sold_quantity: it.sold_stock || 40,
-      discount_rate: it.lowest_original_price > (it.flash_price || it.lowest_sale_price)
-        ? Math.round(((it.lowest_original_price - (it.flash_price || it.lowest_sale_price)) / it.lowest_original_price) * 100)
-        : 30,
-      sold_percent: Math.min(100, Math.round(((it.sold_stock || 0) / (it.allocated_stock || 1)) * 100)),
-      remaining_stock: Math.max(0, (it.allocated_stock || 0) - (it.sold_stock || 0))
+      deal_price: it.charged_price,
+      lowest_sale_price: it.charged_price,
+      lowest_original_price: it.original_price,
+      sold_quantity: it.sold_stock || 0,
+      discount_rate: it.original_price > it.charged_price ? Math.floor(((it.original_price - it.charged_price) * 100) / it.original_price) : 0,
+      sold_percent: it.allocated_stock > 0 ? Math.min(100, Math.floor(((it.sold_stock || 0) * 100) / it.allocated_stock)) : 0,
+      remaining_stock: Math.max(0, Math.min(it.sku_stock ?? 0, (it.allocated_stock || 0) - (it.sold_stock || 0)))
     }));
-
-    return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA',
-      campaign,
-      items: mappedDeals,
-      data: { campaign, deals: mappedDeals, items: mappedDeals }
-    }), { headers: corsHeaders });
+    return json(corsHeaders, { success: true, campaign, items: mappedDeals, data: { campaign, deals: mappedDeals, items: mappedDeals } });
   }
 
   // 4. Product Reviews List & Create
@@ -146,20 +144,30 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
     if (request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
-      const customerId = request.headers.get('X-Customer-Id') || b.customer_id || b.user_id || 'u_customer_001';
+      const customerId = (await requireCustomer(request, env)).userId;
       const contentText = (b.content || b.comment || '').trim();
+      const purchase = await env.DB.prepare(
+        `SELECT i.id, i.option_summary, o.id AS order_id FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+         WHERE o.customer_id = ? AND i.product_id = ? AND s.status IN ('DELIVERED','PURCHASE_CONFIRMED') AND i.refunded_quantity < i.quantity LIMIT 1`
+      ).bind(customerId, prodId).first();
+      if (!purchase) throw forbidden('배송 완료된 구매 고객만 리뷰를 작성할 수 있습니다.');
+      const dup = await env.DB.prepare('SELECT id FROM product_reviews WHERE product_id = ? AND user_id = ? AND order_id = ?').bind(prodId, customerId, purchase.order_id).first();
+      if (dup) throw conflict('REVIEW_EXISTS', '이미 이 주문에 대한 리뷰를 작성했습니다.');
+      const me = await env.DB.prepare('SELECT full_name FROM users WHERE id = ?').bind(customerId).first();
+      const maskedName = me && me.full_name ? me.full_name.slice(0, 1) + '*'.repeat(Math.max(1, me.full_name.length - 1)) : '구매자';
       if (!contentText) {
         return new Response(JSON.stringify({ error: '리뷰 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
       }
-      const revId = `rev_${Date.now()}`;
+      const revId = newId('rev');
       const ratingVal = Math.max(1, Math.min(5, Number(b.rating) || 5));
       await env.DB.prepare(
-        `INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, sku_option_summary, rating, content, images_json, is_verified_purchase)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+        `INSERT INTO product_reviews (id, product_id, order_id, user_id, reviewer_name, author_name, sku_option_summary, rating, content, images_json, is_verified_purchase, user_height_cm, user_weight_kg, fit_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
       ).bind(
-        revId, prodId, customerId, (b.reviewer_name || b.customer_name || '인증 구매자').trim(),
-        b.sku_option_summary || '기본 옵션', ratingVal,
-        contentText, JSON.stringify(Array.isArray(b.images) ? b.images : [])
+        revId, prodId, purchase.order_id, customerId, maskedName, maskedName, purchase.option_summary, ratingVal,
+        str(contentText, { max: 3000, field: '리뷰' }), JSON.stringify(Array.isArray(b.images) ? b.images.slice(0, 10).map(String) : []),
+        b.user_height_cm ? Math.round(Number(b.user_height_cm)) || null : null, b.user_weight_kg ? Math.round(Number(b.user_weight_kg)) || null : null,
+        ['TRUE_TO_SIZE', 'RUNS_SMALL', 'RUNS_LARGE'].includes(b.fit_type) ? b.fit_type : null
       ).run();
 
       const created = { id: revId, review_id: revId, product_id: prodId, rating: ratingVal, comment: contentText, content: contentText, is_verified_purchase: 1 };
@@ -174,22 +182,27 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       const { results } = await env.DB.prepare(
         'SELECT * FROM product_qna WHERE product_id = ? ORDER BY created_at DESC'
       ).bind(prodId).all();
-      return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+      const viewer = await authenticate(request, env);
+      const data = results.map((q) => (Number(q.is_secret) === 1 && (!viewer || viewer.userId !== q.user_id))
+        ? { id: q.id, product_id: q.product_id, is_secret: 1, status: q.status, question: '비밀글입니다.', answer: q.answer ? '비밀글 답변입니다.' : null, created_at: q.created_at }
+        : { ...q, user_id: undefined });
+      return json(corsHeaders, { success: true, count: data.length, data });
     }
     if (request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
-      const customerId = request.headers.get('X-Customer-Id') || b.customer_id || b.user_id || 'u_customer_001';
+      const customerId = (await requireCustomer(request, env)).userId;
       if (!b.question || !b.question.trim()) {
         return new Response(JSON.stringify({ error: '문의 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
       }
       const prod = await env.DB.prepare('SELECT partner_id FROM products WHERE id = ?').bind(prodId).first();
-      const qnaId = `qna_${Date.now()}`;
+      if (!prod) throw notFound('상품을 찾을 수 없습니다.');
+      const qnaId = newId('qna');
       await env.DB.prepare(
         `INSERT INTO product_qna (id, product_id, partner_id, user_id, questioner_name, question, is_secret, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'WAITING')`
       ).bind(
-        qnaId, prodId, prod ? prod.partner_id : 'pt_001', customerId,
-        (b.questioner_name || b.customer_name || '고객').trim(), b.question.trim(), b.is_secret ? 1 : 0
+        qnaId, prodId, prod.partner_id, customerId,
+        '고객', str(b.question, { max: 2000, field: '문의' }), b.is_secret ? 1 : 0
       ).run();
       const created = { id: qnaId, qna_id: qnaId, product_id: prodId, question: b.question.trim(), status: 'WAITING' };
       return new Response(JSON.stringify({ success: true, qna_id: qnaId, data: created, message: '상품 문의가 등록되었습니다.' }), { status: 201, headers: corsHeaders });
@@ -198,9 +211,9 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 6. Coupons & Claim Coupon
   if (url.pathname === '/api/v1/coupons' && request.method === 'GET') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
-    const { results: coupons } = await env.DB.prepare("SELECT * FROM coupons WHERE is_active = 1").all();
-    const { results: userCoupons } = await env.DB.prepare("SELECT coupon_id, is_used FROM user_coupons WHERE user_id = ?").bind(customerId).all();
+    const me = await authenticate(request, env);
+    const { results: coupons } = await env.DB.prepare("SELECT * FROM coupons WHERE is_active = 1 AND expires_at > ?").bind(sqlNow()).all();
+    const userCoupons = me ? (await env.DB.prepare("SELECT id AS user_coupon_id, coupon_id, is_used FROM user_coupons WHERE user_id = ?").bind(me.userId).all()).results : [];
     const claimedMap = {};
     for (const uc of userCoupons) claimedMap[uc.coupon_id] = uc;
 
@@ -213,6 +226,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         valid_until: c.expires_at,
         claimed_status: claimedMap[c.id] ? (claimedMap[c.id].is_used ? 'USED' : 'CLAIMED') : null,
         is_claimed: !!claimedMap[c.id],
+        user_coupon_id: claimedMap[c.id] ? claimedMap[c.id].user_coupon_id : null,
         is_used: claimedMap[c.id] ? !!claimedMap[c.id].is_used : false
       }))
     }), { headers: corsHeaders });
@@ -220,28 +234,22 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   if (url.pathname === '/api/v1/coupons/claim' && request.method === 'POST') {
     const b = await request.json().catch(() => ({}));
-    const customerId = request.headers.get('X-Customer-Id') || b.customer_id || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     const codeOrId = (b.coupon_id || b.code || '').trim();
-    let coupon = await env.DB.prepare('SELECT * FROM coupons WHERE id = ? OR UPPER(code) = UPPER(?)').bind(codeOrId, codeOrId).first();
-    if (!coupon) {
-      coupon = await env.DB.prepare('SELECT * FROM coupons WHERE is_active = 1 LIMIT 1').first();
-    }
+    const coupon = codeOrId ? await env.DB.prepare('SELECT * FROM coupons WHERE (id = ? OR UPPER(code) = UPPER(?)) AND is_active = 1 AND expires_at > ?').bind(codeOrId, codeOrId, sqlNow()).first() : null;
     if (!coupon) {
       return new Response(JSON.stringify({ error: '유효하지 않은 쿠폰 코드입니다.' }), { status: 404, headers: corsHeaders });
     }
-    const existing = await env.DB.prepare('SELECT id FROM user_coupons WHERE user_id = ? AND coupon_id = ?').bind(customerId, coupon.id).first();
-    if (!existing) {
-      await env.DB.prepare('INSERT INTO user_coupons (id, user_id, coupon_id, is_used) VALUES (?, ?, ?, 0)').bind(`uc_${Date.now()}`, customerId, coupon.id).run();
-    }
+    await env.DB.prepare('INSERT OR IGNORE INTO user_coupons (id, user_id, coupon_id, is_used) VALUES (?, ?, ?, 0)').bind(newId('uc'), customerId, coupon.id).run();
     return new Response(JSON.stringify({ success: true, coupon, data: coupon, message: '쿠폰이 쿠폰함에 발급되었습니다.' }), { headers: corsHeaders });
   }
 
   // 7. User Credits Balance & Ledger
   if (url.pathname === '/api/v1/credits' && request.method === 'GET') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     const { results } = await env.DB.prepare('SELECT *, amount_delta as amount FROM user_credits WHERE user_id = ? ORDER BY created_at DESC').bind(customerId).all();
     const balanceRow = await env.DB.prepare('SELECT SUM(amount_delta) as total_balance FROM user_credits WHERE user_id = ?').bind(customerId).first();
-    const balance = balanceRow && balanceRow.total_balance ? Math.max(0, balanceRow.total_balance) : 5000;
+    const balance = balanceRow && balanceRow.total_balance ? balanceRow.total_balance : 0;
     return new Response(JSON.stringify({
       success: true,
       customer_id: customerId,
@@ -252,7 +260,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 8. Customer Wishlist (GET / POST / DELETE /api/v1/wishlist)
   if (url.pathname === '/api/v1/wishlist') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     if (request.method === 'GET') {
       const { results } = await env.DB.prepare(
         `SELECT w.id as wishlist_id, w.created_at as wished_at, p.*, p.id as product_id, p.id as slug,
@@ -269,14 +277,14 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     if (request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
       const prodId = b.product_id;
-      const cid = b.customer_id || customerId;
+      const cid = customerId;
       if (!prodId) return new Response(JSON.stringify({ error: 'product_id required' }), { status: 400, headers: corsHeaders });
       const existing = await env.DB.prepare('SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?').bind(cid, prodId).first();
       if (existing) {
         await env.DB.prepare('DELETE FROM wishlists WHERE id = ?').bind(existing.id).run();
         return new Response(JSON.stringify({ success: true, wished: false, action: 'REMOVED', product_id: prodId }), { headers: corsHeaders });
       } else {
-        await env.DB.prepare('INSERT INTO wishlists (id, user_id, product_id) VALUES (?, ?, ?)').bind(`wsh_${Date.now()}`, cid, prodId).run();
+        await env.DB.prepare('INSERT INTO wishlists (id, user_id, product_id) VALUES (?, ?, ?)').bind(newId('wsh'), cid, prodId).run();
         return new Response(JSON.stringify({ success: true, wished: true, action: 'ADDED', product_id: prodId }), { status: 200, headers: corsHeaders });
       }
     }
@@ -285,17 +293,17 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   // 9. Support FAQ & 1:1 Customer Inquiries
   if (url.pathname === '/api/v1/support/faq' && request.method === 'GET') {
     const faqs = [
-      { category: '배송', q: '배송 기간과 배송비 정책은 어떻게 되나요?', a: 'OLMOA 입점 파트너사별로 30,000원 이상 구매 시 100% 무료 직배송되며, 결제 완료 후 영업일 기준 평균 2~4일 이내 안전하게 도착합니다.' },
-      { category: '최저가보상', q: '30일 최저가 차액 보상제는 어떻게 신청하나요?', a: '결제 후 30일 이내 동일 상품의 올모아 판매가가 인하된 경우 [주문·배송 조회 > 주문 상세 > 30일 최저가 차액 보상 신청]을 클릭하시면 차액 전액이 올모아 적립금(크레딧)으로 즉시 자동 지급됩니다.' },
-      { category: '반품/환불', q: '90일 무료 반품 정책이 궁금합니다.', a: '배송 완료일로부터 90일 이내 단순 변심을 포함하여 모든 주문 건의 첫 회 반품 배송비가 무료이며, 수거 확인 즉시 에스크로 결제 대금 100%가 전액 환불됩니다.' },
-      { category: '결제/에스크로', q: '올모아 에스크로 구매자 보호란 무엇인가요?', a: '고객님이 결제하신 대금은 판매자에게 즉시 넘어가지 않고 OLMOA 에스크로 신탁 원장에 안전하게 보관되며, 고객님이 상품을 정상 수령하고 구매확정한 이후에만 파트너에게 정산됩니다.' },
+      { category: '배송', q: '배송비와 배송 기간은 어떻게 되나요?', a: '배송비와 무료배송 기준은 판매자(직영/입점)별로 다르며 주문서에서 판매자별로 확인할 수 있습니다. 배송 예정일을 넘긴 경우 주문 상세에서 지연 보상을 신청할 수 있습니다.' },
+      { category: '판매가 인하 보상', q: '구매 후 가격이 내리면 보상받을 수 있나요?', a: '결제 후 30일 이내 올모아 판매가가 인하된 경우 주문 상세에서 1회 신청할 수 있으며, 실제 인하 차액이 적립금으로 지급됩니다.' },
+      { category: '반품/환불', q: '반품은 어떻게 하나요?', a: '상품 수령 후 7일 이내 주문 상세에서 반품을 신청할 수 있습니다. 판매자가 회수·확인하면 결제 금액은 원결제수단으로, 사용한 적립금은 적립금으로 환불됩니다. 단순 변심 반품은 반품 배송비가 부과될 수 있습니다.' },
+      { category: '결제', q: '결제 대금은 언제 판매자에게 지급되나요?', a: '입점 판매자의 판매대금은 구매확정(또는 배송완료 후 7일 자동 확정) 이후 정산되며, 정산 후 환불이 발생하면 다음 정산에서 차감됩니다.' },
       { category: '파트너입점', q: '올모아 글로벌 셀러로 입점하려면 어떻게 해야 하나요?', a: '상단 [셀러 입점] 메뉴를 통해 사업자등록증 및 정산 계좌를 제출하시면 운영 관리자 심사(평균 24시간 이내) 완료 즉시 전용 파트너 센터에서 상품 등록 및 대량 CSV 업로드가 가능합니다.' }
     ];
     return new Response(JSON.stringify({ success: true, data: faqs }), { headers: corsHeaders });
   }
 
   if (url.pathname === '/api/v1/support/inquiries') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     if (request.method === 'GET') {
       const { results } = await env.DB.prepare('SELECT *, content as message FROM support_inquiries WHERE user_id = ? ORDER BY created_at DESC').bind(customerId).all();
       return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
@@ -306,12 +314,12 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       if (!b.subject || !msgText) {
         return new Response(JSON.stringify({ error: '문의 제목과 내용을 모두 입력해 주세요.' }), { status: 400, headers: corsHeaders });
       }
-      const inqId = `inq_${Date.now()}`;
+      const inqId = newId('inq');
       const cat = ['DELIVERY', 'REFUND_RETURN', 'PRICE_MATCH', 'PAYMENT', 'PARTNER_JOIN', 'OTHER'].includes(b.category) ? b.category : 'OTHER';
       await env.DB.prepare(
         `INSERT INTO support_inquiries (id, user_id, order_id, category, subject, content, status)
          VALUES (?, ?, ?, ?, ?, ?, 'OPEN')`
-      ).bind(inqId, b.customer_id || customerId, b.order_id || null, cat, b.subject.trim(), msgText).run();
+      ).bind(inqId, customerId, b.order_id || null, cat, str(b.subject, { max: 200, required: true, field: '제목' }), str(msgText, { max: 5000, field: '내용' })).run();
       return new Response(JSON.stringify({
         success: true,
         inquiry_id: inqId,
@@ -331,7 +339,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 11. Multi-Address Book Management (Customer)
   if (url.pathname === '/api/v1/addresses') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     if (request.method === 'GET') {
       const { results } = await env.DB.prepare(
         'SELECT * FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, created_at DESC'
@@ -352,7 +360,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         return new Response(JSON.stringify({ error: '수령인, 연락처, 주소는 필수 입력 항목입니다.' }), { status: 400, headers: corsHeaders });
       }
 
-      const addrId = 'addr_' + Date.now();
+      const addrId = newId('addr');
       if (isDefault) {
         if (env.DB.batch) {
           await env.DB.batch([
@@ -381,7 +389,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   const addrMatch = url.pathname.match(/^\/api\/v1\/addresses\/([a-zA-Z0-9_-]+)/);
   if (addrMatch) {
     const addrId = addrMatch[1];
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     if (url.pathname.endsWith('/default') && (request.method === 'PUT' || request.method === 'POST')) {
       const exists = await env.DB.prepare('SELECT id FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).first();
       if (!exists) {
@@ -410,7 +418,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 12. Customer Notifications & Alerts
   if (url.pathname === '/api/v1/notifications') {
-    const customerId = request.headers.get('X-Customer-Id') || url.searchParams.get('customer_id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     if (request.method === 'GET') {
       const { results } = await env.DB.prepare(
         'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20'
@@ -422,7 +430,8 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 12-1. External Real-time Dispatcher (SMS / Kakao AlimTalk / Email)
   if (url.pathname === '/api/v1/notifications/dispatch' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    await requireAdmin(request, env);
+    const body = await readJson(request);
     const channel = (body.channel || 'ALIMTALK').toUpperCase();
     const recipient = String(body.recipient || body.phone || body.email || '').trim();
     const templateCode = String(body.template_code || 'ORDER_NOTIFICATION').toUpperCase();
@@ -433,10 +442,10 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ error: 'recipient is required for dispatch' }), { status: 400, headers: corsHeaders });
     }
 
-    const logId = `dlv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const logId = newId('dlv');
     let provider = 'SOLAPI';
-    let status = 'SENT';
-    let providerMsgId = `solapi_${Date.now()}`;
+    let status = 'NOT_SENT_PROVIDER_NOT_CONFIGURED';
+    let providerMsgId = null;
 
     // Real API integration if SOLAPI keys present
     if (env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET) {
@@ -444,7 +453,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         const solapiRes = await fetch('https://api.solapi.com/messages/v4/send', {
           method: 'POST',
           headers: {
-            'Authorization': `HMAC-SHA256 apiKey=${env.SOLAPI_API_KEY}`,
+            'Authorization': await solapiAuthHeader(env),
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -455,9 +464,9 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
             }
           })
         });
-        const sJson = await solapiRes.json();
+        const sJson = await solapiRes.json().catch(() => ({}));
         if (solapiRes.ok) {
-          providerMsgId = sJson.groupInfo?.groupId || providerMsgId;
+          providerMsgId = sJson.groupInfo?.groupId || sJson.messageId || null;
           status = 'SENT';
         } else {
           status = 'FAILED';
@@ -474,7 +483,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
     return new Response(JSON.stringify({
       success: true,
-      brand: 'OLMOA Real-Time Dispatcher',
+      provider_configured: Boolean(env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET),
       data: {
         log_id: logId,
         channel,
@@ -489,7 +498,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/notifications/read-all' && (request.method === 'PUT' || request.method === 'POST')) {
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').bind(customerId).run();
     return new Response(JSON.stringify({ success: true, message: '모든 알림을 읽음 처리했습니다.' }), { headers: corsHeaders });
   }
@@ -497,10 +506,19 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   const notiMatch = url.pathname.match(/^\/api\/v1\/notifications\/([a-zA-Z0-9_-]+)\/read$/);
   if (notiMatch && (request.method === 'PUT' || request.method === 'POST')) {
     const notiId = notiMatch[1];
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+    const customerId = (await requireCustomer(request, env)).userId;
     await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').bind(notiId, customerId).run();
     return new Response(JSON.stringify({ success: true, message: '알림을 읽음 처리했습니다.' }), { headers: corsHeaders });
   }
 
   return null;
+}
+
+async function solapiAuthHeader(env) {
+  const date = new Date().toISOString();
+  const salt = crypto.randomUUID().replace(/-/g, '');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.SOLAPI_API_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(date + salt)));
+  const hex = Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `HMAC-SHA256 apiKey=${env.SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${hex}`;
 }

@@ -1,3 +1,5 @@
+import { requireAuth } from '../lib/auth.js';
+import { newId } from '../lib/ids.js';
 // apps/cloudflare-gateway/src/routes/storage.js
 // OLMOA Cloudflare R2 & D1 Resilient Media Storage Engine
 
@@ -6,7 +8,6 @@ const ALLOWED_CONTENT_TYPES = [
   'image/png',
   'image/webp',
   'image/gif',
-  'image/svg+xml',
   'application/pdf'
 ];
 
@@ -15,6 +16,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
   // 1. File Upload (POST /api/v1/storage/upload)
   if (url.pathname === '/api/v1/storage/upload' && request.method === 'POST') {
+    const uploader = await requireAuth(request, env);
     const contentType = request.headers.get('content-type') || '';
     let originalName = 'upload.png';
     let mimeType = 'image/png';
@@ -72,7 +74,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ error: 'Unsupported Content-Type for upload' }), { status: 415, headers: corsHeaders });
     }
 
-    if (!ALLOWED_CONTENT_TYPES.includes(mimeType) && !mimeType.startsWith('image/')) {
+    folder = String(folder || 'products').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30) || 'products';
+    if (!ALLOWED_CONTENT_TYPES.includes(mimeType)) {
       return new Response(JSON.stringify({
         error: `Invalid file type: ${mimeType}. Allowed types: ${ALLOWED_CONTENT_TYPES.join(', ')}`
       }), { status: 400, headers: corsHeaders });
@@ -85,7 +88,9 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
     const extMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
     const ext = extMatch ? extMatch[1].toLowerCase() : (mimeType === 'image/webp' ? 'webp' : 'png');
-    const fileId = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const safeExt = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf' })[mimeType];
+    void ext;
+    const fileId = `${folder}/${newId('obj')}.${safeExt}`;
     const publicUrl = `${url.origin}/api/v1/storage/file/${fileId}`;
 
     let storageBackend = 'D1_EMBEDDED';
@@ -104,8 +109,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
     // 2. Metadata & resilient base64 fallback in D1
     await env.DB.prepare(
-      `INSERT INTO storage_objects (id, original_name, content_type, byte_size, folder, storage_backend, data_base64, public_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO storage_objects (id, original_name, content_type, byte_size, folder, storage_backend, data_base64, public_url, uploader_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       fileId,
       originalName,
@@ -114,7 +119,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       folder,
       storageBackend,
       storageBackend === 'D1_EMBEDDED' ? fileBase64 : null,
-      publicUrl
+      publicUrl,
+      uploader.userId
     ).run();
 
     return new Response(JSON.stringify({
@@ -176,6 +182,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
         'Content-Type': row.content_type || 'image/png',
         'Content-Length': String(row.byte_size || bytes.byteLength),
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
         'Access-Control-Allow-Origin': '*'
       }
     });

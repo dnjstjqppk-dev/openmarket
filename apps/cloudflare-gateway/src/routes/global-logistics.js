@@ -1,3 +1,6 @@
+import { authenticate, requireMachineSecret } from '../lib/auth.js';
+import { unauthorized, forbidden } from '../lib/http.js';
+import { newId } from '../lib/ids.js';
 // apps/cloudflare-gateway/src/routes/global-logistics.js
 // OLMOA Global OpenMarket Logistics Engine: International Carriers, 7-Stage Milestone Tracking & Webhook
 
@@ -56,6 +59,11 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     if (!subOrder) {
       return new Response(JSON.stringify({ error: 'Sub-order not found', sub_order_id: subOrderId }), { status: 404, headers: corsHeaders });
     }
+    const viewer = await authenticate(request, env);
+    if (!viewer) throw unauthorized();
+    const ownerId = (await env.DB.prepare('SELECT customer_id FROM orders WHERE id = ?').bind(subOrder.parent_order_id).first('customer_id'));
+    const allowed = viewer.role === 'ROLE_ADMIN' || viewer.userId === ownerId || (viewer.role === 'ROLE_PARTNER' && viewer.partnerId === subOrder.partner_id);
+    if (!allowed) throw forbidden('본인 주문의 배송 정보만 조회할 수 있습니다.');
 
     const { results: logs } = await env.DB.prepare(
       `SELECT * FROM milestone_tracking_logs WHERE sub_order_id = ? ORDER BY occurred_at ASC`
@@ -73,68 +81,9 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
       tracking_url: 'https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo='
     };
 
-    // Synthesize timeline if logs are empty
-    let timeline = logs;
-    if (!timeline || timeline.length === 0) {
-      const createdAt = subOrder.created_at || new Date().toISOString();
-      timeline = [
-        {
-          stage_code: 'PREPARING',
-          stage_name: '상품 준비 및 검수 완료',
-          location: 'OLMOA 글로벌 풀필먼트 센터',
-          description: `입점사 [${subOrder.partner_name || '파트너'}]에서 주문 검수 및 수출 포장을 완료하였습니다.`,
-          occurred_at: createdAt
-        }
-      ];
-
-      if (['SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(subOrder.status)) {
-        timeline.push({
-          stage_code: 'SHIPPED',
-          stage_name: '해외 현지 물류센터 출고',
-          location: '중국 위해 물류허브 / Incheon FBO',
-          description: `특송사(${carrierInfo.name})에 인계되어 운송장(${subOrder.tracking_number || 'TRK-DEFAULT'})이 발행되었습니다.`,
-          occurred_at: subOrder.shipped_at || new Date(Date.now() - 86400000).toISOString()
-        });
-        timeline.push({
-          stage_code: 'EXPORT_CLEARED',
-          stage_name: '수출 통관 심사 완료',
-          location: '현지 세관 보세구역',
-          description: '수출국 세관 검사를 마치고 항공/해상 적재 대기 중입니다.',
-          occurred_at: new Date(Date.now() - 64800000).toISOString()
-        });
-        timeline.push({
-          stage_code: 'IN_TRANSIT_AIR',
-          stage_name: '국제 항공편 운송 중',
-          location: '인천국제공항 화물터미널행 (항공편 KE0324)',
-          description: '항공편을 통해 대한민국으로 비행 운송 중입니다.',
-          occurred_at: new Date(Date.now() - 43200000).toISOString()
-        });
-        timeline.push({
-          stage_code: 'IMPORT_CUSTOMS',
-          stage_name: '인천세관 수입 통관 진행',
-          location: '인천공항 세관 제1특송통관장',
-          description: `개인통관고유부호(${subOrder.pccc || 'P***'}) 매칭 및 엑스레이 전수 검사 완료.`,
-          occurred_at: new Date(Date.now() - 21600000).toISOString()
-        });
-      }
-
-      if (['DELIVERED', 'COMPLETED'].includes(subOrder.status)) {
-        timeline.push({
-          stage_code: 'DOMESTIC_DELIVERY',
-          stage_name: '국내 택배사 인계 (배송 중)',
-          location: '인천허브터미널 ➔ 서울서초배송센터',
-          description: '국내 라스트마일 배송기사님이 배송을 시작하였습니다.',
-          occurred_at: new Date(Date.now() - 7200000).toISOString()
-        });
-        timeline.push({
-          stage_code: 'DELIVERED',
-          stage_name: '고객 문 앞 배송 완료',
-          location: subOrder.shipping_address_line1 || '문 앞',
-          description: '수령인 고객님께 물품이 안전하게 전달되었습니다.',
-          occurred_at: subOrder.delivered_at || new Date().toISOString()
-        });
-      }
-    }
+    // Only recorded events are shown. (A synthesized 7-stage timeline with invented timestamps,
+    // flight numbers and customs events used to be returned here — removed as misleading to customers.)
+    const timeline = logs || [];
 
     const currentStageMeta = MILESTONE_STAGES.find(m => m.stage === currentMilestone) || MILESTONE_STAGES[0];
     const milestones = MILESTONE_STAGES.map(m => ({
@@ -157,10 +106,10 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
         carrier_info: carrierInfo,
         tracking_number: subOrder.tracking_number,
         full_tracking_url: subOrder.tracking_number ? `${carrierInfo.tracking_url}${subOrder.tracking_number}` : null,
-        pccc: subOrder.pccc,
+        pccc: subOrder.pccc ? subOrder.pccc.slice(0, 3) + '*********' + subOrder.pccc.slice(-1) : null,
         customs_clearance_no: subOrder.customs_clearance_no || null,
-        flight_vessel_no: subOrder.flight_vessel_no || 'KE0324 (Incheon Direct)',
-        origin_country: subOrder.origin_country || 'CN',
+        flight_vessel_no: subOrder.flight_vessel_no || null,
+        origin_country: subOrder.origin_country || null,
         destination_country: subOrder.destination_country || 'KR',
         milestones,
         logs: logs || [],
@@ -172,6 +121,7 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
 
   // 3. Carrier Milestone Webhook Ingestion (/api/v1/logistics/milestone-webhook)
   if (url.pathname === '/api/v1/logistics/milestone-webhook' && request.method === 'POST') {
+    requireMachineSecret(request, env, 'CARRIER_WEBHOOK_SECRET', 'X-Carrier-Webhook-Secret');
     const body = await request.json().catch(() => ({}));
     const subOrderId = body.sub_order_id;
     const stageCode = String(body.milestone || body.stage_code || 'SHIPPED').toUpperCase();
@@ -185,12 +135,12 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
       return new Response(JSON.stringify({ error: 'Missing sub_order_id' }), { status: 400, headers: corsHeaders });
     }
 
-    const subOrder = await env.DB.prepare('SELECT * FROM sub_orders WHERE id = ? OR sub_order_no = ? OR parent_order_id = ? LIMIT 1').bind(subOrderId, subOrderId, subOrderId).first();
+    const subOrder = await env.DB.prepare("SELECT * FROM sub_orders WHERE (id = ? OR sub_order_no = ?) AND status IN ('SHIPPED','IN_TRANSIT','DELIVERED') LIMIT 1").bind(subOrderId, subOrderId).first();
     if (!subOrder) {
-      return new Response(JSON.stringify({ error: 'Sub-order not found' }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: '배송 중(SHIPPED/IN_TRANSIT/DELIVERED) 상태의 판매자 주문이 아닙니다.', code: 'NOT_IN_TRANSIT_STATE' }), { status: 409, headers: corsHeaders });
     }
 
-    const logId = `trk_log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const logId = newId('trk');
     const stageMeta = MILESTONE_STAGES.find(m => m.stage === stageCode) || { stage: stageCode, name: stageCode };
 
     const batch = [];
@@ -207,13 +157,12 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     let shippedAt = subOrder.shipped_at;
 
     if (stageCode === 'SHIPPED') {
-      newStatus = 'SHIPPED';
       shippedAt = shippedAt || new Date().toISOString();
     } else if (stageCode === 'DELIVERED') {
       newStatus = 'DELIVERED';
       deliveredAt = new Date().toISOString();
-    } else if (['EXPORT_CLEARED', 'IN_TRANSIT_AIR', 'IMPORT_CUSTOMS', 'DOMESTIC_DELIVERY'].includes(stageCode)) {
-      newStatus = 'IN_TRANSIT';
+    } else if (['EXPORT_CLEARED', 'IN_TRANSIT_AIR', 'IMPORT_CUSTOMS', 'DOMESTIC_DELIVERY'].includes(stageCode) && subOrder.status === 'SHIPPED') {
+      newStatus = 'IN_TRANSIT'; // never regresses a DELIVERED sub-order
     }
 
     batch.push(

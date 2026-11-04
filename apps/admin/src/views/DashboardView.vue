@@ -92,13 +92,10 @@ async function loadControlTower() {
 
 async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER') {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/disputes/${claim.id}/arbitrate`, {
-      method: 'POST',
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claim.id}`, {
+      method: 'PUT',
       headers: getAdminHeaders(),
-      body: JSON.stringify({
-        ruling,
-        notes: ruling === 'FULL_REFUND_TO_BUYER' ? '구매자 보호 원칙에 의거 전액 환불 직권 판정' : '정상 출고 증빙 확인에 따른 판매자 대금 지급 판정'
-      })
+      body: JSON.stringify(ruling === 'FULL_REFUND_TO_BUYER' ? { decision: 'APPROVE' } : { decision: 'REJECT', notes: '정상 출고 증빙 확인에 따른 반품 거절 판정' })
     });
     if (res.ok) {
       toastMsg.value = `✓ 분쟁 건(${claim.id})에 대해 [${ruling === 'FULL_REFUND_TO_BUYER' ? '구매자 환불 승인' : '판매자 정산 지급'}] 직권 판정이 완료되었습니다.`;

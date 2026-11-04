@@ -1,0 +1,15 @@
+[PASS] B01 storefront home renders with legal business disclosure from API | http>=400:1
+[PASS] B02 protected route redirects anonymous users to login
+[PASS] B03 product detail (marketplace seller) and add to cart
+[PASS] B04 add a direct-sales (MODEL A) product -> mixed cart
+[PASS] B05 checkout requires login; login through the real form | console:1 | http>=400:1
+[PASS] B06 checkout shows the server quote; pay with the local simulator
+[PASS] B07 seller center: login, see the paid order, ship it
+[PASS] B08 operator console: login, reconciliation, entities, purchase orders
+[PASS] B09 delivery (dev simulator) -> customer purchase confirmation in the UI
+[PASS] B10 customer cancels the remaining (direct) shipment from the UI
+[PASS] B11 reconciliation still clean after the browser journey
+
+=== Browser E2E: 11/11 passed · console errors 1 · HTTP>=400 2 · screenshots 29 ===
+  HTTP FAILED  https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500  [B01 storefront home renders with legal business disclosure from API]
+  HTTP 401 POST http://127.0.0.1:8787/api/v1/auth/login  [B05 checkout requires login; login through the real form]

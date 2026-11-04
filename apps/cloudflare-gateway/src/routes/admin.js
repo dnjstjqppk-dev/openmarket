@@ -1,36 +1,26 @@
 // apps/cloudflare-gateway/src/routes/admin.js
-// OLMOA Admin Console Engine: Metrics, Product Approval, Partner Verification, Orders, Ledger Payouts & Claims
+// Operator console API. Requires an authenticated ROLE_ADMIN user; every mutation writes admin_audit_log.
 
-function verifyAdminAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const adminHeader = (request.headers.get('X-Admin-Secret') || request.headers.get('X-Admin-Key') || '').trim();
-  const secret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
-  return (
-    token === secret ||
-    adminHeader === secret ||
-    token.startsWith('ey') ||
-    adminHeader.startsWith('ey')
-  );
-}
+import { requireAdmin } from '../lib/auth.js';
+import { readJson, json, bad, conflict, notFound, str } from '../lib/http.js';
+import { newId } from '../lib/ids.js';
+import { auditStatement } from '../lib/ledger.js';
+import { refundOrder, loadOrderBundle } from '../services/orders.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
-
-  if (!verifyAdminAuth(request, env)) {
-    return new Response(JSON.stringify({
-      error: 'Unauthorized: Admin authorization secret required.'
-    }), { status: 401, headers: corsHeaders });
-  }
+  const admin = await requireAdmin(request, env);
+  const audit = (action, targetType, targetId, before, after) => auditStatement(env, admin, { action, targetType, targetId, before, after, request });
 
   // 1. Admin Dashboard Statistics (Excludes CANCELLED Orders from GMV)
   if ((url.pathname === '/api/v1/admin/dashboard' || url.pathname === '/api/v1/admin/metrics') && request.method === 'GET') {
     const prodRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM products WHERE status = 'ACTIVE'").first();
-    const orderRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(total_pay_amount) as total_gmv FROM orders WHERE payment_status != 'CANCELLED'").first();
+    const orderRes = await env.DB.prepare("SELECT COUNT(*) as cnt, COALESCE(SUM(total_goods_amount - volume_discount_amount + total_shipping_amount),0) as total_gmv FROM orders WHERE paid_at IS NOT NULL AND is_sandbox = 0").first();
     const partnerRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM partners').first();
     const userRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM users').first();
     const oosRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM product_skus WHERE stock_quantity = 0').first();
     const claimRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM returns WHERE status = 'REQUESTED'").first();
-    const stlRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(net_payout_amount) as pending_payout FROM settlements WHERE status = 'PENDING'").first();
+    const stlRes = await env.DB.prepare("SELECT COUNT(*) as cnt, SUM(net_payout_amount) as pending_payout FROM settlements WHERE status IN ('PENDING','ELIGIBLE_FOR_PAYOUT')").first();
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA',
@@ -63,7 +53,9 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   const adminReviewMatch = url.pathname.match(/^\/api\/v1\/admin\/reviews\/([^\/]+)$/);
   if (adminReviewMatch && request.method === 'DELETE') {
     const reviewId = adminReviewMatch[1];
-    await env.DB.prepare('DELETE FROM product_reviews WHERE id = ?').bind(reviewId).run();
+    const before = await env.DB.prepare('SELECT * FROM product_reviews WHERE id = ?').bind(reviewId).first();
+    if (!before) throw notFound('리뷰를 찾을 수 없습니다.');
+    await env.DB.batch([env.DB.prepare('DELETE FROM product_reviews WHERE id = ?').bind(reviewId), audit('REVIEW_DELETE', 'review', reviewId, before, null)]);
     return new Response(JSON.stringify({ success: true, message: '리뷰가 삭제되었습니다.' }), { headers: corsHeaders });
   }
 
@@ -91,16 +83,22 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (url.pathname.startsWith('/api/v1/admin/partners/') && url.pathname.endsWith('/verify') && (request.method === 'PUT' || request.method === 'POST')) {
     const partnerId = url.pathname.split('/')[5];
     const body = await request.json().catch(() => ({}));
-    const status = ['APPROVED', 'REJECTED', 'SUSPENDED', 'PENDING'].includes(body.status) ? body.status : 'APPROVED';
+    if (!['APPROVED', 'REJECTED', 'SUSPENDED', 'PENDING'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
+    const status = body.status;
+    const beforePartner = await env.DB.prepare('SELECT id, status, risk_tier, rolling_reserve_pct FROM partners WHERE id = ?').bind(partnerId).first();
+    if (!beforePartner) throw notFound('입점사를 찾을 수 없습니다.');
     const riskTier = body.risk_tier || 'TIER_1_NORMAL';
     const reservePct = body.rolling_reserve_pct !== undefined ? Number(body.rolling_reserve_pct) : (riskTier === 'TIER_3_HIGH_RISK' ? 10.0 : (riskTier === 'TIER_2_WATCH' ? 5.0 : 0.0));
     const kycNotes = body.kyc_notes ? String(body.kyc_notes).trim() : null;
 
-    await env.DB.prepare(
-      `UPDATE partners
-       SET status = ?, kyc_status = ?, risk_tier = ?, rolling_reserve_pct = ?, kyc_notes = COALESCE(?, kyc_notes), updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`
-    ).bind(status, status, riskTier, reservePct, kycNotes, partnerId).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE partners
+         SET status = ?, kyc_status = ?, risk_tier = ?, rolling_reserve_pct = ?, kyc_notes = COALESCE(?, kyc_notes), updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).bind(status, status, riskTier, reservePct, kycNotes, partnerId),
+      audit('PARTNER_VERIFY', 'partner', partnerId, beforePartner, { status, riskTier, reservePct, kycNotes })
+    ]);
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA', partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes, data: { partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes }
@@ -125,10 +123,62 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (url.pathname.startsWith('/api/v1/admin/products/') && url.pathname.endsWith('/status') && (request.method === 'PUT' || request.method === 'PATCH')) {
     const prodId = url.pathname.split('/')[5];
     const body = await request.json().catch(() => ({}));
-    const status = ['ACTIVE', 'HIDDEN', 'DELETED'].includes(body.status) ? body.status : 'ACTIVE';
-
-    await env.DB.prepare('UPDATE products SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, prodId).run();
+    if (!['ACTIVE', 'HIDDEN', 'DELETED'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
+    const status = body.status;
+    const beforeProd = await env.DB.prepare('SELECT id, status, review_status FROM products WHERE id = ?').bind(prodId).first();
+    if (!beforeProd) throw notFound('상품을 찾을 수 없습니다.');
+    if (status === 'ACTIVE' && beforeProd.review_status !== 'APPROVED') throw conflict('REVIEW_REQUIRED', '심사 승인되지 않은 상품은 판매 상태로 전환할 수 없습니다.');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE products SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, prodId),
+      audit('PRODUCT_STATUS', 'product', prodId, beforeProd, { status })
+    ]);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', product_id: prodId, status }), { headers: corsHeaders });
+  }
+
+  // 5b. Product review decision (MODEL B 상품 심사)
+  const reviewMatch = url.pathname.match(/^\/api\/v1\/admin\/products\/([^\/]+)\/review$/);
+  if (reviewMatch && (request.method === 'POST' || request.method === 'PUT')) {
+    const body = await readJson(request);
+    const prod = await env.DB.prepare('SELECT id, status, review_status FROM products WHERE id = ?').bind(reviewMatch[1]).first();
+    if (!prod) throw notFound('상품을 찾을 수 없습니다.');
+    const decision = String(body.decision || '').toUpperCase();
+    if (!['APPROVE', 'REJECT'].includes(decision)) throw bad('INVALID_DECISION', 'decision은 APPROVE 또는 REJECT 입니다.');
+    const note = str(body.note, { max: 500 });
+    if (decision === 'REJECT' && !note) throw bad('REASON_REQUIRED', '반려 사유를 입력해 주세요.');
+    const next = decision === 'APPROVE' ? { review_status: 'APPROVED', status: 'ACTIVE' } : { review_status: 'REJECTED', status: 'DRAFT' };
+    await env.DB.batch([
+      env.DB.prepare('UPDATE products SET review_status = ?, status = ?, review_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(next.review_status, next.status, note || null, prod.id),
+      audit('PRODUCT_REVIEW', 'product', prod.id, prod, { ...next, note })
+    ]);
+    return json(corsHeaders, { success: true, product_id: prod.id, ...next });
+  }
+
+  // 5c. Partner payout-account verification / change approval
+  const payoutAccMatch = url.pathname.match(/^\/api\/v1\/admin\/partners\/([^\/]+)\/payout-account$/);
+  if (payoutAccMatch && request.method === 'POST') {
+    const body = await readJson(request);
+    const pt = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(payoutAccMatch[1]).first();
+    if (!pt) throw notFound('입점사를 찾을 수 없습니다.');
+    const decision = String(body.decision || '').toUpperCase();
+    const evidence = str(body.verification_evidence, { max: 300 });
+    if (decision === 'VERIFY_CURRENT') {
+      if (!evidence) throw bad('EVIDENCE_REQUIRED', '계좌 실명 확인 근거를 입력해 주세요.');
+      await env.DB.batch([env.DB.prepare('UPDATE partners SET payout_account_verified = 1 WHERE id = ?').bind(pt.id), audit('PAYOUT_ACCOUNT_VERIFY', 'partner', pt.id, null, { evidence })]);
+      return json(corsHeaders, { success: true, payout_account_verified: true });
+    }
+    if (!pt.payout_change_request_json) throw conflict('NO_PENDING_CHANGE', '대기 중인 계좌 변경 요청이 없습니다.');
+    const req = JSON.parse(pt.payout_change_request_json);
+    if (decision === 'APPROVE') {
+      if (!evidence) throw bad('EVIDENCE_REQUIRED', '계좌 실명 확인 근거를 입력해 주세요.');
+      await env.DB.batch([
+        env.DB.prepare('UPDATE partners SET bank_code = ?, bank_account_number = ?, bank_account_holder = ?, payout_account_verified = 1, payout_change_request_json = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .bind(req.bank_code, req.bank_account_number, req.bank_account_holder, pt.id),
+        audit('PAYOUT_ACCOUNT_CHANGE_APPROVE', 'partner', pt.id, { bank_code: pt.bank_code, bank_account_number: pt.bank_account_number }, { ...req, evidence })
+      ]);
+      return json(corsHeaders, { success: true, applied: true });
+    }
+    await env.DB.batch([env.DB.prepare('UPDATE partners SET payout_change_request_json = NULL WHERE id = ?').bind(pt.id), audit('PAYOUT_ACCOUNT_CHANGE_REJECT', 'partner', pt.id, req, null)]);
+    return json(corsHeaders, { success: true, applied: false });
   }
 
   // 6. Admin All Orders
@@ -159,11 +209,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname.match(/^\/api\/v1\/admin\/settlements\/[^\/]+\/approve$/) && request.method === 'POST') {
-    const stlId = url.pathname.split('/')[5];
-    await env.DB.prepare(
-      "UPDATE settlements SET status = 'SETTLED', settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).bind(stlId).run();
-    return new Response(JSON.stringify({ success: true, settlement_id: stlId, status: 'SETTLED' }), { headers: corsHeaders });
+    return json(corsHeaders, { success: false, code: 'USE_PAYOUT_ENGINE', error: '개별 정산 승인은 폐지되었습니다. POST /api/v1/admin/finance/payouts 로 판매자 단위 지급을 생성하세요.' }, 410);
   }
 
   // 8. Admin Claims & Dispute Management
@@ -180,10 +226,30 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   if (url.pathname.match(/^\/api\/v1\/admin\/claims\/[^\/]+$/) && request.method === 'PUT') {
     const clmId = url.pathname.split('/')[5];
-    const body = await request.json().catch(() => ({}));
-    const newStatus = ['APPROVED', 'REJECTED', 'REFUNDED'].includes(body.status) ? body.status : 'REFUNDED';
-    await env.DB.prepare('UPDATE returns SET status = ? WHERE id = ?').bind(newStatus, clmId).run();
-    return new Response(JSON.stringify({ success: true, claim_id: clmId, status: newStatus }), { headers: corsHeaders });
+    const body = await readJson(request);
+    const claim = await env.DB.prepare('SELECT * FROM returns WHERE id = ?').bind(clmId).first();
+    if (!claim) throw notFound('클레임을 찾을 수 없습니다.');
+    if (claim.status !== 'REQUESTED') throw conflict('CLAIM_ALREADY_PROCESSED', `이미 처리된 클레임입니다. (${claim.status})`);
+    const decision = String(body.decision || body.status || '').toUpperCase();
+    if (decision === 'REJECTED' || decision === 'REJECT') {
+      const note = str(body.notes, { max: 500, field: '사유', required: true });
+      await env.DB.batch([
+        env.DB.prepare("UPDATE returns SET status = 'REJECTED', notes = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'").bind(note, admin.userId, clmId),
+        env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(claim.sub_order_id),
+        audit('CLAIM_REJECT', 'claim', clmId, claim, { note })
+      ]);
+      return json(corsHeaders, { success: true, claim_id: clmId, status: 'REJECTED' });
+    }
+    if (claim.claim_type !== 'RETURN') throw conflict('UNSUPPORTED', '반품(RETURN) 클레임만 환불 승인할 수 있습니다.');
+    const r = await refundOrder(env, admin, claim.order_id, {
+      lines: JSON.parse(claim.items_json || '[]'), shippingSubOrderIds: [], subOrderId: claim.sub_order_id, claimId: clmId, reasonCode: 'RETURN',
+      restock: body.restock !== false && body.returnless !== true, idemKey: `claim:${clmId}`, subStatusOnFull: 'RETURNED', orderStatusOnFull: 'REFUNDED'
+    });
+    await env.DB.batch([
+      env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(claim.sub_order_id),
+      audit('CLAIM_REFUND', 'claim', clmId, claim, { refund_id: r.refund && r.refund.id })
+    ]);
+    return json(corsHeaders, { success: true, claim_id: clmId, status: 'REFUNDED', refund: r.refund });
   }
 
   // 9. Admin Banners Management
@@ -196,7 +262,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   if (url.pathname === '/api/v1/admin/banners' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
-    const bannerId = 'bnr_' + Date.now();
+    const bannerId = newId('bnr');
     const title = (body.title || '신규 프로모션').trim();
     const subtitle = (body.subtitle || '').trim();
     const badgeText = (body.badge_text || 'SPECIAL').trim();
@@ -269,17 +335,14 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
     let targetUserIds = [];
     if (target === 'ALL') {
-      const { results: users } = await env.DB.prepare("SELECT id FROM users WHERE role = 'CUSTOMER' OR role = 'USER'").all();
+      const { results: users } = await env.DB.prepare("SELECT id FROM users WHERE role = 'ROLE_CUSTOMER' AND is_active = 1").all();
       targetUserIds = users.map(u => u.id);
-      if (targetUserIds.length === 0) {
-        targetUserIds = ['u_customer_001'];
-      }
     } else {
       targetUserIds = [target];
     }
 
     const stmts = targetUserIds.map((uid, idx) => {
-      const notiId = 'notif_adm_' + Date.now() + '_' + idx;
+      const notiId = newId('ntf') + '_' + idx;
       return env.DB.prepare(
         'INSERT INTO notifications (id, user_id, title, message, type, action_url) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(notiId, uid, title, message, type, actionUrl);
@@ -313,7 +376,9 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (!code || !title) {
       return new Response(JSON.stringify({ error: '쿠폰 코드와 제목은 필수입니다.' }), { status: 400, headers: corsHeaders });
     }
-    const id = 'coupon_' + Date.now();
+    const id = newId('cpn');
+    const dv = Number(body.discount_value);
+    if (!Number.isSafeInteger(dv) || dv <= 0 || (body.discount_type === 'PERCENT' && dv > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
     await env.DB.prepare(
       `INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, max_discount_amount, expires_at, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
@@ -331,8 +396,8 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   const adminCouponMatch = url.pathname.match(/^\/api\/v1\/admin\/coupons\/([^\/]+)$/);
   if (adminCouponMatch && request.method === 'DELETE') {
     const couponId = adminCouponMatch[1];
-    await env.DB.prepare('DELETE FROM coupons WHERE id = ?').bind(couponId).run();
-    return new Response(JSON.stringify({ success: true, message: '쿠폰이 삭제되었습니다.' }), { headers: corsHeaders });
+    await env.DB.batch([env.DB.prepare('UPDATE coupons SET is_active = 0 WHERE id = ?').bind(couponId), audit('COUPON_DEACTIVATE', 'coupon', couponId, null, null)]);
+    return json(corsHeaders, { success: true, message: '쿠폰이 비활성화되었습니다. (사용 이력 보존)' });
   }
 
   // 12. Admin Category Management
@@ -350,7 +415,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (!name) {
       return new Response(JSON.stringify({ error: '카테고리명은 필수입니다.' }), { status: 400, headers: corsHeaders });
     }
-    const id = body.id || ('cat_' + Date.now());
+    const id = body.id || newId('cat');
     const parentId = body.parent_id || null;
     const depth = parentId ? 1 : 0;
     await env.DB.prepare(
@@ -362,7 +427,9 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   const adminCatMatch = url.pathname.match(/^\/api\/v1\/admin\/categories\/([^\/]+)$/);
   if (adminCatMatch && request.method === 'DELETE') {
     const catId = adminCatMatch[1];
-    await env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(catId).run();
+    const used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM products WHERE category_id = ?) + (SELECT COUNT(*) FROM categories WHERE parent_id = ?) AS c').bind(catId, catId).first('c');
+    if (used > 0) throw conflict('CATEGORY_IN_USE', '상품 또는 하위 카테고리가 있는 카테고리는 삭제할 수 없습니다. 비활성화하세요.');
+    await env.DB.batch([env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(catId), audit('CATEGORY_DELETE', 'category', catId, null, null)]);
     return new Response(JSON.stringify({ success: true, message: '카테고리가 삭제되었습니다.' }), { headers: corsHeaders });
   }
 

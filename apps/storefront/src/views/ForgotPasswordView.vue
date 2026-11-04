@@ -23,7 +23,8 @@ async function requestReset() {
     const json = await res.json();
     if (json.success) {
       message.value = json.message;
-      token.value = json.reset_token || '';
+      // The reset token is e-mailed (provider not integrated yet); only local development returns it.
+      token.value = json.dev_reset_token || '';
       step.value = 'reset';
     } else {
       message.value = json.error || '요청 실패';

@@ -4,7 +4,7 @@ import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
-import { API_BASE_URL, PARTNER_CONSOLE_URL, ADMIN_CONSOLE_URL } from './config'
+import { API_BASE_URL, PARTNER_CONSOLE_URL, ADMIN_CONSOLE_URL, authHeader } from './config'
 import SearchAutocomplete from './components/SearchAutocomplete.vue'
 
 const cart = useCartStore()
@@ -29,15 +29,16 @@ const handleLogout = () => {
   router.push('/')
 }
 
+const biz = ref<any>(null)
 const notifications = ref<any[]>([])
 const unreadNotiCount = ref(0)
 const showNotiDropdown = ref(false)
 
 async function fetchNotifications() {
+  if (!auth.isAuthenticated) return
   try {
-    const custId = localStorage.getItem('olmoa_customer_id') || 'u_customer_001'
     const res = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
-      headers: { 'X-Customer-Id': custId }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success && Array.isArray(json.data)) {
@@ -52,16 +53,16 @@ async function markNotiRead(noti: any) {
   noti.is_read = 1
   if (unreadNotiCount.value > 0) unreadNotiCount.value--
   try {
-    const custId = localStorage.getItem('olmoa_customer_id') || 'u_customer_001'
     await fetch(`${API_BASE_URL}/api/v1/notifications/${noti.id}/read`, {
       method: 'PUT',
-      headers: { 'X-Customer-Id': custId }
+      headers: { ...authHeader() }
     })
   } catch {}
 }
 
 onMounted(async () => {
   fetchNotifications()
+  fetch(`${API_BASE_URL}/api/v1/business-info`).then((r) => r.json()).then((j) => { biz.value = j && j.configured ? j.data : null }).catch(() => { biz.value = null })
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
     const json = await res.json()
@@ -77,15 +78,15 @@ onMounted(async () => {
 <template>
   <div class="min-h-screen flex flex-col bg-[#F5F5F7] text-[#111111] font-sans antialiased selection:bg-[#FF5000] selection:text-white">
     <!-- Top Trust & Utility Bar -->
-    <div class="bg-[#111111] text-white text-[11px] font-medium py-1.5 px-4 border-b border-gray-800">
+    <div class="hidden md:block bg-[#111111] text-white text-[11px] font-medium py-1.5 px-4 border-b border-gray-800">
       <div class="max-w-[1440px] mx-auto flex flex-wrap justify-between items-center gap-2">
         <div class="flex items-center gap-5">
           <span class="flex items-center gap-1.5 text-[#00A862] font-bold">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
-            Free Shipping on Orders ₩30,000+
+            판매자별 무료배송 기준 적용
           </span>
-          <RouterLink to="/policy/price-match" class="hidden sm:inline text-gray-300 hover:text-white transition-colors">✓ 30-Day Price-Match Adjustment</RouterLink>
-          <RouterLink to="/policy/returns" class="hidden md:inline text-gray-300 hover:text-white transition-colors">✓ Free 90-Day Returns</RouterLink>
+          <RouterLink to="/policy/price-match" class="hidden sm:inline text-gray-300 hover:text-white transition-colors">✓ 판매가 인하 차액 보상</RouterLink>
+          <RouterLink to="/policy/returns" class="hidden md:inline text-gray-300 hover:text-white transition-colors">✓ 7일 내 반품 신청</RouterLink>
         </div>
         <div class="flex items-center gap-4 text-gray-300">
           <!-- Language & Currency Selector -->
@@ -128,7 +129,7 @@ onMounted(async () => {
             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FF5000] to-[#E60023] flex items-center justify-center text-white font-black text-xl shadow-sm group-hover:scale-105 transition-transform">
               O
             </div>
-            <span class="text-2xl font-black tracking-tighter text-[#111111]">OLMOA</span>
+            <span class="hidden sm:inline text-2xl font-black tracking-tighter text-[#111111]">OLMOA</span>
           </RouterLink>
 
           <button
@@ -201,10 +202,10 @@ onMounted(async () => {
         </div>
 
         <!-- Central Search Autocomplete Engine -->
-        <SearchAutocomplete />
+        <div class="flex-1 min-w-0 max-w-2xl"><SearchAutocomplete /></div>
 
-        <!-- Right User Actions -->
-        <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <!-- Right User Actions (mobile uses the bottom tab bar instead) -->
+        <div class="hidden sm:flex items-center gap-1 sm:gap-2 shrink-0">
           <div v-if="auth.isAuthenticated" class="flex items-center gap-1">
             <RouterLink to="/profile" class="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-100 transition-colors" title="My Account & Profile">
               <div class="w-7 h-7 rounded-full bg-orange-100 text-[#FF5000] flex items-center justify-center font-black text-xs">
@@ -391,8 +392,8 @@ onMounted(async () => {
         <div>
           <h4 class="text-white font-bold mb-3 uppercase tracking-wider">Buyer Protection</h4>
           <ul class="space-y-2">
-            <li><RouterLink to="/policy/price-match" class="hover:text-white">30-Day Price-Match Refund</RouterLink></li>
-            <li><RouterLink to="/policy/returns" class="hover:text-white">90-Day Free Return Guarantee</RouterLink></li>
+            <li><RouterLink to="/policy/price-match" class="hover:text-white">판매가 인하 차액 보상</RouterLink></li>
+            <li><RouterLink to="/policy/returns" class="hover:text-white">취소·반품·환불 안내</RouterLink></li>
             <li><RouterLink to="/policy/shipping" class="hover:text-white">Split-Partner Delivery Policy</RouterLink></li>
             <li><RouterLink to="/orders" class="hover:text-white">Order Tracking & Claims</RouterLink></li>
           </ul>
@@ -418,27 +419,25 @@ onMounted(async () => {
       </div>
       <div class="border-t border-gray-800 py-6 px-4 text-[11px] text-gray-500">
         <div class="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between gap-4">
-          <div>
+          <!-- 전자상거래법 제10조/제20조 사업자 정보 표시: 운영 사업자(business_entities) API에서만 가져온다. -->
+          <div v-if="biz" data-testid="business-info">
             <p class="font-semibold text-gray-400 mb-1">
-              주식회사 올모아글로벌 (OLMOA Commerce Inc.) | 대표이사: 김올모 | 사업자등록번호: 120-88-99102
-              <a href="https://www.ftc.go.kr/bizCommPop.do?wrkr_no=1208899102" target="_blank" rel="noopener" class="underline text-gray-400 hover:text-white ml-1">[사업자정보확인]</a>
-              | 통신판매업신고: 제2026-서울강남-04821호 | 호스팅서비스: Cloudflare Edge
+              상호: {{ biz.legal_name }} | 대표자: {{ biz.representative_name }} | 사업자등록번호: {{ biz.business_reg_number }}
+              <a :href="`https://www.ftc.go.kr/bizCommPop.do?wrkr_no=${biz.business_reg_number.replace(/-/g, '')}`" target="_blank" rel="noopener" class="underline text-gray-400 hover:text-white ml-1">[사업자정보확인]</a>
+              | 통신판매업신고: {{ biz.mail_order_reg_number }}<span v-if="biz.hosting_provider"> | 호스팅서비스: {{ biz.hosting_provider }}</span>
             </p>
-            <p>주소: 서울특별시 강남구 테헤란로 427, 올모아타워 15층 | 고객센터: 1588-0000 (평일 09:00~18:00) | 전자우편: support@olmoa.com</p>
+            <p>주소: {{ biz.address }} | 고객센터: {{ biz.cs_phone }} | 이메일: {{ biz.cs_email }}<span v-if="biz.privacy_officer_name"> | 개인정보보호책임자: {{ biz.privacy_officer_name }}</span></p>
             <p class="mt-1 text-gray-600">
-              올모아는 통신판매중개자로서 오픈마켓 거래 당사자가 아니며, 입점 판매자가 등록한 상품 정보 및 거래에 대해 올모아 결제대금예치(에스크로) 및 90일 무료반품/30일 최저가 차액보상 정책에 따라 소비자를 보호합니다.
+              '올모아 직영' 표시 상품은 {{ biz.legal_name }}가 직접 판매하는 상품입니다. 입점 판매자 상품의 경우 {{ biz.legal_name }}는 통신판매중개자로서 거래 당사자가 아니며,
+              상품정보 및 거래에 대한 책임은 각 판매자에게 있습니다. 판매자 정보는 상품 상세 페이지에서 확인하실 수 있습니다.
             </p>
-            <div class="mt-2.5 flex items-center gap-2">
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold border border-emerald-800/80 text-[10px]">
-                🛡️ 토스페이먼츠 구매안전(에스크로) 서비스 가입 확인
-              </span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-bold text-[10px]">
-                🔒 256-Bit SSL/TLS 암호화 거래
-              </span>
-            </div>
+            <p v-if="biz.escrow_service_ref" class="mt-1 text-gray-500">구매안전서비스: {{ biz.escrow_service_ref }}</p>
+          </div>
+          <div v-else class="text-amber-500 font-bold" data-testid="business-info-missing">
+            운영 사업자 정보가 등록되지 않았습니다. (사업자 정보 등록 전에는 주문이 접수되지 않습니다)
           </div>
           <div class="shrink-0 text-right self-end">
-            <p>© 2026 OLMOA Commerce Inc. All rights reserved. • <span class="font-mono text-gray-500">v1.2.0</span></p>
+            <p>© {{ new Date().getFullYear() }} {{ biz ? biz.legal_name : 'OLMOA' }}</p>
           </div>
         </div>
       </div>

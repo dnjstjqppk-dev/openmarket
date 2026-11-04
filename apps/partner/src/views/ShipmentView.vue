@@ -396,7 +396,7 @@ onMounted(() => {
               <input
                 v-model="s.tracking_number"
                 placeholder="운송장 번호 입력"
-                class="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                class="flex-1 min-w-0 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
             </div>
             <button

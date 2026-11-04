@@ -1,24 +1,15 @@
 // apps/cloudflare-gateway/src/routes/global-governance.js
 // OLMOA Global OpenMarket Phase 3: Central Operations Control Tower, FDS Anti-Fraud Watch & 3-Party Dispute Arbitration Tribunal
 
-function isAdminAuthorized(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const adminSecret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
-  const adminHeader = request.headers.get('X-Admin-Secret') || request.headers.get('X-Admin-Key') || '';
-  return (
-    (token.length > 0 && (token === adminSecret || token === 'olmoa_admin_2026' || token.startsWith('ey-olmoa-admin-'))) ||
-    adminHeader === adminSecret ||
-    adminHeader === 'olmoa_admin_2026' ||
-    adminHeader.startsWith('ey-olmoa-admin-')
-  );
-}
+import { requireAdmin } from '../lib/auth.js';
+import { json } from '../lib/http.js';
 
 export const FDS_ACTIVE_RULES = [
-  { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '동일 IP 10분 내 다중 카드 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: 14 },
-  { id: 'RULE_02', code: 'GEO_IP_MISMATCH', name: '접속 IP 국가 ≠ 카드 발급국 ≠ 배송지 불일치', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: 29 },
-  { id: 'RULE_03', code: 'WASH_TRADING_GUARD', name: '구매자-판매자 동일 계좌/디바이스 자전거래 탐지', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: 2 },
-  { id: 'RULE_04', code: 'HIGH_VALUE_ESCROW_HOLD', name: '고액 직구 주문($1,000 초과) 3D Secure 강제', severity: 'MEDIUM', status: 'ACTIVE', hit_count_24h: 41 },
-  { id: 'RULE_05', code: 'PROHIBITED_HS_SCANNER', name: '수입금지 품목(식약처 위해성분/가품) AI 키워드 차단', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: 7 }
+  { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '동일 IP 10분 내 다중 카드 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_02', code: 'GEO_IP_MISMATCH', name: '접속 IP 국가 ≠ 카드 발급국 ≠ 배송지 불일치', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_03', code: 'WASH_TRADING_GUARD', name: '구매자-판매자 동일 계좌/디바이스 자전거래 탐지', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_04', code: 'HIGH_VALUE_ESCROW_HOLD', name: '고액 직구 주문($1,000 초과) 3D Secure 강제', severity: 'MEDIUM', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_05', code: 'PROHIBITED_HS_SCANNER', name: '수입금지 품목(식약처 위해성분/가품) AI 키워드 차단', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' }
 ];
 
 export async function handleGlobalGovernanceRoutes(request, url, env, corsHeaders) {
@@ -28,16 +19,12 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     return null;
   }
 
-  if (url.pathname !== '/api/v1/admin/fds/evaluate' && !isAdminAuthorized(request, env)) {
-    return new Response(JSON.stringify({
-      error: 'Unauthorized: Valid Admin credentials required for Central Control Tower.'
-    }), { status: 401, headers: corsHeaders });
-  }
+  await requireAdmin(request, env);
 
   // 1. Central Operations Control Tower Overview (/api/v1/admin/control-tower)
   if (url.pathname === '/api/v1/admin/control-tower' && request.method === 'GET') {
     const orderStats = await env.DB.prepare(
-      "SELECT COUNT(*) as total_orders, COALESCE(SUM(total_pay_amount), 0) as total_gmv FROM orders WHERE payment_status != 'CANCELLED'"
+      "SELECT COUNT(*) as total_orders, COALESCE(SUM(total_goods_amount - volume_discount_amount + total_shipping_amount), 0) as total_gmv FROM orders WHERE paid_at IS NOT NULL AND is_sandbox = 0"
     ).first();
     const pcccOrders = await env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM orders WHERE pccc IS NOT NULL AND pccc != ''"
@@ -155,30 +142,9 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     }), { headers: corsHeaders });
   }
 
-  // 5. 3-Party Dispute Arbitration Ruling (/api/v1/admin/disputes/:id/arbitrate)
+  // 5. Arbitration rulings move money, so they go through the claim/refund engine (PUT /api/v1/admin/claims/:id).
   if (url.pathname.startsWith('/api/v1/admin/disputes/') && url.pathname.endsWith('/arbitrate') && request.method === 'POST') {
-    const claimId = url.pathname.split('/')[5];
-    const body = await request.json().catch(() => ({}));
-    const ruling = body.ruling || 'FULL_REFUND_TO_BUYER'; // 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER'
-    const notes = body.notes || '중앙 분쟁 조정 위원회 직권 판정 완료';
-
-    const newStatus = (ruling === 'FULL_REFUND_TO_BUYER' || ruling === 'BUYER_WIN_FULL_REFUND') ? 'APPROVED' : 'REJECTED';
-
-    await env.DB.prepare(
-      `UPDATE returns SET status = ?, reason = COALESCE(reason, '') || ' [판정: ' || ? || ']' WHERE id = ?`
-    ).bind(newStatus, notes, claimId).run();
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA Dispute Tribunal',
-      data: {
-        claim_id: claimId,
-        ruling,
-        new_status: newStatus,
-        notes,
-        arbitrated_at: new Date().toISOString()
-      }
-    }), { headers: corsHeaders });
+    return json(corsHeaders, { success: false, code: 'USE_CLAIM_ENGINE', error: '분쟁 판정은 PUT /api/v1/admin/claims/:id (decision=APPROVE|REJECT) 로 처리합니다. 승인 시 실제 환불이 실행됩니다.' }, 410);
   }
 
   return null;

@@ -69,9 +69,9 @@ const router = createRouter({
 });
 
 router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem('partner_token') || localStorage.getItem('olmoa_partner_token');
+  const token = localStorage.getItem('partner_token');
   if (to.meta.requiresAuth && !token) {
-    next('/login');
+    next({ path: '/login', query: { redirect: to.fullPath } });
   } else {
     next();
   }

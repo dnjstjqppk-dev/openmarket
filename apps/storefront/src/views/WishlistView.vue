@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -12,10 +12,10 @@ const loading = ref(true)
 
 const loadWishlist = async () => {
   loading.value = true
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/wishlist?customer_id=${encodeURIComponent(cid)}`, {
-      headers: { 'X-Customer-Id': cid }
+      headers: { ...authHeader() }
     })
     const json = await res.json()
     if (json.success) items.value = json.data || []
@@ -25,10 +25,10 @@ const loadWishlist = async () => {
 }
 
 const removeWish = async (productId: string) => {
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({ customer_id: cid, product_id: productId })
   })
   await loadWishlist()

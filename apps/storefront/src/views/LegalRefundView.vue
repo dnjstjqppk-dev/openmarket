@@ -1,42 +1,35 @@
 <template>
+  <!-- DRAFT: aligned with the implemented system behaviour; final text requires legal review (reports/v3/F_COMMERCIAL_VERDICT.md §법률). -->
   <div class="max-w-4xl mx-auto bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm space-y-6 text-slate-700 text-xs sm:text-sm leading-relaxed">
+    <div role="note" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">본 문서는 법률 검토 전 초안입니다. 정식 서비스 개시 전 확정됩니다.</div>
     <div class="border-b border-slate-100 pb-4">
-      <span class="text-orange-600 font-bold text-xs uppercase tracking-wider">OLMOA Buyer Protection</span>
-      <h1 class="text-2xl font-black text-slate-900 mt-1">90일 무조건 무료 반품 & 100% 환불 정책</h1>
-      <p class="text-xs text-slate-400 mt-1">구매자 안심 보호 프로그램 (전 주문 첫 회 반품 배송비 0원 전액 무료)</p>
+      <h1 class="text-2xl font-black text-slate-900">취소 · 반품 · 환불 안내</h1>
     </div>
 
     <section class="space-y-2">
-      <h2 class="text-base font-bold text-slate-900">1. 90일 반품 보장 프로그램 개요</h2>
-      <p>OLMOA에서 구매한 모든 상품은 배송 완료일로부터 <strong>90일 이내</strong> 단순 변심을 포함하여 반품 및 100% 전액 환불을 신청하실 수 있습니다.</p>
-      <div class="p-4 bg-orange-50 border border-orange-200 rounded-2xl text-xs text-orange-900 font-semibold space-y-1">
-        <div><i class="fa-solid fa-gift mr-1.5 text-orange-600"></i>첫 번째 반품 배송비 100% 무료 지원</div>
-        <p class="font-normal text-[11px] text-orange-800">동일 주문 건에서 첫 번째 반품 요청 시 반품 수거 배송비는 전액 올모아가 부담합니다.</p>
-      </div>
+      <h2 class="text-base font-bold text-slate-900">1. 결제 전 주문</h2>
+      <p>결제가 완료되지 않은 주문은 언제든 취소할 수 있으며, 주문 후 30분 내 결제가 이루어지지 않으면 자동 취소됩니다. 이때 사용한 쿠폰과 적립금은 즉시 복원됩니다.</p>
     </section>
-
     <section class="space-y-2">
-      <h2 class="text-base font-bold text-slate-900">2. 반품 신청 절차</h2>
-      <ol class="list-decimal list-inside space-y-1 text-slate-600">
-        <li><strong>[주문·배송]</strong> 메뉴에서 해당 주문의 <strong>[반품/교환 신청]</strong> 버튼을 클릭합니다.</li>
-        <li>반품 수량과 사유를 선택하고 사진을 첨부한 뒤 접수를 완료합니다.</li>
-        <li>지정 택배 기사님이 1~3 영업일 이내 방문하여 상품을 무료 수거합니다.</li>
-        <li>물류센터 입고 검수 완료 후 결제 수단으로 24시간 이내 즉시 전액 환불됩니다.</li>
-      </ol>
+      <h2 class="text-base font-bold text-slate-900">2. 출고 전 취소</h2>
+      <p>판매자가 상품을 출고하기 전에는 주문 전체 또는 판매자별로 취소할 수 있습니다. 결제 금액은 원래의 결제수단으로, 사용한 적립금은 적립금으로 환불됩니다. 주문 전체 취소 시 사용한 쿠폰도 복원됩니다.</p>
     </section>
-
     <section class="space-y-2">
-      <h2 class="text-base font-bold text-slate-900">3. 반품이 제한되는 경우</h2>
-      <p>소비자 귀책으로 상품이 멸실·훼손되거나 개봉 후 상품 가치가 현저히 상실된 경우(식품 개봉, 밀봉 스티커 제거 소프트웨어 등)에는 반품이 제한될 수 있습니다.</p>
+      <h2 class="text-base font-bold text-slate-900">3. 반품(청약철회)</h2>
+      <p>상품을 받은 날부터 7일 이내에 반품을 신청할 수 있습니다(전자상거래 등에서의 소비자보호에 관한 법률 제17조). 반품 신청 후 판매자가 상품 회수·확인을 마치면 환불이 진행됩니다. 단순 변심에 의한 반품의 경우 반품 배송비가 부과될 수 있으며, 구체적인 금액은 판매자별로 상이합니다.</p>
+      <p>환불 금액은 해당 상품에 실제로 결제된 금액(쿠폰 할인·적립금 사용분을 상품별로 배분한 금액)을 기준으로 계산됩니다.</p>
     </section>
-
-    <div class="pt-6 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
-      <router-link to="/" class="font-bold text-orange-600 hover:underline">&larr; 홈으로 돌아가기</router-link>
-      <div class="space-x-3">
-        <router-link to="/legal/terms" class="hover:text-slate-800">이용약관</router-link>
-        <router-link to="/legal/privacy" class="hover:text-slate-800">개인정보처리방침</router-link>
-      </div>
+    <section class="space-y-2">
+      <h2 class="text-base font-bold text-slate-900">4. 환불 시기</h2>
+      <p>환불 사유 확정 후 3영업일 이내에 결제 취소를 요청합니다. 카드사·결제사 사정에 따라 실제 반영까지 추가 기간이 소요될 수 있습니다.</p>
+    </section>
+    <section class="space-y-2">
+      <h2 class="text-base font-bold text-slate-900">5. 판매 주체</h2>
+      <p>'올모아 직영' 상품은 운영 사업자가 판매자이며, 입점 판매자 상품은 각 판매자가 반품·환불의 당사자입니다. 판매자 정보는 상품 상세 및 주문 상세에서 확인할 수 있습니다.</p>
+    </section>
+    <div class="pt-4 border-t border-slate-100 text-[11px] text-slate-400 flex gap-4">
+      <router-link to="/legal/terms" class="hover:text-slate-800">이용약관</router-link>
+      <router-link to="/legal/privacy" class="hover:text-slate-800">개인정보처리방침</router-link>
     </div>
   </div>
 </template>
-

@@ -14,7 +14,8 @@ const loading = ref(true)
 const activeCategorySlug = ref('ALL')
 const sortBy = ref<'popular' | 'price_asc' | 'price_desc' | 'discount'>('popular')
 
-const countdown = ref('04:59:42')
+const countdown = ref('')
+const campaignEndsAt = ref<number | null>(null)
 const banners = ref<any[]>([])
 const currentBannerIdx = ref(0)
 let timer: any = null
@@ -32,11 +33,13 @@ const prevBanner = () => {
   }
 }
 
+// Countdown only for a real running campaign (flash_sale_campaigns.ends_at). No synthetic timers.
 const updateCountdown = () => {
-  const now = new Date()
-  const sec = 59 - now.getSeconds()
-  const min = 59 - now.getMinutes()
-  const hr = 4 - (now.getHours() % 5)
+  if (!campaignEndsAt.value) { countdown.value = ''; return }
+  const ms = campaignEndsAt.value - Date.now()
+  if (ms <= 0) { countdown.value = ''; return }
+  const t = Math.floor(ms / 1000)
+  const hr = Math.floor(t / 3600), min = Math.floor((t % 3600) / 60), sec = t % 60
   countdown.value = `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
@@ -60,7 +63,12 @@ onMounted(async () => {
     if (catJson.success && Array.isArray(catJson.data)) {
       categories.value = catJson.data.filter((c: any) => Number(c.depth) === 0)
     }
-    if (flashJson.success) lightningCampaign.value = flashJson.data
+    if (flashJson.success) {
+      lightningCampaign.value = flashJson.data
+      const ends = flashJson.data?.campaign?.ends_at
+      campaignEndsAt.value = ends ? Date.parse(String(ends).replace(' ', 'T') + (String(ends).includes('Z') ? '' : 'Z')) : null
+      updateCountdown()
+    }
     if (bnrJson?.success && Array.isArray(bnrJson.data) && bnrJson.data.length > 0) {
       banners.value = bnrJson.data
     }
@@ -144,7 +152,7 @@ const quickAdd = (e: Event, product: any) => {
             {{ banners[currentBannerIdx]?.title || 'DIRECT FACTORY DEALS UP TO 70% OFF' }}
           </h1>
           <p class="text-white/90 text-sm sm:text-base font-medium mb-5">
-            {{ banners[currentBannerIdx]?.subtitle || 'Every order is backed by our 30-day Price-Match Adjustment Guarantee, 90-day Free Returns, and 1% Purchase Confirmation Reward Credits.' }}
+            {{ banners[currentBannerIdx]?.subtitle || '직영 상품과 검증된 입점 판매자 상품을 한 번에 결제하세요.' }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
             <RouterLink :to="banners[currentBannerIdx]?.link_url || '/channel/lightning-deals'" class="px-5 py-2.5 rounded-full bg-[#FFE600] text-black font-black text-xs sm:text-sm hover:bg-yellow-300 transition-colors shadow-md">
@@ -159,15 +167,15 @@ const quickAdd = (e: Event, product: any) => {
         <div class="grid grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
           <RouterLink to="/coupons" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
             <div class="text-2xl font-black text-[#FFE600]">₩10,000</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">Instant Welcome Credit</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">신규 가입 웰컴 적립금</div>
           </RouterLink>
           <RouterLink to="/policy/shipping" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-white">100%</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">On-Time Guarantee</div>
+            <div class="text-2xl font-black text-white">5,300원</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">배송 지연 시 보상 신청</div>
           </RouterLink>
           <RouterLink to="/policy/returns" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-[#FFE600]">90 Days</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">Free Return Window</div>
+            <div class="text-2xl font-black text-[#FFE600]">7일</div>
+            <div class="text-[11px] text-white/90 font-medium mt-0.5">수령 후 반품 신청</div>
           </RouterLink>
         </div>
       </div>
@@ -199,7 +207,7 @@ const quickAdd = (e: Event, product: any) => {
               <svg class="w-6 h-6 fill-current" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
               LIGHTNING DEALS
             </div>
-            <span class="px-2.5 py-0.5 bg-red-50 text-[#E60023] font-extrabold text-xs rounded-full border border-red-200">
+            <span v-if="countdown" class="px-2.5 py-0.5 bg-red-50 text-[#E60023] font-extrabold text-xs rounded-full border border-red-200">
               Ends in {{ countdown }}
             </span>
           </div>

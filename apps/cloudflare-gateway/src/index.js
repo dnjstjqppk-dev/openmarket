@@ -1,6 +1,7 @@
 // apps/cloudflare-gateway/src/index.js
-// OLMOA Enterprise Edge Gateway: D1 Cloud SQL Database Router, Auth, Dynamic Sitemap & Security Headers
+// OLMOA Edge API Gateway (Cloudflare Worker + D1).
 
+import { buildCorsHeaders, errorResponse, json } from './lib/http.js';
 import { handleAuthRoutes } from './routes/auth.js';
 import { handleCatalogRoutes } from './routes/catalog.js';
 import { handleOrderRoutes } from './routes/orders.js';
@@ -14,173 +15,102 @@ import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
 import { handlePaymentRoutes } from './routes/payments.js';
 import { handleStorageRoutes } from './routes/storage.js';
 import { handleTemuOpsRoutes } from './routes/temu-ops.js';
+import { handleBusinessRoutes } from './routes/business.js';
+import { handleSupplierRoutes } from './routes/suppliers.js';
+import { handleFinanceRoutes } from './routes/finance.js';
+import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 
-function buildCorsHeaders(request) {
-  const origin = request.headers.get('Origin') || '*';
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Idempotency-Key, X-Partner-Id, X-Customer-Id, X-Integration-Key, X-Admin-Secret',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Type': 'application/json; charset=utf-8'
-  };
+const SERVICE_VERSION = '2.0.0-v3-integrity';
+
+const ROUTERS = [
+  handleAuthRoutes,
+  handleBusinessRoutes,
+  handlePaymentRoutes,
+  handleFinanceRoutes,
+  handleSupplierRoutes,
+  handleGlobalCustomsAndFxRoutes,
+  handleGlobalLogisticsRoutes,
+  handleGlobalGovernanceRoutes,
+  handleStorageRoutes,
+  handleTemuOpsRoutes,
+  handleFeatureRoutes,
+  handleCatalogRoutes,
+  handleOrderRoutes,
+  handlePartnerRoutes,
+  handleAdminRoutes,
+  handleIntegrationRoutes
+];
+
+async function health(env, corsHeaders) {
+  let db = 'DISCONNECTED';
+  let products = 0;
+  let operatorConfigured = false;
+  try {
+    products = await env.DB.prepare("SELECT COUNT(*) AS c FROM products WHERE status = 'ACTIVE'").first('c');
+    operatorConfigured = Boolean(await env.DB.prepare("SELECT id FROM business_entities WHERE status = 'ACTIVE' AND role = 'PLATFORM_OPERATOR'").first());
+    db = 'CONNECTED_D1';
+  } catch {
+    db = 'ERROR';
+  }
+  let payment = 'DISABLED';
+  const pm = String(env.PAYMENT_MODE || '').toLowerCase();
+  if (pm === 'live' && env.TOSS_SECRET_KEY) payment = String(env.TOSS_SECRET_KEY).startsWith('test_') ? 'TOSS_TEST_KEY' : 'TOSS_LIVE_KEY';
+  else if (pm === 'sandbox' && env.ENVIRONMENT !== 'production') payment = 'LOCAL_SIMULATOR';
+  return json(corsHeaders, {
+    status: db === 'CONNECTED_D1' ? 'UP' : 'DEGRADED',
+    brand: 'OLMOA',
+    version: SERVICE_VERSION,
+    environment: env.ENVIRONMENT || 'unset',
+    databaseStatus: db,
+    activeProductsInD1: products,
+    readiness: {
+      auth_configured: typeof env.JWT_SECRET === 'string' && env.JWT_SECRET.length >= 32,
+      operator_entity_active: operatorConfigured,
+      payment,
+      email_delivery: 'NOT_INTEGRATED',
+      carrier_tracking_api: 'NOT_INTEGRATED',
+      supplier_order_api: 'NOT_INTEGRATED'
+    },
+    timestamp: new Date().toISOString()
+  });
 }
 
 export default {
   async fetch(request, env, ctx) {
-    const corsHeaders = buildCorsHeaders(request);
-
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
+    const corsHeaders = buildCorsHeaders(request, env);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
     const url = new URL(request.url);
-
-    // 1. Health & Status
-    if (url.pathname === '/health' || url.pathname === '/api/health') {
-      let dbStatus = 'DISCONNECTED';
-      let productCount = 0;
-      let rootCategoryCount = 0;
-      let totalCategoryCount = 0;
-      if (env && env.DB) {
-        try {
-          const pRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM products WHERE status = 'ACTIVE'").first();
-          const cRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM categories WHERE parent_id IS NULL AND is_active = 1').first();
-          const tRes = await env.DB.prepare('SELECT COUNT(*) as cnt FROM categories WHERE is_active = 1').first();
-          dbStatus = 'CONNECTED_D1';
-          productCount = pRes ? pRes.cnt : 0;
-          rootCategoryCount = cRes ? cRes.cnt : 0;
-          totalCategoryCount = tRes ? tRes.cnt : 0;
-        } catch (e) {
-          dbStatus = 'ERROR: ' + e.message;
-        }
+    try {
+      if (url.pathname === '/health' || url.pathname === '/api/health') return await health(env, corsHeaders);
+      if (url.pathname === '/api/version' || url.pathname === '/version') {
+        return json(corsHeaders, { service: 'olmoa-api', version: SERVICE_VERSION, commit: env.GIT_COMMIT || 'unset', environment: env.ENVIRONMENT || 'unset' });
       }
-
-      return new Response(JSON.stringify({
-        status: 'UP',
-        brand: 'OLMOA',
-        koreanBrand: '올모아',
-        tagline: '내가 찾는 모든 것, 여기.',
-        databaseEngine: 'Cloudflare D1 SQL',
-        databaseStatus: dbStatus,
-        activeRootCategories: rootCategoryCount,
-        totalCategories: totalCategoryCount,
-        activeProductsInD1: productCount,
-        timestamp: new Date().toISOString()
-      }), { headers: corsHeaders });
-    }
-
-    // 1b. Service Version & Commit Endpoint (GET /api/version)
-    if (url.pathname === '/api/version' || url.pathname === '/version') {
-      return new Response(JSON.stringify({
-        service: 'olmoa-api',
-        brand: 'OLMOA',
-        version: '1.2.0',
-        commit: 'e8e7d84ef717961d02fe396ecd759fc7c1c2d5aa',
-        environment: 'production',
-        deployed_at: new Date().toISOString(),
-        databaseEngine: 'Cloudflare D1 SQL',
-        status: 'ROUTING_ACTIVE'
-      }), { headers: corsHeaders });
-    }
-
-    // 2. Dynamic SEO Sitemap XML (GET /sitemap.xml)
-    if (url.pathname === '/sitemap.xml' && env && env.DB) {
-      const { results: cats } = await env.DB.prepare('SELECT slug FROM categories WHERE is_active = 1').all();
-      const { results: prods } = await env.DB.prepare("SELECT id, updated_at FROM products WHERE status = 'ACTIVE'").all();
-      const urls = [
-        'https://olmoa.com/',
-        'https://olmoa.com/categories',
-        'https://olmoa.com/channel/lightning-deals',
-        'https://olmoa.com/channel/best-sellers',
-        'https://olmoa.com/coupons',
-        'https://olmoa.com/support',
-        ...cats.map(c => `https://olmoa.com/category/${c.slug}`),
-        ...prods.map(p => `https://olmoa.com/product/${p.id}`)
-      ];
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-        urls.map(u => `  <url><loc>${u}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`).join('\n') +
-        `\n</urlset>`;
-      return new Response(xml, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/xml; charset=utf-8'
-        }
-      });
-    }
-
-    // 3. Go Backend proxying (when external backend is configured)
-    if (env && env.GO_BACKEND_URL) {
-      const targetUrl = new URL(url.pathname + url.search, env.GO_BACKEND_URL);
-      try {
-        const proxyReq = new Request(targetUrl, request);
-        return await fetch(proxyReq);
-      } catch (err) {
-        return new Response(JSON.stringify({ error: 'Go Backend unreachable', detail: String(err) }), {
-          status: 502,
-          headers: corsHeaders
-        });
+      if (url.pathname === '/sitemap.xml') {
+        const base = env.PUBLIC_STOREFRONT_URL || 'https://olmoa.com';
+        const { results: cats } = await env.DB.prepare('SELECT slug FROM categories WHERE is_active = 1').all();
+        const { results: prods } = await env.DB.prepare("SELECT id FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED'").all();
+        const urls = ['/', '/categories', '/channel/lightning-deals', '/channel/best-sellers', '/coupons', '/support',
+          ...cats.map((c) => `/category/${encodeURIComponent(c.slug)}`), ...prods.map((p) => `/product/${encodeURIComponent(p.id)}`)];
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${base}${u}</loc></url>`).join('\n')}\n</urlset>`;
+        return new Response(xml, { headers: { ...corsHeaders, 'Content-Type': 'application/xml; charset=utf-8' } });
       }
-    }
-
-    // 4. Direct D1 Relational Engine
-    if (env && env.DB) {
-      try {
-        const authRes = await handleAuthRoutes(request, url, env, corsHeaders);
-        if (authRes) return authRes;
-
-        const globalCustomsFxRes = await handleGlobalCustomsAndFxRoutes(request, url, env, corsHeaders);
-        if (globalCustomsFxRes) return globalCustomsFxRes;
-
-        const globalLogisticsRes = await handleGlobalLogisticsRoutes(request, url, env, corsHeaders);
-        if (globalLogisticsRes) return globalLogisticsRes;
-
-        const globalGovernanceRes = await handleGlobalGovernanceRoutes(request, url, env, corsHeaders);
-        if (globalGovernanceRes) return globalGovernanceRes;
-
-        const paymentRes = await handlePaymentRoutes(request, url, env, corsHeaders);
-        if (paymentRes) return paymentRes;
-
-        const storageRes = await handleStorageRoutes(request, url, env, corsHeaders);
-        if (storageRes) return storageRes;
-
-        const temuOpsRes = await handleTemuOpsRoutes(request, url, env, corsHeaders);
-        if (temuOpsRes) return temuOpsRes;
-
-        const featureRes = await handleFeatureRoutes(request, url, env, corsHeaders);
-        if (featureRes) return featureRes;
-
-        const catalogRes = await handleCatalogRoutes(request, url, env, corsHeaders);
-        if (catalogRes) return catalogRes;
-
-        const orderRes = await handleOrderRoutes(request, url, env, corsHeaders);
-        if (orderRes) return orderRes;
-
-        const partnerRes = await handlePartnerRoutes(request, url, env, corsHeaders);
-        if (partnerRes) return partnerRes;
-
-        const adminRes = await handleAdminRoutes(request, url, env, corsHeaders);
-        if (adminRes) return adminRes;
-
-        const integrationRes = await handleIntegrationRoutes(request, url, env, corsHeaders);
-        if (integrationRes) return integrationRes;
-      } catch (dbErr) {
-        return new Response(JSON.stringify({
-          error: 'D1 Query Execution Failed',
-          details: dbErr.message
-        }), { status: 500, headers: corsHeaders });
+      if (!env.DB) return json(corsHeaders, { success: false, error: 'Database binding missing', code: 'DB_NOT_BOUND' }, 503);
+      for (const route of ROUTERS) {
+        const res = await route(request, url, env, corsHeaders, ctx);
+        if (res) return res;
       }
+      return json(corsHeaders, { success: false, error: '존재하지 않는 API 경로입니다.', code: 'ROUTE_NOT_FOUND', route: url.pathname }, 404);
+    } catch (err) {
+      return errorResponse(corsHeaders, err, env);
     }
+  },
 
-    // 5. Default Gateway Response
-    return new Response(JSON.stringify({
-      gateway: 'OLMOA Edge Gateway',
-      route: url.pathname,
-      brand: 'OLMOA',
-      databaseStatus: 'Cloudflare D1 Relational Engine Active',
-      status: 'ROUTING_ACTIVE'
-    }), { status: 200, headers: corsHeaders });
+  // Cron Triggers (configure in wrangler.jsonc "triggers": {"crons": ["*/5 * * * *"]})
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      const expired = await expireStaleOrders(env, 200);
+      const confirmed = await autoConfirmDelivered(env, 7, 200);
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed }));
+    })());
   }
 };

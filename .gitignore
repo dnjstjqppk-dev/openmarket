@@ -47,3 +47,11 @@ Thumbs.db
 
 # Diagnostics & Scratch
 scratch/
+
+# Local Worker secrets (wrangler dev)
+.dev.vars
+.dev.vars.*
+
+# Generated local dev seed (contains dev-password hashes) and production DB backups (PII)
+migrations/dev/seed_local_dev.sql
+backups/

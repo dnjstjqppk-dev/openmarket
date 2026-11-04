@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const auth = useAuthStore()
 const faqs = ref<any[]>([])
@@ -12,11 +12,11 @@ const message = ref('')
 const submitMsg = ref('')
 
 const loadSupport = async () => {
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   try {
     const [fRes, iRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/support/faq`),
-      fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { 'X-Customer-Id': cid } })
+      fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     ])
     const fJson = await fRes.json()
     const iJson = await iRes.json()
@@ -27,10 +27,10 @@ const loadSupport = async () => {
 
 const submitInquiry = async () => {
   if (!subject.value.trim() || !message.value.trim()) return
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   const res = await fetch(`${API_BASE_URL}/api/v1/support/inquiries`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({
       customer_id: cid,
       category: category.value,

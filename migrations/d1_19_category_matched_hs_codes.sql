@@ -63,3 +63,4 @@ UPDATE products SET hs_code = '6209.20', package_weight_kg = 0.40 WHERE id = 'pr
 UPDATE products SET hs_code = '6404.11', package_weight_kg = 0.55 WHERE id = 'prod_kds_01';
 UPDATE products SET hs_code = '4202.12', package_weight_kg = 3.20 WHERE id = 'prod_bag_01';
 UPDATE products SET hs_code = '6112.41', package_weight_kg = 0.32 WHERE id = 'prod_bch_01';
+

@@ -65,6 +65,7 @@ const currentPolicy = computed(() => policies[policyType.value] || policies['ter
 
 <template>
   <div class="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
+    <div role="note" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">본 문서는 법률 검토 전 초안이며 일부 내용은 실제 서비스 정책과 다를 수 있습니다. 정식 서비스 개시 전 확정됩니다.</div>
     <div class="bg-white rounded-3xl p-6 sm:p-10 border border-gray-200/80 shadow-xs">
       <div class="flex flex-wrap gap-2 mb-6">
         <RouterLink

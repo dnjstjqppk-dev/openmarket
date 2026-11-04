@@ -8,5 +8,17 @@
       "database_name": "openmarket-db",
       "database_id": "6935e21b-ffdc-47d1-8e7d-d97b1b8b317a"
     }
-  ]
+  ],
+  // Non-secret defaults. Production stays fail-closed until secrets are set with `wrangler secret put`:
+  //   JWT_SECRET (>=32 chars), ALLOWED_ORIGINS, PAYMENT_MODE=live + TOSS_SECRET_KEY/TOSS_CLIENT_KEY,
+  //   CARRIER_WEBHOOK_SECRET, (optional) SOLAPI_API_KEY/SOLAPI_API_SECRET, PRICESCANNER_API_KEY.
+  // Local development overrides these through apps/cloudflare-gateway/.dev.vars (git-ignored).
+  "vars": {
+    "ENVIRONMENT": "production",
+    "RETURN_WINDOW_DAYS": "7"
+  },
+  // Releases expired unpaid orders (stock/coupon/credit) and auto-confirms deliveries older than 7 days.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
 }

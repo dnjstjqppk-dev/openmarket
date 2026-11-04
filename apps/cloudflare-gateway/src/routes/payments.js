@@ -1,173 +1,81 @@
 // apps/cloudflare-gateway/src/routes/payments.js
-// OLMOA Production Payment Gateway Engine: Toss Payments, KakaoPay & Global Webhooks
+// Payment confirmation (customer) and PG webhook (verified by authoritative PG lookup).
+
+import { requireCustomer, requireMachineSecret } from '../lib/auth.js';
+import { json, readJson, HttpError } from '../lib/http.js';
+import { newId } from '../lib/ids.js';
+import { paymentMode, pgGetPayment } from '../lib/pg.js';
+import { confirmPayment, captureFromVerifiedPg } from '../services/orders.js';
 
 export async function handlePaymentRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/payments')) return null;
+  const p = url.pathname;
 
-  // 1. Payment Client Configuration (for Frontend SDK Initialization)
-  if (url.pathname === '/api/v1/payments/config' && request.method === 'GET') {
-    return new Response(JSON.stringify({
+  if (p === '/api/v1/payments/config' && request.method === 'GET') {
+    let mode = 'DISABLED';
+    try { mode = paymentMode(env) === 'live' ? 'TOSS' : 'SANDBOX_SIMULATOR'; } catch { mode = 'DISABLED'; }
+    return json(corsHeaders, {
       success: true,
-      brand: 'OLMOA',
-      provider: 'TOSS_PAYMENTS',
-      client_key: env.TOSS_CLIENT_KEY || 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq',
-      kakaopay_cid: env.KAKAOPAY_CID || 'TC0ONETIME',
-      supported_methods: ['CARD', 'VIRTUAL_ACCOUNT', 'EASY_PAY', 'TRANSFER'],
-      mode: env.TOSS_SECRET_KEY ? 'PRODUCTION_LIVE' : 'SANDBOX_READY'
-    }), { headers: corsHeaders });
+      provider: mode === 'TOSS' ? 'TOSS_PAYMENTS' : null,
+      mode,
+      client_key: mode === 'TOSS' ? (env.TOSS_CLIENT_KEY || null) : null,
+      is_test_key: mode === 'TOSS' ? String(env.TOSS_CLIENT_KEY || '').startsWith('test_') : null,
+      message: mode === 'DISABLED' ? 'PG 계약/키 미설정으로 결제가 비활성화되어 있습니다.' : undefined
+    });
   }
 
-  // 2. Real-Time Payment Confirmation (POST /api/v1/payments/confirm)
-  if (url.pathname === '/api/v1/payments/confirm' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const orderId = body.order_id || body.orderId;
-    const paymentKey = body.payment_key || body.paymentKey;
-    const amount = Number(body.amount || 0);
-    const provider = (body.provider || 'TOSS').toUpperCase();
+  if (p === '/api/v1/payments/confirm' && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const body = await readJson(request);
+    const r = await confirmPayment(env, me, {
+      orderRef: String(body.order_id || body.orderId || ''),
+      paymentKey: String(body.payment_key || body.paymentKey || ''),
+      amount: Number(body.amount)
+    });
+    const o = r.order;
+    const data = { order_id: o.id, order_no: o.order_no, amount: o.total_pay_amount, status: o.payment_status, payment_key: o.payment_key, receipt_url: o.pg_receipt_url, is_sandbox: Number(o.is_sandbox) === 1, idempotent_replay: r.replay };
+    return json(corsHeaders, { success: true, message: '결제가 승인되었습니다.', data });
+  }
 
-    if (!orderId || !paymentKey) {
-      return new Response(JSON.stringify({
-        error: 'order_id and payment_key are mandatory for payment confirmation.',
-        code: 'MISSING_PAYMENT_PARAM'
-      }), { status: 400, headers: corsHeaders });
-    }
-
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(orderId, orderId).first();
-    if (!order) {
-      return new Response(JSON.stringify({ error: 'Order not found for confirmation.' }), { status: 404, headers: corsHeaders });
-    }
-
-    if (amount > 0 && Math.abs(amount - order.total_pay_amount) > 1) {
-      return new Response(JSON.stringify({
-        error: `Payment amount mismatch: Expected ₩${order.total_pay_amount}, received ₩${amount}.`,
-        code: 'AMOUNT_MISMATCH'
-      }), { status: 400, headers: corsHeaders });
-    }
-
-    let isSuccess = true;
-    let receiptUrl = `https://dashboard.tosspayments.com/receipt/redirection?paymentKey=${paymentKey}`;
-    let approvedAt = new Date().toISOString();
-    let rawResponse = {};
-
-    // Call Real Toss Payments Confirm API if TOSS_SECRET_KEY is present
-    if (env.TOSS_SECRET_KEY) {
-      try {
-        const tossRes = await fetch('https://api.tosspayments.com/v1/payments/confirm', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${btoa(env.TOSS_SECRET_KEY + ':')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            paymentKey,
-            orderId: order.order_no || order.id,
-            amount: order.total_pay_amount
-          })
-        });
-
-        const tossJson = await tossRes.json();
-        rawResponse = tossJson;
-        if (!tossRes.ok) {
-          isSuccess = false;
-          return new Response(JSON.stringify({
-            success: false,
-            error: tossJson.message || 'Toss Payments confirmation rejected',
-            code: tossJson.code || 'TOSS_CONFIRM_FAILED',
-            details: tossJson
-          }), { status: 400, headers: corsHeaders });
-        }
-
-        receiptUrl = tossJson.receipt?.url || receiptUrl;
-        approvedAt = tossJson.approvedAt || approvedAt;
-      } catch (err) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'External PG network timeout: ' + err.message
-        }), { status: 502, headers: corsHeaders });
-      }
+  if (p === '/api/v1/payments/webhook' && request.method === 'POST') {
+    const payload = await readJson(request);
+    const data = payload.data || {};
+    const paymentKey = String(data.paymentKey || payload.paymentKey || '');
+    const eventType = String(payload.eventType || 'UNKNOWN');
+    const mode = paymentMode(env);
+    let verified = null;
+    let sandbox = false;
+    if (mode === 'live') {
+      if (!paymentKey) throw new HttpError(400, 'MISSING_PAYMENT_KEY', 'paymentKey 누락');
+      verified = await pgGetPayment(env, paymentKey); // the webhook body itself is never trusted
     } else {
-      // Sandbox Simulator with cryptographic verification guarantee
-      rawResponse = {
-        mId: 'tosspayments',
-        version: '2022-11-16',
-        paymentKey,
-        orderId: order.order_no || order.id,
-        orderName: 'OLMOA Order ' + (order.order_no || order.id),
-        status: 'DONE',
-        requestedAt: new Date().toISOString(),
-        approvedAt,
-        totalAmount: order.total_pay_amount,
-        currency: 'KRW',
-        method: '카드',
-        receipt: { url: receiptUrl }
-      };
+      requireMachineSecret(request, env, 'PAYMENT_WEBHOOK_SECRET', 'X-Webhook-Secret');
+      verified = { paymentKey, orderId: data.orderId, totalAmount: data.totalAmount, status: data.status, method: 'SANDBOX' };
+      sandbox = true;
     }
-
-    const txId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO payment_transactions (id, order_id, payment_key, provider, method, amount, currency, status, receipt_url, raw_response_json, approved_at)
-         VALUES (?, ?, ?, ?, 'CARD', ?, 'KRW', 'DONE', ?, ?, ?)`
-      ).bind(txId, order.id, paymentKey, provider, order.total_pay_amount, receiptUrl, JSON.stringify(rawResponse), approvedAt),
-      env.DB.prepare(
-        `UPDATE orders
-         SET payment_status = 'PAID', payment_key = ?, pg_provider = ?, pg_receipt_url = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`
-      ).bind(paymentKey, provider, receiptUrl, order.id)
-    ]);
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: '결제가 안전하게 승인 완료되었습니다.',
-      data: {
-        transaction_id: txId,
-        order_id: order.id,
-        order_no: order.order_no,
-        payment_key: paymentKey,
-        amount: order.total_pay_amount,
-        status: 'PAID',
-        receipt_url: receiptUrl,
-        approved_at: approvedAt,
-        provider
-      }
-    }), { status: 200, headers: corsHeaders });
-  }
-
-  // 3. Webhook Ingestion (POST /api/v1/payments/webhook)
-  if (url.pathname === '/api/v1/payments/webhook' && request.method === 'POST') {
-    const payload = await request.json().catch(() => ({}));
-    const eventType = payload.eventType || payload.status || 'UNKNOWN';
-    const data = payload.data || payload;
-    const paymentKey = data.paymentKey || payload.paymentKey;
-    const orderNo = data.orderId || payload.orderId;
-
-    if (!paymentKey && !orderNo) {
-      return new Response(JSON.stringify({ error: 'Missing paymentKey or orderId in webhook' }), { status: 400, headers: corsHeaders });
+    const eventKey = `${eventType}:${paymentKey}:${verified ? verified.status : 'UNVERIFIED'}:${data.createdAt || payload.createdAt || ''}`;
+    let outcome = 'IGNORED';
+    let orderId = null;
+    if (verified && verified.orderId) {
+      const order = await env.DB.prepare('SELECT * FROM orders WHERE order_no = ?').bind(verified.orderId).first();
+      orderId = order ? order.id : null;
+      if (!order) outcome = 'ORDER_NOT_FOUND';
+      else if (verified.status === 'DONE') outcome = await captureFromVerifiedPg(env, order, verified, { sandbox });
+      else if (['CANCELED', 'PARTIAL_CANCELED', 'ABORTED', 'EXPIRED'].includes(verified.status)) outcome = 'PG_SIDE_STATUS_RECORDED_FOR_RECONCILIATION';
+    } else if (!verified) {
+      outcome = 'VERIFICATION_FAILED';
     }
-
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE order_no = ? OR id = ? OR payment_key = ?')
-      .bind(orderNo || '', orderNo || '', paymentKey || '').first();
-
-    if (order) {
-      if (eventType.includes('CANCELED') || data.status === 'CANCELED') {
-        // Rollback sub_orders & mark cancelled
-        await env.DB.batch([
-          env.DB.prepare("UPDATE orders SET payment_status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(order.id),
-          env.DB.prepare("UPDATE sub_orders SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?").bind(order.id),
-          env.DB.prepare("UPDATE settlements SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id)
-        ]);
-      }
+    try {
+      await env.DB.prepare(
+        `INSERT INTO payment_events (id, provider, event_key, event_type, order_id, payment_key, verified, outcome, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(newId('pev'), sandbox ? 'SANDBOX' : 'TOSS', eventKey, eventType, orderId, paymentKey || null, verified ? 1 : 0, outcome, JSON.stringify(payload).slice(0, 20000)).run();
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return json(corsHeaders, { success: true, duplicate: true });
+      throw e;
     }
-
-    return new Response(JSON.stringify({
-      success: true,
-      received: true,
-      event: eventType,
-      timestamp: new Date().toISOString()
-    }), { status: 200, headers: corsHeaders });
+    return json(corsHeaders, { success: true, outcome });
   }
 
   return null;
 }
-

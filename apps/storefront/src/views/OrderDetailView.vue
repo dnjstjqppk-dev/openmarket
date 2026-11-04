@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const route = useRoute()
-const auth = useAuthStore()
 const locale = useLocaleStore()
 const order = ref<any>(null)
 const claims = ref<any[]>([])
 const loading = ref(true)
 const statusBanner = ref('')
+const bannerTone = ref<'ok' | 'warn'>('ok')
 const copyToast = ref('')
+const busy = ref(false)
 
 const showClaimModal = ref(false)
-const claimType = ref<'RETURN' | 'EXCHANGE' | 'PRICE_MATCH'>('PRICE_MATCH')
+const claimType = ref<'RETURN' | 'EXCHANGE'>('RETURN')
+const claimSubOrderId = ref('')
 const claimReason = ref('')
-const claimCompetitorPrice = ref<number>(0)
 const trackingInfo = ref<any>(null)
 const loadingTracking = ref(false)
 
@@ -27,6 +27,33 @@ const invoiceLoading = ref(false)
 const invoiceError = ref<string>('')
 const invoiceMissingFields = ref<string[]>([])
 
+const STATUS_LABEL: Record<string, string> = {
+  READY: '결제 대기', PAID: '결제 완료', PARTIAL_REFUNDED: '부분 환불', REFUNDED: '환불 완료', CANCELLED: '주문 취소', EXPIRED: '결제 시간 만료', FAILED: '결제 실패',
+  PAYMENT_PENDING: '결제 대기', PAYMENT_CONFIRMED: '결제 완료 · 출고 준비', PREPARING: '상품 준비중', SHIPPED: '출고 완료', IN_TRANSIT: '배송중', DELIVERED: '배송 완료',
+  PURCHASE_CONFIRMED: '구매 확정', RETURN_REQUESTED: '반품 요청', RETURNED: '반품 완료'
+}
+const label = (s: string) => STATUS_LABEL[s] || s
+const won = (n: number) => `${Number(n || 0).toLocaleString('ko-KR')}원`
+
+const subs = computed<any[]>(() => order.value?.sub_orders || [])
+const canCancelWhole = computed(() => order.value && (order.value.payment_status === 'READY'
+  || (['PAID', 'PARTIAL_REFUNDED'].includes(order.value.payment_status) && subs.value.every((s) => ['PAYMENT_CONFIRMED', 'PREPARING', 'CANCELLED'].includes(s.status)))))
+const deliveredSubs = computed(() => subs.value.filter((s) => s.status === 'DELIVERED'))
+const canPriceAdjust = computed(() => order.value && ['PAID', 'PARTIAL_REFUNDED'].includes(order.value.payment_status))
+
+function say(msg: string, tone: 'ok' | 'warn' = 'ok') { statusBanner.value = msg; bannerTone.value = tone }
+
+async function post(path: string, body?: any) {
+  busy.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: body ? JSON.stringify(body) : undefined })
+    const json = await res.json().catch(() => ({}))
+    return { ok: res.ok && json.success !== false, json }
+  } finally {
+    busy.value = false
+  }
+}
+
 const loadCommercialInvoice = async () => {
   if (!order.value) return
   invoiceLoading.value = true
@@ -34,21 +61,13 @@ const loadCommercialInvoice = async () => {
   invoiceError.value = ''
   invoiceMissingFields.value = []
   try {
-    const cid = auth.user?.id || order.value.customer_id || 'u_customer_001'
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice`, {
-      headers: {
-        'X-Customer-Id': cid
-      }
-    })
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice`, { headers: { ...authHeader() } })
     const json = await res.json()
-    if (res.ok && json.success) {
-      invoiceData.value = json.data
-    } else {
+    if (res.ok && json.success) invoiceData.value = json.data
+    else {
       invoiceData.value = null
       invoiceError.value = json.error || '통관 인보이스를 불러올 수 없습니다.'
-      if (json.missing_fields) {
-        invoiceMissingFields.value = json.missing_fields
-      }
+      if (json.missing_fields) invoiceMissingFields.value = json.missing_fields
     }
   } catch (e: any) {
     invoiceError.value = e.message || '인보이스 로딩 오류'
@@ -60,13 +79,9 @@ const loadCommercialInvoice = async () => {
 const loadMilestoneTracking = async (subOrderId: string) => {
   loadingTracking.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/logistics/tracking/${encodeURIComponent(subOrderId)}`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/logistics/tracking/${encodeURIComponent(subOrderId)}`, { headers: { ...authHeader() } })
     const json = await res.json()
-    if (json.success) {
-      trackingInfo.value = json.data
-    }
-  } catch (e) {
-    console.error(e)
+    if (json.success) trackingInfo.value = json.data
   } finally {
     loadingTracking.value = false
   }
@@ -75,110 +90,74 @@ const loadMilestoneTracking = async (subOrderId: string) => {
 const copyTracking = (num: string) => {
   navigator.clipboard.writeText(num).then(() => {
     copyToast.value = num
-    setTimeout(() => {
-      copyToast.value = ''
-    }, 2000)
+    setTimeout(() => { copyToast.value = '' }, 2000)
   })
 }
 
 const loadOrderDetail = async () => {
   loading.value = true
   try {
-    const cid = auth.user?.id || 'cust_demo_001'
-    const [res, claimRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/orders/${route.params.id}?customer_id=${encodeURIComponent(cid)}`, {
-        headers: { 'X-Customer-Id': cid }
-      }),
-      fetch(`${API_BASE_URL}/api/v1/orders/${route.params.id}/claims`, {
-        headers: { 'X-Customer-Id': cid }
-      })
-    ])
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${route.params.id}`, { headers: { ...authHeader() } })
     const json = await res.json()
-    const claimJson = await claimRes.json()
-    if (json.success) order.value = json.data
-    if (claimJson.success) claims.value = claimJson.data || []
-  } catch (e) {
-    console.error(e)
+    if (json.success) {
+      order.value = json.data
+      claims.value = json.data.claims || []
+    } else {
+      say(json.error || '주문을 불러오지 못했습니다.', 'warn')
+    }
   } finally {
     loading.value = false
   }
 }
 
-const handleCancelOrder = async () => {
-  if (!order.value) return
-  const cid = auth.user?.id || 'cust_demo_001'
-  const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/cancel`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
-    body: JSON.stringify({ reason: 'Customer self-service cancellation' })
-  })
-  const json = await res.json()
-  if (json.success) {
-    statusBanner.value = '✓ 주문이 취소되었으며 SKU 실재고가 원복되었습니다.'
-    await loadOrderDetail()
-  } else {
-    statusBanner.value = `⚠️ ${json.error}`
-  }
+async function handleCancelOrder() {
+  if (!order.value || !confirm('주문 전체를 취소하시겠습니까? 결제 금액은 원결제 수단으로, 사용한 적립금은 적립금으로 환불됩니다.')) return
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/cancel`)
+  say(ok ? (json.refund ? `주문이 취소되었습니다. 환불: 결제수단 ${won(json.refund.pg_amount)} · 적립금 ${won(json.refund.credit_amount)}` : '결제 전 주문이 취소되었습니다.') : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
+  await loadOrderDetail()
 }
 
-const handleLateDeliveryClaim = async () => {
-  if (!order.value) return
-  const cid = auth.user?.id || 'cust_demo_001'
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/late-delivery-claim`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid }
-    })
-    const json = await res.json()
-    if (json.success) {
-      statusBanner.value = '🎉 테무형 안심 배송 약속: ₩5,300 지연 보상 적립금이 고객님 계정으로 즉시 입금되었습니다!'
-      await loadOrderDetail()
-    } else {
-      statusBanner.value = `⚠️ ${json.error}`
-    }
-  } catch (e) {
-    console.error(e)
-  }
+async function handleCancelSub(sub: any) {
+  if (!confirm(`${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`)) return
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`)
+  say(ok ? `부분 취소 완료 · 환불 ${won((json.refund?.pg_amount || 0) + (json.refund?.credit_amount || 0))}` : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
+  await loadOrderDetail()
 }
 
-const handleConfirmOrder = async () => {
-  if (!order.value) return
-  const cid = auth.user?.id || 'cust_demo_001'
-  const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/confirm`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid }
-  })
-  const json = await res.json()
-  if (json.success) {
-    statusBanner.value = `🎉 구매확정이 완료되었습니다! +₩${Number(json.data.reward_credit || 0).toLocaleString()} (1%) 올모아 적립금이 지급되었습니다.`
-    await loadOrderDetail()
-  }
+async function handleConfirmOrder() {
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/confirm`)
+  say(ok ? (json.reward_credit > 0 ? `구매확정 완료 · 적립금 ${won(json.reward_credit)} 지급` : '구매확정이 완료되었습니다.') : (json.error || '구매확정하지 못했습니다.'), ok ? 'ok' : 'warn')
+  await loadOrderDetail()
 }
 
-const submitClaim = async () => {
-  if (!order.value) return
-  const cid = auth.user?.id || 'cust_demo_001'
-  const diff = claimType.value === 'PRICE_MATCH'
-    ? Math.max(1000, Math.min(15000, Number(order.value.total_amount) - Number(claimCompetitorPrice.value || 0)))
-    : Number(order.value.total_amount)
+async function handlePriceAdjust() {
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, { type: 'PRICE_ADJUSTMENT' })
+  say(ok ? `판매가 인하 차액 ${won(json.refund_amount)}이 적립금으로 지급되었습니다.` : (json.error || '보상 대상이 아닙니다.'), ok ? 'ok' : 'warn')
+  await loadOrderDetail()
+}
 
-  const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/claims`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
-    body: JSON.stringify({
-      type: claimType.value,
-      reason: claimReason.value || `${claimType.value} requested by customer`,
-      refund_amount: diff
-    })
-  })
-  const json = await res.json()
-  if (json.success) {
+async function handleLateDeliveryClaim() {
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/late-delivery-claim`)
+  say(ok ? `배송 지연 보상 ${won(json.data.compensation_amount)}이 적립금으로 지급되었습니다.` : (json.error || '보상 대상이 아닙니다.'), ok ? 'ok' : 'warn')
+  await loadOrderDetail()
+}
+
+function openClaim(sub: any) {
+  claimSubOrderId.value = sub.id
+  claimType.value = 'RETURN'
+  claimReason.value = ''
+  showClaimModal.value = true
+}
+
+async function submitClaim() {
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, { type: claimType.value, sub_order_id: claimSubOrderId.value, reason: claimReason.value })
+  if (ok) {
     showClaimModal.value = false
-    statusBanner.value = claimType.value === 'PRICE_MATCH'
-      ? `✓ 30일 최저가 보상 신청 승인! +₩${Number(json.data.refund_amount).toLocaleString()} 적립금이 즉시 지급되었습니다.`
-      : `✓ ${claimType.value} 신청 (${json.data.claim_id})이 완료되었습니다. 지정 택배사 무료 수거가 진행됩니다.`
-    await loadOrderDetail()
+    say(claimType.value === 'RETURN' ? `반품 신청이 접수되었습니다. 예상 환불액 ${won(json.estimated_refund_amount)} (판매자 확인 후 환불)` : '교환 신청이 접수되었습니다.')
+  } else {
+    say(json.error || '신청하지 못했습니다.', 'warn')
   }
+  await loadOrderDetail()
 }
 
 onMounted(loadOrderDetail)
@@ -198,223 +177,85 @@ onMounted(loadOrderDetail)
     <div v-if="loading" class="bg-white rounded-2xl p-8 animate-pulse h-64"></div>
 
     <div v-else-if="order" class="space-y-6">
-      <!-- Confirmation Header -->
-      <div class="bg-gradient-to-r from-[#00A862] to-emerald-700 text-white rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <!-- Order header -->
+      <div class="bg-white rounded-2xl p-6 border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span class="px-2.5 py-0.5 bg-white/20 rounded-full text-[11px] font-black uppercase tracking-wider">
-            STATUS: {{ order.payment_status || order.status }}
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black" data-testid="order-status"
+            :class="['PAID','PARTIAL_REFUNDED'].includes(order.payment_status) ? 'bg-emerald-50 text-emerald-700' : order.payment_status === 'READY' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'">
+            {{ label(order.payment_status) }}
           </span>
-          <h1 class="text-2xl font-black mt-2">주문 번호 #{{ order.order_no || order.id }}</h1>
-          <p class="text-xs text-white/90 mt-1">OLMOA 30일 최저가 차액보상 및 90일 무조건 무료반품 안심 케어 적용</p>
+          <span v-if="Number(order.is_sandbox) === 1" class="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">테스트 결제</span>
+          <h1 class="text-xl font-black mt-2 text-gray-900">주문번호 {{ order.order_no }}</h1>
+          <p class="text-xs text-gray-500 mt-1">주문일시 {{ order.created_at }}</p>
         </div>
-        <div class="text-left sm:text-right">
-          <div class="text-xs text-white/80">최종 결제 금액</div>
-          <div class="text-3xl font-black">{{ locale.formatPrice(order.total_pay_amount || order.total_amount) }}</div>
-          <div class="text-[11px] text-white/80 mt-0.5 font-mono">결제수단: {{ order.payment_method }}</div>
-        </div>
-      </div>
-
-      <!-- Self-Service Order Actions Bar -->
-      <div class="bg-white rounded-2xl p-5 border border-gray-200/80 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-        <div class="text-xs text-gray-600 font-medium">
-          주문 변경이나 케어가 필요하신가요? 1초 셀프서비스로 즉시 처리됩니다:
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-if="['PAID', 'PREPARING'].includes(order.payment_status || order.status)"
-            @click="handleCancelOrder"
-            class="px-4 py-2 rounded-full border border-red-300 text-[#E60023] hover:bg-red-50 text-xs font-bold cursor-pointer"
-          >
-            주문 취소 및 즉시 환불
-          </button>
-          <button
-            v-if="['PAID', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.payment_status || order.status)"
-            @click="handleConfirmOrder"
-            class="px-4 py-2 rounded-full bg-[#00A862] text-white hover:opacity-95 text-xs font-black cursor-pointer shadow-xs"
-          >
-            ✓ 구매확정 (+1% 적립금)
-          </button>
-          <button
-            @click="claimType = 'PRICE_MATCH'; claimCompetitorPrice = Math.round((order.total_pay_amount || order.total_amount) * 0.92); showClaimModal = true"
-            class="px-4 py-2 rounded-full bg-orange-50 text-[#FF5000] border border-orange-200 hover:bg-orange-100 text-xs font-black cursor-pointer"
-          >
-            ⚡ 30일 최저가 차액 보상
-          </button>
-          <button
-            @click="handleLateDeliveryClaim"
-            class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 text-xs font-black cursor-pointer"
-          >
-            ⚡ 배송 지연 보상 (₩5,300 즉시 지급)
-          </button>
-          <button
-            @click="claimType = 'RETURN'; showClaimModal = true"
-            class="px-4 py-2 rounded-full bg-gray-100 text-gray-800 hover:bg-gray-200 text-xs font-bold cursor-pointer"
-          >
-            ↩ 90일 무료 반품 / 무회수 환불
-          </button>
-          <button
-            @click="loadCommercialInvoice"
-            class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-xs font-black cursor-pointer flex items-center gap-1.5"
-            title="관세청 제출용 국제 상업 송장(Commercial Invoice) 및 패킹 리스트 보기"
-          >
-            <i class="fa-solid fa-file-invoice text-xs"></i>
-            <span>📄 전자 통관 인보이스</span>
-          </button>
+        <div class="text-left sm:text-right text-xs text-gray-600 space-y-0.5">
+          <div>결제수단 결제액 <strong class="text-lg text-gray-900">{{ won(order.total_pay_amount) }}</strong></div>
+          <div v-if="order.credit_used_amount">적립금 사용 {{ won(order.credit_used_amount) }}</div>
+          <div v-if="order.refunded_pg_amount || order.refunded_credit_amount" class="text-[#E60023] font-bold">환불 {{ won(order.refunded_pg_amount) }} · 적립금 {{ won(order.refunded_credit_amount) }}</div>
+          <div v-if="order.payment_status === 'READY'" class="text-amber-700 font-bold">결제 기한 {{ order.payment_expires_at }} (UTC)</div>
         </div>
       </div>
 
-      <!-- Commercial Invoice Modal (Step 29) -->
-      <div v-if="showInvoiceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-        <div class="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl border border-gray-200 space-y-6">
-          <div class="flex items-center justify-between border-b pb-4">
-            <div class="flex items-center gap-2">
-              <span class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm">
-                <i class="fa-solid fa-plane-departure"></i>
-              </span>
-              <div>
-                <h3 class="text-base font-black text-gray-900">국제 크로스보더 상업송장 (Commercial Invoice)</h3>
-                <p class="text-[11px] text-gray-500 font-mono">Customs Declaration &amp; Packing List Manifest</p>
-              </div>
+      <div v-if="statusBanner" role="status" class="p-3 rounded-xl text-xs font-bold" :class="bannerTone === 'ok' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'">{{ statusBanner }}</div>
+
+      <!-- Per-seller shipments with their own actions -->
+      <div class="space-y-3">
+        <div v-for="sub in subs" :key="sub.id" class="bg-white rounded-2xl p-5 border border-gray-200/80" :data-testid="`sub-${sub.sales_model}`">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
+            <div class="text-sm font-black text-gray-900">{{ sub.business_name || '판매자' }}
+              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded" :class="sub.sales_model === 'DIRECT' ? 'bg-orange-50 text-[#FF5000]' : 'bg-slate-100 text-slate-600'">{{ sub.sales_model === 'DIRECT' ? '올모아 직영' : '입점 판매자' }}</span>
             </div>
-            <button @click="showInvoiceModal = false" class="text-xs text-gray-400 hover:text-gray-700 font-bold p-1 cursor-pointer">✕ 닫기</button>
+            <span class="text-xs font-bold text-slate-700">{{ label(sub.status) }}</span>
           </div>
-
-          <div v-if="invoiceLoading" class="py-12 text-center text-xs text-gray-400 animate-pulse">
-            전자 인보이스 데이터 불러오는 중...
-          </div>
-          <div v-else-if="invoiceError" class="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-3">
-            <div class="font-bold flex items-center gap-2 text-sm text-amber-900">
-              <span>⚠️</span>
-              <span>{{ invoiceError }}</span>
-            </div>
-            <div v-if="invoiceMissingFields.length > 0" class="text-[11px] text-amber-800 bg-white/70 p-3 rounded-xl border border-amber-100">
-              <p class="font-bold mb-1">누락된 필수 통관 정보 목록 (Fail-Closed 보안 원칙):</p>
-              <ul class="list-disc pl-5 space-y-0.5 font-mono">
-                <li v-for="f in invoiceMissingFields" :key="f">{{ f }}</li>
-              </ul>
-              <p class="mt-2 text-gray-600 font-sans">
-                올모아는 허위 개인통관고유부호(PCCC)나 가짜 전화번호를 생성하지 않습니다. 통관 정보가 완비된 주문에 한해 상업송장이 발급됩니다.
-              </p>
-            </div>
-          </div>
-          <div v-else-if="invoiceData" class="space-y-5 text-xs">
-            <!-- Header Info -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-gray-50 border border-gray-200">
-              <div>
-                <span class="text-gray-400 text-[10px] block font-bold">Invoice No.</span>
-                <span class="font-mono font-black text-gray-900">{{ invoiceData.invoice_number }}</span>
-              </div>
-              <div>
-                <span class="text-gray-400 text-[10px] block font-bold">Issue Date</span>
-                <span class="font-semibold text-gray-800">{{ invoiceData.issue_date }}</span>
-              </div>
-              <div>
-                <span class="text-gray-400 text-[10px] block font-bold">Incoterms</span>
-                <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-black text-[10px]">{{ invoiceData.incoterms }}</span>
-              </div>
-              <div>
-                <span class="text-gray-400 text-[10px] block font-bold">Declaration FX</span>
-                <span class="font-mono text-gray-700">1 USD = ₩{{ invoiceData.fx_rate_applied }}</span>
-              </div>
-            </div>
-
-            <!-- Exporter / Consignee -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="p-4 rounded-xl border border-gray-200 bg-white">
-                <div class="font-black text-gray-900 text-xs mb-1.5 flex items-center gap-1.5">
-                  <span class="text-blue-600">●</span> Exporter (발송인/수출자)
-                </div>
-                <div class="font-bold text-gray-800">{{ invoiceData.exporter.company_name }}</div>
-                <div class="text-[11px] text-gray-500 mt-1">{{ invoiceData.exporter.address }}</div>
-                <div class="text-[11px] text-gray-500 font-mono mt-0.5">Biz Reg: {{ invoiceData.exporter.business_number }}</div>
-              </div>
-              <div class="p-4 rounded-xl border border-gray-200 bg-white">
-                <div class="font-black text-gray-900 text-xs mb-1.5 flex items-center gap-1.5">
-                  <span class="text-emerald-600">●</span> Consignee (수하인/수입자)
-                </div>
-                <div class="font-bold text-gray-800">{{ invoiceData.consignee.name }}</div>
-                <div class="text-[11px] text-gray-500 mt-1">{{ invoiceData.consignee.address }}</div>
-                <div class="text-[11px] font-mono text-emerald-700 font-bold mt-0.5">PCCC: {{ invoiceData.consignee.pccc }}</div>
-              </div>
-            </div>
-
-            <!-- Manifest Items Table -->
-            <div class="rounded-xl border border-gray-200 overflow-hidden">
-              <table class="w-full text-left border-collapse text-[11px]">
-                <thead class="bg-gray-100 text-gray-600 font-bold border-b">
-                  <tr>
-                    <th class="py-2.5 px-3">No</th>
-                    <th class="py-2.5 px-3">Item Description</th>
-                    <th class="py-2.5 px-3">HS Code</th>
-                    <th class="py-2.5 px-3 text-center">Qty</th>
-                    <th class="py-2.5 px-3 text-right">Unit (USD)</th>
-                    <th class="py-2.5 px-3 text-right">Total (USD)</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                  <tr v-for="it in invoiceData.line_items" :key="it.item_no">
-                    <td class="py-2 px-3 font-mono text-gray-400">{{ it.item_no }}</td>
-                    <td class="py-2 px-3 font-bold text-gray-900">{{ it.description }}</td>
-                    <td class="py-2 px-3 font-mono text-blue-600 font-semibold">{{ it.hs_code }}</td>
-                    <td class="py-2 px-3 text-center font-bold">{{ it.quantity }}</td>
-                    <td class="py-2 px-3 text-right font-mono">${{ it.unit_price_usd.toFixed(2) }}</td>
-                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-900">${{ it.total_amount_usd.toFixed(2) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Customs Declaration Legal Statement -->
-            <div class="p-3 bg-gray-50 rounded-xl text-[10px] text-gray-500 leading-relaxed font-mono border border-gray-200">
-              {{ invoiceData.customs_declaration_statement }}
-            </div>
-
-            <div class="flex justify-end pt-2">
-              <button
-                @click="showInvoiceModal = false"
-                class="px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs cursor-pointer shadow-xs"
-              >
-                확인 및 닫기
-              </button>
-            </div>
+          <ul class="text-xs space-y-1.5 mb-3">
+            <li v-for="it in sub.items" :key="it.id" class="flex justify-between gap-3">
+              <span class="text-gray-700">{{ it.product_title }} <span class="text-slate-400">· {{ it.option_summary }} × {{ it.quantity }}</span>
+                <span v-if="it.refunded_quantity" class="ml-1 text-[#E60023]">({{ it.refunded_quantity }}개 환불)</span></span>
+              <span class="font-bold whitespace-nowrap">{{ won(it.total_price) }}</span>
+            </li>
+            <li class="flex justify-between text-slate-500"><span>배송비</span><span>{{ sub.shipping_fee ? won(sub.shipping_fee) : '무료' }}</span></li>
+          </ul>
+          <div v-if="sub.tracking_number" class="text-[11px] text-slate-600 mb-3">{{ sub.carrier_code }} · <button class="underline" @click="copyTracking(sub.tracking_number)">{{ sub.tracking_number }}</button>
+            <button class="ml-2 text-[#FF5000] font-bold" @click="loadMilestoneTracking(sub.id)">배송 조회</button></div>
+          <div class="flex flex-wrap gap-2">
+            <button v-if="['PAYMENT_CONFIRMED','PREPARING'].includes(sub.status) && subs.filter(s => s.status !== 'CANCELLED').length > 1" :disabled="busy" @click="handleCancelSub(sub)"
+              class="px-3 py-1.5 rounded-full border border-red-300 text-[#E60023] text-xs font-bold">이 판매자 상품만 취소</button>
+            <button v-if="sub.status === 'DELIVERED'" :disabled="busy" @click="openClaim(sub)" class="px-3 py-1.5 rounded-full border border-slate-300 text-xs font-bold">반품 · 교환 신청</button>
           </div>
         </div>
+      </div>
+
+      <!-- Order-level actions (only the ones valid for the current state are shown) -->
+      <div class="bg-white rounded-2xl p-4 border border-gray-200/80 flex flex-wrap gap-2">
+        <button v-if="canCancelWhole" :disabled="busy" @click="handleCancelOrder" data-testid="cancel-order"
+          class="px-4 py-2 rounded-full border border-red-300 text-[#E60023] hover:bg-red-50 text-xs font-bold">{{ order.payment_status === 'READY' ? '주문 취소' : '주문 전체 취소 · 환불' }}</button>
+        <button v-if="deliveredSubs.length" :disabled="busy" @click="handleConfirmOrder" data-testid="confirm-order"
+          class="px-4 py-2 rounded-full bg-[#00A862] text-white text-xs font-black">구매확정 ({{ deliveredSubs.length }}건)</button>
+        <button v-if="canPriceAdjust" :disabled="busy" @click="handlePriceAdjust" class="px-4 py-2 rounded-full bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-bold">판매가 인하 차액 보상 신청</button>
+        <button v-if="canPriceAdjust" :disabled="busy" @click="handleLateDeliveryClaim" class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold">배송 지연 보상 신청</button>
+        <button v-if="order.pccc" @click="loadCommercialInvoice" class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">통관 인보이스</button>
+        <span v-if="order.payment_status === 'READY'" class="text-[11px] text-amber-700 self-center">결제가 완료되지 않은 주문입니다. 결제 기한이 지나면 자동 취소됩니다.</span>
       </div>
 
       <!-- Claim Modal -->
-      <div v-if="showClaimModal" class="bg-white rounded-2xl p-6 border-2 border-[#FF5000] shadow-lg space-y-4">
+      <div v-if="showClaimModal" class="bg-white rounded-2xl p-6 border-2 border-[#FF5000] space-y-4" role="dialog" aria-labelledby="claim-title">
         <div class="flex items-center justify-between">
-          <h3 class="text-base font-black text-gray-900">
-            {{ claimType === 'PRICE_MATCH' ? '⚡ 30일 최저가 보상제 (즉시 적립금 환급)' : '↩ 90일 안심 무료 반품 / 교환 접수' }}
-          </h3>
-          <button @click="showClaimModal = false" class="text-xs text-gray-400 hover:text-gray-700">✕ 닫기</button>
+          <h3 id="claim-title" class="text-base font-black text-gray-900">반품 · 교환 신청</h3>
+          <button @click="showClaimModal = false" class="text-xs text-gray-400 hover:text-gray-700">닫기</button>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">신청 유형</label>
+          <label class="block"><span class="block font-bold text-gray-700 mb-1">신청 유형</span>
             <select v-model="claimType" class="w-full h-10 px-3 rounded-lg border border-gray-300 font-bold">
-              <option value="PRICE_MATCH">30일 최저가 보상 (타사 또는 올모아 내 인하 차액 즉시 적립)</option>
-              <option value="RETURN">90일 무료 반품 (전액 환불 + 무료 수거)</option>
-              <option value="EXCHANGE">90일 무료 교환 (사이즈/색상 교환)</option>
-            </select>
-          </div>
-          <div v-if="claimType === 'PRICE_MATCH'">
-            <label class="block font-bold text-gray-700 mb-1">확인된 인하 가격 (KRW)</label>
-            <input v-model.number="claimCompetitorPrice" type="number" class="w-full h-10 px-3 rounded-lg border border-gray-300 font-bold" />
-          </div>
-          <div class="sm:col-span-2">
-            <label class="block font-bold text-gray-700 mb-1">상세 사유 또는 수거 시 전달사항</label>
-            <input v-model="claimReason" type="text" placeholder="더 저렴한 링크 또는 택배 기사님 수거 메모를 남겨주세요." class="w-full h-10 px-3 rounded-lg border border-gray-300" />
-          </div>
+              <option value="RETURN">반품 (환불)</option>
+              <option value="EXCHANGE">교환</option>
+            </select></label>
+          <label class="block sm:col-span-2"><span class="block font-bold text-gray-700 mb-1">사유</span>
+            <input v-model="claimReason" type="text" maxlength="500" placeholder="예: 사이즈가 맞지 않음" class="w-full h-10 px-3 rounded-lg border border-gray-300" /></label>
         </div>
-        <div v-if="claimType === 'RETURN'" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-medium">
-          💡 <strong>테무형 안심 무회수 환불(Returnless Refund):</strong> 결제 금액이 ₩15,000 이하인 경우 택배 기사 수거 대기 없이 즉시 전액 적립금 환급이 완료됩니다.
-        </div>
+        <p class="text-[11px] text-slate-500">환불 금액은 실제 결제 금액(쿠폰·적립금 배분 반영)을 기준으로 판매자 확인 후 확정됩니다. 단순 변심 반품 시 반품 배송비가 부과될 수 있습니다.</p>
         <div class="flex justify-end gap-2 pt-2">
           <button @click="showClaimModal = false" class="px-4 py-2 rounded-full border border-gray-300 text-xs font-bold">취소</button>
-          <button @click="submitClaim" class="px-5 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black cursor-pointer shadow-xs">
-            신청서 제출하기
-          </button>
+          <button @click="submitClaim" :disabled="busy" class="px-5 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black">신청하기</button>
         </div>
       </div>
 
@@ -426,12 +267,12 @@ onMounted(loadOrderDetail)
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
               <i class="fa-solid fa-location-dot text-[#FF5000]"></i>배송지 정보
             </h2>
-            <span class="text-[11px] font-bold text-[#00A862]">전 품목 무료배송</span>
+            
           </div>
           <div class="text-xs space-y-1.5 text-gray-700">
             <div class="flex justify-between">
               <span class="text-gray-400">받는 분:</span>
-              <span class="font-bold text-gray-900">{{ order.recipient_name || auth.user?.name || 'Alex Kim' }}</span>
+              <span class="font-bold text-gray-900">{{ order.recipient_name }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-gray-400">연락처:</span>
@@ -469,7 +310,7 @@ onMounted(loadOrderDetail)
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
               <i class="fa-solid fa-credit-card text-[#FF5000]"></i>결제 내역 요약
             </h2>
-            <span class="text-[11px] font-mono text-gray-500">{{ order.payment_method || '간편결제' }}</span>
+            <span class="text-[11px] font-mono text-gray-500">{{ order.pg_provider === 'SANDBOX' ? '결제 시뮬레이터' : (order.pg_provider || '-') }}</span>
           </div>
           <div class="text-xs space-y-2 text-gray-600">
             <div class="flex justify-between">

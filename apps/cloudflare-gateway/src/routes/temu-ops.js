@@ -1,235 +1,116 @@
 // apps/cloudflare-gateway/src/routes/temu-ops.js
-// OLMOA Temu-Grade Core Supply Chain & Customer Care Engine:
-// Returnless Refunds, Late Delivery Guarantee, Body Metric Reviews, Factory Sample QC & Fast-Track IPR Takedown
+// Customer-care & supply-chain extras: late-delivery compensation, real sales stats, sample QC, IPR reports.
+// (Reviews are handled in features.js — the duplicate handler that shadowed it was removed.)
+
+import { requireAuth, requireCustomer, requireAdmin } from '../lib/auth.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { newId, sqlNow } from '../lib/ids.js';
+import { grantCreditStatements, auditStatement } from '../lib/ledger.js';
+
+const LATE_COMPENSATION_KRW = 5300;
 
 export async function handleTemuOpsRoutes(request, url, env, corsHeaders) {
-  // 1. Late Delivery Guarantee Compensation (POST /api/v1/orders/:id/late-delivery-claim)
-  if (url.pathname.match(/^\/api\/v1\/orders\/[^\/]+\/late-delivery-claim$/) && request.method === 'POST') {
-    const orderId = url.pathname.split('/')[4];
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
+  const p = url.pathname;
 
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(orderId, orderId).first();
-    if (!order) {
-      return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404, headers: corsHeaders });
+  // 1. Late delivery guarantee: owner only, only when the promised date has actually passed.
+  const lateM = p.match(/^\/api\/v1\/orders\/([^/]+)\/late-delivery-claim$/);
+  if (lateM && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(lateM[1], lateM[1]).first();
+    if (!order) throw notFound('주문을 찾을 수 없습니다.');
+    if (order.customer_id !== me.userId) throw forbidden();
+    const { results: subs } = await env.DB.prepare('SELECT * FROM sub_orders WHERE parent_order_id = ?').bind(order.id).all();
+    const now = sqlNow();
+    const late = subs.filter((s) => Number(s.is_late_compensated) === 0 && s.estimated_delivery_date
+      && !['CANCELLED', 'EXPIRED', 'PAYMENT_PENDING'].includes(s.status)
+      && ((s.delivered_at && s.delivered_at > s.estimated_delivery_date) || (!s.delivered_at && now > s.estimated_delivery_date)));
+    if (!late.length) throw conflict('NOT_LATE', '배송 예정일을 초과한 미보상 주문이 없습니다.');
+    const st = [];
+    for (const s of late) {
+      st.push(env.DB.prepare('UPDATE sub_orders SET is_late_compensated = 1, late_compensation_amount = ? WHERE id = ? AND is_late_compensated = 0').bind(LATE_COMPENSATION_KRW, s.id));
+      st.push(env.DB.prepare("INSERT INTO idempotency_keys (scope, idem_key, principal_id, reference_id) VALUES ('LATE_COMPENSATION', ?, ?, ?)").bind(s.id, me.userId, order.id));
+      st.push(...grantCreditStatements(env, { userId: me.userId, amount: LATE_COMPENSATION_KRW, reason: '배송 지연 보상', referenceId: s.id, entityId: order.operator_entity_id, txnType: 'LATE_DELIVERY_COMPENSATION' }));
     }
-
-    const { results: subOrders } = await env.DB.prepare(
-      'SELECT * FROM sub_orders WHERE parent_order_id = ?'
-    ).bind(order.id).all();
-
-    if (!subOrders || subOrders.length === 0) {
-      return new Response(JSON.stringify({ error: 'Sub-orders not found for this order' }), { status: 404, headers: corsHeaders });
+    try { await env.DB.batch(st); } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw conflict('ALREADY_COMPENSATED', '이미 보상이 지급되었습니다.');
+      throw e;
     }
-
-    const uncompensated = subOrders.find(s => Number(s.is_late_compensated) === 0);
-    if (!uncompensated) {
-      return new Response(JSON.stringify({
-        error: '이미 해당 주문에 대한 배송 지연 보상 크레딧(₩5,300)이 지급되었습니다.',
-        code: 'ALREADY_COMPENSATED'
-      }), { status: 400, headers: corsHeaders });
-    }
-
-    const compensationAmount = 5300; // ~$5.00 USD Temu standard late delivery compensation
-    const creditId = `crd_late_${Date.now()}`;
-
-    await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE sub_orders
-         SET is_late_compensated = 1, late_compensation_amount = ?
-         WHERE parent_order_id = ?`
-      ).bind(compensationAmount, order.id),
-      env.DB.prepare(
-        `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-         VALUES (?, ?, ?, COALESCE((SELECT SUM(amount_delta) FROM user_credits WHERE user_id = ?), 0) + ?, '테무형 안심 배송 약속 지연 보상 크레딧', ?)`
-      ).bind(creditId, customerId, compensationAmount, customerId, compensationAmount, order.id),
-      env.DB.prepare(
-        `INSERT INTO notifications (id, user_id, title, message, type, action_url)
-         VALUES (?, ?, '⚡ 배송 지연 보상금 ₩5,300 지급 완료', '약속된 배송 예정일보다 늦어져 죄송합니다. 올모아 무조건 배송 보증 정책에 따라 ₩5,300 적립금이 즉시 지급되었습니다.', 'CREDIT_GRANTED', '/profile')`
-      ).bind(`notif_${Date.now()}`, customerId)
-    ]);
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA Delivery Guarantee',
-      message: '배송 지연 보상 정책에 따라 ₩5,300 적립금이 즉시 지급되었습니다.',
-      data: {
-        order_id: order.id,
-        order_no: order.order_no,
-        compensation_amount: compensationAmount,
-        compensated_at: new Date().toISOString()
-      }
-    }), { status: 200, headers: corsHeaders });
+    const amount = LATE_COMPENSATION_KRW * late.length;
+    return json(corsHeaders, { success: true, data: { order_id: order.id, compensated_sub_orders: late.length, compensation_amount: amount } });
   }
 
-  // 2. Real-Time Scarcity / Urgency Stats (GET /api/v1/products/:id/urgency-stats)
-  if (url.pathname.match(/^\/api\/v1\/products\/[^\/]+\/urgency-stats$/) && request.method === 'GET') {
-    const prodId = url.pathname.split('/')[4];
-    const product = await env.DB.prepare('SELECT id, total_sold_count FROM products WHERE id = ?').bind(prodId).first();
-
-    const baseSold = product ? (Number(product.total_sold_count) || 120) : 340;
-    const dynamic24hSales = Math.max(14, Math.round(baseSold * 0.12) + 18);
-    const inCartViewers = Math.max(3, Math.round(dynamic24hSales * 0.15) + 4);
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA Urgency Engine',
-      data: {
-        product_id: prodId,
-        recent_24h_sales: dynamic24hSales,
-        viewers_now: inCartViewers * 2 + 5,
-        in_cart_now: inCartViewers,
-        flash_deal_remaining_seconds: 14400 - (Math.floor(Date.now() / 1000) % 14400),
-        low_stock_threshold: 5,
-        delivery_guarantee: {
-          days: '5-7 business days',
-          late_compensation_krw: 5300
-        }
-      }
-    }), { headers: corsHeaders });
+  // 2. Sales stats: measured values only (no fabricated viewers / countdowns).
+  const statM = p.match(/^\/api\/v1\/products\/([^/]+)\/urgency-stats$/);
+  if (statM && request.method === 'GET') {
+    const sold24h = await env.DB.prepare(
+      `SELECT COALESCE(SUM(i.quantity - i.refunded_quantity), 0) AS q FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+       WHERE i.product_id = ? AND o.paid_at IS NOT NULL AND o.paid_at >= ?`
+    ).bind(statM[1], sqlNow(-24 * 3600 * 1000)).first('q');
+    const stock = await env.DB.prepare('SELECT COALESCE(SUM(stock_quantity), 0) AS s FROM product_skus WHERE product_id = ?').bind(statM[1]).first('s');
+    return json(corsHeaders, { success: true, data: { product_id: statM[1], recent_24h_sales: sold24h, total_stock: stock, low_stock: stock > 0 && stock <= 5, late_compensation_krw: LATE_COMPENSATION_KRW } });
   }
 
-  // 3. Product Reviews with Body Metric (Height / Weight / Fit)
-  if (url.pathname.match(/^\/api\/v1\/products\/[^\/]+\/reviews$/)) {
-    const prodId = url.pathname.split('/')[4];
-
+  // 3. Factory sample QC (partner submits, admin inspects)
+  if (p === '/api/v1/partner/sample-qc') {
+    const me = await requireAuth(request, env, ['ROLE_PARTNER']);
+    if (!me.partnerId) throw forbidden();
     if (request.method === 'GET') {
-      const { results } = await env.DB.prepare(
-        `SELECT * FROM product_reviews WHERE product_id = ? ORDER BY created_at DESC LIMIT 50`
-      ).bind(prodId).all();
-
-      return new Response(JSON.stringify({
-        success: true,
-        brand: 'OLMOA Fit Reviews',
-        count: results.length,
-        data: results
-      }), { headers: corsHeaders });
+      const { results } = await env.DB.prepare('SELECT * FROM sample_qc_requests WHERE partner_id = ? ORDER BY created_at DESC').bind(me.partnerId).all();
+      return json(corsHeaders, { success: true, count: results.length, data: results });
     }
-
     if (request.method === 'POST') {
-      const body = await request.json().catch(() => ({}));
-      const userId = request.headers.get('X-Customer-Id') || body.user_id || body.customer_id || 'u_customer_001';
-      const authorName = body.author_name || body.customer_name || '익명 고객';
-      const rating = Number(body.rating) || 5;
-      const content = (body.content || body.comment || '사이즈 딱 맞고 배송 빠릅니다. 가성비 최고!').trim();
-      const heightCm = body.user_height_cm ? Number(body.user_height_cm) : null;
-      const weightKg = body.user_weight_kg ? Number(body.user_weight_kg) : null;
-      const fitType = ['TRUE_TO_SIZE', 'RUNS_SMALL', 'RUNS_LARGE'].includes(body.fit_type) ? body.fit_type : 'TRUE_TO_SIZE';
-      const reviewId = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-
-      await env.DB.prepare(
-        `INSERT INTO product_reviews (id, product_id, order_id, user_id, reviewer_name, author_name, rating, content, user_height_cm, user_weight_kg, fit_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(reviewId, prodId, body.order_id || null, userId, authorName, authorName, rating, content, heightCm, weightKg, fitType).run();
-
-      return new Response(JSON.stringify({
-        success: true,
-        brand: 'OLMOA',
-        message: '실측 체형 정보가 포함된 리뷰가 성공적으로 등록되었습니다.',
-        data: {
-          review_id: reviewId,
-          product_id: prodId,
-          fit_type: fitType,
-          rating
-        }
-      }), { status: 201, headers: corsHeaders });
+      const b = await readJson(request);
+      if (b.product_id) {
+        const own = await env.DB.prepare('SELECT id FROM products WHERE id = ? AND partner_id = ?').bind(b.product_id, me.partnerId).first();
+        if (!own) throw forbidden('본인 상품만 검수 신청할 수 있습니다.');
+      }
+      const id = newId('qc');
+      await env.DB.prepare(`INSERT INTO sample_qc_requests (id, partner_id, product_id, product_title, sample_tracking_no, carrier, status) VALUES (?, ?, ?, ?, ?, ?, 'IN_INSPECTION')`)
+        .bind(id, me.partnerId, b.product_id || null, str(b.product_title, { field: '상품명', max: 200, required: true }), str(b.sample_tracking_no, { field: '샘플 송장번호', max: 40, required: true }), str(b.carrier, { max: 40 }) || 'CJ대한통운').run();
+      return json(corsHeaders, { success: true, data: { id, status: 'IN_INSPECTION' } }, 201);
     }
   }
 
-  // 4. Factory Sample QC Verification (Partner & Admin)
-  if (url.pathname === '/api/v1/partner/sample-qc') {
-    const partnerId = request.headers.get('X-Partner-Id') || 'pt_001';
-
-    if (request.method === 'GET') {
-      const { results } = await env.DB.prepare(
-        'SELECT * FROM sample_qc_requests WHERE partner_id = ? ORDER BY created_at DESC'
-      ).bind(partnerId).all();
-      return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
-    }
-
-    if (request.method === 'POST') {
-      const body = await request.json().catch(() => ({}));
-      const title = (body.product_title || '신규 M2C 공장 직결 샘플').trim();
-      const trackingNo = (body.sample_tracking_no || `TRK-QC-${Date.now()}`).trim();
-      const carrier = body.carrier || 'CJ대한통운';
-      const reqId = `qc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-
-      await env.DB.prepare(
-        `INSERT INTO sample_qc_requests (id, partner_id, product_id, product_title, sample_tracking_no, carrier, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'IN_INSPECTION')`
-      ).bind(reqId, partnerId, body.product_id || null, title, trackingNo, carrier).run();
-
-      return new Response(JSON.stringify({
-        success: true,
-        brand: 'OLMOA Sample QC',
-        message: '물류센터 실물 샘플 검수 신청이 접수되었습니다. 검수팀 도착 후 24시간 내 판정됩니다.',
-        data: { id: reqId, status: 'IN_INSPECTION', tracking_no: trackingNo }
-      }), { status: 201, headers: corsHeaders });
-    }
+  if (p === '/api/v1/admin/sample-qc' && request.method === 'GET') {
+    await requireAdmin(request, env);
+    const { results } = await env.DB.prepare('SELECT q.*, p.business_name FROM sample_qc_requests q LEFT JOIN partners p ON q.partner_id = p.id ORDER BY q.created_at DESC').all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
-  // Admin Sample QC Inspection Desk
-  if (url.pathname === '/api/v1/admin/sample-qc' && request.method === 'GET') {
-    const { results } = await env.DB.prepare(
-      `SELECT q.*, p.business_name FROM sample_qc_requests q LEFT JOIN partners p ON q.partner_id = p.id ORDER BY q.created_at DESC`
-    ).all();
-    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
-  }
-
-  if (url.pathname.match(/^\/api\/v1\/admin\/sample-qc\/[^\/]+\/inspect$/) && request.method === 'POST') {
-    const reqId = url.pathname.split('/')[5];
-    const body = await request.json().catch(() => ({}));
-    const decision = ['APPROVED', 'REJECTED', 'CONDITIONAL'].includes(body.decision) ? body.decision : 'APPROVED';
-    const notes = body.inspector_notes || '원단 내구성 및 무독성 패키지 규격 합격';
-
-    await env.DB.prepare(
-      `UPDATE sample_qc_requests SET status = ?, inspector_notes = ?, inspected_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).bind(decision, notes, reqId).run();
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA QC Inspection Desk',
-      data: { id: reqId, status: decision, inspector_notes: notes }
-    }), { status: 200, headers: corsHeaders });
-  }
-
-  // 5. IPR (Notice & Fast-Track Takedown)
-  if (url.pathname === '/api/v1/ipr/report' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const reporter = (body.reporter_name || '권리자 대리인').trim();
-    const brandName = (body.brand_name || 'Global Brand Inc.').trim();
-    const targetProdId = body.target_product_id;
-    const infringementType = body.infringement_type || 'COUNTERFEIT';
-    const evidenceUrl = body.evidence_url || 'https://evidence.olmoa.com/cert.pdf';
-    const reportId = `ipr_${Date.now()}`;
-
-    if (!targetProdId) {
-      return new Response(JSON.stringify({ error: 'target_product_id is required' }), { status: 400, headers: corsHeaders });
-    }
-
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO ipr_takedown_reports (id, reporter_name, brand_name, target_product_id, infringement_type, evidence_url, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'SUBMITTED')`
-      ).bind(reportId, reporter, brandName, targetProdId, infringementType, evidenceUrl),
-      // Fast-track auto-hide suspicious product immediately to prevent legal liability
-      env.DB.prepare("UPDATE products SET status = 'HIDDEN', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(targetProdId)
+  const qcM = p.match(/^\/api\/v1\/admin\/sample-qc\/([^/]+)\/inspect$/);
+  if (qcM && request.method === 'POST') {
+    const admin = await requireAdmin(request, env);
+    const b = await readJson(request);
+    if (!['APPROVED', 'REJECTED', 'CONDITIONAL'].includes(b.decision)) throw bad('INVALID_DECISION', 'decision 값이 올바르지 않습니다.');
+    const notes = str(b.inspector_notes, { field: '검수 의견', max: 1000, required: true });
+    const r = await env.DB.batch([
+      env.DB.prepare("UPDATE sample_qc_requests SET status = ?, inspector_notes = ?, inspected_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'IN_INSPECTION'").bind(b.decision, notes, qcM[1]),
+      auditStatement(env, admin, { action: 'SAMPLE_QC_INSPECT', targetType: 'sample_qc', targetId: qcM[1], after: { decision: b.decision, notes }, request })
     ]);
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA IPR Protection Center',
-      message: '지식재산권 침해 신고가 접수되어 해당 상품이 즉시 긴급 블라인드(판매 중단) 처리되었습니다.',
-      data: { report_id: reportId, product_id: targetProdId, action: 'IMMEDIATE_HIDDEN' }
-    }), { status: 201, headers: corsHeaders });
+    if (r[0].meta.changes !== 1) throw conflict('NOT_IN_INSPECTION', '검수 대기 상태가 아닙니다.');
+    return json(corsHeaders, { success: true, data: { id: qcM[1], status: b.decision, inspector_notes: notes } });
   }
 
-  if (url.pathname === '/api/v1/admin/ipr-reports' && request.method === 'GET') {
-    const { results } = await env.DB.prepare(
-      `SELECT r.*, p.title as product_title, p.partner_id FROM ipr_takedown_reports r LEFT JOIN products p ON r.target_product_id = p.id ORDER BY r.created_at DESC`
-    ).all();
-    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  // 4. IPR notice: recorded for operator review. Products are never hidden by an unverified report.
+  if (p === '/api/v1/ipr/report' && request.method === 'POST') {
+    const me = await requireAuth(request, env);
+    const b = await readJson(request);
+    const target = str(b.target_product_id, { field: '대상 상품', max: 100, required: true });
+    const prod = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(target).first();
+    if (!prod) throw notFound('대상 상품을 찾을 수 없습니다.');
+    const id = newId('ipr');
+    await env.DB.prepare(`INSERT INTO ipr_takedown_reports (id, reporter_name, brand_name, target_product_id, infringement_type, evidence_url, status) VALUES (?, ?, ?, ?, ?, ?, 'SUBMITTED')`)
+      .bind(id, `${str(b.reporter_name, { field: '신고자', max: 100, required: true })} <${me.userId}>`, str(b.brand_name, { field: '권리 브랜드', max: 100, required: true }), target,
+        ['COUNTERFEIT', 'TRADEMARK', 'COPYRIGHT', 'DESIGN', 'PATENT'].includes(b.infringement_type) ? b.infringement_type : 'COUNTERFEIT',
+        str(b.evidence_url, { field: '증빙 자료', max: 500, required: true })).run();
+    return json(corsHeaders, { success: true, message: '권리침해 신고가 접수되었습니다. 운영자 검토 후 조치됩니다.', data: { report_id: id, status: 'SUBMITTED' } }, 201);
+  }
+
+  if (p === '/api/v1/admin/ipr-reports' && request.method === 'GET') {
+    await requireAdmin(request, env);
+    const { results } = await env.DB.prepare('SELECT r.*, p.title as product_title, p.partner_id FROM ipr_takedown_reports r LEFT JOIN products p ON r.target_product_id = p.id ORDER BY r.created_at DESC').all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
   return null;
 }
-

@@ -1,50 +1,43 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { API_BASE_URL } from '../config'
+import { useRouter, useRoute } from 'vue-router'
+import { API_BASE_URL, savePartnerSession } from '../config'
 
 const router = useRouter()
-const email = ref('seller@olmoa-flagship.com')
-const password = ref('partner2026!')
-const selectedPartnerId = ref('pt_001')
+const route = useRoute()
+const email = ref('')
+const password = ref('')
 const errorMsg = ref('')
+const loading = ref(false)
+const isDev = Boolean((import.meta as any).env?.DEV)
 
 const handlePartnerLogin = async () => {
   errorMsg.value = ''
+  loading.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        role: 'PARTNER',
-        partner_id: selectedPartnerId.value,
-        email: email.value,
-        password: password.value
-      })
+      body: JSON.stringify({ role: 'PARTNER', email: email.value, password: password.value })
     })
-    const json = await res.json()
-    if (json.success) {
-      const token = json.data?.token || json.token || selectedPartnerId.value
-      const pid = json.data?.user?.partner_id || json.partner_id || selectedPartnerId.value
-      const pName = json.data?.user?.company_name || json.partner?.business_name || 'Olmoa Official Flagship'
-      localStorage.setItem('partner_token', token)
-      localStorage.setItem('olmoa_partner_token', token)
-      localStorage.setItem('partner_id', pid)
-      localStorage.setItem('olmoa_partner_id', pid)
-      localStorage.setItem('partner_name', pName)
-      localStorage.setItem('olmoa_partner_name', pName)
-      router.push('/')
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success || !json.token || !json.partner) {
+      errorMsg.value = json.error || '로그인에 실패했습니다.'
       return
     }
-  } catch {}
-  const fallbackToken = selectedPartnerId.value
-  localStorage.setItem('partner_token', fallbackToken)
-  localStorage.setItem('olmoa_partner_token', fallbackToken)
-  localStorage.setItem('partner_id', selectedPartnerId.value)
-  localStorage.setItem('olmoa_partner_id', selectedPartnerId.value)
-  localStorage.setItem('partner_name', 'Olmoa Official Flagship')
-  localStorage.setItem('olmoa_partner_name', 'Olmoa Official Flagship')
-  router.push('/')
+    savePartnerSession(json.token, json.partner)
+    const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
+    router.replace(r)
+  } catch {
+    errorMsg.value = '서버에 연결할 수 없습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function fillDev(which: 1 | 2) {
+  email.value = which === 1 ? 'seller@temu-supply.com' : 'partner2@olmoa-tech.com'
+  password.value = 'DevPass!2026#'
 }
 </script>
 
@@ -54,32 +47,30 @@ const handlePartnerLogin = async () => {
       <div class="flex items-center gap-2.5 mb-6">
         <div class="w-9 h-9 rounded-xl bg-[#FF5000] flex items-center justify-center text-white font-black text-lg">P</div>
         <div>
-          <h1 class="text-xl font-black text-gray-900 leading-none">OLMOA PARTNER</h1>
-          <span class="text-xs text-gray-500">Seller Fulfillment & Settlement Center</span>
+          <h1 class="text-xl font-black text-gray-900 leading-none">OLMOA 판매자 센터</h1>
+          <span class="text-xs text-gray-500">상품 · 주문 · 배송 · 정산 관리</span>
         </div>
       </div>
-
+      <p v-if="route.query.expired === '1'" role="status" class="mb-4 p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-bold">세션이 만료되었습니다. 다시 로그인해 주세요.</p>
       <form @submit.prevent="handlePartnerLogin" class="space-y-4 text-xs">
         <div>
-          <label class="block font-bold text-gray-700 mb-1">Select Verified Partner Store</label>
-          <select v-model="selectedPartnerId" class="w-full h-11 px-3 rounded-xl border border-gray-300 font-bold">
-            <option value="pt_001">pt_001 — Olmoa Official Flagship (Electronics / Home)</option>
-            <option value="pt_002">pt_002 — K-Tech & Lifestyle Official (Multi-Partner Split Test)</option>
-          </select>
+          <label for="pt-email" class="block font-bold text-gray-700 mb-1">판매자 계정 이메일</label>
+          <input id="pt-email" v-model="email" type="email" autocomplete="username" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
         </div>
         <div>
-          <label class="block font-bold text-gray-700 mb-1">Partner Account Email</label>
-          <input v-model="email" type="email" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
+          <label for="pt-pw" class="block font-bold text-gray-700 mb-1">비밀번호</label>
+          <input id="pt-pw" v-model="password" type="password" autocomplete="current-password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
         </div>
-        <div>
-          <label class="block font-bold text-gray-700 mb-1">Security Password</label>
-          <input v-model="password" type="password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
-        </div>
-        <p v-if="errorMsg" class="text-red-600 font-bold">{{ errorMsg }}</p>
-        <button type="submit" class="w-full h-12 rounded-xl bg-[#FF5000] hover:bg-[#E04600] text-white font-black text-sm cursor-pointer">
-          Access Partner Console
+        <p v-if="errorMsg" role="alert" class="text-red-600 font-bold">{{ errorMsg }}</p>
+        <button type="submit" :disabled="loading" class="w-full h-12 rounded-xl bg-[#FF5000] hover:bg-[#E04600] disabled:opacity-50 text-white font-black text-sm">
+          {{ loading ? '확인 중...' : '로그인' }}
         </button>
+        <div v-if="isDev" class="flex gap-2">
+          <button type="button" class="flex-1 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold" @click="fillDev(1)">개발용: 직영 스토어</button>
+          <button type="button" class="flex-1 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold" @click="fillDev(2)">개발용: 입점 판매자</button>
+        </div>
       </form>
+      <p class="mt-6 text-[11px] text-slate-400">입점 심사가 완료된 판매자만 이용할 수 있습니다. 계정 문의는 운영 사업자 고객센터로 연락해 주세요.</p>
     </div>
   </div>
 </template>

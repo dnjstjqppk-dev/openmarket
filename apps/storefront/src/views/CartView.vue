@@ -248,7 +248,7 @@ onMounted(() => {
               <i class="fa-solid fa-shield-halved text-[#00A862]"></i>
               <span>올모아 100% 고객 안심 보장제</span>
             </div>
-            <p>• 90일 무조건 무료반품 (불만족 시 100% 전액 환불)</p>
+            <p>• 수령 후 7일 이내 반품(청약철회) 신청 가능</p>
             <p>• 30일 최저가 차액 자동 보상</p>
           </div>
         </div>

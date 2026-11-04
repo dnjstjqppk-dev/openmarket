@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL } from '../config'
+import { API_BASE_URL, authHeader } from '../config'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -11,11 +11,11 @@ const creditData = ref<any>({ balance: 5000, history: [] })
 const claimMsg = ref('')
 
 const loadWallet = async () => {
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   try {
     const [cRes, crRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`),
-      fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { 'X-Customer-Id': cid } })
+      fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     ])
     const cJson = await cRes.json()
     const crJson = await crRes.json()
@@ -25,10 +25,10 @@ const loadWallet = async () => {
 }
 
 const claimCoupon = async (couponId: string) => {
-  const cid = auth.user?.id || 'cust_demo_001'
+  const cid = auth.user?.id || ''
   const res = await fetch(`${API_BASE_URL}/api/v1/coupons/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Customer-Id': cid },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({ customer_id: cid, coupon_id: couponId })
   })
   const json = await res.json()

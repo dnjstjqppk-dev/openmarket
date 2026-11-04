@@ -1,341 +1,198 @@
 // apps/cloudflare-gateway/src/routes/auth.js
-// OLMOA Enterprise Unified Authentication: Web Crypto PBKDF2 Password Hashing & Standard HMAC-SHA256 JWT
+// Unified authentication. Every role logs in with a users-table account and a PBKDF2 password.
 
-import { hashPassword, verifyPassword, signJwt } from '../utils/crypto-auth.js';
+import { hashPassword, verifyPassword, randomToken, sha256Hex } from '../utils/crypto-auth.js';
+import { issueToken, requireAuth } from '../lib/auth.js';
+import { json, readJson, bad, unauthorized, conflict, str, HttpError } from '../lib/http.js';
+import { newId, sqlNow } from '../lib/ids.js';
+import { grantCreditStatements, getActiveOperator } from '../lib/ledger.js';
+
+const MAX_FAILED = 5;
+const LOCK_MS = 15 * 60 * 1000;
+const WELCOME_CREDIT = 10000;
+const ROLE_ALIASES = { ADMIN: 'ROLE_ADMIN', ROLE_ADMIN: 'ROLE_ADMIN', PARTNER: 'ROLE_PARTNER', ROLE_PARTNER: 'ROLE_PARTNER', CUSTOMER: 'ROLE_CUSTOMER', ROLE_CUSTOMER: 'ROLE_CUSTOMER' };
+
+function validatePassword(pw) {
+  if (typeof pw !== 'string' || pw.length < 10 || pw.length > 128) throw bad('WEAK_PASSWORD', '비밀번호는 10자 이상 128자 이하여야 합니다.');
+  const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(pw)).length;
+  if (classes < 3) throw bad('WEAK_PASSWORD', '비밀번호는 영문 대/소문자, 숫자, 특수문자 중 3종류 이상을 포함해야 합니다.');
+}
+
+function publicUser(u) {
+  return { id: u.id, email: u.email, full_name: u.full_name, name: u.full_name, phone: u.phone, role: u.role, email_verified: u.email_verified };
+}
 
 export async function handleAuthRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/auth')) return null;
+  const p = url.pathname;
 
-  const jwtSecret = env.JWT_SECRET || env.ADMIN_SECRET || 'olmoa_enterprise_jwt_secret_2026';
+  if (p === '/api/v1/auth/login' && request.method === 'POST') {
+    const body = await readJson(request);
+    const email = str(body.email, { field: '이메일', max: 254 }).toLowerCase();
+    const password = typeof body.password === 'string' ? body.password : '';
+    const expectedRole = ROLE_ALIASES[String(body.role || 'CUSTOMER').toUpperCase()] || 'ROLE_CUSTOMER';
+    if (!email || !password) throw bad('CREDENTIALS_REQUIRED', '이메일과 비밀번호를 입력해 주세요.');
 
-  // 1. Unified Login (Customer / Partner / Admin)
-  if (url.pathname === '/api/v1/auth/login' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const email = (body.email || '').trim().toLowerCase();
-    const password = (body.password || body.secret || '').trim();
-    const roleHint = (body.role || '').toUpperCase();
-
-    // Check Admin login
-    if (roleHint === 'ROLE_ADMIN' || roleHint === 'ADMIN' || email.includes('admin')) {
-      const adminSecret = env.ADMIN_SECRET || 'olmoa_admin_sec_2026';
-      if (password === 'admin2026!' || password === adminSecret || password === 'olmoa_admin_2026' || password.length >= 6) {
-        const userObj = {
-          id: 'u_admin_001',
-          email: email || 'admin@olmoa.com',
-          full_name: 'OLMOA Super Admin',
-          role: 'ROLE_ADMIN'
-        };
-        const token = await signJwt({ sub: userObj.id, role: 'ROLE_ADMIN', email: userObj.email }, adminSecret);
-        const payload = {
-          role: 'ROLE_ADMIN',
-          token,
-          admin_secret: adminSecret,
-          user: userObj,
-          expiresIn: 86400
-        };
-        return new Response(JSON.stringify({
-          success: true,
-          brand: 'OLMOA',
-          ...payload,
-          data: payload
-        }), { headers: corsHeaders });
-      }
-      return new Response(JSON.stringify({ error: '관리자 비밀번호가 올바르지 않습니다.' }), { status: 401, headers: corsHeaders });
+    const user = await env.DB.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(email).first();
+    const generic = unauthorized('이메일 또는 비밀번호가 올바르지 않습니다.');
+    if (!user) { await verifyPassword(password, 'pbkdf2:100000:00:00'); throw generic; }
+    if (user.locked_until && user.locked_until > sqlNow()) throw new HttpError(423, 'ACCOUNT_LOCKED', '로그인 시도가 너무 많아 잠시 잠겼습니다. 15분 후 다시 시도해 주세요.');
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) {
+      const fails = Number(user.failed_login_count || 0) + 1;
+      await env.DB.prepare('UPDATE users SET failed_login_count = ?, locked_until = ? WHERE id = ?')
+        .bind(fails >= MAX_FAILED ? 0 : fails, fails >= MAX_FAILED ? sqlNow(LOCK_MS) : null, user.id).run();
+      throw generic;
     }
+    if (Number(user.is_active) !== 1) throw new HttpError(403, 'ACCOUNT_DISABLED', '비활성화된 계정입니다.');
+    if (user.role !== expectedRole) throw generic; // do not reveal which role the account has
+    await env.DB.prepare('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = ?').bind(user.id).run();
 
-    if (!email && !body.partner_id) {
-      return new Response(JSON.stringify({ error: '이메일 계정을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
+    let partner = null;
+    if (user.role === 'ROLE_PARTNER') {
+      partner = await env.DB.prepare('SELECT id, business_name, status, sales_model FROM partners WHERE owner_user_id = ?').bind(user.id).first();
+      if (!partner) throw new HttpError(403, 'PARTNER_PROFILE_MISSING', '입점사 정보가 연결되지 않은 판매자 계정입니다.');
     }
-
-    // Check Partner login
-    if (roleHint === 'ROLE_PARTNER' || roleHint === 'PARTNER' || email.includes('seller') || email.includes('partner')) {
-      const partnerId = body.partner_id || (email.includes('partner2') ? 'pt_002' : 'pt_001');
-      const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(partnerId).first();
-      const pObj = partner || { id: partnerId, business_name: 'Olmoa Official Flagship', status: 'APPROVED' };
-      const token = await signJwt({ sub: partnerId, role: 'ROLE_PARTNER', partner_id: partnerId }, jwtSecret);
-      const payload = {
-        role: 'ROLE_PARTNER',
-        token,
-        partner_id: partnerId,
-        partner: pObj,
-        user: { partner_id: partnerId, company_name: pObj.business_name, email: email || 'seller@olmoa.com' },
-        expiresIn: 86400
-      };
-      return new Response(JSON.stringify({
-        success: true,
-        brand: 'OLMOA',
-        ...payload,
-        data: payload
-      }), { headers: corsHeaders });
-    }
-
-    // Customer Login
-    let user = await env.DB.prepare('SELECT id, email, full_name, phone, role, password_hash FROM users WHERE LOWER(email) = ?').bind(email).first();
-    if (!user) {
-      user = await env.DB.prepare('SELECT id, email, full_name, phone, role, password_hash FROM users WHERE id = ?').bind('u_customer_001').first();
-    }
-
-    if (user && user.password_hash && password) {
-      const isMatch = await verifyPassword(password, user.password_hash);
-      if (!isMatch) {
-        return new Response(JSON.stringify({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' }), { status: 401, headers: corsHeaders });
-      }
-
-      // Seamless Password Upgrade: If stored hash is legacy, upgrade to PBKDF2
-      if (!user.password_hash.startsWith('pbkdf2:')) {
-        const upgradedHash = await hashPassword(password);
-        await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(upgradedHash, user.id).run().catch(() => {});
-      }
-    }
-
-    const uObj = user || { id: 'u_customer_001', email, full_name: '구매 고객', role: 'ROLE_CUSTOMER' };
-    const token = await signJwt({ sub: uObj.id, role: uObj.role, email: uObj.email }, jwtSecret);
+    const token = await issueToken(env, user, partner);
     const payload = {
-      role: 'ROLE_CUSTOMER',
-      token,
-      customer_id: uObj.id,
-      user: { ...uObj, name: uObj.full_name },
-      expiresIn: 86400
+      role: user.role, token, expiresIn: 43200, user: publicUser(user),
+      ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
+      ...(partner ? { partner_id: partner.id, partner } : {})
     };
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      ...payload,
-      data: payload
-    }), { headers: corsHeaders });
+    return json(corsHeaders, { success: true, ...payload, data: payload });
   }
 
-  // 1-1. Customer Registration (Real D1 Insertion + PBKDF2 Password Hashing + Welcome Credit)
-  if (url.pathname === '/api/v1/auth/register' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const email = (body.email || '').trim().toLowerCase();
-    const password = (body.password || '').trim();
-    const fullName = (body.full_name || body.name || '').trim();
-    const phone = (body.phone || '010-0000-0000').trim();
+  if (p === '/api/v1/auth/register' && request.method === 'POST') {
+    const body = await readJson(request);
+    const email = str(body.email, { field: '이메일', max: 254, required: true }).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw bad('INVALID_EMAIL', '이메일 형식이 올바르지 않습니다.');
+    const fullName = str(body.full_name || body.name, { field: '성명', max: 50, required: true });
+    const phone = str(body.phone, { field: '휴대폰 번호', max: 20, required: true });
+    if (!/^01[016789]-?\d{3,4}-?\d{4}$/.test(phone)) throw bad('INVALID_PHONE', '휴대폰 번호 형식이 올바르지 않습니다.');
+    if (body.agree_terms !== true || body.agree_privacy !== true) throw bad('CONSENT_REQUIRED', '이용약관 및 개인정보 수집·이용에 동의해 주세요.');
+    validatePassword(body.password);
 
-    if (!email || !password || !fullName) {
-      return new Response(JSON.stringify({ error: '이메일, 비밀번호, 성명은 필수 항목입니다.' }), { status: 400, headers: corsHeaders });
+    const exists = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
+    if (exists) throw conflict('EMAIL_TAKEN', '이미 등록된 이메일입니다.');
+    const userId = newId('usr');
+    const hash = await hashPassword(body.password);
+    const operator = await getActiveOperator(env);
+    const st = [
+      env.DB.prepare(`INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active) VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`)
+        .bind(userId, email, hash, fullName, phone)
+    ];
+    if (operator) {
+      st.push(...grantCreditStatements(env, { userId, amount: WELCOME_CREDIT, reason: '신규 가입 웰컴 적립금', referenceId: `welcome:${userId}`, entityId: operator.id, txnType: 'WELCOME_CREDIT' }));
     }
-
-    const existing = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
-    if (existing) {
-      return new Response(JSON.stringify({ error: '이미 등록된 이메일 계정입니다.' }), { status: 409, headers: corsHeaders });
+    try {
+      await env.DB.batch(st);
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw conflict('EMAIL_TAKEN', '이미 등록된 이메일입니다.');
+      throw e;
     }
-
-    const userId = `u_customer_${Date.now()}`;
-    const securePasswordHash = await hashPassword(password);
-
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active)
-       VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`
-    ).bind(userId, email, securePasswordHash, fullName, phone).run();
-
-    // Welcome Credit Bonus (10,000 KRW)
-    const creditId = `cred_${Date.now()}`;
-    await env.DB.prepare(
-      `INSERT INTO user_credits (id, user_id, amount_delta, balance_after, reason, reference_id)
-       VALUES (?, ?, 10000, 10000, '신규 가입 웰컴 크레딧 지급', 'WELCOME_BONUS')`
-    ).bind(creditId, userId).run().catch(() => {});
-
-    const token = await signJwt({ sub: userId, role: 'ROLE_CUSTOMER', email }, jwtSecret);
-    const payload = {
-      role: 'ROLE_CUSTOMER',
-      token,
-      customer_id: userId,
-      user: { id: userId, email, full_name: fullName, phone, role: 'ROLE_CUSTOMER' },
-      welcome_credit: 10000,
-      expiresIn: 86400
-    };
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: '회원가입이 완료되었습니다. 10,000원 웰컴 크레딧이 지급되었습니다.',
-      ...payload,
-      data: payload
-    }), { status: 201, headers: corsHeaders });
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
+    const token = await issueToken(env, user, null);
+    const payload = { role: 'ROLE_CUSTOMER', token, customer_id: userId, user: publicUser(user), welcome_credit: operator ? WELCOME_CREDIT : 0, expiresIn: 43200 };
+    return json(corsHeaders, { success: true, message: '회원가입이 완료되었습니다.', ...payload, data: payload }, 201);
   }
 
-  // 2. Customer / Partner Profile & Balance Lookup
-  if ((url.pathname === '/api/v1/auth/me' || url.pathname === '/api/v1/auth/profile') && request.method === 'GET') {
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
-    const user = await env.DB.prepare('SELECT id, email, full_name, phone, role, created_at FROM users WHERE id = ?').bind(customerId).first();
-    const creditRow = await env.DB.prepare('SELECT SUM(amount_delta) as balance FROM user_credits WHERE user_id = ?').bind(customerId).first();
-    const couponRow = await env.DB.prepare('SELECT COUNT(*) as cnt FROM coupons WHERE is_active = 1').first();
-    const wishRow = await env.DB.prepare('SELECT COUNT(*) as cnt FROM wishlists WHERE user_id = ?').bind(customerId).first();
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      data: {
-        user: user || { id: customerId, email: 'customer@example.com', full_name: 'Jane Doe', role: 'ROLE_CUSTOMER' },
-        credit_balance: creditRow && creditRow.balance ? creditRow.balance : 0,
-        available_coupons: couponRow ? couponRow.cnt : 0,
-        wishlist_count: wishRow ? wishRow.cnt : 0
-      }
-    }), { headers: corsHeaders });
+  if ((p === '/api/v1/auth/me' || p === '/api/v1/auth/profile') && request.method === 'GET') {
+    const me = await requireAuth(request, env);
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
+    const credit = await env.DB.prepare('SELECT COALESCE(SUM(amount_delta), 0) AS b FROM user_credits WHERE user_id = ?').bind(me.userId).first('b');
+    const coupons = await env.DB.prepare(
+      'SELECT COUNT(*) AS c FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?'
+    ).bind(me.userId, sqlNow()).first('c');
+    const wish = await env.DB.prepare('SELECT COUNT(*) AS c FROM wishlists WHERE user_id = ?').bind(me.userId).first('c');
+    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish } });
   }
 
-  // 2-1. Customer Profile & Password Update (PUT /api/v1/auth/profile)
-  if (url.pathname === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
-    const customerId = request.headers.get('X-Customer-Id') || 'u_customer_001';
-    const body = await request.json().catch(() => ({}));
-    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(customerId).first();
-    if (!user) {
-      return new Response(JSON.stringify({ error: '사용자를 찾을 수 없습니다.' }), { status: 404, headers: corsHeaders });
+  if (p === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const me = await requireAuth(request, env);
+    const body = await readJson(request);
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
+    const fullName = body.full_name !== undefined ? str(body.full_name, { field: '성명', max: 50, required: true }) : user.full_name;
+    const phone = body.phone !== undefined ? str(body.phone, { field: '휴대폰 번호', max: 20, required: true }) : user.phone;
+    let hash = user.password_hash;
+    let tokenVersion = Number(user.token_version || 0);
+    if (body.new_password !== undefined) {
+      if (!(await verifyPassword(String(body.current_password || ''), user.password_hash))) throw bad('CURRENT_PASSWORD_MISMATCH', '현재 비밀번호가 일치하지 않습니다.');
+      validatePassword(body.new_password);
+      hash = await hashPassword(body.new_password);
+      tokenVersion += 1; // revoke all other sessions
     }
-
-    const fullName = (body.full_name || body.name || user.full_name).trim();
-    const phone = (body.phone || user.phone || '010-0000-0000').trim();
-
-    let passwordHash = user.password_hash;
-    if (body.new_password) {
-      if (body.current_password && user.password_hash) {
-        const isCurrentMatch = await verifyPassword(body.current_password, user.password_hash);
-        if (!isCurrentMatch) {
-          return new Response(JSON.stringify({ error: '현재 비밀번호가 일치하지 않습니다.' }), { status: 400, headers: corsHeaders });
-        }
-      }
-      passwordHash = await hashPassword(body.new_password);
-    }
-
-    await env.DB.prepare(
-      'UPDATE users SET full_name = ?, phone = ?, password_hash = ? WHERE id = ?'
-    ).bind(fullName, phone, passwordHash, customerId).run();
-
-    const updatedUser = await env.DB.prepare('SELECT id, email, full_name, phone, role, created_at FROM users WHERE id = ?').bind(customerId).first();
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: '회원 정보가 성공적으로 수정되었습니다.',
-      data: {
-        user: updatedUser
-      }
-    }), { headers: corsHeaders });
+    await env.DB.prepare('UPDATE users SET full_name = ?, phone = ?, password_hash = ?, token_version = ?, password_changed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE password_changed_at END, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(fullName, phone, hash, tokenVersion, body.new_password !== undefined ? 1 : 0, me.userId).run();
+    const updated = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
+    const token = tokenVersion !== Number(user.token_version || 0) ? await issueToken(env, updated, me.partner) : undefined;
+    return json(corsHeaders, { success: true, message: '회원 정보가 수정되었습니다.', data: { user: publicUser(updated), token } });
   }
 
-  // 3. Forgot Password
-  if (url.pathname === '/api/v1/auth/forgot-password' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const email = (body.email || '').trim().toLowerCase();
-    if (!email) {
-      return new Response(JSON.stringify({ error: '이메일을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-    }
+  if (p === '/api/v1/auth/logout-all' && request.method === 'POST') {
+    const me = await requireAuth(request, env);
+    await env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').bind(me.userId).run();
+    return json(corsHeaders, { success: true, message: '모든 기기에서 로그아웃되었습니다.' });
+  }
+
+  if (p === '/api/v1/auth/forgot-password' && request.method === 'POST') {
+    const body = await readJson(request);
+    const email = str(body.email, { field: '이메일', max: 254, required: true }).toLowerCase();
     const user = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
-    const token = 'reset_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    let devToken;
     if (user) {
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const token = randomToken(32);
       await env.DB.prepare('INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)')
-        .bind('prt_' + Date.now(), user.id, token, expiresAt).run();
+        .bind(newId('prt'), user.id, await sha256Hex(token), new Date(Date.now() + 30 * 60 * 1000).toISOString()).run();
+      // E-mail delivery provider is not integrated yet; the token is only exposed in local development.
+      if (env.ENVIRONMENT === 'development') devToken = token;
     }
-    return new Response(JSON.stringify({
+    return json(corsHeaders, {
       success: true,
-      brand: 'OLMOA',
-      message: '비밀번호 재설정 링크가 이메일로 발송되었습니다. (데모: 아래 토큰 사용)',
-      reset_token: token
-    }), { headers: corsHeaders });
+      message: '가입된 이메일이라면 비밀번호 재설정 안내가 발송됩니다.',
+      email_delivery: 'NOT_INTEGRATED',
+      ...(devToken ? { dev_reset_token: devToken } : {})
+    });
   }
 
-  // 4. Reset Password with PBKDF2
-  if (url.pathname === '/api/v1/auth/reset-password' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const token = (body.token || '').trim();
-    const newPassword = (body.new_password || '').trim();
-    if (!token || !newPassword) {
-      return new Response(JSON.stringify({ error: '토큰과 새 비밀번호를 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-    }
-    const row = await env.DB.prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL').bind(token).first();
-    if (!row) {
-      return new Response(JSON.stringify({ error: '유효하지 않거나 만료된 토큰입니다.' }), { status: 400, headers: corsHeaders });
-    }
-    if (new Date(row.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: '토큰이 만료되었습니다.' }), { status: 400, headers: corsHeaders });
-    }
-
-    const secureHash = await hashPassword(newPassword);
-    await env.DB.prepare('UPDATE users SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(secureHash, row.user_id).run();
-    await env.DB.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(row.id).run();
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: '비밀번호가 성공적으로 재설정되었습니다.'
-    }), { headers: corsHeaders });
+  if (p === '/api/v1/auth/reset-password' && request.method === 'POST') {
+    const body = await readJson(request);
+    const token = str(body.token, { field: '토큰', max: 200, required: true });
+    validatePassword(body.new_password);
+    const row = await env.DB.prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL').bind(await sha256Hex(token)).first();
+    if (!row || new Date(row.expires_at).getTime() < Date.now()) throw bad('INVALID_TOKEN', '유효하지 않거나 만료된 토큰입니다.');
+    const hash = await hashPassword(body.new_password);
+    const res = await env.DB.batch([
+      env.DB.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL').bind(row.id),
+      env.DB.prepare('UPDATE users SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP, token_version = token_version + 1, failed_login_count = 0, locked_until = NULL WHERE id = ?').bind(hash, row.user_id)
+    ]);
+    if (!res[0].meta || res[0].meta.changes !== 1) throw bad('INVALID_TOKEN', '이미 사용된 토큰입니다.');
+    return json(corsHeaders, { success: true, message: '비밀번호가 재설정되었습니다.' });
   }
 
-  // 5. Email Verification Send
-  if (url.pathname === '/api/v1/auth/send-verification' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const email = (body.email || '').trim().toLowerCase();
-    if (!email) {
-      return new Response(JSON.stringify({ error: '이메일을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-    }
-    const user = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
-    if (!user) {
-      return new Response(JSON.stringify({ error: '등록되지 않은 이메일입니다.' }), { status: 404, headers: corsHeaders });
-    }
-    const token = 'verify_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  if (p === '/api/v1/auth/send-verification' && request.method === 'POST') {
+    const me = await requireAuth(request, env);
+    const token = randomToken(24);
     await env.DB.prepare('INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)')
-      .bind('evt_' + Date.now(), user.id, token, expiresAt).run();
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      message: '인증 이메일이 발송되었습니다. (데모: 아래 토큰 사용)',
-      verification_token: token
-    }), { headers: corsHeaders });
+      .bind(newId('evt'), me.userId, await sha256Hex(token), new Date(Date.now() + 24 * 3600 * 1000).toISOString()).run();
+    return json(corsHeaders, { success: true, message: '인증 메일 발송 요청이 접수되었습니다.', email_delivery: 'NOT_INTEGRATED', ...(env.ENVIRONMENT === 'development' ? { dev_verification_token: token } : {}) });
   }
 
-  // 6. Email Verification Confirm
-  if (url.pathname === '/api/v1/auth/verify-email' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const token = (body.token || '').trim();
-    if (!token) {
-      return new Response(JSON.stringify({ error: '토큰을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-    }
-    const row = await env.DB.prepare('SELECT * FROM email_verification_tokens WHERE token = ? AND verified_at IS NULL').bind(token).first();
-    if (!row) {
-      return new Response(JSON.stringify({ error: '유효하지 않은 토큰입니다.' }), { status: 400, headers: corsHeaders });
-    }
-    if (new Date(row.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: '토큰이 만료되었습니다.' }), { status: 400, headers: corsHeaders });
-    }
-    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(row.user_id).run();
-    await env.DB.prepare('UPDATE email_verification_tokens SET verified_at = CURRENT_TIMESTAMP WHERE id = ?').bind(row.id).run();
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', message: '이메일이 인증되었습니다.' }), { headers: corsHeaders });
+  if (p === '/api/v1/auth/verify-email' && request.method === 'POST') {
+    const body = await readJson(request);
+    const token = str(body.token, { field: '토큰', max: 200, required: true });
+    const row = await env.DB.prepare('SELECT * FROM email_verification_tokens WHERE token = ? AND verified_at IS NULL').bind(await sha256Hex(token)).first();
+    if (!row || new Date(row.expires_at).getTime() < Date.now()) throw bad('INVALID_TOKEN', '유효하지 않거나 만료된 토큰입니다.');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(row.user_id),
+      env.DB.prepare('UPDATE email_verification_tokens SET verified_at = CURRENT_TIMESTAMP WHERE id = ?').bind(row.id)
+    ]);
+    return json(corsHeaders, { success: true, message: '이메일이 인증되었습니다.' });
   }
 
-  // 7. Social Login
-  if (url.pathname === '/api/v1/auth/social-login' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const provider = (body.provider || '').toUpperCase();
-    const providerId = (body.provider_id || '').trim();
-    const email = (body.email || '').trim().toLowerCase();
-    const name = (body.name || '').trim();
-    if (!provider || !email) {
-      return new Response(JSON.stringify({ error: 'provider와 email은 필수입니다.' }), { status: 400, headers: corsHeaders });
-    }
-    let user = await env.DB.prepare('SELECT id, email, full_name, phone, role FROM users WHERE LOWER(email) = ?').bind(email).first();
-    if (!user) {
-      const userId = `u_social_${Date.now()}`;
-      await env.DB.prepare(
-        `INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active, email_verified) VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1, 1)`
-      ).bind(userId, email, `social_${provider}_${providerId}`, name || '소셜 사용자', '010-0000-0000').run();
-      user = { id: userId, email, full_name: name || '소셜 사용자', phone: '010-0000-0000', role: 'ROLE_CUSTOMER' };
-    }
-    const token = await signJwt({ sub: user.id, role: user.role, email: user.email }, jwtSecret);
-    const payload = {
-      role: 'ROLE_CUSTOMER',
-      token,
-      customer_id: user.id,
-      user: { ...user, name: user.full_name },
-      provider,
-      expiresIn: 86400
-    };
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', ...payload, data: payload }), { headers: corsHeaders });
+  if (p === '/api/v1/auth/social-login' && request.method === 'POST') {
+    // Previously trusted a client-supplied e-mail (account takeover, audit E08). Disabled until the
+    // provider's OAuth code exchange + ID-token verification is implemented with real client credentials.
+    return json(corsHeaders, { success: false, code: 'SOCIAL_LOGIN_NOT_INTEGRATED', error: '소셜 로그인은 아직 제공되지 않습니다.' }, 501);
   }
 
   return null;

@@ -1,0 +1,6 @@
+ok  	openmarket/api/cmd/server	(cached)
+?   	openmarket/api/internal/inventory	[no test files]
+ok  	openmarket/api/internal/orders	(cached)
+ok  	openmarket/backend/internal/domain/statemachine	(cached)
+?   	openmarket/backend/internal/infra/redis	[no test files]
+ok  	openmarket/backend/internal/service	(cached)
