@@ -78,6 +78,9 @@ onMounted(() => {
           <router-link to="/partner-applications" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">입점 심사</router-link>
           <router-link to="/business" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">운영 사업자</router-link>
           <router-link to="/suppliers" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">공급사·발주</router-link>
+          <router-link to="/supplier-integrations" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white flex items-center gap-1" active-class="bg-slate-800 text-orange-400 font-bold">
+            <i class="fa-solid fa-boxes-packing text-amber-400"></i>3PL·수집통합
+          </router-link>
           <router-link to="/reconciliation" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">데이터 대사</router-link>
           <router-link to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
           <router-link to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
@@ -117,6 +120,7 @@ onMounted(() => {
         <router-link to="/partner-applications" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">입점 심사</router-link>
         <router-link to="/business" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">운영 사업자</router-link>
         <router-link to="/suppliers" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">공급사·발주</router-link>
+        <router-link to="/supplier-integrations" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">3PL·수집통합</router-link>
         <router-link to="/reconciliation" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">데이터 대사</router-link>
         <router-link to="/security" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">계정 보안</router-link>
         <router-link to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">

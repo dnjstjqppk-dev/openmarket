@@ -35,6 +35,9 @@ watch(() => route.path, () => {
             <router-link to="/" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대시보드</router-link>
             <router-link to="/products" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">상품 관리</router-link>
             <router-link to="/bidding" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">M2C 역경매·비딩</router-link>
+            <router-link to="/imports" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition flex items-center gap-1.5" active-class="bg-indigo-900 text-amber-400">
+              <i class="fa-solid fa-cloud-arrow-down text-emerald-400"></i>URL 수집
+            </router-link>
             <router-link to="/bulk-upload" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대량 등록</router-link>
             <router-link to="/shipments" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">주문·배송</router-link>
             <router-link to="/returns" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">반품·클레임</router-link>
@@ -77,6 +80,9 @@ watch(() => route.path, () => {
         </router-link>
         <router-link to="/bidding" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           M2C 역경매·비딩
+        </router-link>
+        <router-link to="/imports" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
+          <i class="fa-solid fa-cloud-arrow-down text-emerald-400 mr-1.5"></i>URL 자동 수집
         </router-link>
         <router-link to="/bulk-upload" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           대량 등록 (CSV)

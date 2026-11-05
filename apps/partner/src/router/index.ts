@@ -9,6 +9,7 @@ import QnaManageView from '../views/QnaManageView.vue';
 import ProfileManageView from '../views/ProfileManageView.vue';
 import ReturnsManageView from '../views/ReturnsManageView.vue';
 import BiddingView from '../views/BiddingView.vue';
+import UrlImportView from '../views/UrlImportView.vue';
 import ApplyView from '../views/ApplyView.vue';
 import ApplicationView from '../views/ApplicationView.vue';
 import { getPartnerStatus } from '../config';
@@ -45,6 +46,12 @@ const router = createRouter({
       path: '/bulk-upload',
       name: 'bulk-upload',
       component: BulkUploadView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/imports',
+      name: 'imports',
+      component: UrlImportView,
       meta: { requiresAuth: true }
     },
     {
