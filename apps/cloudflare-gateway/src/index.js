@@ -22,6 +22,8 @@ import { handleOnboardingRoutes } from './routes/onboarding.js';
 import { handleAdminSecurityRoutes } from './routes/admin-security.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 import { purgeExpiredPii } from './services/privacy.js';
+import { enforceRateLimit, classify } from './lib/ratelimit.js';
+import { authenticate } from './lib/auth.js';
 
 const SERVICE_VERSION = '2.0.0-v3-integrity';
 
@@ -100,6 +102,15 @@ export default {
         return new Response(xml, { headers: { ...corsHeaders, 'Content-Type': 'application/xml; charset=utf-8' } });
       }
       if (!env.DB) return json(corsHeaders, { success: false, error: 'Database binding missing', code: 'DB_NOT_BOUND' }, 503);
+      // O12: rate limits before any work. Writes are keyed by the verified user (shared mobile-carrier IPs stay usable).
+      const bucket = classify(request.method, url.pathname);
+      let userKey = null;
+      let loginEmail = null;
+      if (bucket === 'RL_WRITE') userKey = (await authenticate(request, env).catch(() => null))?.userId || null;
+      if (bucket === 'RL_AUTH' && url.pathname === '/api/v1/auth/login' && request.method === 'POST') {
+        loginEmail = await request.clone().json().then((b) => (b && typeof b.email === 'string' ? b.email.slice(0, 254) : null)).catch(() => null);
+      }
+      await enforceRateLimit(request, env, { userKey, loginEmail });
       for (const route of ROUTERS) {
         const res = await route(request, url, env, corsHeaders, ctx);
         if (res) return res;

@@ -23,7 +23,9 @@ export function json(corsHeaders, data, status = 200) {
 
 export function errorResponse(corsHeaders, err, env) {
   if (err instanceof HttpError) {
-    return json(corsHeaders, { success: false, error: err.message, code: err.code, ...err.extra }, err.status);
+    const res = json(corsHeaders, { success: false, error: err.message, code: err.code, ...err.extra }, err.status);
+    if (err.headers) for (const [k, v] of Object.entries(err.headers)) res.headers.set(k, v);
+    return res;
   }
   const requestId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   console.error(JSON.stringify({ level: 'error', requestId, message: err && err.message, stack: err && err.stack }));

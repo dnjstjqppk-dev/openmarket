@@ -1194,6 +1194,40 @@ await t.test('I53 saving store settings with the masked account number does not 
   assert.equal(real.json.payout_change_pending, true, 'a real change is still queued for verification');
 });
 
+// ---- O12 rate limiting (fake Workers Rate Limiting bindings with the production limits) ----
+const fakeLimiter = (limit) => { const seen = new Map(); return { limit: async ({ key }) => { const n = (seen.get(key) || 0) + 1; seen.set(key, n); return { success: n <= limit }; } }; };
+await t.test('I54 rate limits: login brute force, per-account guessing, checkout floods; customers on one IP are not lumped together', async () => {
+  const g = await boot({ RL_AUTH: fakeLimiter(10), RL_LOGIN: fakeLimiter(5), RL_WRITE: fakeLimiter(30), RL_API: fakeLimiter(300) });
+  const login = (email, ip) => g.call('/api/v1/auth/login', { method: 'POST', headers: { 'CF-Connecting-IP': ip }, body: { email, password: 'wrong-Pass-123' } });
+  const st = [];
+  for (let i = 0; i < 6; i++) st.push((await login('customer@example.com', `198.51.100.${i}`)).status);
+  assert.equal(st[5], 429, 'the 6th guess at one account from rotating IPs is refused');
+  const r = await login('alex.kim@olmoa.com', '198.51.100.200');
+  assert.notEqual(r.status, 429, 'other accounts unaffected');
+  const ipSt = [];
+  for (let i = 0; i < 11; i++) ipSt.push((await login(`nobody${i}@x.com`, '203.0.113.77')).status);
+  assert.equal(ipSt[10], 429, 'the 11th auth request from one IP is refused');
+  const lim = await login('another@x.com', '203.0.113.77');
+  assert.equal(lim.headers.get('retry-after'), '60');
+  assert.equal(lim.json.code, 'RATE_LIMITED');
+  // Two customers behind the same carrier IP each get their own write budget.
+  const a = (await g.call('/api/v1/auth/login', { method: 'POST', headers: { 'CF-Connecting-IP': '192.0.2.10' }, body: { email: 'customer@example.com', password: PW } })).json.token;
+  const b = (await g.call('/api/v1/auth/login', { method: 'POST', headers: { 'CF-Connecting-IP': '192.0.2.11' }, body: { email: 'alex.kim@olmoa.com', password: PW } })).json.token;
+  const co = (tok) => g.call('/api/v1/orders/checkout', { method: 'POST', token: tok, headers: { 'CF-Connecting-IP': '192.0.2.1' }, body: { items: [] } });
+  const aSt = [];
+  for (let i = 0; i < 31; i++) aSt.push((await co(a)).status);
+  assert.equal(aSt[30], 429, 'checkout flood stopped');
+  assert.ok(aSt.slice(0, 30).every((s) => s !== 429));
+  assert.notEqual((await co(b)).status, 429, 'second customer on the same IP still has budget');
+  assert.equal((await g.call('/health', { headers: { 'CF-Connecting-IP': '203.0.113.77' } })).status, 200, 'health is never limited');
+});
+await t.test('I55 limiter missing: open by default (dev), closed when RATE_LIMIT_REQUIRED=true', async () => {
+  const g = await boot({ RATE_LIMIT_REQUIRED: 'true' });
+  assert.equal((await g.call('/api/v1/products')).json.code, 'RATE_LIMIT_NOT_CONFIGURED');
+  const h = await boot({ RL_API: { limit: async () => { throw new Error('limiter down'); } } });
+  assert.equal((await h.call('/api/v1/products')).status, 200, 'a broken limiter does not take the shop down');
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R21)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);
