@@ -1,0 +1,1 @@
+{"open_settlements":0,"audit_rows":6,"r23":0,"r22_scope":0}

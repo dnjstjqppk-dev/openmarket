@@ -148,6 +148,19 @@ export async function reconcile(env) {
                  o.refunded_pg_amount + o.refunded_credit_amount + (SELECT COALESCE(SUM(return_fee_amount),0) FROM refunds r WHERE r.order_id = o.id AND r.status IN ('PENDING','DONE'))
               != (SELECT COALESCE(SUM(i.refunded_pg_amount + i.refunded_credit_amount),0) FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.parent_order_id = o.id)
                + (SELECT COALESCE(SUM(s.shipping_pg_alloc + s.shipping_credit_alloc),0) FROM sub_orders s WHERE s.parent_order_id = o.id AND s.shipping_refunded = 1)`));
+  // R22/R23 cover what R05/R12 cannot see: they ignore legacy rows and orders without paid_at, which is exactly
+  // where pre-V3 code left "PAID" orders with no payment and payable settlements on cancelled orders (d1_31/d1_32).
+  add('R22', 'Orders in a paid state have paid_at and, when PG was charged, a PG capture (legacy included)',
+    await all(`SELECT o.id, o.payment_status, o.paid_at, o.total_pay_amount FROM orders o
+               WHERE o.payment_status IN ('PAID', 'PARTIAL_REFUNDED', 'REFUNDED', 'DELIVERED')
+                 AND (o.paid_at IS NULL OR (o.total_pay_amount > 0 AND NOT EXISTS (
+                      SELECT 1 FROM payment_transactions t WHERE t.order_id = o.id AND t.status != 'FAILED')))`));
+  add('R23', 'Open settlements belong to paid, live sub-orders (no payable on cancelled/expired or unpaid orders)',
+    await all(`SELECT st.id, st.status, s.status AS sub_status, o.payment_status FROM settlements st
+               JOIN sub_orders s ON s.id = st.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+               WHERE st.payout_id IS NULL AND (
+                    (st.status IN ('HOLD', 'PENDING', 'ELIGIBLE_FOR_PAYOUT') AND s.status IN ('CANCELLED', 'EXPIRED'))
+                 OR (st.status IN ('PENDING', 'ELIGIBLE_FOR_PAYOUT') AND o.paid_at IS NULL))`));
   const ok = checks.every((c) => c.ok);
   return { ok, checked_at: new Date().toISOString(), checks };
 }

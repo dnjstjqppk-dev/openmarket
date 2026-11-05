@@ -1321,7 +1321,40 @@ await t.test('I59 d1_31 voids orders marked PAID without payment: stock, ledger,
   assert.equal(snap(), s1, 'second run changes nothing');
 });
 
-await t.test('I31 full reconciliation passes after every scenario above (R01–R21)', async () => {
+await t.test('I60 R22/R23 detect PAID-without-payment and payable settlements on cancelled orders; d1_31 + d1_32 clear them', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { MIGRATIONS_DIR } = await import('./lib/harness.mjs');
+  const read = (f) => fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8');
+  const recon = async () => Object.fromEntries((await I.call('/api/v1/admin/reconciliation', { token: ad })).json.data.checks.map((c) => [c.id, c]));
+  const sku = I.one("SELECT s.id FROM product_skus s JOIN products p ON p.id = s.product_id WHERE p.partner_id = 'pt_002' AND s.stock_quantity > 20 ORDER BY s.id LIMIT 1 OFFSET 3");
+  // pre-V3 cancellation: order and sub-order CANCELLED, settlement left payable
+  const oc = (await I.checkout(c2, [{ sku_id: sku.id, quantity: 1 }])).json;
+  I.db.prepare("UPDATE orders SET payment_status = 'CANCELLED' WHERE id = ?").run(oc.order_id);
+  I.db.prepare("UPDATE sub_orders SET status = 'CANCELLED' WHERE parent_order_id = ?").run(oc.order_id);
+  I.db.prepare("UPDATE settlements SET status = 'PENDING' WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").run(oc.order_id);
+  const st = I.one('SELECT st.id FROM settlements st JOIN sub_orders s ON s.id = st.sub_order_id WHERE s.parent_order_id = ?', oc.order_id).id;
+  // pre-V3 checkout: PAID without any payment
+  const op = (await I.checkout(c2, [{ sku_id: sku.id, quantity: 1 }])).json;
+  I.db.prepare("UPDATE orders SET payment_status = 'PAID' WHERE id = ?").run(op.order_id);
+
+  let r = await recon();
+  assert.ok(!r.R23.ok && r.R23.violations.some((v) => v.id === st), 'R23 sees the payable settlement of a cancelled order');
+  assert.ok(!r.R22.ok && r.R22.violations.some((v) => v.id === op.order_id), 'R22 sees the PAID order without payment');
+
+  I.db.exec(read('d1_31_void_unpaid_orders_marked_paid.sql'));
+  I.db.exec(read('d1_32_cancel_settlements_of_cancelled_orders.sql'));
+  assert.equal(I.one('SELECT status FROM settlements WHERE id = ?', st).status, 'CANCELLED');
+  assert.equal(I.one("SELECT COUNT(*) c FROM admin_audit_log WHERE target_id = ? AND action = 'SETTLEMENT_CANCEL_ORDER_NOT_PAYABLE'", st).c, 1);
+  r = await recon();
+  assert.ok(r.R22.ok, JSON.stringify(r.R22.violations));
+  assert.ok(r.R23.ok, JSON.stringify(r.R23.violations));
+  const audits = I.one('SELECT COUNT(*) c FROM admin_audit_log').c;
+  I.db.exec(read('d1_32_cancel_settlements_of_cancelled_orders.sql'));
+  assert.equal(I.one('SELECT COUNT(*) c FROM admin_audit_log').c, audits, 'second run changes nothing');
+});
+
+await t.test('I31 full reconciliation passes after every scenario above (R01–R23)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);
   const failedChecks = r.json.data.checks.filter((c) => !c.ok && c.id !== 'R07');
