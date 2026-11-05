@@ -4,7 +4,7 @@
 export function extractMetaOg(html) {
   if (!html || typeof html !== 'string') return null;
 
-  const metas = {};
+  const metaMap = {};
   const metaRegex = /<meta\b[^>]*>/gi;
   let match;
 
@@ -13,33 +13,33 @@ export function extractMetaOg(html) {
     const nameMatch = tag.match(/(?:name|property)\s*=\s*["']([^"']+)["']/i);
     const contentMatch = tag.match(/content\s*=\s*["']([^"']*)["']/i);
     if (nameMatch && contentMatch) {
-      metas[nameMatch[1].toLowerCase()] = contentMatch[1].trim();
+      metaMap[nameMatch[1].toLowerCase()] = contentMatch[1].trim();
     }
   }
 
   // Extract <title> if og:title missing
-  let title = metas['og:title'] || metas['twitter:title'] || metas['title'] || '';
+  let title = metaMap['og:title'] || metaMap['twitter:title'] || metaMap['title'] || '';
   if (!title) {
     const titleTagMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
     if (titleTagMatch) title = titleTagMatch[1].replace(/\s+/g, ' ').trim();
   }
 
-  const description = metas['og:description'] || metas['twitter:description'] || metas['description'] || '';
-  const brand = metas['product:brand'] || metas['brand'] || metas['og:site_name'] || '';
+  const description = metaMap['og:description'] || metaMap['twitter:description'] || metaMap['description'] || '';
+  const brand = metaMap['product:brand'] || metaMap['brand'] || metaMap['og:site_name'] || '';
 
   // Images
   const images = [];
-  if (metas['og:image']) images.push(metas['og:image']);
-  if (metas['og:image:secure_url'] && !images.includes(metas['og:image:secure_url'])) {
-    images.push(metas['og:image:secure_url']);
+  if (metaMap['og:image']) images.push(metaMap['og:image']);
+  if (metaMap['og:image:secure_url'] && !images.includes(metaMap['og:image:secure_url'])) {
+    images.push(metaMap['og:image:secure_url']);
   }
-  if (metas['twitter:image'] && !images.includes(metas['twitter:image'])) {
-    images.push(metas['twitter:image']);
+  if (metaMap['twitter:image'] && !images.includes(metaMap['twitter:image'])) {
+    images.push(metaMap['twitter:image']);
   }
 
   // Price & Currency
-  let price = Number(metas['product:price:amount'] || metas['price'] || metas['og:price:amount'] || 0);
-  let currency = String(metas['product:price:currency'] || metas['og:price:currency'] || 'KRW').toUpperCase();
+  let price = Number(metaMap['product:price:amount'] || metaMap['price'] || metaMap['og:price:amount'] || 0);
+  let currency = String(metaMap['product:price:currency'] || metaMap['og:price:currency'] || 'KRW').toUpperCase();
 
   // If price wasn't in meta, check for common price regex in HTML
   if (!price) {
