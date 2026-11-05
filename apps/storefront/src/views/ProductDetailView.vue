@@ -397,7 +397,7 @@ const handleAddToCart = (goToCheckout = false) => {
                 {{ qnaList.length }} Q&A
               </button>
               <span>•</span>
-              <span class="font-bold text-gray-900">{{ (product.total_sold_count || 150).toLocaleString() }}+ Sold</span>
+              <span v-if="product.total_sold_count > 0" class="font-bold text-gray-900">{{ Number(product.total_sold_count).toLocaleString() }}개 판매</span>
             </div>
 
             <!-- Flash Deal Price Banner -->
@@ -580,7 +580,7 @@ const handleAddToCart = (goToCheckout = false) => {
             <div class="bg-gray-50 rounded-2xl p-5 border border-gray-200/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
                 <div class="flex items-center gap-2">
-                  <span class="text-3xl font-black text-gray-900">{{ reviewSummary.average_rating || 4.9 }}</span>
+                  <span class="text-3xl font-black text-gray-900">{{ reviewSummary.count > 0 ? reviewSummary.average_rating : '-' }}</span>
                   <span class="text-xl text-[#FFB800]">★★★★★</span>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Based on {{ reviewSummary.count }} reviews • Verified purchases are badged automatically</p>
@@ -625,7 +625,7 @@ const handleAddToCart = (goToCheckout = false) => {
               <div v-for="rev in reviews" :key="rev.id" class="py-4">
                 <div class="flex items-center justify-between mb-1.5">
                   <div class="flex items-center gap-2">
-                    <span class="text-sm text-[#FFB800] font-bold">{{ '★'.repeat(rev.rating || 5) }}</span>
+                    <span class="text-sm text-[#FFB800] font-bold">{{ '★'.repeat(Math.max(0, Math.min(5, Number(rev.rating) || 0))) }}</span>
                     <span class="text-xs font-bold text-gray-900">{{ rev.customer_name || 'Verified Shopper' }}</span>
                     <span v-if="rev.is_verified_purchase" class="px-2 py-0.5 bg-green-50 text-[#00A862] text-[10px] font-extrabold rounded border border-green-200">
                       ✓ Verified Purchase

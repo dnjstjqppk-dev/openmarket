@@ -1,0 +1,2403 @@
+{
+  "storefront": {
+    "router_guard": false,
+    "guard_excerpt": "",
+    "unrouted_views": [],
+    "screens": [
+      {
+        "url": "/",
+        "view": "HomeView",
+        "lines": 383,
+        "buttons": 6,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 23,
+        "english_text_nodes": 7,
+        "korean_text_nodes": 7,
+        "aria": 1,
+        "inline_hex_colors": 31,
+        "suspicious": [
+          "English trust claim×1"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products",
+            "path": "/api/v1/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/categories",
+            "path": "/api/v1/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/campaigns/lightning",
+            "path": "/api/v1/campaigns/lightning",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/banners",
+            "path": "/api/v1/banners",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/categories",
+        "view": "CategoriesView",
+        "lines": 115,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 9,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 7,
+        "suspicious": [
+          "English trust claim×1"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/categories",
+            "path": "/api/v1/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/category/:slug",
+        "view": "CategoryView",
+        "lines": 129,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 8,
+        "english_text_nodes": 7,
+        "korean_text_nodes": 1,
+        "aria": 0,
+        "inline_hex_colors": 8,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(currentSlug.value)}",
+            "path": "/api/v1/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/categories",
+            "path": "/api/v1/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/product/:slug",
+        "view": "ProductDetailView",
+        "lines": 757,
+        "buttons": 21,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 28,
+        "english_text_nodes": 16,
+        "korean_text_nodes": 13,
+        "aria": 1,
+        "inline_hex_colors": 59,
+        "suspicious": [
+          "English trust claim×7"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${slug}",
+            "path": "/api/v1/products/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${productId}/reviews",
+            "path": "/api/v1/products/x_probe/reviews",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${productId}/qna",
+            "path": "/api/v1/products/x_probe/qna",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${productId}/urgency-stats",
+            "path": "/api/v1/products/x_probe/urgency-stats",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/wishlist?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/wishlist",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/cart",
+        "view": "CartView",
+        "lines": 259,
+        "buttons": 4,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 15,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 17,
+        "aria": 0,
+        "inline_hex_colors": 20,
+        "suspicious": [
+          "live/realtime claim×1",
+          "guarantee claim×1"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/campaigns/lightning",
+            "path": "/api/v1/campaigns/lightning",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/checkout",
+        "view": "CheckoutView",
+        "lines": 314,
+        "buttons": 4,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 11,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 33,
+        "aria": 12,
+        "inline_hex_colors": 12,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/quote",
+            "path": "/api/v1/orders/quote",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/coupons",
+            "path": "/api/v1/coupons",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/credits",
+            "path": "/api/v1/credits",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/addresses",
+            "path": "/api/v1/addresses",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/payments/config",
+            "path": "/api/v1/payments/config",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/customs/validate-pccc",
+            "path": "/api/v1/customs/validate-pccc",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "MISSING_PCCC",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/checkout",
+            "path": "/api/v1/orders/checkout",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          }
+        ]
+      },
+      {
+        "url": "/profile",
+        "view": "ProfileView",
+        "lines": 507,
+        "buttons": 8,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 16,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 35,
+        "aria": 2,
+        "inline_hex_colors": 18,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/profile",
+            "path": "/api/v1/auth/profile",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/privacy/export",
+            "path": "/api/v1/auth/privacy/export",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/withdraw/precheck",
+            "path": "/api/v1/auth/withdraw/precheck",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/withdraw",
+            "path": "/api/v1/auth/withdraw",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "CONFIRM_REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/orders",
+        "view": "OrdersView",
+        "lines": 711,
+        "buttons": 18,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 18,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 36,
+        "aria": 0,
+        "inline_hex_colors": 33,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/orders",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/${ordId}/cancel",
+            "path": "/api/v1/orders/x_probe/cancel",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/${orderId}/confirm",
+            "path": "/api/v1/orders/x_probe/confirm",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/orders/:id",
+        "view": "OrderDetailView",
+        "lines": 710,
+        "buttons": 25,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 13,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 56,
+        "aria": 4,
+        "inline_hex_colors": 26,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/finance/cash-receipts/${order.value.id}",
+            "path": "/api/v1/finance/cash-receipts/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/finance/cash-receipts/request",
+            "path": "/api/v1/finance/cash-receipts/request",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/${order.value.id}/commercial-invoice",
+            "path": "/api/v1/orders/x_probe/commercial-invoice",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/logistics/tracking/${encodeURIComponent(subOrderId)}",
+            "path": "/api/v1/logistics/tracking/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/${route.params.id}",
+            "path": "/api/v1/orders/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/orders/${order.value.id}/cancel",
+            "path": "/api/v1/orders/x_probe/cancel",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel",
+            "path": "/api/v1/orders/x_probe/sub-orders/x_probe/cancel",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "/api/v1/orders/${order.value.id}/confirm",
+            "path": "/api/v1/orders/x_probe/confirm",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "/api/v1/orders/${order.value.id}/claims",
+            "path": "/api/v1/orders/x_probe/claims",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/orders/${order.value.id}/late-delivery-claim",
+            "path": "/api/v1/orders/x_probe/late-delivery-claim",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${encodeURIComponent(it.product_id)}",
+            "path": "/api/v1/products/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/search",
+        "view": "SearchView",
+        "lines": 181,
+        "buttons": 6,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 10,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 17,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products?${params.toString()}",
+            "path": "/api/v1/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/login",
+        "view": "LoginView",
+        "lines": 109,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 10,
+        "aria": 2,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/login",
+            "path": "/api/v1/auth/login",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "CREDENTIALS_REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/forgot-password",
+        "view": "ForgotPasswordView",
+        "lines": 105,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 6,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/forgot-password",
+            "path": "/api/v1/auth/forgot-password",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/reset-password",
+            "path": "/api/v1/auth/reset-password",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/register",
+        "view": "RegisterView",
+        "lines": 133,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 16,
+        "aria": 2,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/register",
+            "path": "/api/v1/auth/register",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/channel/lightning-deals",
+        "view": "LightningDealsView",
+        "lines": 119,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 9,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 3,
+        "aria": 7,
+        "inline_hex_colors": 11,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/campaigns/lightning",
+            "path": "/api/v1/campaigns/lightning",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/channel/best-sellers",
+        "view": "BestSellersView",
+        "lines": 78,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 8,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 7,
+        "suspicious": [
+          "English trust claim×1"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products",
+            "path": "/api/v1/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/coupons",
+        "view": "CouponsView",
+        "lines": 117,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 6,
+        "english_text_nodes": 3,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 11,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/coupons",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/credits",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/coupons/claim",
+            "path": "/api/v1/coupons/claim",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/addresses",
+        "view": "AddressesView",
+        "lines": 349,
+        "buttons": 7,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 3,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 21,
+        "aria": 0,
+        "inline_hex_colors": 15,
+        "suspicious": [
+          "fake default input×1"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/addresses",
+            "path": "/api/v1/addresses",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/addresses/${addrId}/default",
+            "path": "/api/v1/addresses/x_probe/default",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/addresses/${addrId}",
+            "path": "/api/v1/addresses/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "method_found": "DELETE"
+          }
+        ]
+      },
+      {
+        "url": "/wishlist",
+        "view": "WishlistView",
+        "lines": 78,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": false,
+        "has_empty": true,
+        "responsive_classes": 4,
+        "english_text_nodes": 3,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 2,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/wishlist?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/wishlist",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/store/:id",
+        "view": "SellerStoreView",
+        "lines": 94,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 8,
+        "english_text_nodes": 4,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 9,
+        "suspicious": [
+          "English trust claim×2"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/partners/${route.params.id}/store",
+            "path": "/api/v1/partners/x_probe/store",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/support",
+        "view": "SupportView",
+        "lines": 121,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": true,
+        "responsive_classes": 7,
+        "english_text_nodes": 11,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 8,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/support/faq",
+            "path": "/api/v1/support/faq",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}",
+            "path": "/api/v1/support/inquiries",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/policy/:type",
+        "view": "PolicyView",
+        "lines": 92,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 5,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 1,
+        "aria": 1,
+        "inline_hex_colors": 1,
+        "suspicious": [
+          "guarantee claim×1"
+        ],
+        "api": []
+      },
+      {
+        "url": "/legal/terms",
+        "view": "LegalTermsView",
+        "lines": 47,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 2,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 18,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [
+          "guarantee claim×1"
+        ],
+        "api": []
+      },
+      {
+        "url": "/legal/privacy",
+        "view": "LegalPrivacyView",
+        "lines": 50,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 2,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 23,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "url": "/payments/success",
+        "view": "PaymentResultView",
+        "lines": 74,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 6,
+        "aria": 2,
+        "inline_hex_colors": 2,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/payments/confirm",
+            "path": "/api/v1/payments/confirm",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_PAYMENT_KEY",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/payments/fail",
+        "view": "PaymentResultView",
+        "lines": 74,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 6,
+        "aria": 2,
+        "inline_hex_colors": 2,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/payments/confirm",
+            "path": "/api/v1/payments/confirm",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_PAYMENT_KEY",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/legal/refund",
+        "view": "LegalRefundView",
+        "lines": 36,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 2,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 15,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      }
+    ],
+    "shell": [
+      {
+        "file": "App.vue",
+        "lines": 447,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 22,
+        "english_text_nodes": 27,
+        "korean_text_nodes": 15,
+        "aria": 2,
+        "inline_hex_colors": 39,
+        "suspicious": [
+          "English trust claim×5"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/notifications",
+            "path": "/api/v1/notifications",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/notifications/${noti.id}/read",
+            "path": "/api/v1/notifications/x_probe/read",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/business-info",
+            "path": "/api/v1/business-info",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/categories",
+            "path": "/api/v1/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "file": "components/ClaimModal.vue",
+        "lines": 67,
+        "buttons": 5,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 5,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "file": "components/ProductReviews.vue",
+        "lines": 154,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 5,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${props.productId}/reviews",
+            "path": "/api/v1/products/x_probe/reviews",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "file": "components/SearchAutocomplete.vue",
+        "lines": 273,
+        "buttons": 8,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 5,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 8,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/search/autocomplete?q=${encodeURIComponent(q)}",
+            "path": "/api/v1/search/autocomplete",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/search/log",
+            "path": "/api/v1/search/log",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          }
+        ]
+      }
+    ]
+  },
+  "admin": {
+    "router_guard": false,
+    "guard_excerpt": "",
+    "unrouted_views": [],
+    "screens": [
+      {
+        "url": "/login",
+        "view": "LoginView",
+        "lines": 80,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 4,
+        "aria": 2,
+        "inline_hex_colors": 1,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/login",
+            "path": "/api/v1/auth/login",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "CREDENTIALS_REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/",
+        "view": "DashboardView",
+        "lines": 426,
+        "buttons": 5,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 9,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 46,
+        "aria": 0,
+        "inline_hex_colors": 3,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/dashboard",
+            "path": "/api/v1/admin/dashboard",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/banners",
+            "path": "/api/v1/admin/banners",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/notifications",
+            "path": "/api/v1/admin/notifications",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/control-tower",
+            "path": "/api/v1/admin/control-tower",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/fds/overview",
+            "path": "/api/v1/admin/fds/overview",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/disputes",
+            "path": "/api/v1/admin/disputes",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/sample-qc",
+            "path": "/api/v1/admin/sample-qc",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/ipr-reports",
+            "path": "/api/v1/admin/ipr-reports",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/claims/${claim.id}",
+            "path": "/api/v1/admin/claims/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "PUT"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/sample-qc/${qcId}/inspect",
+            "path": "/api/v1/admin/sample-qc/x_probe/inspect",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_DECISION",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/products",
+        "view": "ProductManageView",
+        "lines": 139,
+        "buttons": 5,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 16,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/products",
+            "path": "/api/v1/admin/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/products/${p.id}/status",
+            "path": "/api/v1/admin/products/x_probe/status",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_STATUS",
+            "method_found": "PUT"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/products/${p.id}/review",
+            "path": "/api/v1/admin/products/x_probe/review",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/partners",
+        "view": "PartnerVerifyView",
+        "lines": 181,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 0,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 15,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/partners",
+            "path": "/api/v1/admin/partners",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/partners/${p.id}/verify",
+            "path": "/api/v1/admin/partners/x_probe/verify",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_STATUS",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/ledger",
+        "view": "LedgerAuditView",
+        "lines": 223,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 25,
+        "korean_text_nodes": 10,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/ledgers",
+            "path": "/api/v1/admin/ledgers",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/claims",
+            "path": "/api/v1/admin/claims",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/finance/tax-invoices",
+            "path": "/api/v1/finance/tax-invoices",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/claims/${claimId}",
+            "path": "/api/v1/admin/claims/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "PUT"
+          }
+        ]
+      },
+      {
+        "url": "/orders",
+        "view": "OrdersView",
+        "lines": 124,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 16,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/orders",
+            "path": "/api/v1/admin/orders",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/users",
+        "view": "UsersView",
+        "lines": 100,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 10,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/users",
+            "path": "/api/v1/admin/users",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/reviews",
+        "view": "ReviewsView",
+        "lines": 97,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 7,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/reviews",
+            "path": "/api/v1/admin/reviews",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/reviews/${id}",
+            "path": "/api/v1/admin/reviews/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "DELETE"
+          }
+        ]
+      },
+      {
+        "url": "/coupons",
+        "view": "CouponsView",
+        "lines": 135,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 9,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/coupons",
+            "path": "/api/v1/admin/coupons",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/coupons/${id}",
+            "path": "/api/v1/admin/coupons/x_probe",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS",
+            "method_found": "DELETE"
+          }
+        ]
+      },
+      {
+        "url": "/categories",
+        "view": "CategoriesView",
+        "lines": 120,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 7,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/categories",
+            "path": "/api/v1/admin/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/categories/${id}",
+            "path": "/api/v1/admin/categories/x_probe",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS",
+            "method_found": "DELETE"
+          }
+        ]
+      },
+      {
+        "url": "/marketing",
+        "view": "MarketingView",
+        "lines": 454,
+        "buttons": 10,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 9,
+        "english_text_nodes": 5,
+        "korean_text_nodes": 30,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/banners",
+            "path": "/api/v1/admin/banners",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/notifications",
+            "path": "/api/v1/admin/notifications",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/banners/${b.id}",
+            "path": "/api/v1/admin/banners/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "method_found": "PUT"
+          }
+        ]
+      },
+      {
+        "url": "/business",
+        "view": "BusinessEntitiesView",
+        "lines": 109,
+        "buttons": 3,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 7,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 21,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/business-entities",
+            "path": "/api/v1/admin/business-entities",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/business-entities/${id}/obligations",
+            "path": "/api/v1/admin/business-entities/x_probe/obligations",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/admin/business-entities",
+            "path": "/api/v1/admin/business-entities",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_ENTITY_TYPE"
+          },
+          {
+            "raw": "/api/v1/admin/business-entities/${e.id}/activate",
+            "path": "/api/v1/admin/business-entities/x_probe/activate",
+            "method": "POST",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          }
+        ]
+      },
+      {
+        "url": "/suppliers",
+        "view": "SuppliersView",
+        "lines": 283,
+        "buttons": 11,
+        "buttons_without_handler": 2,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 4,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 39,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/bidding/campaigns",
+            "path": "/api/v1/admin/bidding/campaigns",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          },
+          {
+            "raw": "/api/v1/admin/bidding/campaigns",
+            "path": "/api/v1/admin/bidding/campaigns",
+            "method": "POST",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          },
+          {
+            "raw": "/api/v1/admin/bidding/campaigns/${campaignId}/bids",
+            "path": "/api/v1/admin/bidding/campaigns/x_probe/bids",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          },
+          {
+            "raw": "/api/v1/admin/bidding/campaigns/${campaignId}/award",
+            "path": "/api/v1/admin/bidding/campaigns/x_probe/award",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          },
+          {
+            "raw": "/api/v1/admin/purchase-orders${poFilter.value ? ",
+            "path": "/api/v1/admin/purchase-orders",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/suppliers",
+            "path": "/api/v1/admin/suppliers",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/suppliers/${s.id}/mappings",
+            "path": "/api/v1/admin/suppliers/x_probe/mappings",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/admin/purchase-orders/${po.id}/status",
+            "path": "/api/v1/admin/purchase-orders/x_probe/status",
+            "method": "PUT",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/admin/suppliers",
+            "path": "/api/v1/admin/suppliers",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          },
+          {
+            "raw": "/api/v1/admin/supplier-mappings",
+            "path": "/api/v1/admin/supplier-mappings",
+            "method": "POST",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          }
+        ]
+      },
+      {
+        "url": "/supplier-integrations",
+        "view": "SupplierIntegrationView",
+        "lines": 934,
+        "buttons": 17,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 22,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 84,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [
+          "numeric fallback (|| N)×1"
+        ],
+        "api": [
+          {
+            "raw": "/api/v1/integrations/health",
+            "path": "/api/v1/integrations/health",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/supplier-orders",
+            "path": "/api/v1/admin/supplier-orders",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/imports/jobs",
+            "path": "/api/v1/admin/imports/jobs",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/sync/logs",
+            "path": "/api/v1/admin/sync/logs",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/feature-flags",
+            "path": "/api/v1/admin/feature-flags",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/feature-flags/${flag.key}/toggle",
+            "path": "/api/v1/admin/feature-flags/x_probe/toggle",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "IS_ENABLED_REQUIRED"
+          },
+          {
+            "raw": "/api/v1/supplier-orders/${po.id}/respond",
+            "path": "/api/v1/supplier-orders/x_probe/respond",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_ACTION"
+          },
+          {
+            "raw": "/api/v1/supplier-orders/${dispatchTarget.value.id}/dispatch",
+            "path": "/api/v1/supplier-orders/x_probe/dispatch",
+            "method": "POST",
+            "status": 403,
+            "verdict": "EXISTS",
+            "code": "FEATURE_DISABLED"
+          },
+          {
+            "raw": "/api/v1/channels/platforms",
+            "path": "/api/v1/channels/platforms",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/reconciliation",
+        "view": "ReconciliationView",
+        "lines": 118,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 22,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/reconciliation",
+            "path": "/api/v1/admin/reconciliation",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/finance/trial-balance",
+            "path": "/api/v1/admin/finance/trial-balance",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/finance/payouts",
+            "path": "/api/v1/admin/finance/payouts",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/finance/reconciliation-runs",
+            "path": "/api/v1/admin/finance/reconciliation-runs",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/finance/payouts",
+            "path": "/api/v1/admin/finance/payouts",
+            "method": "POST",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/admin/finance/payouts/${po.id}/transferred",
+            "path": "/api/v1/admin/finance/payouts/x_probe/transferred",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          }
+        ]
+      },
+      {
+        "url": "/partner-applications",
+        "view": "PartnerApplicationsView",
+        "lines": 114,
+        "buttons": 5,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 13,
+        "aria": 3,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/partner-applications?kyc_status=${filter.value}",
+            "path": "/api/v1/admin/partner-applications",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/storage/file/${fileId}",
+            "path": "/api/v1/storage/file/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/partner-applications/${a.partner_id}/review",
+            "path": "/api/v1/admin/partner-applications/x_probe/review",
+            "method": "POST",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          }
+        ]
+      },
+      {
+        "url": "/security",
+        "view": "SecurityView",
+        "lines": 127,
+        "buttons": 5,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 4,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 18,
+        "aria": 3,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/auth/me",
+            "path": "/api/v1/auth/me",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/admin-users",
+            "path": "/api/v1/admin/admin-users",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/auth/2fa/setup",
+            "path": "/api/v1/auth/2fa/setup",
+            "method": "POST",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/auth/2fa/enable",
+            "path": "/api/v1/auth/2fa/enable",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "OTP_INVALID"
+          },
+          {
+            "raw": "/api/v1/admin/admin-users",
+            "path": "/api/v1/admin/admin-users",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          },
+          {
+            "raw": "/api/v1/admin/admin-users/${o.id}",
+            "path": "/api/v1/admin/admin-users/x_probe",
+            "method": "PUT",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          }
+        ]
+      }
+    ],
+    "shell": [
+      {
+        "file": "App.vue",
+        "lines": 146,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 6,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 29,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      }
+    ]
+  },
+  "partner": {
+    "router_guard": true,
+    "guard_excerpt": "beforeEach((to, _from, next) => {\n  const token = localStorage.getItem('partner_token');\n  if (to.meta.requiresAuth && !token) {\n    next({ path: '/login', query: { redirect: to.fullPath } });\n  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() && getPartnerStatus() !== 'APPROVED') {\n    // Sellers under review only see their application.\n    next({ path: '/application' }",
+    "unrouted_views": [],
+    "screens": [
+      {
+        "url": "/login",
+        "view": "LoginView",
+        "lines": 79,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 10,
+        "aria": 2,
+        "inline_hex_colors": 5,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/auth/login",
+            "path": "/api/v1/auth/login",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "CREDENTIALS_REQUIRED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/apply",
+        "view": "ApplyView",
+        "lines": 161,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 10,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 25,
+        "aria": 1,
+        "inline_hex_colors": 2,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/onboarding/validate-business",
+            "path": "/api/v1/onboarding/validate-business",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner-applications",
+            "path": "/api/v1/partner-applications",
+            "method": "GET",
+            "status": 403,
+            "verdict": "EXISTS",
+            "code": "FORBIDDEN"
+          }
+        ]
+      },
+      {
+        "url": "/application",
+        "view": "ApplicationView",
+        "lines": 139,
+        "buttons": 3,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 8,
+        "aria": 2,
+        "inline_hex_colors": 1,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/application",
+            "path": "/api/v1/partner/application",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/storage/upload",
+            "path": "/api/v1/storage/upload",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/application/documents",
+            "path": "/api/v1/partner/application/documents",
+            "method": "GET",
+            "status": 409,
+            "verdict": "EXISTS",
+            "code": "APPLICATION_LOCKED",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/storage/file/${fileId}",
+            "path": "/api/v1/storage/file/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/application/submit",
+            "path": "/api/v1/partner/application/submit",
+            "method": "GET",
+            "status": 409,
+            "verdict": "EXISTS",
+            "code": "APPLICATION_LOCKED",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/",
+        "view": "DashboardView",
+        "lines": 245,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 5,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 39,
+        "aria": 0,
+        "inline_hex_colors": 17,
+        "suspicious": [
+          "guarantee claim×1"
+        ],
+        "api": []
+      },
+      {
+        "url": "/products",
+        "view": "ProductManageView",
+        "lines": 608,
+        "buttons": 11,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 4,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 77,
+        "aria": 0,
+        "inline_hex_colors": 19,
+        "suspicious": [
+          "guarantee claim×2"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/storage/upload",
+            "path": "/api/v1/storage/upload",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products",
+            "path": "/api/v1/partner/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/${p.id}/price",
+            "path": "/api/v1/partner/products/x_probe/price",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "PUT"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/${p.id}/stock",
+            "path": "/api/v1/partner/products/x_probe/stock",
+            "method": "GET",
+            "status": 403,
+            "verdict": "EXISTS",
+            "code": "FORBIDDEN",
+            "method_found": "PUT"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/${editingProd.value.id}",
+            "path": "/api/v1/partner/products/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "PUT"
+          }
+        ]
+      },
+      {
+        "url": "/bidding",
+        "view": "BiddingView",
+        "lines": 370,
+        "buttons": 12,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 4,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 30,
+        "aria": 0,
+        "inline_hex_colors": 12,
+        "suspicious": [
+          "numeric fallback (|| N)×2"
+        ],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/bidding/campaigns",
+            "path": "/api/v1/bidding/campaigns",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/bidding/my-bids",
+            "path": "/api/v1/bidding/my-bids",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/bidding/negotiations",
+            "path": "/api/v1/bidding/negotiations",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/bidding/campaigns/${selectedCampaign.value.id}/bids",
+            "path": "/api/v1/bidding/campaigns/x_probe/bids",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "POST"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/bidding/negotiations/${selectedNego.value.id}/respond",
+            "path": "/api/v1/bidding/negotiations/x_probe/respond",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          }
+        ]
+      },
+      {
+        "url": "/bulk-upload",
+        "view": "BulkUploadView",
+        "lines": 191,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 10,
+        "korean_text_nodes": 0,
+        "aria": 1,
+        "inline_hex_colors": 5,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/bulk",
+            "path": "/api/v1/partner/products/bulk",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "EMPTY",
+            "method_found": "POST"
+          }
+        ]
+      },
+      {
+        "url": "/imports",
+        "view": "UrlImportView",
+        "lines": 933,
+        "buttons": 9,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 17,
+        "english_text_nodes": 1,
+        "korean_text_nodes": 69,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [
+          "guarantee claim×1"
+        ],
+        "api": []
+      },
+      {
+        "url": "/channels",
+        "view": "MultiChannelListingView",
+        "lines": 610,
+        "buttons": 11,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 13,
+        "english_text_nodes": 3,
+        "korean_text_nodes": 54,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "url": "/shipments",
+        "view": "ShipmentView",
+        "lines": 661,
+        "buttons": 18,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 9,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 27,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "url": "/returns",
+        "view": "ReturnsManageView",
+        "lines": 435,
+        "buttons": 11,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 7,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 33,
+        "aria": 0,
+        "inline_hex_colors": 3,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "url": "/settlements",
+        "view": "SettlementView",
+        "lines": 121,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 1,
+        "english_text_nodes": 14,
+        "korean_text_nodes": 0,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/settlements",
+            "path": "/api/v1/partner/settlements",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
+        "url": "/qna",
+        "view": "QnaManageView",
+        "lines": 241,
+        "buttons": 7,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 4,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 10,
+        "aria": 0,
+        "inline_hex_colors": 1,
+        "suspicious": [],
+        "api": []
+      },
+      {
+        "url": "/profile",
+        "view": "ProfileManageView",
+        "lines": 286,
+        "buttons": 1,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 7,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 22,
+        "aria": 0,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      }
+    ],
+    "shell": [
+      {
+        "file": "App.vue",
+        "lines": 158,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 8,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 28,
+        "aria": 1,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      }
+    ]
+  }
+}

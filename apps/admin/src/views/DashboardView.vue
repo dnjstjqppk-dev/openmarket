@@ -16,30 +16,14 @@ const metrics = ref({
 const controlTower = ref<any>({
   cross_border_pccc_orders: 0,
   escrow_protected_balance_krw: 0,
-  edge_regions: [
-    { region: 'ICN (Seoul, Korea)', traffic_pct: 68, latency_ms: 9 },
-    { region: 'NRT (Tokyo, Japan)', traffic_pct: 14, latency_ms: 18 },
-    { region: 'LAX (Los Angeles, US)', traffic_pct: 11, latency_ms: 34 },
-    { region: 'FRA (Frankfurt, EU)', traffic_pct: 7, latency_ms: 42 }
-  ]
+  edge_regions: [] as any[] // filled only from /admin/control-tower (no fabricated traffic split)
 });
 
-const fdsRules = ref<any[]>([
-  { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '동일 IP 10분 내 다중 카드 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: 14 },
-  { id: 'RULE_02', code: 'GEO_IP_MISMATCH', name: '접속 IP 국가 ≠ 카드 발급국 ≠ 배송지 불일치', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: 29 },
-  { id: 'RULE_03', code: 'WASH_TRADING_GUARD', name: '구매자-판매자 동일 계좌/디바이스 자전거래 탐지', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: 2 },
-  { id: 'RULE_04', code: 'HIGH_VALUE_ESCROW_HOLD', name: '고액 직구 주문($1,000 초과) 3D Secure 강제', severity: 'MEDIUM', status: 'ACTIVE', hit_count_24h: 41 },
-  { id: 'RULE_05', code: 'PROHIBITED_HS_SCANNER', name: '수입금지 품목(식약처 위해성분/가품) AI 키워드 차단', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: 7 }
-]);
+const fdsRules = ref<any[]>([]);
 
 const disputes = ref<any[]>([]);
-const sampleQcList = ref<any[]>([
-  { id: 'qc_001', business_name: 'Olmoa Official Flagship', product_title: 'M2C 무선 노이즈캔슬링 헤드폰', sample_tracking_no: 'TRK-QC-8821', status: 'IN_INSPECTION', carrier: 'CJ대한통운' },
-  { id: 'qc_002', business_name: 'K-Tech & Lifestyle', product_title: '초경량 티타늄 텀블러 Pro', sample_tracking_no: 'TRK-QC-9932', status: 'IN_INSPECTION', carrier: '한진택배' }
-]);
-const iprReports = ref<any[]>([
-  { id: 'ipr_001', reporter_name: '나이키 코리아 법무대리인', brand_name: 'NIKE', product_title: '레플리카 에어쿠션 러닝화', infringement_type: 'COUNTERFEIT', status: 'SUBMITTED' }
-]);
+const sampleQcList = ref<any[]>([]);
+const iprReports = ref<any[]>([]);
 const loading = ref(true);
 const toastMsg = ref('');
 
@@ -54,6 +38,12 @@ async function loadControlTower() {
       fetch(`${API_BASE_URL}/api/v1/admin/fds/overview`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) })),
       fetch(`${API_BASE_URL}/api/v1/admin/disputes`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) }))
     ]);
+    const [qcRes, iprRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/v1/admin/sample-qc`, { headers: getAdminHeaders() }).then((r) => r.json()).catch(() => ({})),
+      fetch(`${API_BASE_URL}/api/v1/admin/ipr-reports`, { headers: getAdminHeaders() }).then((r) => r.json()).catch(() => ({}))
+    ]);
+    sampleQcList.value = Array.isArray(qcRes?.data) ? qcRes.data : [];
+    iprReports.value = Array.isArray(iprRes?.data) ? iprRes.data : [];
 
     const json = await dashRes.json();
     const bnrJson = await bnrRes.json().catch(() => ({}));
@@ -91,11 +81,13 @@ async function loadControlTower() {
 }
 
 async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER') {
+  const notes = ruling === 'RELEASE_TO_SELLER' ? window.prompt('반품 거절(판매자 지급) 판정 근거를 입력하세요', '')?.trim() : null;
+  if (ruling === 'RELEASE_TO_SELLER' && !notes) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claim.id}`, {
       method: 'PUT',
       headers: getAdminHeaders(),
-      body: JSON.stringify(ruling === 'FULL_REFUND_TO_BUYER' ? { decision: 'APPROVE' } : { decision: 'REJECT', notes: '정상 출고 증빙 확인에 따른 반품 거절 판정' })
+      body: JSON.stringify(ruling === 'FULL_REFUND_TO_BUYER' ? { decision: 'APPROVE' } : { decision: 'REJECT', notes })
     });
     if (res.ok) {
       toastMsg.value = `✓ 분쟁 건(${claim.id})에 대해 [${ruling === 'FULL_REFUND_TO_BUYER' ? '구매자 환불 승인' : '판매자 정산 지급'}] 직권 판정이 완료되었습니다.`;
@@ -107,11 +99,13 @@ async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RE
 
 
 async function inspectSample(qcId: string, decision: 'APPROVED' | 'REJECTED') {
+  const notes = window.prompt(decision === 'APPROVED' ? '검수 의견(합격 근거)을 입력하세요' : '반려 사유를 입력하세요', '')?.trim();
+  if (!notes) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/sample-qc/${qcId}/inspect`, {
       method: 'POST',
       headers: getAdminHeaders(),
-      body: JSON.stringify({ decision, inspector_notes: decision === 'APPROVED' ? '실물 내구성 및 무독성 패키지 규격 합격' : '안전기준 미달로 입고 반려' })
+      body: JSON.stringify({ decision, inspector_notes: notes })
     });
     if (res.ok) {
       toastMsg.value = `✓ 실물 샘플(${qcId})이 [${decision === 'APPROVED' ? '합격 승인' : '반려 처리'}] 되었습니다.`;
@@ -123,10 +117,9 @@ async function inspectSample(qcId: string, decision: 'APPROVED' | 'REJECTED') {
 }
 
 async function fastTrackTakedown(iprId: string) {
-  toastMsg.value = `✓ IPR 신고(${iprId})에 의거하여 해당 상품이 즉시 긴급 블라인드(판매 중단) 처리되었습니다.`;
-  setTimeout(() => { toastMsg.value = ''; }, 3000);
-  const target = iprReports.value.find(i => i.id === iprId);
-  if (target) target.status = 'TAKEDOWN_APPLIED';
+  // There is no takedown endpoint yet. Products are stopped from 상품 관리 (상태 변경) after the operator reviews the report.
+  toastMsg.value = `IPR 신고(${iprId}): 즉시 차단 기능은 아직 없습니다. 상품 관리에서 해당 상품을 직접 판매중지해 주세요.`;
+  setTimeout(() => { toastMsg.value = ''; }, 5000);
 }
 
 onMounted(loadControlTower);
@@ -198,6 +191,7 @@ onMounted(loadControlTower);
             <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">300+ PoP Active</span>
           </div>
           <div class="space-y-3">
+            <p v-if="!controlTower.edge_regions || !controlTower.edge_regions.length" class="text-xs text-slate-400">트래픽 분석 데이터 소스가 연결되지 않아 지역별 분포를 표시하지 않습니다.</p>
             <div v-for="reg in controlTower.edge_regions" :key="reg.region" class="space-y-1">
               <div class="flex justify-between font-bold text-slate-700">
                 <span>{{ reg.region }}</span>
@@ -241,7 +235,7 @@ onMounted(loadControlTower);
                       {{ r.severity }}
                     </span>
                   </td>
-                  <td class="p-2 text-right font-mono font-bold text-slate-900">{{ r.hit_count_24h }}건</td>
+                  <td class="p-2 text-right font-mono font-bold text-slate-900">{{ r.hit_count_24h ?? "미집계" }}</td>
                 </tr>
               </tbody>
             </table>

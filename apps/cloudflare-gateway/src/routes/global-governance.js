@@ -47,24 +47,15 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
         pending_settlement_count: escrowStats?.pending_count || 0,
         open_disputes_count: disputeStats?.open_disputes || 0,
         customs_bottleneck_alerts: 0,
-        regional_nodes: [
-          { region: 'ICN (Seoul, Korea)', traffic_pct: 68, latency_ms: 9 },
-          { region: 'NRT (Tokyo, Japan)', traffic_pct: 14, latency_ms: 18 },
-          { region: 'LAX (Los Angeles, US)', traffic_pct: 11, latency_ms: 34 },
-          { region: 'FRA (Frankfurt, EU)', traffic_pct: 7, latency_ms: 42 }
-        ],
-        edge_regions: [
-          { region: 'ICN (Seoul, Korea)', traffic_pct: 68, latency_ms: 9 },
-          { region: 'NRT (Tokyo, Japan)', traffic_pct: 14, latency_ms: 18 },
-          { region: 'LAX (Los Angeles, US)', traffic_pct: 11, latency_ms: 34 },
-          { region: 'FRA (Frankfurt, EU)', traffic_pct: 7, latency_ms: 42 }
-        ],
+        // No traffic analytics source is connected, so no regional split is reported.
+        regional_nodes: [],
+        edge_regions: [],
+        // Only what this request actually observed. The database answered the queries above.
         system_health: {
-          cloudflare_edge: 'HEALTHY',
           d1_database: 'HEALTHY',
-          customs_unipass_api: 'CONNECTED',
-          global_fx_synchronizer: 'SYNCED',
-          fds_engine: 'PROTECTING'
+          customs_unipass_api: env.UNIPASS_API_KEY ? 'KEY_CONFIGURED' : 'NOT_CONFIGURED',
+          global_fx_synchronizer: 'STATIC_RATE_TABLE',
+          fds_engine: 'NOT_ENFORCED_AT_CHECKOUT'
         },
         timestamp: new Date().toISOString()
       }
@@ -77,9 +68,10 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
       success: true,
       brand: 'OLMOA FDS Security Engine',
       data: {
-        status: 'ACTIVE_ENFORCEMENT',
-        blocked_attempts_24h: 43,
-        challenged_3ds_24h: 70,
+        // Rules are defined but checkout does not call them, so nothing has been blocked or challenged.
+        status: 'NOT_ENFORCED_AT_CHECKOUT',
+        blocked_attempts_24h: null,
+        challenged_3ds_24h: null,
         active_rules: FDS_ACTIVE_RULES
       }
     }), { headers: corsHeaders });

@@ -117,8 +117,8 @@ const sortedProducts = computed(() => {
           <div>
             <div class="text-base font-black text-gray-900">{{ locale.formatPrice(product.lowest_sale_price) }}</div>
             <div class="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-              <span class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating || 4.8).toFixed(1) }}</span>
-              <span>{{ (product.total_sold_count || 95).toLocaleString() }}+ sold</span>
+              <span v-if="product.review_count > 0 && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
+              <span v-if="product.total_sold_count > 0">{{ Number(product.total_sold_count).toLocaleString() }}개 판매</span>
             </div>
           </div>
         </div>

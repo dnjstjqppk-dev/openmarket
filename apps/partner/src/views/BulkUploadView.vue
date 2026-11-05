@@ -7,6 +7,8 @@ const parsedItems = ref<any[]>([])
 const uploading = ref(false)
 const uploadResult = ref<any>(null)
 const errorMsg = ref('')
+// Rows that cannot be registered as-is. Nothing is filled in with default prices, stock, category or images.
+const rowErrors = ref<string[]>([])
 
 const sampleCsvContent = `title,brand,category_id,original_price,sale_price,stock_quantity,option_label,thumbnail_url
 "Ultra-Light Carbon Trekking Poles (Pair)",OLMOA OUTDOOR,cat_s_camp,89000,49000,150,"Black / 120cm",https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&q=80
@@ -28,24 +30,36 @@ const parseCsvText = (text: string) => {
   if (lines.length < 2) return []
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
   const rows: any[] = []
+  rowErrors.value = []
   for (let i = 1; i < lines.length; i++) {
     // Handle quoted CSV fields
     const matches = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []
     const vals = matches.map(v => v.trim().replace(/^"|"$/g, ''))
     const obj: any = {}
     headers.forEach((h, idx) => { obj[h] = vals[idx] || '' })
-    if (obj.title) {
-      rows.push({
-        title: obj.title,
-        brand: obj.brand || 'OLMOA PARTNER',
-        category_id: obj.category_id || 'cat_e_audio',
-        original_price: Number(obj.original_price) || 50000,
-        sale_price: Number(obj.sale_price) || 35000,
-        stock_quantity: Number(obj.stock_quantity) || 100,
-        option_values_json: JSON.stringify({ Option: obj.option_label || 'Standard' }),
-        thumbnail_url: obj.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80'
-      })
+    const num = (v: string) => (v === undefined || v === '' ? NaN : Number(v))
+    const original = num(obj.original_price), sale = num(obj.sale_price), stock = num(obj.stock_quantity)
+    const problems: string[] = []
+    if (!obj.title) problems.push('상품명 없음')
+    if (!Number.isInteger(sale) || sale <= 0) problems.push('판매가 없음/오류')
+    if (!Number.isInteger(original) || original < sale) problems.push('정가 없음/판매가보다 낮음')
+    if (!Number.isInteger(stock) || stock < 0) problems.push('재고 없음/오류')
+    if (!obj.category_id) problems.push('카테고리 없음')
+    if (!/^https:\/\//.test(obj.thumbnail_url || '')) problems.push('대표 이미지 URL 없음')
+    if (problems.length) {
+      rowErrors.value.push(`${i + 1}행 ${obj.title ? `(${obj.title}) ` : ''}— ${problems.join(', ')}`)
+      continue
     }
+    rows.push({
+      title: obj.title,
+      brand: obj.brand || null,
+      category_id: obj.category_id,
+      original_price: original,
+      sale_price: sale,
+      stock_quantity: stock,
+      option_json: JSON.stringify({ 옵션: obj.option_label || '단일' }), // server reads option_json
+      thumbnail_url: obj.thumbnail_url
+    })
   }
   return rows
 }
@@ -125,6 +139,10 @@ const executeBulkUpload = async () => {
       </div>
     </div>
 
+    <div v-if="rowErrors.length" class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800" role="alert">
+      <div class="font-bold mb-1">등록에서 제외된 행 {{ rowErrors.length }}개 (값을 채워 다시 올려 주세요)</div>
+      <ul class="list-disc pl-4 space-y-0.5"><li v-for="e in rowErrors" :key="e">{{ e }}</li></ul>
+    </div>
     <div v-if="errorMsg" class="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-600">
       {{ errorMsg }}
     </div>

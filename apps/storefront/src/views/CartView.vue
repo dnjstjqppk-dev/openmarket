@@ -33,7 +33,7 @@ const loadRecommendations = async () => {
         thumbnail_url: it.thumbnail_url,
         lowest_sale_price: it.deal_price || it.lowest_sale_price,
         lowest_original_price: it.lowest_original_price,
-        total_sold_count: it.sold_quantity || it.total_sold_count || 120
+        total_sold_count: it.sold_quantity || it.total_sold_count || 0
       }))
     }
   } catch (e) {

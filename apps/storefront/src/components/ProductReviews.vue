@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config';
 const props = defineProps<{ productId: string }>();
 
 const reviews = ref<any[]>([]);
-const avgRating = ref(4.8);
+const avgRating = ref(0);
 const reviewCount = ref(0);
 const loading = ref(true);
 
@@ -22,7 +22,7 @@ async function loadReviews() {
     if (res.ok) {
       const json = await res.json();
       reviews.value = json.data || [];
-      avgRating.value = json.avg_rating || 4.8;
+      avgRating.value = Number(json.avg_rating) || 0;
       reviewCount.value = json.review_count || reviews.value.length;
     }
   } catch (_) {}

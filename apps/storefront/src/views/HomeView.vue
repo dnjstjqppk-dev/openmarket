@@ -234,10 +234,12 @@ const quickAdd = (e: Event, product: any) => {
               <span class="text-base font-black text-[#E60023]">{{ locale.formatPrice(item.deal_price || item.lowest_sale_price) }}</span>
               <span class="text-[11px] text-gray-400 line-through">{{ locale.formatPrice(item.lowest_original_price) }}</span>
             </div>
-            <div class="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-              <div class="bg-gradient-to-r from-[#FF5000] to-[#E60023] h-full rounded-full" :style="{ width: `${Math.min(94, 48 + ((item.sold_quantity || item.total_sold_count || 20) % 45))}%` }"></div>
-            </div>
-            <span class="text-[10px] font-bold text-[#FF5000] mt-1">🔥 {{ (item.sold_quantity || item.total_sold_count || 85).toLocaleString() }} claimed</span>
+            <template v-if="item.allocated_stock > 0">
+              <div class="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-[#FF5000] to-[#E60023] h-full rounded-full" :style="{ width: `${item.sold_percent || 0}%` }"></div>
+              </div>
+              <span class="text-[10px] font-bold text-[#FF5000] mt-1">{{ Number(item.sold_quantity || 0).toLocaleString() }}개 판매</span>
+            </template>
           </RouterLink>
         </div>
       </section>
@@ -357,10 +359,10 @@ const quickAdd = (e: Event, product: any) => {
 
               <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
                 <div class="flex items-center gap-1 text-[11px] text-gray-500">
-                  <span class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating || 4.8).toFixed(1) }}</span>
+                  <span v-if="product.review_count > 0 && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
                   <span v-if="product.review_count">({{ product.review_count }})</span>
                   <span>•</span>
-                  <span>{{ (product.total_sold_count || 120).toLocaleString() }}+ sold</span>
+                  <span v-if="product.total_sold_count > 0">{{ Number(product.total_sold_count).toLocaleString() }}개 판매</span>
                 </div>
 
                 <button

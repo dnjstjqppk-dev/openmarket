@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { API_BASE_URL, getPartnerHeaders, getPartnerId } from '../config'
+import { API_BASE_URL, getPartnerHeaders } from '../config'
 
 const products = ref<any[]>([])
 const loading = ref(true)
@@ -11,16 +11,15 @@ const showEditModal = ref(false)
 const uploadingImage = ref(false)
 const uploadingDetailImage = ref(false)
 
+// Starting outline only. Every line must be written by the seller; the platform makes no quality, authenticity or
+// compensation promise on the seller's behalf.
 const defaultDescriptionTemplate = `<div class="product-detail-body space-y-4">
-  <h3 class="text-lg font-black text-gray-900">[상품 핵심 특장점 및 사양]</h3>
-  <p class="text-sm text-gray-700 leading-relaxed">
-    OLMOA 글로벌 품질 검증을 통과한 M2C 공장 직결 정품입니다. 중간 유통 거품을 걷어낸 합리적인 도매 직거래 가격으로 배송됩니다.
-  </p>
-  <div class="p-4 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-700 space-y-1">
-    <p><strong>• 정품 보증:</strong> 100% 제조사 정품 / 위조품 적발 시 300% 보상</p>
-    <p><strong>• 품질 검수:</strong> 출고 전 전문 QC팀 무결점 실물 패키징 검수 완료</p>
-    <p><strong>• 안심 배송:</strong> 파손 방지 3중 에어캡 포장 및 항공/특송 운송장 추적</p>
-  </div>
+  <h3>상품 특징</h3>
+  <p>[판매자 작성] 상품의 주요 특징과 사양을 적어 주세요.</p>
+  <h3>구성 및 규격</h3>
+  <p>[판매자 작성] 구성품, 크기, 무게, 소재를 적어 주세요.</p>
+  <h3>주의사항</h3>
+  <p>[판매자 작성] 사용·보관 시 주의사항을 적어 주세요.</p>
 </div>`
 
 const newProd = ref({
@@ -128,50 +127,40 @@ const loadProducts = async () => {
       headers: getPartnerHeaders()
     })
     const json = await res.json()
-    if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-      products.value = json.data.map((p: any) => ({
-        ...p,
-        editPrice: p.sale_price ?? p.lowest_sale_price ?? 0,
-        editStock: p.stock_quantity ?? 100
-      }))
-    } else {
-      const pubRes = await fetch(`${API_BASE_URL}/api/v1/products`)
-      const pubJson = await pubRes.json()
-      if (pubJson.success && Array.isArray(pubJson.data)) {
-        const pid = getPartnerId()
-        const list = pubJson.data.filter((p: any) => !p.partner_id || p.partner_id === pid)
-        products.value = (list.length > 0 ? list : pubJson.data).map((p: any) => ({
-          ...p,
-          editPrice: p.lowest_sale_price,
-          editStock: 100
-        }))
-      }
-    }
+    // Only this seller's own products. (Previously an empty list fell back to the public catalogue — other
+    // sellers' products shown as the seller's own with a made-up stock of 100.)
+    products.value = json.success && Array.isArray(json.data)
+      ? json.data.map((p: any) => ({ ...p, editPrice: p.sale_price ?? p.lowest_sale_price ?? 0, editStock: p.stock_quantity ?? 0 }))
+      : []
+    if (!res.ok || !json.success) toast.value = `상품 목록을 불러오지 못했습니다. ${json.error || ''}`
   } catch (e) {
     console.error(e)
+    products.value = []
+    toast.value = '상품 목록을 불러오지 못했습니다. (네트워크 오류)'
   } finally {
     loading.value = false
   }
 }
 
 const saveProductChanges = async (p: any) => {
+  // Report what the server actually accepted; never show "수정 완료" for a rejected request.
+  const send = async (url: string, body: any) => {
+    const res = await fetch(url, { method: 'PUT', headers: getPartnerHeaders(), body: JSON.stringify(body) })
+    const json = await res.json().catch(() => ({}))
+    return res.ok && json.success !== false ? null : (json.error || `요청 실패 (${res.status})`)
+  }
   try {
-    await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/partner/products/${p.id}/price`, {
-        method: 'PUT',
-        headers: getPartnerHeaders(),
-        body: JSON.stringify({ sale_price: Number(p.editPrice), original_price: Number(p.lowest_original_price) })
-      }),
-      fetch(`${API_BASE_URL}/api/v1/partner/products/${p.id}/stock`, {
-        method: 'PUT',
-        headers: getPartnerHeaders(),
-        body: JSON.stringify({ stock_quantity: Number(p.editStock) })
-      })
+    const [priceErr, stockErr] = await Promise.all([
+      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/price`, { sale_price: Number(p.editPrice), original_price: Number(p.lowest_original_price) }),
+      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/stock`, { stock_quantity: Number(p.editStock) })
     ])
-    toast.value = `✓ "${p.title}" 가격(₩${Number(p.editPrice).toLocaleString()}) 및 재고(${p.editStock}) 수정 완료`
-    setTimeout(() => { toast.value = '' }, 3000)
-  } catch (e) {
-    console.error(e)
+    toast.value = !priceErr && !stockErr
+      ? `✓ "${p.title}" 가격(₩${Number(p.editPrice).toLocaleString()}) 및 재고(${p.editStock}) 저장됨`
+      : `저장 실패 — ${[priceErr && `가격: ${priceErr}`, stockErr && `재고: ${stockErr}`].filter(Boolean).join(' / ')}`
+    setTimeout(() => { toast.value = '' }, 5000)
+    if (!priceErr || !stockErr) await loadProducts()
+  } catch (e: any) {
+    toast.value = `저장 실패 — ${e?.message || '네트워크 오류'}`
   }
 }
 
@@ -209,18 +198,18 @@ const openEditModal = (p: any) => {
   editingProd.value = {
     ...p,
     title: p.title,
-    sale_price: p.editPrice || p.lowest_sale_price || 19900,
-    original_price: p.lowest_original_price || Math.round((p.editPrice || 19900) * 1.3),
+    sale_price: p.editPrice ?? p.lowest_sale_price ?? null,
+    original_price: p.lowest_original_price ?? null,
     supply_price: p.supply_price || 0,
     custody_type: p.custody_type || 'SEMI_MANAGED',
-    stock_quantity: p.editStock || p.stock_quantity || 100,
-    hs_code: p.hs_code || '6109.10',
-    country_origin: p.country_origin || 'KR',
-    warehouse_location: p.warehouse_location || 'INCHEON_FBO',
-    package_length_cm: p.package_length_cm || 25,
-    package_width_cm: p.package_width_cm || 20,
-    package_height_cm: p.package_height_cm || 12,
-    package_weight_kg: p.package_weight_kg || 0.8,
+    stock_quantity: p.editStock ?? p.stock_quantity ?? 0,
+    hs_code: p.hs_code || '',
+    country_origin: p.country_origin || '',
+    warehouse_location: p.warehouse_location || '',
+    package_length_cm: p.package_length_cm ?? null,
+    package_width_cm: p.package_width_cm ?? null,
+    package_height_cm: p.package_height_cm ?? null,
+    package_weight_kg: p.package_weight_kg ?? null,
     thumbnail_url: p.thumbnail_url,
     description_html: p.description_html || defaultDescriptionTemplate
   }
@@ -564,7 +553,7 @@ onMounted(loadProducts)
             </td>
             <td class="py-3 px-5">
               <div class="font-semibold text-gray-700 text-[11px]">{{ p.warehouse_location || 'INCHEON_FBO' }}</div>
-              <div class="text-[10px] text-gray-400">Vol: {{ p.volumetric_weight_kg || 0.6 }}kg</div>
+              <div class="text-[10px] text-gray-400">Vol: {{ p.volumetric_weight_kg ?? '-' }}kg</div>
             </td>
             <td class="py-3 px-5 text-center">
               <span class="px-2 py-0.5 rounded font-black text-[11px] inline-block" :class="(p.quality_score ?? computeQualityScore(p)) >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">

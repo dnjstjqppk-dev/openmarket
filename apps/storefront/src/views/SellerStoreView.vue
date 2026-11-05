@@ -41,7 +41,7 @@ watch(() => route.params.id, loadStore)
             </div>
             <h1 class="text-2xl sm:text-3xl font-black mt-1">{{ storeData.partner.company_name }}</h1>
             <p class="text-xs text-gray-300 mt-1">
-              Free Shipping on Store Orders over {{ locale.formatPrice(storeData.shipping_policy?.free_shipping_threshold || 30000) }} (Base Fee: {{ locale.formatPrice(storeData.shipping_policy?.base_fee || 3000) }})
+              <template v-if="storeData.shipping_policy">배송비 {{ locale.formatPrice(storeData.shipping_policy.base_fee) }}<template v-if="storeData.shipping_policy.free_shipping_threshold"> · {{ locale.formatPrice(storeData.shipping_policy.free_shipping_threshold) }} 이상 무료배송</template></template>
             </p>
           </div>
         </div>
