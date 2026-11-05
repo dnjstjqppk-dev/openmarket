@@ -317,3 +317,4 @@ INSERT OR IGNORE INTO feature_flags (key, name, category, description, is_enable
     ('global_shipping_sync', '다중 물류사 배송 추적 자동 수집', 'LOGISTICS', '국내외 8개 택배사(CJ, 한진, 롯데, 우체국, DHL, FedEx 등) 배송 상태 실시간 추적', 0, 0, 1, 'LOW'),
     ('crossborder_fulfillment', '크로스보더 3PL 통관·배송 연동', 'LOGISTICS', '해외 직구/역직구 개인통관고유부호(PCCC) 검증 및 전자 상업송장 자동 발행', 0, 0, 1, 'MEDIUM'),
     ('global_settlement_sync', '외부 판매채널 정산 데이터 수집', 'FINANCE', '외부 오픈마켓 수수료 및 정산 확정 데이터 자동 수집 및 장부 대조', 0, 1, 0, 'HIGH');
+

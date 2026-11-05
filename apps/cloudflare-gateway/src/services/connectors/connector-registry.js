@@ -67,3 +67,4 @@ export class ConnectorRegistry {
 }
 
 export const registry = new ConnectorRegistry();
+
