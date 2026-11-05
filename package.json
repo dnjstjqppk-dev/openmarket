@@ -16,7 +16,7 @@
     "test:backend": "cd backend && go test -v ./...",
     "test:go": "npm run test:api && npm run test:backend",
     "test:e2e": "node tests/full_platform_e2e.mjs",
-    "test": "node scripts/gen-dev-seed.mjs && npm run test:security && npm run test:e2e && npm run test:go",
+    "test": "node scripts/gen-dev-seed.mjs && npm run test:migrations && npm run test:security && npm run test:e2e && npm run test:go",
     "lint": "node --check apps/cloudflare-gateway/src/index.js",
     "deploy": "npm run deploy:all",
     "deploy:all": "npm run build && npx wrangler deploy --config apps/cloudflare-gateway/wrangler.jsonc && npx wrangler deploy --config apps/storefront/wrangler.jsonc && npx wrangler deploy --config apps/admin/wrangler.jsonc && npx wrangler deploy --config apps/partner/wrangler.jsonc && npx wrangler deploy",
@@ -30,7 +30,8 @@
     "test:browser": "node tests/browser/e2e_browser.mjs",
     "dev:db": "node scripts/local-db-reset.mjs",
     "dev:api": "wrangler dev --config apps/cloudflare-gateway/wrangler.jsonc --local --persist-to .wrangler/local-state --port 8787",
-    "test:runtime": "node tests/runtime/v3_1_smoke.mjs"
+    "test:runtime": "node tests/runtime/v3_1_smoke.mjs",
+    "test:migrations": "node tests/migration_fk_rehearsal.mjs"
   },
   "keywords": [
     "olmoa",

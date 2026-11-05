@@ -85,6 +85,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_user_coupons_user_coupon ON user_coupons(us
 ALTER TABLE user_coupons ADD COLUMN used_order_id TEXT;
 
 -- ---------------------------------------------------------------------------------------------
+-- 2b. Rebuild safety under D1's always-on foreign keys (V3.1 fix, found by rehearsing on the production backup)
+--     "copy -> DROP old parent -> RENAME new" leaves SQLite's deferred-FK counter non-zero whenever child rows
+--     exist (DROP's implicit DELETE counts them as violations; RENAME never decrements), so COMMIT fails.
+--     Instead: stash every affected table, empty them child-first, rebuild, then restore parent-first.
+--     No DROP ever happens while a child row exists, and every restored row has its parent already present.
+-- ---------------------------------------------------------------------------------------------
+CREATE TABLE _v20_stash_orders AS SELECT * FROM orders;
+CREATE TABLE _v20_stash_sub_orders AS SELECT * FROM sub_orders;
+CREATE TABLE _v20_stash_order_items AS SELECT * FROM order_items;
+CREATE TABLE _v20_stash_settlements AS SELECT * FROM settlements;
+CREATE TABLE _v20_stash_returns AS SELECT * FROM returns;
+CREATE TABLE _v20_stash_payment_tx AS SELECT * FROM payment_transactions;
+CREATE TABLE _v20_stash_milestones AS SELECT * FROM milestone_tracking_logs;
+DELETE FROM order_items;
+DELETE FROM milestone_tracking_logs;
+DELETE FROM payment_transactions;
+DELETE FROM settlements;
+DELETE FROM returns;
+DELETE FROM sub_orders;
+DELETE FROM orders;
+
+-- ---------------------------------------------------------------------------------------------
 -- 3. Orders (rebuild: payment state set + money allocation + entity attribution)
 -- ---------------------------------------------------------------------------------------------
 CREATE TABLE orders_v20 (
@@ -142,9 +164,10 @@ SELECT id, order_no, customer_id, NULL, total_goods_amount, total_shipping_amoun
     shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo, pccc, pccc_verified,
     customs_duty_type, estimated_duty_amount, settlement_currency, fx_rate, payment_key, pg_provider, pg_receipt_url,
     created_at, updated_at
-FROM orders;
+FROM _v20_stash_orders;
 DROP TABLE orders;
 ALTER TABLE orders_v20 RENAME TO orders;
+INSERT INTO payment_transactions SELECT * FROM _v20_stash_payment_tx;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_checkout_idem ON orders(customer_id, checkout_idempotency_key) WHERE checkout_idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_customer_created ON orders(customer_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status_expiry ON orders(payment_status, payment_expires_at);
@@ -197,9 +220,12 @@ SELECT id, parent_order_id, sub_order_no, partner_id, shipping_fee, goods_amount
     carrier_code, tracking_number, shipped_at, delivered_at, milestone_status, flight_vessel_no, customs_clearance_no,
     origin_country, destination_country, last_milestone_location, last_milestone_updated_at, estimated_delivery_date,
     is_late_compensated, late_compensation_amount, created_at, updated_at
-FROM sub_orders;
+FROM _v20_stash_sub_orders;
 DROP TABLE sub_orders;
 ALTER TABLE sub_orders_v20 RENAME TO sub_orders;
+-- Children of sub_orders come back unchanged (before the additive ALTERs below, so SELECT * columns line up).
+INSERT INTO order_items SELECT * FROM _v20_stash_order_items;
+INSERT INTO milestone_tracking_logs SELECT * FROM _v20_stash_milestones;
 CREATE INDEX IF NOT EXISTS idx_sub_orders_parent ON sub_orders(parent_order_id);
 CREATE INDEX IF NOT EXISTS idx_sub_orders_partner_status ON sub_orders(partner_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sub_orders_delivered ON sub_orders(status, delivered_at);
@@ -247,7 +273,7 @@ INSERT INTO settlements_v20 (id, sub_order_id, partner_id, gross_amount, shippin
 SELECT id, sub_order_id, partner_id, gross_amount, shipping_fee, commission_rate,
     CAST(ROUND(CASE WHEN commission_rate < 1 THEN commission_rate * 10000 ELSE commission_rate * 100 END) AS INTEGER),
     commission_amount, net_payout_amount, status, settled_at, created_at, updated_at
-FROM settlements;
+FROM _v20_stash_settlements;
 DROP TABLE settlements;
 ALTER TABLE settlements_v20 RENAME TO settlements;
 CREATE INDEX IF NOT EXISTS idx_settlements_partner_status ON settlements(partner_id, status);
@@ -302,9 +328,29 @@ CREATE TABLE returns_v20 (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO returns_v20 (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, is_returnless, returnless_reason, created_at)
-SELECT id, order_id, user_id, claim_type, reason, status, refund_amount, notes, is_returnless, returnless_reason, created_at FROM returns;
+SELECT id, order_id, user_id, claim_type, reason, status, refund_amount, notes, is_returnless, returnless_reason, created_at FROM _v20_stash_returns;
 DROP TABLE returns;
 ALTER TABLE returns_v20 RENAME TO returns;
+
+-- Every stashed row must be back (a silent loss here would be a data-loss migration): abort otherwise.
+CREATE TABLE IF NOT EXISTS _v20_guard (ok INTEGER NOT NULL CHECK (ok = 1));
+INSERT INTO _v20_guard (ok) SELECT CASE WHEN
+      (SELECT COUNT(*) FROM orders) = (SELECT COUNT(*) FROM _v20_stash_orders)
+  AND (SELECT COUNT(*) FROM sub_orders) = (SELECT COUNT(*) FROM _v20_stash_sub_orders)
+  AND (SELECT COUNT(*) FROM order_items) = (SELECT COUNT(*) FROM _v20_stash_order_items)
+  AND (SELECT COUNT(*) FROM settlements) = (SELECT COUNT(*) FROM _v20_stash_settlements)
+  AND (SELECT COUNT(*) FROM returns) = (SELECT COUNT(*) FROM _v20_stash_returns)
+  AND (SELECT COUNT(*) FROM payment_transactions) = (SELECT COUNT(*) FROM _v20_stash_payment_tx)
+  AND (SELECT COUNT(*) FROM milestone_tracking_logs) = (SELECT COUNT(*) FROM _v20_stash_milestones)
+  THEN 1 ELSE 0 END;
+DROP TABLE _v20_guard;
+DROP TABLE _v20_stash_orders;
+DROP TABLE _v20_stash_sub_orders;
+DROP TABLE _v20_stash_order_items;
+DROP TABLE _v20_stash_settlements;
+DROP TABLE _v20_stash_returns;
+DROP TABLE _v20_stash_payment_tx;
+DROP TABLE _v20_stash_milestones;
 CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_returns_one_price_adjustment ON returns(order_id) WHERE claim_type = 'PRICE_ADJUSTMENT' AND status != 'REJECTED';
 
