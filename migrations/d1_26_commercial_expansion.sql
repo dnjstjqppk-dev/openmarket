@@ -95,3 +95,4 @@ ALTER TABLE sub_orders ADD COLUMN consolidation_hub_id TEXT;
 ALTER TABLE sub_orders ADD COLUMN consolidated_tracking_number TEXT;
 ALTER TABLE sub_orders ADD COLUMN is_consolidated INTEGER NOT NULL DEFAULT 0 CHECK (is_consolidated IN (0, 1));
 ALTER TABLE sub_orders ADD COLUMN consolidation_status TEXT CHECK (consolidation_status IS NULL OR consolidation_status IN ('COLLECTING_AT_HUB', 'CONSOLIDATED', 'DISPATCHED_SINGLE_BOX'));
+
