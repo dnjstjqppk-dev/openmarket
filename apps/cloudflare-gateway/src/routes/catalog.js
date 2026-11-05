@@ -435,6 +435,15 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const imageUrl = String(b.image_url || '').trim();
     const queryTag = String(b.category_hint || b.tag || '').trim();
 
+    const tagMap = {
+      DIGITAL: '헤드폰',
+      FASHION: '의류',
+      LIVING: '침구',
+      BEAUTY: '화장품',
+      ELECTRONICS: '스마트'
+    };
+    const mappedTag = tagMap[queryTag.toUpperCase()] || queryTag;
+
     // Query active catalog items matching category hint or ranked by popularity
     let query = `
       SELECT p.id, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price,
@@ -444,13 +453,24 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       WHERE p.status = 'ACTIVE'
     `;
     const binds = [];
-    if (queryTag) {
+    if (mappedTag) {
       query += ` AND (c.name LIKE ? OR p.title LIKE ?)`;
-      binds.push('%' + queryTag + '%', '%' + queryTag + '%');
+      binds.push('%' + mappedTag + '%', '%' + mappedTag + '%');
     }
     query += ` ORDER BY p.total_sold_count DESC LIMIT 8`;
 
-    const { results } = await env.DB.prepare(query).bind(...binds).all();
+    let { results } = await env.DB.prepare(query).bind(...binds).all();
+    if (!results || results.length === 0) {
+      const fallback = await env.DB.prepare(`
+        SELECT p.id, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price,
+               p.total_sold_count, c.name as category_name
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.status = 'ACTIVE'
+        ORDER BY p.total_sold_count DESC LIMIT 8
+      `).all();
+      results = fallback.results || [];
+    }
     const matched = results.map((p, i) => ({
       ...p,
       similarity_score: Math.round((0.96 - i * 0.04) * 100) / 100,

@@ -66,7 +66,7 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
   if (p === '/api/v1/onboarding/validate-business' && request.method === 'POST') {
     const b = await readJson(request);
-    const brn = String(b.business_reg_number || b.brn || '').trim();
+    const brn = String(b.business_reg_number || b.registration_number || b.brn || '').trim();
     const chk = validateKoreanBrnChecksum(brn);
     if (!chk.valid) {
       return json(corsHeaders, { success: false, valid: false, reason: chk.reason }, 400);
