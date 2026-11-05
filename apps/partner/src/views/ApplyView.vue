@@ -36,16 +36,20 @@ async function validateBrn() {
       body: JSON.stringify({ registration_number: f.business_reg_number.trim() })
     })
     const json = await res.json()
-    if (res.ok && json.success && json.data) {
+    if (res.ok && json.success) {
+      // NTS_OPEN_API = 국세청 실조회 결과, CHECKSUM_ONLY = 번호 형식만 확인(휴·폐업 여부 미확인)
+      const viaNts = json.verification === 'NTS_OPEN_API'
       brnStatus.value = {
-        valid: json.data.is_valid,
-        message: json.data.is_valid
-          ? `✓ 국세청 조회 완료: ${json.data.nts_status} (${json.data.tax_type || '과세사업자'})`
-          : `⚠ 유효하지 않은 사업자등록번호 (체크섬 불일치)`,
-        data: json.data
+        valid: Boolean(json.valid),
+        message: viaNts
+          ? (json.valid
+              ? `✓ 국세청 조회: ${json.business_status}${json.tax_type ? ` (${json.tax_type})` : ''}`
+              : `⚠ 국세청 조회: ${json.business_status || '정상 사업자가 아닙니다'}`)
+          : `번호 형식은 올바릅니다. 휴·폐업 여부는 입점 심사 때 운영자가 확인합니다.`,
+        data: json
       }
     } else {
-      brnStatus.value = { valid: false, message: json.error || '사업자등록 상태 조회 실패' }
+      brnStatus.value = { valid: false, message: json.reason || json.error || '사업자등록번호를 확인하지 못했습니다.' }
     }
   } catch (e: any) {
     brnStatus.value = { valid: false, message: e.message || '검증 서버 연결 오류' }

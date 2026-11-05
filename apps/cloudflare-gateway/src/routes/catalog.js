@@ -383,139 +383,45 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
-  // 13. Dynamic Lightning Deals Engine (GET /api/v1/deals/lightning)
+  // 13. /api/v1/deals/lightning — retired in favour of the real campaign feed (/api/v1/campaigns/lightning in
+  //     features.js). The former implementation invented "claimed %" gauges and a timer that reset every midnight.
   if (url.pathname === '/api/v1/deals/lightning' && request.method === 'GET') {
-    const now = new Date();
-    // Daily cycle ends at next midnight UTC (or KST 24:00)
-    const midnight = new Date(now);
-    midnight.setUTCHours(23, 59, 59, 999);
-    const remainingSeconds = Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
-
-    const { results } = await env.DB.prepare(
-      `SELECT p.id, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price,
-              p.total_sold_count, c.name as category_name
-       FROM products p
-       LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.status = 'ACTIVE' AND p.lowest_original_price > p.lowest_sale_price
-       ORDER BY (p.lowest_original_price - p.lowest_sale_price) DESC LIMIT 12`
-    ).all();
-
-    const deals = results.map((p, idx) => {
-      const orig = Number(p.lowest_original_price) || 10000;
-      const sale = Number(p.lowest_sale_price) || 8000;
-      const discountPct = Math.round(((orig - sale) / orig) * 100);
-      const claimedQuota = 50 + (idx * 3) % 45; // 50% ~ 95%
-      return {
-        product_id: p.id,
-        title: p.title,
-        thumbnail_url: p.thumbnail_url,
-        category: p.category_name,
-        original_price: orig,
-        deal_price: sale,
-        discount_pct: discountPct,
-        claimed_pct: claimedQuota,
-        is_urgent: claimedQuota >= 80,
-        deal_ends_in_seconds: remainingSeconds
-      };
-    });
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      event: '오늘의 번개특가 (Lightning Deals)',
-      remaining_seconds: remainingSeconds,
-      count: deals.length,
-      data: deals
-    }), { headers: corsHeaders });
+    return new Response(JSON.stringify({ success: false, code: 'GONE', error: '/api/v1/campaigns/lightning 을 사용해 주세요.' }), { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // 14. Visual AI Similarity Search (POST /api/v1/search/visual-similarity)
+  // 14. Image similarity search: no image model is integrated, so nothing may be presented as a visual match.
   if (url.pathname === '/api/v1/search/visual-similarity' && request.method === 'POST') {
-    const b = await request.json().catch(() => ({}));
-    const imageUrl = String(b.image_url || '').trim();
-    const queryTag = String(b.category_hint || b.tag || '').trim();
-
-    const tagMap = {
-      DIGITAL: '헤드폰',
-      FASHION: '의류',
-      LIVING: '침구',
-      BEAUTY: '화장품',
-      ELECTRONICS: '스마트'
-    };
-    const mappedTag = tagMap[queryTag.toUpperCase()] || queryTag;
-
-    // Query active catalog items matching category hint or ranked by popularity
-    let query = `
-      SELECT p.id, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price,
-             p.total_sold_count, c.name as category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.status = 'ACTIVE'
-    `;
-    const binds = [];
-    if (mappedTag) {
-      query += ` AND (c.name LIKE ? OR p.title LIKE ?)`;
-      binds.push('%' + mappedTag + '%', '%' + mappedTag + '%');
-    }
-    query += ` ORDER BY p.total_sold_count DESC LIMIT 8`;
-
-    let { results } = await env.DB.prepare(query).bind(...binds).all();
-    if (!results || results.length === 0) {
-      const fallback = await env.DB.prepare(`
-        SELECT p.id, p.title, p.thumbnail_url, p.lowest_original_price, p.lowest_sale_price,
-               p.total_sold_count, c.name as category_name
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.status = 'ACTIVE'
-        ORDER BY p.total_sold_count DESC LIMIT 8
-      `).all();
-      results = fallback.results || [];
-    }
-    const matched = results.map((p, i) => ({
-      ...p,
-      similarity_score: Math.round((0.96 - i * 0.04) * 100) / 100,
-      visual_confidence: 'HIGH'
-    }));
-
     return new Response(JSON.stringify({
-      success: true,
-      search_mode: 'VISUAL_SIMILARITY_MATCH',
-      image_source: imageUrl || 'UPLOADED_BITMAP',
-      count: matched.length,
-      data: matched
-    }), { headers: corsHeaders });
+      success: false,
+      code: 'VISUAL_SEARCH_NOT_AVAILABLE',
+      error: '이미지 검색은 아직 제공하지 않습니다. 검색어로 찾아 주세요.'
+    }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
-  // 15. Real-time Product Activity & Social Proof (GET /api/v1/products/:id/live-activity)
+  // 15. Product activity: measured values only (paid, non-refunded units), same basis as /urgency-stats.
   const actM = url.pathname.match(/^\/api\/v1\/products\/([^/]+)\/live-activity$/);
   if (actM && request.method === 'GET') {
-    const prodId = actM[1];
-    const prod = await env.DB.prepare('SELECT id, title, total_sold_count FROM products WHERE id = ?').bind(prodId).first();
-    if (!prod) return new Response(JSON.stringify({ error: 'Product not found' }), { status: 404, headers: corsHeaders });
-
-    const recentOrderCount = await env.DB.prepare(
-      `SELECT COUNT(DISTINCT o.id) AS cnt
-       FROM orders o
-       JOIN sub_orders s ON s.parent_order_id = o.id
-       JOIN order_items oi ON oi.sub_order_id = s.id
-       WHERE oi.product_id = ? AND o.created_at >= datetime('now', '-24 hours')`
-    ).bind(prodId).first('cnt') || 0;
-
-    const stockSum = await env.DB.prepare(
-      'SELECT SUM(stock_quantity) AS s FROM product_skus WHERE product_id = ?'
-    ).bind(prodId).first('s') || 0;
-
+    const prod = await env.DB.prepare("SELECT id, total_sold_count FROM products WHERE id = ? AND status = 'ACTIVE'").bind(actM[1]).first();
+    if (!prod) return new Response(JSON.stringify({ success: false, error: '상품을 찾을 수 없습니다.' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    const sold24h = await env.DB.prepare(
+      `SELECT COALESCE(SUM(i.quantity - i.refunded_quantity), 0) AS q FROM order_items i
+       JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+       WHERE i.product_id = ? AND o.paid_at IS NOT NULL AND o.paid_at >= ?`
+    ).bind(prod.id, since).first('q') || 0;
+    const stockSum = await env.DB.prepare('SELECT COALESCE(SUM(stock_quantity), 0) AS s FROM product_skus WHERE product_id = ?').bind(prod.id).first('s') || 0;
     return new Response(JSON.stringify({
       success: true,
-      product_id: prodId,
+      product_id: prod.id,
       data: {
-        recent_24h_purchases: recentOrderCount,
+        recent_24h_purchases: sold24h,
         all_time_sales: prod.total_sold_count || 0,
         total_remaining_stock: stockSum,
-        stock_urgency: stockSum <= 5 && stockSum > 0 ? `품절 임박 (남은 수량 ${stockSum}개)` : null,
-        delivery_guarantee: '배송지연 시 5,300원 즉시 보상'
+        stock_urgency: stockSum <= 5 && stockSum > 0 ? `남은 수량 ${stockSum}개` : null,
+        // Matches routes/temu-ops.js: store credit, claimed by the buyer once the promised delivery date has passed.
+        delivery_guarantee: '배송 예정일을 넘기면 주문 상세에서 5,300원 적립금 보상을 신청할 수 있습니다.'
       }
-    }), { headers: corsHeaders });
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   return null;

@@ -35,6 +35,12 @@ const RULES = [
   R(null, /^\/api\/v1\/admin\/users(\/|$)/, 'users.read'),
   R(null, /^\/api\/v1\/admin\/(dashboard|metrics|control-tower|fds)(\/|$)/, 'dashboard'),
   R(null, /^\/api\/v1\/admin(\/|$)/, 'super'),                             // fail closed
+  // Operator actions on shared (non-/admin) routes added with the sourcing / finance modules
+  R(null, /^\/api\/v1\/finance\//, 'finance.read', 'finance.payout'),
+  R(null, /^\/api\/v1\/(supplier-orders|sync)(\/|$)/, 'sourcing'),
+  R(null, /^\/api\/v1\/bidding\//, 'sourcing'),
+  R(null, /^\/api\/v1\/pricing\//, 'catalog.read', 'catalog.manage'),
+  R(null, /^\/api\/v1\/(channels|imports)(\/|$)/, 'catalog.read', 'catalog.manage'),
   // Operator actions on customer-facing routes
   R('POST', /^\/api\/v1\/orders\/[^/]+\/(cancel|sub-orders\/[^/]+\/cancel)$/, 'orders.refund'),
   R(null, /^\/api\/v1\/orders\/cron\//, 'super'),

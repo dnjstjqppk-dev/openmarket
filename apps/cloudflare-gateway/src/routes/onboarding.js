@@ -96,9 +96,11 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, {
       success: true,
       valid: true,
-      business_status: '계속사업자(정상)',
-      tax_type: '부가가치세 일반과세자',
-      verification: 'CHECKSUM_VERIFIED',
+      // Only the check digit was verified. Status / tax type are unknown until the NTS lookup is configured or answers.
+      business_status: null,
+      tax_type: null,
+      verification: 'CHECKSUM_ONLY',
+      message: '사업자등록번호 형식(검증번호)만 확인했습니다. 휴·폐업 여부는 국세청 조회가 연동되지 않아 확인하지 못했습니다.',
       formatted: chk.formatted
     });
   }

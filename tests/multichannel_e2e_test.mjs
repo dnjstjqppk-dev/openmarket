@@ -69,8 +69,13 @@ await t.test('2. Multi-Channel & Supply Chain Platform Connectors', async () => 
   assert.equal(naverBlocked.status, 'BLOCKED_NO_CREDENTIAL');
 
   const naverValid = await naver.verifyConnection({ clientId: 'naver-cid', clientSecret: 'naver-csec' });
-  assert.equal(naverValid.verified, true);
-  assert.equal(naverValid.token_type, 'Bearer');
+  // No OAuth exchange is performed, so typed-in keys are not "verified"
+  assert.equal(naverValid.verified, false);
+  assert.equal(naverValid.status, 'NOT_INTEGRATED');
+  assert.equal(naver.isLive, false);
+  const naverStub = await naver.verifyConnection({ isSandbox: true });
+  assert.equal(naverStub.status, 'SANDBOX_STUB');
+  assert.equal(naverStub.simulated, true);
 
   // B. Coupang Wing Connector (HMAC SHA-256 Signature)
   const coupang = new CoupangWingConnector();
@@ -96,7 +101,8 @@ await t.test('2. Multi-Channel & Supply Chain Platform Connectors', async () => 
   assert.equal(elevenBlocked.status, 'BLOCKED_NO_CREDENTIAL');
 
   const elevenValid = await eleven.verifyConnection({ openApiKey: 'eleven-valid-key' });
-  assert.equal(elevenValid.verified, true);
+  assert.equal(elevenValid.verified, false);
+  assert.equal(elevenValid.status, 'NOT_INTEGRATED');
 
   // D. Amazon SP-API Connector
   const amazon = new AmazonSpApiConnector();
@@ -109,7 +115,8 @@ await t.test('2. Multi-Channel & Supply Chain Platform Connectors', async () => 
     lwaClientSecret: 'amzn-secret',
     refreshToken: 'amzn-refresh'
   });
-  assert.equal(amzValid.verified, true);
+  assert.equal(amzValid.verified, false);
+  assert.equal(amzValid.status, 'NOT_INTEGRATED');
 
   // E. Domestic B2B Supplier Connector (Domeggook, Domeme)
   const domeggook = new DomesticB2BSupplierConnector('domeggook_domeme', '도매꾹/도매매 B2B');
@@ -126,8 +133,9 @@ await t.test('2. Multi-Channel & Supply Chain Platform Connectors', async () => 
     recipient_phone: '010-1234-5678',
     shipping_address: '서울특별시 강남구 테헤란로 152'
   }, { apiKey: 'b2b-test-key' });
-  assert.equal(b2bOrder.success, true);
-  assert.ok(b2bOrder.b2b_order_id.startsWith('DOME_PO_'));
+  assert.equal(b2bOrder.success, false, 'a real (non-sandbox) PO is never reported as placed');
+  const b2bStub = await domeggook.createSupplierOrder({ sub_order_id: 'sub_ord_123', idempotency_key: 'idemp_key_123', total_cost_krw: 48000 }, { isSandbox: true });
+  assert.equal(b2bStub.success, true);
 
   // F. Global 3PL Logistics Connector
   const logistics = new Global3plLogisticsConnector();
@@ -138,7 +146,8 @@ await t.test('2. Multi-Channel & Supply Chain Platform Connectors', async () => 
   assert.equal(fulfillment.success, true);
   assert.equal(fulfillment.carrier_code, 'CJ_LOGISTICS');
   assert.ok(fulfillment.tracking_number);
-  assert.equal(fulfillment.customs_cleared, true);
+  assert.equal(logistics.isLive, false);
+  assert.equal(logistics.carrierInfo('cj_logistics').name, 'CJ대한통운');
 
   const milestones = await logistics.getTrackingMilestones(fulfillment.tracking_number, 'CJ_LOGISTICS');
   assert.equal(milestones.success, true);
@@ -155,6 +164,7 @@ await t.test('3. Multi-Channel Gateway Endpoints & Platform Seed Verification', 
   const env = {
     JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu',
     ENVIRONMENT: 'development',
+    CONNECTOR_SIMULATION: 'true',
     PAYMENT_MODE: 'sandbox',
     CARRIER_WEBHOOK_SECRET: 'carrier-secret-0123456789ab'
   };
@@ -199,6 +209,7 @@ await t.test('4. Partner Credentials, Listing Lifecycle & Feature Flag Guard', a
   const env = {
     JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu',
     ENVIRONMENT: 'development',
+    CONNECTOR_SIMULATION: 'true',
     PAYMENT_MODE: 'sandbox',
     CARRIER_WEBHOOK_SECRET: 'carrier-secret-0123456789ab'
   };
@@ -253,8 +264,12 @@ await t.test('4. Partner Credentials, Listing Lifecycle & Feature Flag Guard', a
   });
   assert.equal(credVerify.status, 200);
   assert.equal(credVerify.json.success, true);
-  assert.equal(credVerify.json.verified, true);
-  assert.equal(credVerify.json.status, 'VERIFIED');
+  // No connector calls the platform yet: the credential is stored (sealed) but never reported as VERIFIED
+  assert.equal(credVerify.json.verified, false);
+  assert.equal(credVerify.json.status, 'CONFIGURED');
+  const sealedRow = g.db.prepare('SELECT secret_key_enc FROM platform_credentials WHERE id = ?').get(coupangCred.id);
+  assert.ok(sealedRow.secret_key_enc.startsWith('v1:'), 'secret stored encrypted');
+  assert.ok(!sealedRow.secret_key_enc.includes('cp-super-secret'));
 
   // D. Feature Flag Guard: marketplace_listing_publish is OFF (0) by default
   const pubBlocked = await g.call('/api/v1/channels/listings/publish', {
@@ -290,7 +305,19 @@ await t.test('4. Partner Credentials, Listing Lifecycle & Feature Flag Guard', a
   assert.equal(pubSuccess.status, 200);
   assert.equal(pubSuccess.json.success, true);
   assert.ok(pubSuccess.json.listing_id);
-  assert.ok(['ACTIVE', 'PENDING_REVIEW'].includes(pubSuccess.json.status));
+  assert.equal(pubSuccess.json.simulated, true);
+  assert.equal(pubSuccess.json.status, 'DRAFT', 'a simulated publish never claims the listing is live');
+  const lst = g.db.prepare('SELECT stock_allocated, external_product_id FROM channel_listings WHERE id = ?').get(pubSuccess.json.listing_id);
+  const realStock = g.db.prepare('SELECT COALESCE(SUM(stock_quantity),0) AS s FROM product_skus WHERE product_id = ?').get('prod_001').s;
+  assert.equal(lst.stock_allocated, realStock, 'allocated stock is the real stock, not a constant 100');
+  assert.equal(lst.external_product_id, null);
+
+  // Another seller's product cannot be pushed to an external channel
+  const foreign = g.db.prepare("SELECT id FROM products WHERE partner_id != (SELECT id FROM partners WHERE owner_user_id = (SELECT id FROM users WHERE email = 'seller@temu-supply.com')) LIMIT 1").get();
+  if (foreign) {
+    const r = await g.call('/api/v1/channels/listings/publish', { method: 'POST', token: ptToken, body: { sales_channel_id: 'sc_coupang_wing', product_id: foreign.id } });
+    assert.equal(r.status, 404);
+  }
 
   // G. Get listings
   const listRes = await g.call('/api/v1/channels/listings', { token: ptToken });
@@ -303,6 +330,7 @@ await t.test('5. Multi-Channel Orders, B2B PO Dispatch & 3PL Carrier Fulfillment
   const env = {
     JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu',
     ENVIRONMENT: 'development',
+    CONNECTOR_SIMULATION: 'true',
     PAYMENT_MODE: 'sandbox',
     CARRIER_WEBHOOK_SECRET: 'carrier-secret-0123456789ab'
   };
@@ -365,41 +393,54 @@ await t.test('5. Multi-Channel Orders, B2B PO Dispatch & 3PL Carrier Fulfillment
       supplier_id: 'domeggook_domeme'
     }
   });
-  assert.equal(poRes.status, 200);
-  assert.equal(poRes.json.success, true);
-  assert.ok(poRes.json.b2b_order_id);
-  assert.equal(poRes.json.status, 'PO_DISPATCHED');
+  assert.equal(poRes.status, 400, 'supply cost must be entered, never estimated');
+  const poOk = await g.call(`/api/v1/channels/orders/${targetOrder.id}/dispatch-po`, { method: 'POST', token: ptToken, body: { supplier_id: 'domeggook_domeme', total_cost_krw: 12000 } });
+  assert.equal(poOk.status, 200);
+  assert.equal(poOk.json.success, true);
+  assert.equal(poOk.json.simulated, true);
+  assert.equal(poOk.json.b2b_order_id, null);
+  assert.equal(poOk.json.total_cost_krw, 12000);
+  const poRes2 = poOk;
+  assert.equal(poRes2.json.status, 'PO_DISPATCHED');
 
-  // F. 3PL Fulfillment and Tracking Number Assignment (Model C)
-  const fulfillRes = await g.call(`/api/v1/channels/orders/${targetOrder.id}/fulfill`, {
-    method: 'POST',
-    token: ptToken,
-    body: {
-      carrier_code: 'CJ_LOGISTICS'
-    }
-  });
+  // F. Register the carrier waybill (flag fulfillment_3pl is OFF by default; the system never invents a waybill)
+  const fulBlocked = await g.call(`/api/v1/channels/orders/${targetOrder.id}/fulfill`, { method: 'POST', token: ptToken, body: { carrier_code: 'CJ_LOGISTICS', tracking_number: '682910482012' } });
+  assert.equal(fulBlocked.status, 403);
+  await g.call('/api/v1/admin/feature-flags/fulfillment_3pl/toggle', { method: 'POST', token: admToken, body: { is_enabled: true } });
+  const noWaybill = await g.call(`/api/v1/channels/orders/${targetOrder.id}/fulfill`, { method: 'POST', token: ptToken, body: { carrier_code: 'CJ_LOGISTICS' } });
+  assert.equal(noWaybill.status, 400);
+  const fulfillRes = await g.call(`/api/v1/channels/orders/${targetOrder.id}/fulfill`, { method: 'POST', token: ptToken, body: { carrier_code: 'CJ_LOGISTICS', tracking_number: '682910482012' } });
   assert.equal(fulfillRes.status, 200);
-  assert.equal(fulfillRes.json.success, true);
   assert.equal(fulfillRes.json.status, 'SHIPPED');
-  assert.ok(fulfillRes.json.tracking_number);
+  assert.equal(fulfillRes.json.tracking_number, '682910482012');
+  assert.equal(fulfillRes.json.simulated, true);
+  assert.equal((await g.call(`/api/v1/channels/orders/${targetOrder.id}/fulfill`, { method: 'POST', token: ptToken, body: { carrier_code: 'CJ_LOGISTICS', tracking_number: '682910482012' } })).status, 409);
 
-  // G. Inbound Webhook Reception & Verification
+  // G. Unsigned webhooks are refused and nothing is written
+  const before = g.db.prepare('SELECT COUNT(*) AS c FROM integration_webhook_events').get().c;
   const webhookRes = await g.call('/api/v1/channels/webhooks/coupang_wing', {
-    method: 'POST',
-    headers: {
-      'x-signature': 'mock-hmac-sha256-signature'
-    },
-    body: {
-      event_type: 'ORDER_STATUS_CHANGED',
-      order_id: targetOrder.external_order_id,
-      status: 'DELIVERED',
-      timestamp: new Date().toISOString()
-    }
+    method: 'POST', headers: { 'x-signature': 'mock-hmac-sha256-signature' },
+    body: { event_type: 'ORDER_STATUS_CHANGED', order_id: targetOrder.external_order_id, status: 'DELIVERED' }
   });
-  assert.equal(webhookRes.status, 200);
-  assert.equal(webhookRes.json.received, true);
-  assert.ok(webhookRes.json.event_id);
+  assert.equal(webhookRes.status, 501);
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM integration_webhook_events').get().c, before);
+});
+
+// Test 6: production never runs canned connectors
+await t.test('6. Production: connector actions answer 501 and persist nothing', async () => {
+  const env = { JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu', ENVIRONMENT: 'production', CONNECTOR_SIMULATION: 'true', ADMIN_2FA_REQUIRED: 'false', RATE_LIMIT_REQUIRED: 'false', PAYMENT_MODE: 'sandbox' };
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env });
+  const { signJwt } = await import('../apps/cloudflare-gateway/src/utils/crypto-auth.js');
+  const u = g.db.prepare("SELECT u.id, u.token_version, p.id AS pid FROM users u JOIN partners p ON p.owner_user_id = u.id WHERE u.email = 'seller@temu-supply.com'").get();
+  const pt = await signJwt({ sub: u.id, role: 'ROLE_PARTNER', tv: u.token_version || 0, pid: u.pid }, env.JWT_SECRET, 3600);
+  for (const k of ['marketplace_order_sync', 'marketplace_listing_publish']) g.db.prepare('UPDATE feature_flags SET is_enabled = 1 WHERE key = ?').run(k);
+  const sync = await g.call('/api/v1/channels/orders/sync', { method: 'POST', token: pt, body: { sales_channel_id: 'sc_coupang_wing' } });
+  assert.equal(sync.status, 501);
+  assert.equal(sync.json.code, 'CONNECTOR_NOT_INTEGRATED');
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM channel_orders').get().c, 0);
+  const pub = await g.call('/api/v1/channels/listings/publish', { method: 'POST', token: pt, body: { sales_channel_id: 'sc_coupang_wing', product_id: 'prod_001' } });
+  assert.equal(pub.status, 501);
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM channel_listings').get().c, 0);
 });
 
 t.finish();
-console.log('\n🎉 ALL 5 MULTI-CHANNEL & SUPPLY CHAIN TEST SUITES PASSED 100%!\n');

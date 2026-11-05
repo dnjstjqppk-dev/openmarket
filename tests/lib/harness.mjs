@@ -129,7 +129,9 @@ export function createRunner(suiteName) {
         console.log(`[PASS] ${name}`);
       } catch (e) {
         results.push({ name, ok: false, error: e });
-        console.log(`[FAIL] ${name}\n       -> ${e && e.message ? e.message.split('\n')[0] : e}`);
+        const where = e && e.stack ? (e.stack.split('\n').find((l) => /tests[\\/][^\\/]+\.mjs/.test(l)) || '').trim() : '';
+        const msg = e && e.message ? e.message.replace(/\s*\n\s*/g, ' ').slice(0, 400) : String(e);
+        console.log(`[FAIL] ${name}\n       -> ${msg}${where ? `\n       @ ${where}` : ''}`);
       }
     },
     finish() {

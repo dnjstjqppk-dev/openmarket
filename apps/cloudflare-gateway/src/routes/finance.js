@@ -1,10 +1,16 @@
 // apps/cloudflare-gateway/src/routes/finance.js
 // Operator finance: seller payouts, journal / trial balance, manual refunds & delivery, and full reconciliation.
 
-import { requireAdmin } from '../lib/auth.js';
+import { requireAdmin, requireAuth } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
-import { ACCOUNTS, journalStatements, auditStatement } from '../lib/ledger.js';
+import { ACCOUNTS, journalStatements, auditStatement, getActiveOperator } from '../lib/ledger.js';
+import { validateKoreanBrnChecksum } from './onboarding.js';
+
+// Payment methods a 현금영수증 can be issued for. Toss reports Korean names; card/coupon payments are excluded.
+const CASH_RECEIPT_METHODS = new Set(['가상계좌', '계좌이체', 'TRANSFER', 'VIRTUAL_ACCOUNT']);
+const maskId = (v) => { const t = String(v || ''); return t.length <= 4 ? '****' : '*'.repeat(t.length - 4) + t.slice(-4); };
+const maskReceipt = (r) => (r ? { ...r, buyer_identifier: maskId(r.buyer_identifier) } : r);
 import { refundOrder, runBatch, loadOrderBundle } from '../services/orders.js';
 
 // A payout is always for ONE operating entity: after a 개인사업자 -> 법인 switch, settlements of each entity are
@@ -189,71 +195,94 @@ export async function reconcileIfDue(env, intervalMinutes = 60) {
 export async function handleFinanceRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
 
-  // 1. Cash Receipt Request (POST /api/v1/finance/cash-receipts/request)
+  // ---- Cash receipts (현금영수증) ---------------------------------------------------------------------------
+  // There is NO 국세청/PG cash-receipt API integration yet. A buyer can only REQUEST one; an operator issues it
+  // (PG 관리자 또는 홈택스) and records the real approval number. Nothing here may claim an NTS approval.
   if (p === '/api/v1/finance/cash-receipts/request' && request.method === 'POST') {
+    const viewer = await requireAuth(request, env, ['ROLE_CUSTOMER']);
     const b = await readJson(request);
     const orderId = str(b.order_id, { field: '주문 ID', required: true });
-    const buyerId = str(b.buyer_identifier, { field: '발행 식별번호(휴대폰/사업자번호)', max: 20, required: true }).replace(/[^0-9]/g, '');
-    const idType = ['PHONE', 'BUSINESS_REG_NO', 'PERSONAL_ID'].includes(b.identifier_type) ? b.identifier_type : 'PHONE';
+    const rawIdentity = str(b.buyer_identifier ?? b.identity_number, { field: '발행 식별번호(휴대폰/사업자번호)', max: 20, required: true }).replace(/[^0-9]/g, '');
+    const idType = ['PHONE', 'BUSINESS_REG_NO'].includes(b.identifier_type) ? b.identifier_type
+      : (b.receipt_type === 'BUSINESS' ? 'BUSINESS_REG_NO' : 'PHONE');
+    if (idType === 'PHONE' && !/^01[016789]\d{7,8}$/.test(rawIdentity)) throw bad('INVALID_IDENTIFIER', '휴대폰 번호 형식이 올바르지 않습니다.');
+    if (idType === 'BUSINESS_REG_NO' && !validateKoreanBrnChecksum(rawIdentity).valid) throw bad('INVALID_IDENTIFIER', '사업자등록번호가 올바르지 않습니다.');
 
-    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(orderId, orderId).first();
+    // Ownership: a buyer can only request a receipt for their own order (no order-number enumeration).
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE (id = ? OR order_no = ?) AND customer_id = ?').bind(orderId, orderId, viewer.userId).first();
     if (!order) throw notFound('주문을 찾을 수 없습니다.');
     if (order.payment_status !== 'PAID') throw bad('ORDER_NOT_PAID', '결제 완료된 주문에 대해서만 현금영수증을 신청할 수 있습니다.');
-
-    const existing = await env.DB.prepare("SELECT * FROM tax_invoices WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status != 'CANCELLED'").bind(order.id).first();
-    if (existing) return json(corsHeaders, { success: true, message: '이미 발행된 현금영수증이 존재합니다.', data: existing });
+    const pay = await env.DB.prepare("SELECT method FROM payment_transactions WHERE order_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1").bind(order.id).first();
+    if (!pay || !CASH_RECEIPT_METHODS.has(String(pay.method || '').toUpperCase())) {
+      throw bad('NOT_CASH_PAYMENT', '현금영수증은 계좌이체·가상계좌 결제에만 발행됩니다. 카드 결제는 카드 매출전표가 증빙입니다.');
+    }
+    const existing = await env.DB.prepare("SELECT * FROM tax_invoices WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status IN ('REQUESTED','ISSUED')").bind(order.id).first();
+    if (existing) return json(corsHeaders, { success: true, already_requested: true, data: maskReceipt(existing) });
 
     const total = Number(order.total_pay_amount);
-    const supply = Math.round(total / 1.1);
-    const vat = total - supply;
-    const invId = newId('txi');
-    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const approvalNo = 'HTX-' + todayStr + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-
+    const supply = Math.round(total / 1.1); // assumes all lines are VAT-taxable; tax-free goods are not modelled yet
+    const operator = await getActiveOperator(env);
     const row = {
-      id: invId,
-      invoice_type: 'CASH_RECEIPT',
-      order_id: order.id,
-      partner_id: null,
-      buyer_identifier: buyerId,
-      identifier_type: idType,
-      supply_amount: supply,
-      vat_amount: vat,
-      total_amount: total,
-      issue_status: 'ISSUED',
-      hometax_approval_no: approvalNo,
-      item_title: 'OLMOA 상품 구매 (' + order.order_no + ')',
-      issued_at: new Date().toISOString()
+      id: newId('txi'), invoice_type: 'CASH_RECEIPT', order_id: order.id, buyer_identifier: rawIdentity, identifier_type: idType,
+      supply_amount: supply, vat_amount: total - supply, total_amount: total, issue_status: 'REQUESTED',
+      hometax_approval_no: null, item_title: `주문 ${order.order_no}`, issuer_entity_id: order.operator_entity_id || operator?.id || null
     };
-
     await env.DB.prepare(
-      `INSERT INTO tax_invoices (id, invoice_type, order_id, buyer_identifier, identifier_type, supply_amount, vat_amount, total_amount, issue_status, hometax_approval_no, item_title, issued_at)
+      `INSERT INTO tax_invoices (id, invoice_type, order_id, buyer_identifier, identifier_type, supply_amount, vat_amount, total_amount, issue_status, hometax_approval_no, item_title, issuer_entity_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      row.id, row.invoice_type, row.order_id, row.buyer_identifier, row.identifier_type,
-      row.supply_amount, row.vat_amount, row.total_amount, row.issue_status,
-      row.hometax_approval_no, row.item_title, row.issued_at
-    ).run();
-
-    return json(corsHeaders, { success: true, message: '현금영수증이 국세청에 정상 승인·발행되었습니다.', data: row }, 201);
+    ).bind(row.id, row.invoice_type, row.order_id, row.buyer_identifier, row.identifier_type, row.supply_amount, row.vat_amount,
+      row.total_amount, row.issue_status, row.hometax_approval_no, row.item_title, row.issuer_entity_id).run();
+    return json(corsHeaders, {
+      success: true,
+      message: '현금영수증 발행 요청이 접수되었습니다. 운영자가 발행하면 승인번호가 표시됩니다.',
+      data: maskReceipt(row)
+    }, 201);
   }
 
-  // 2. Cash Receipt Lookup (GET /api/v1/finance/cash-receipts/:orderId)
   const crLookupM = p.match(/^\/api\/v1\/finance\/cash-receipts\/([^/]+)$/);
   if (crLookupM && request.method === 'GET') {
-    const oId = crLookupM[1];
+    const viewer = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
+    const isOp = viewer.role === 'ROLE_ADMIN';
     const receipt = await env.DB.prepare(
-      "SELECT * FROM tax_invoices WHERE (order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_no = ?)) AND invoice_type = 'CASH_RECEIPT' ORDER BY created_at DESC LIMIT 1"
-    ).bind(oId, oId).first();
-    if (!receipt) throw notFound('발행된 현금영수증이 없습니다.');
-    return json(corsHeaders, { success: true, data: receipt });
+      `SELECT t.* FROM tax_invoices t JOIN orders o ON o.id = t.order_id
+       WHERE (o.id = ? OR o.order_no = ?) AND t.invoice_type = 'CASH_RECEIPT'${isOp ? '' : ' AND o.customer_id = ?'}
+       ORDER BY t.created_at DESC LIMIT 1`
+    ).bind(crLookupM[1], crLookupM[1], ...(isOp ? [] : [viewer.userId])).first();
+    if (!receipt) throw notFound('현금영수증 신청 내역이 없습니다.');
+    return json(corsHeaders, { success: true, data: maskReceipt(receipt) });
   }
 
-  // 3. Tax Invoices List (GET /api/v1/finance/tax-invoices)
+  // Operator list (permission finance.read via the admin-policy rule for /api/v1/finance/).
   if (p === '/api/v1/finance/tax-invoices' && request.method === 'GET') {
+    await requireAdmin(request, env);
     const { results } = await env.DB.prepare('SELECT * FROM tax_invoices ORDER BY created_at DESC LIMIT 100').all();
-    return json(corsHeaders, { success: true, count: results.length, data: results });
+    return json(corsHeaders, { success: true, count: results.length, data: results.map(maskReceipt) });
   }
+
+  // Operator records the issuance done in the PG console / 홈택스, with the real approval number.
+  const crIssueM = p.match(/^\/api\/v1\/admin\/finance\/cash-receipts\/([^/]+)\/(issue|fail)$/);
+  if (crIssueM && request.method === 'POST') {
+    const admin = await requireAdmin(request, env);
+    const b = await readJson(request);
+    const row = await env.DB.prepare("SELECT * FROM tax_invoices WHERE id = ? AND invoice_type = 'CASH_RECEIPT'").bind(crIssueM[1]).first();
+    if (!row) throw notFound('현금영수증 신청 건을 찾을 수 없습니다.');
+    if (row.issue_status !== 'REQUESTED') throw conflict('NOT_REQUESTED', `발행 대기 상태에서만 처리할 수 있습니다. (현재: ${row.issue_status})`);
+    const issuing = crIssueM[2] === 'issue';
+    let upd;
+    if (issuing) {
+      const approval = str(b.hometax_approval_no, { field: '국세청 승인번호', max: 40, required: true });
+      if (!/^[0-9A-Za-z-]{6,40}$/.test(approval)) throw bad('INVALID_APPROVAL_NO', '승인번호 형식이 올바르지 않습니다.');
+      upd = env.DB.prepare("UPDATE tax_invoices SET issue_status = 'ISSUED', hometax_approval_no = ?, issued_at = CURRENT_TIMESTAMP, memo = ? WHERE id = ? AND issue_status = 'REQUESTED'")
+        .bind(approval, str(b.memo, { max: 300 }) || null, row.id);
+    } else {
+      upd = env.DB.prepare("UPDATE tax_invoices SET issue_status = 'FAILED', memo = ? WHERE id = ? AND issue_status = 'REQUESTED'")
+        .bind(str(b.reason, { field: '사유', max: 300, required: true }), row.id);
+    }
+    const r = await env.DB.batch([upd, auditStatement(env, admin, { action: issuing ? 'CASH_RECEIPT_ISSUE' : 'CASH_RECEIPT_FAIL', targetType: 'tax_invoice', targetId: row.id, before: { issue_status: row.issue_status }, request })]);
+    if (r[0].meta.changes !== 1) throw conflict('NOT_REQUESTED', '다른 운영자가 먼저 처리했습니다.');
+    return json(corsHeaders, { success: true, id: row.id, issue_status: issuing ? 'ISSUED' : 'FAILED' });
+  }
+
   const isFinance = p.startsWith('/api/v1/admin/finance') || p === '/api/v1/admin/reconciliation' || /^\/api\/v1\/admin\/orders\/[^/]+\/refund$/.test(p) || /^\/api\/v1\/admin\/sub-orders\/[^/]+\/delivered$/.test(p);
   if (!isFinance) return null;
   const admin = await requireAdmin(request, env);

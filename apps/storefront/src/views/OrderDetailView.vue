@@ -95,9 +95,9 @@ const submitCashReceipt = async () => {
     const json = await res.json()
     if (res.ok && json.success) {
       cashReceiptData.value = json.data
-      say('현금영수증이 성공적으로 발급되었습니다. (국세청 전송 승인)', 'ok')
+      say('현금영수증 발행 요청이 접수되었습니다.', 'ok')
     } else {
-      cashReceiptError.value = json.error || '현금영수증 발급 요청에 실패했습니다.'
+      cashReceiptError.value = json.message || json.error || '현금영수증 신청에 실패했습니다.'
     }
   } catch (e: any) {
     cashReceiptError.value = e.message || '요청 처리 중 오류가 발생했습니다.'
@@ -599,21 +599,25 @@ onMounted(loadOrderDetail)
 
           <!-- Existing Issued Receipt -->
           <div v-else-if="cashReceiptData" class="space-y-3 text-xs">
-            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+            <div :class="['p-3.5 rounded-xl border space-y-1', cashReceiptData.issue_status === 'ISSUED' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : cashReceiptData.issue_status === 'FAILED' ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50 border-amber-200 text-amber-900']">
               <div class="font-black text-sm flex items-center justify-between">
-                <span>✓ 국세청 승인 완료</span>
-                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-200/80">{{ cashReceiptData.receipt_type === 'PERSONAL' ? '개인 소득공제용' : '사업자 지출증빙용' }}</span>
+                <span>{{ cashReceiptData.issue_status === 'ISSUED' ? '✓ 발행 완료' : cashReceiptData.issue_status === 'FAILED' ? '발행 불가' : '발행 요청 접수' }}</span>
+                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-white/70">{{ cashReceiptData.identifier_type === 'BUSINESS_REG_NO' ? '사업자 지출증빙용' : '개인 소득공제용' }}</span>
               </div>
-              <div class="text-[11px] text-emerald-700">국세청(홈택스)으로 전자 영수증이 정식 전송·승인되었습니다.</div>
+              <div class="text-[11px]">
+                {{ cashReceiptData.issue_status === 'ISSUED' ? '국세청 승인번호가 기록되었습니다. 홈택스에서도 조회할 수 있습니다.'
+                  : cashReceiptData.issue_status === 'FAILED' ? (cashReceiptData.memo || '발행할 수 없는 건입니다. 고객센터로 문의해 주세요.')
+                  : '운영자가 발행을 마치면 승인번호가 표시됩니다.' }}
+              </div>
             </div>
 
             <div class="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-2 font-mono">
-              <div class="flex justify-between"><span class="text-gray-500">승인번호</span><span class="font-bold text-gray-900">{{ cashReceiptData.issue_number }}</span></div>
+              <div v-if="cashReceiptData.hometax_approval_no" class="flex justify-between"><span class="text-gray-500">승인번호</span><span class="font-bold text-gray-900">{{ cashReceiptData.hometax_approval_no }}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">발행금액</span><span class="font-bold text-gray-900">{{ won(cashReceiptData.total_amount) }}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">공급가액</span><span>{{ won(cashReceiptData.supply_amount) }}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">부가가치세</span><span>{{ won(cashReceiptData.vat_amount) }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">식별번호</span><span>{{ cashReceiptData.identity_number }}</span></div>
-              <div class="flex justify-between text-[11px]"><span class="text-gray-500">승인일시</span><span>{{ cashReceiptData.approved_at }}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">식별번호</span><span>{{ cashReceiptData.buyer_identifier }}</span></div>
+              <div v-if="cashReceiptData.issued_at" class="flex justify-between text-[11px]"><span class="text-gray-500">발행일시</span><span>{{ cashReceiptData.issued_at }}</span></div>
             </div>
 
             <button @click="showCashReceiptModal = false" class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs">
@@ -624,7 +628,7 @@ onMounted(loadOrderDetail)
           <!-- New Issuance Form -->
           <form v-else @submit.prevent="submitCashReceipt" class="space-y-4 text-xs">
             <p class="text-gray-600 leading-relaxed">
-              현금 결제 수단(가상계좌, 에스크로, 계좌이체 등) 및 전액 결제분에 대해 국세청 전자 현금영수증을 실시간 신청 및 발급합니다.
+              계좌이체·가상계좌로 결제한 주문만 신청할 수 있습니다(카드 결제는 카드 매출전표가 증빙입니다). 신청하면 운영자가 발행하고, 승인번호가 이 화면에 표시됩니다.
             </p>
 
             <div class="space-y-1">
@@ -649,7 +653,7 @@ onMounted(loadOrderDetail)
 
             <div class="space-y-1">
               <label class="block font-bold text-gray-700">
-                {{ cashReceiptType === 'PERSONAL' ? '휴대폰 번호 또는 주민등록번호' : '사업자등록번호 (10자리)' }}
+                {{ cashReceiptType === 'PERSONAL' ? '휴대폰 번호' : '사업자등록번호 (10자리)' }}
               </label>
               <input
                 v-model="cashReceiptIdentity"

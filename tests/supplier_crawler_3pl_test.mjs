@@ -360,16 +360,43 @@ await t.test('7. Dynamic Feature Flags Enforcement & End-to-End Control', async 
     VALUES (?, ?, ?, '스마트 저소음 무선 진공 청소기 Pro', '기본', 1, 52000, 52000)
   `).run(itmId, subId, landedSku.id);
 
-  // Create PO (Now allowed because auto_supplier_po is ON)
-  const poRes = await g.call('/api/v1/supplier-orders', {
-    method: 'POST',
-    token: ptToken,
-    body: { sub_order_id: subId, supplier_id: 'sup_dev_001', idempotency_key: 'idemp_key_supplier_order_2' }
-  });
+  // Another approved seller (pt_002) must not be able to touch pt_001's order, PO or SKU.
+  const { signJwt } = await import('../apps/cloudflare-gateway/src/utils/crypto-auth.js');
+  const u2 = g.db.prepare("SELECT u.id, u.token_version, p.id AS pid FROM users u JOIN partners p ON p.owner_user_id = u.id WHERE p.id = 'pt_002'").get();
+  g.db.prepare("UPDATE partners SET status = 'APPROVED' WHERE id = 'pt_002'").run();
+  const otherSeller = await signJwt({ sub: u2.id, role: 'ROLE_PARTNER', tv: u2.token_version || 0, pid: u2.pid }, env.JWT_SECRET, 3600);
+
+  const poBody = { sub_order_id: subId, supplier_id: 'sup_dev_001', idempotency_key: 'idemp_key_supplier_order_2' };
+  const foreignPo = await g.call('/api/v1/supplier-orders', { method: 'POST', token: otherSeller, body: poBody });
+  assert.equal(foreignPo.status, 404, 'cannot raise a PO on another seller\'s sub-order');
+
+  // An unpaid sub-order cannot get a PO
+  g.db.prepare("UPDATE sub_orders SET status = 'PAYMENT_PENDING' WHERE id = ?").run(subId);
+  assert.equal((await g.call('/api/v1/supplier-orders', { method: 'POST', token: ptToken, body: poBody })).json.code, 'SUB_ORDER_NOT_PAYABLE');
+  g.db.prepare("UPDATE sub_orders SET status = 'PAYMENT_CONFIRMED' WHERE id = ?").run(subId);
+
+  // Create PO (allowed because auto_supplier_po is ON); costs come from the recorded supply price only
+  const poRes = await g.call('/api/v1/supplier-orders', { method: 'POST', token: ptToken, body: poBody });
   assert.equal(poRes.status, 201);
   const poId = poRes.json.data.id;
+  assert.equal(poRes.json.data.total_supply_cost, landedSku.wholesale_supply_price);
+  assert.equal((await g.call('/api/v1/supplier-orders', { method: 'POST', token: ptToken, body: poBody })).json.is_idempotent_replay, true);
+  assert.equal((await g.call('/api/v1/supplier-orders', { method: 'POST', token: ptToken, body: { ...poBody, idempotency_key: 'another' } })).json.code, 'PO_ALREADY_EXISTS');
 
-  // Dispatch (Now allowed because fulfillment_3pl is ON)
+  // The other seller sees none of it and cannot answer or ship it
+  const foreignList = await g.call('/api/v1/supplier-orders', { token: otherSeller });
+  assert.equal(foreignList.status, 200);
+  assert.equal(foreignList.json.data.filter((r) => r.id === poId).length, 0);
+  assert.equal((await g.call(`/api/v1/supplier-orders/${poId}/respond`, { method: 'POST', token: otherSeller, body: { action: 'REJECT', reason: 'x' } })).status, 404);
+  assert.equal((await g.call(`/api/v1/supplier-orders/${poId}/dispatch`, { method: 'POST', token: otherSeller, body: { tracking_number: '682910482012' } })).status, 404);
+
+  // Shipping before the supplier accepted is refused
+  assert.equal((await g.call(`/api/v1/supplier-orders/${poId}/dispatch`, { method: 'POST', token: ptToken, body: { carrier_code: 'CJ대한통운', tracking_number: '682910482012' } })).json.code, 'PO_NOT_ACCEPTED');
+
+  const acc = await g.call(`/api/v1/supplier-orders/${poId}/respond`, { method: 'POST', token: ptToken, body: { action: 'ACCEPT' } });
+  assert.equal(acc.status, 200);
+
+  // Dispatch (allowed because fulfillment_3pl is ON)
   const dispRes = await g.call(`/api/v1/supplier-orders/${poId}/dispatch`, {
     method: 'POST',
     token: ptToken,
@@ -377,20 +404,31 @@ await t.test('7. Dynamic Feature Flags Enforcement & End-to-End Control', async 
   });
   assert.equal(dispRes.status, 200);
 
-  // Sub-order automatically updated to SHIPPED!
   const updatedSub = g.db.prepare('SELECT status, tracking_number FROM sub_orders WHERE id = ?').get(subId);
   assert.equal(updatedSub.status, 'SHIPPED');
   assert.equal(updatedSub.tracking_number, '682910482012');
 
-  // Sync Inventory & Price (Now allowed because stock_sync and auto_pricing are ON)
-  const syncRes = await g.call('/api/v1/sync/supplier-inventory', {
-    method: 'POST',
-    token: ptToken,
-    body: { supplier_id: 'sup_dev_001', sku_id: landedSku.id, new_price: 30000, new_stock: 40 }
-  });
+  // A delivered order can never be pushed back to SHIPPED through a supplier PO
+  g.db.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ?").run(subId);
+  g.db.prepare("UPDATE supplier_orders SET status = 'ACCEPTED' WHERE id = ?").run(poId);
+  const reship = await g.call(`/api/v1/supplier-orders/${poId}/dispatch`, { method: 'POST', token: ptToken, body: { tracking_number: '999999999999' } });
+  assert.equal(reship.status, 409);
+  assert.equal(g.db.prepare('SELECT status FROM sub_orders WHERE id = ?').get(subId).status, 'DELIVERED');
+  assert.equal(g.db.prepare('SELECT status FROM supplier_orders WHERE id = ?').get(poId).status, 'ACCEPTED', 'no partial write when the guard fails');
+
+  // Stock / price sync: another seller cannot touch this SKU; the owner's change is written to the inventory ledger
+  const syncBody = { supplier_id: 'sup_dev_001', sku_id: landedSku.id, new_price: 30000, new_stock: 40 };
+  assert.equal((await g.call('/api/v1/sync/supplier-inventory', { method: 'POST', token: otherSeller, body: syncBody })).status, 404);
+  assert.equal((await g.call('/api/v1/sync/supplier-inventory', { method: 'POST', token: ptToken, body: { ...syncBody, new_stock: -5 } })).status, 400);
+  const ledgerBefore = g.db.prepare('SELECT COUNT(*) AS c FROM inventory_ledger WHERE sku_id = ?').get(landedSku.id).c;
+  const syncRes = await g.call('/api/v1/sync/supplier-inventory', { method: 'POST', token: ptToken, body: syncBody });
   assert.equal(syncRes.status, 200);
   assert.equal(syncRes.json.sync_status, 'PRICE_JUMP_ALERT');
+  const skuAfter = g.db.prepare('SELECT stock_quantity FROM product_skus WHERE id = ?').get(landedSku.id);
+  assert.equal(skuAfter.stock_quantity, 40);
+  const ledgerRow = g.db.prepare('SELECT quantity_delta, balance_after FROM inventory_ledger WHERE sku_id = ? ORDER BY rowid DESC LIMIT 1').get(landedSku.id);
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM inventory_ledger WHERE sku_id = ?').get(landedSku.id).c, ledgerBefore + 1);
+  assert.equal(ledgerRow.balance_after, 40);
 });
 
 t.finish();
-console.log('\n🎉 ALL 7 TEST SUITES (SSRF, HTML SANITIZER, ADAPTERS, OPTION MATRIX, QUALITY, AI TRANSLATION, FEATURE FLAGS E2E) PASSED 100%!');

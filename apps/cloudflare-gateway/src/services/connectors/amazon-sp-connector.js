@@ -13,19 +13,14 @@ export class AmazonSpApiConnector extends BaseCommerceConnector {
   }
 
   async verifyConnection(credentials = {}) {
+    if (credentials.isSandbox) {
+      return { status: 'SANDBOX_STUB', verified: true, simulated: true, message: `${this.platformName || '플랫폼'} 샌드박스 스텁입니다. 실제 API는 호출하지 않았습니다.` };
+    }
     const clientId = credentials.clientId || credentials.lwaClientId || credentials.apiKey || credentials.sellerAccountId;
     const clientSecret = credentials.clientSecret || credentials.lwaClientSecret || credentials.secretKey || credentials.secretKeyEnc;
     const refreshToken = credentials.refreshToken || credentials.secretKey || credentials.secretKeyEnc;
 
     if (!clientId || !clientSecret || !refreshToken) {
-      if (credentials.isSandbox) {
-        return {
-          status: 'SANDBOX_STUB',
-          verified: true,
-          marketplace_id: this.options.marketplaceId,
-          message: 'Amazon SP-API 샌드박스 스텁 모드로 검증되었습니다.'
-        };
-      }
       return {
         status: 'BLOCKED_NO_CREDENTIAL',
         verified: false,
@@ -33,10 +28,9 @@ export class AmazonSpApiConnector extends BaseCommerceConnector {
       };
     }
     return {
-      status: 'VERIFIED_AVAILABLE',
-      verified: true,
-      marketplace_id: credentials.marketplaceId || this.options.marketplaceId,
-      message: 'Amazon SP-API (US 마켓플레이스) 연동 인터페이스가 검증되었습니다.'
+      status: 'NOT_INTEGRATED', // no request is sent to the platform yet
+      verified: false,
+      message: `${this.platformName || '플랫폼'} 실제 API 연동이 구현되지 않아 인증정보를 검증하지 않았습니다.`
     };
   }
 

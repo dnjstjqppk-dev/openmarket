@@ -12,32 +12,24 @@ export class NaverCommerceConnector extends BaseCommerceConnector {
   }
 
   async verifyConnection(credentials = {}) {
+    if (credentials.isSandbox) {
+      return { status: 'SANDBOX_STUB', verified: true, simulated: true, message: `${this.platformName || '플랫폼'} 샌드박스 스텁입니다. 실제 API는 호출하지 않았습니다.` };
+    }
     const clientId = credentials.clientId || credentials.apiKey || credentials.sellerAccountId;
     const clientSecret = credentials.clientSecret || credentials.secretKey || credentials.secretKeyEnc;
 
     if (!clientId || !clientSecret) {
-      if (credentials.isSandbox) {
-        return {
-          status: 'SANDBOX_STUB',
-          verified: true,
-          expires_in: 10800,
-          token_type: 'Bearer',
-          message: '네이버 커머스 샌드박스 스텁 모드로 검증되었습니다.'
-        };
-      }
       return {
         status: 'BLOCKED_NO_CREDENTIAL',
         verified: false,
         message: '네이버 커머스 API 연동을 위해 Application Client ID 및 Client Secret 등록이 필요합니다.'
       };
     }
-    // In live execution, exchange token with Naver OAuth endpoint
+    // Not implemented: the OAuth token exchange with Naver is never performed.
     return {
-      status: 'VERIFIED_AVAILABLE',
-      verified: true,
-      expires_in: 10800,
-      token_type: 'Bearer',
-      message: '네이버 커머스 API 연동 계정이 정상 검증되었습니다.'
+      status: 'NOT_INTEGRATED', // no request is sent to the platform yet
+      verified: false,
+      message: `${this.platformName || '플랫폼'} 실제 API 연동이 구현되지 않아 인증정보를 검증하지 않았습니다.`
     };
   }
 

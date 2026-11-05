@@ -3,6 +3,8 @@
 
 export class Global3plLogisticsConnector {
   constructor() {
+    this.platformName = '3PL 물류 연동';
+    this.isLive = false; // no carrier / 3PL API is called; see simulation.js
     this.carriers = {
       CJ_LOGISTICS: {
         code: 'CJ_LOGISTICS',
@@ -47,7 +49,12 @@ export class Global3plLogisticsConnector {
     };
   }
 
-  // Waybill Dispatch Generation
+  /** Static carrier directory (name + public tracking page). */
+  carrierInfo(code) {
+    return this.carriers[String(code || '').toUpperCase()] || null;
+  }
+
+  // Waybill Dispatch Generation (SIMULATION ONLY - random numbers, never shown as a real waybill)
   async createFulfillmentOrder(input = {}) {
     const carrierCode = (input.carrier_code || 'CJ_LOGISTICS').toUpperCase();
     const carrier = this.carriers[carrierCode] || this.carriers.CJ_LOGISTICS;

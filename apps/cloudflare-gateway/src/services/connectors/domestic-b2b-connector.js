@@ -12,6 +12,9 @@ export class DomesticB2BSupplierConnector extends BaseCommerceConnector {
   }
 
   async verifyConnection(credentials = {}) {
+    if (credentials.isSandbox) {
+      return { status: 'SANDBOX_STUB', verified: true, simulated: true, message: `${this.platformName || '플랫폼'} 샌드박스 스텁입니다. 실제 API는 호출하지 않았습니다.` };
+    }
     if (!credentials.apiKey && !credentials.memberId && !credentials.isSandbox) {
       return {
         status: 'BLOCKED_NO_CREDENTIAL',
@@ -20,9 +23,9 @@ export class DomesticB2BSupplierConnector extends BaseCommerceConnector {
       };
     }
     return {
-      status: 'VERIFIED_AVAILABLE',
-      verified: true,
-      message: `${this.platformName} 정식 B2B 발주 및 카탈로그 인터페이스가 검증되었습니다.`
+      status: 'NOT_INTEGRATED', // no request is sent to the platform yet
+      verified: false,
+      message: `${this.platformName || '플랫폼'} 실제 API 연동이 구현되지 않아 인증정보를 검증하지 않았습니다.`
     };
   }
 

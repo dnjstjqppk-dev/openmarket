@@ -6,6 +6,8 @@ export class BaseCommerceConnector {
     this.platformId = platformId;
     this.platformName = platformName;
     this.options = options;
+    // true only for a connector that performs the real platform API call (see simulation.js). None does yet.
+    this.isLive = false;
   }
 
   // 1. Authentication & Verification
@@ -21,10 +23,11 @@ export class BaseCommerceConnector {
         message: `[${this.platformName}] 정식 API 인증정보(API Key/Secret 또는 OAuth 토큰)가 등록되지 않았습니다.`
       };
     }
+    // No request is made to the platform, so nothing can be claimed as verified.
     return {
-      status: 'VERIFIED_AVAILABLE',
-      verified: true,
-      message: `[${this.platformName}] 연결 인터페이스가 검증되었습니다.`
+      status: 'NOT_INTEGRATED',
+      verified: false,
+      message: `[${this.platformName}] 실제 API 연동이 구현되지 않아 인증정보를 검증하지 않았습니다.`
     };
   }
 

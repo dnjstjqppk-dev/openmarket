@@ -1,0 +1,24 @@
+=== OLD CODE: commercial_expansion_test
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+=== OLD CODE: supplier_crawler_3pl_test
+[PASS] 1. URL Validation & Strict SSRF Defense
+[PASS] 2. HTML Sanitization & Payload Removal
+[PASS] 3. Multi-adapter Structured Product Extraction
+[PASS] 4. Multi-dimensional Option Matrix & Pricing Automation
+[PASS] 5. Complete Crawler Pipeline with Quality Scoring
+[PASS] 6. AI Translation & Localization Engine
+[FAIL] 7. Dynamic Feature Flags Enforcement & End-to-End Control
+       -> cannot raise a PO on another seller's sub-order 201 !== 404 
+=== OLMOA Global URL Crawler & 3PL Integration Suite: 6/7 passed, 1 failed ===
+=== OLD CODE: multichannel_e2e_test
+[PASS] 1. Global Pricing & Margin Engine (FX, Logistics, Customs, Anti-Negative Lock)
+[FAIL] 2. Multi-Channel & Supply Chain Platform Connectors
+       -> Expected values to be strictly equal: true !== false 
+[PASS] 3. Multi-Channel Gateway Endpoints & Platform Seed Verification
+[FAIL] 4. Partner Credentials, Listing Lifecycle & Feature Flag Guard
+       -> Expected values to be strictly equal: true !== false 
+[FAIL] 5. Multi-Channel Orders, B2B PO Dispatch & 3PL Carrier Fulfillment
+       -> supply cost must be entered, never estimated 200 !== 400 
+[FAIL] 6. Production: connector actions answer 501 and persist nothing
+       -> Expected values to be strictly equal: 200 !== 501 
+=== OLMOA Global Multi-Channel & Supply Chain Suite: 2/6 passed, 4 failed ===
