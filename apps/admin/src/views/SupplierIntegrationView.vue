@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { adminApi, won } from '../config';
 
 interface SupplierOrder {
@@ -55,13 +55,41 @@ interface FeatureFlag {
   updated_at: string;
 }
 
-const currentTab = ref<'orders' | 'imports' | 'sync' | 'flags'>('orders');
+interface Platform {
+  id: string;
+  platform_code: string;
+  platform_name: string;
+  country_code: string;
+  category: string;
+  base_url: string;
+  auth_type: string;
+  api_doc_url: string;
+  default_commission_rate: number;
+  status: string;
+  capabilities: Array<{
+    capability_code: string;
+    description: string;
+    rate_limit_per_minute: number;
+    is_supported: number;
+  }>;
+  active_channels_count?: number;
+}
+
+const currentTab = ref<'orders' | 'imports' | 'sync' | 'flags' | 'platforms'>('orders');
+const platformCategoryFilter = ref('ALL');
+
+const filteredPlatforms = computed(() => {
+  if (platformCategoryFilter.value === 'ALL') return platforms.value;
+  return platforms.value.filter(p => p.category === platformCategoryFilter.value);
+});
 
 // State
 const orders = ref<SupplierOrder[]>([]);
 const importJobs = ref<ImportJob[]>([]);
 const syncLogs = ref<SyncLog[]>([]);
 const flags = ref<FeatureFlag[]>([]);
+const platforms = ref<Platform[]>([]);
+const platformSummary = ref<{ total: number; domestic_openmarket: number; global_openmarket: number; b2b_supplier: number; logistics_3pl: number } | null>(null);
 const isLoading = ref(false);
 const actionMsg = ref('');
 const errorMsg = ref('');
@@ -223,12 +251,28 @@ async function executeDispatch() {
   }
 }
 
+async function loadPlatforms() {
+  isLoading.value = true;
+  try {
+    const r = await adminApi('/api/v1/channels/platforms');
+    if (r.ok && r.data) {
+      platforms.value = r.data.platforms || [];
+      platformSummary.value = r.data.summary || null;
+    }
+  } catch (err) {
+    console.error('Failed to load platforms:', err);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 onMounted(() => {
   loadHealth();
   loadOrders();
   loadImportJobs();
   loadSyncLogs();
   loadFlags();
+  loadPlatforms();
 });
 </script>
 
@@ -306,7 +350,17 @@ onMounted(() => {
       >
         <i class="fa-solid fa-toggle-on text-emerald-500"></i>
         <span>기능 활성화 관리 (Feature Flags)</span>
-        <span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-mono">9개</span>
+        <span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ flags.length }}개</span>
+      </button>
+
+      <button
+        @click="currentTab = 'platforms'; loadPlatforms()"
+        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
+        :class="currentTab === 'platforms' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+      >
+        <i class="fa-solid fa-globe text-indigo-500"></i>
+        <span>글로벌 오픈마켓 & 공급망 플랫폼</span>
+        <span class="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ platforms.length || 18 }}개</span>
       </button>
     </div>
 
@@ -618,6 +672,190 @@ onMounted(() => {
             <span class="text-slate-400 font-mono text-[10px]">
               {{ flag.updated_at ? new Date(flag.updated_at).toLocaleDateString() : '-' }}
             </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: Global OpenMarket & Supply Chain Platforms -->
+    <div v-if="currentTab === 'platforms'" class="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-network-wired text-indigo-600"></i>
+            <span>글로벌 오픈마켓 & 공급망 플랫폼 연동 매트릭스 (18개)</span>
+          </h2>
+          <p class="text-xs text-slate-500">
+            국내 4대 오픈마켓, 글로벌 4개사, 국내 4대 B2B 공급처 및 6대 3PL 물류사의 API 규격, 수수료, 연동 상태를 중앙 관제합니다.
+          </p>
+        </div>
+        <button
+          @click="loadPlatforms"
+          class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
+        >
+          <i class="fa-solid fa-rotate-right"></i> 플랫폼 목록 새로고침
+        </button>
+      </div>
+
+      <!-- Platform KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-blue-50/70 border border-blue-200/80 p-4 rounded-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-blue-700">국내 오픈마켓</span>
+            <span class="text-lg">🇰🇷</span>
+          </div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.domestic_openmarket || 4 }}개</div>
+          <p class="text-[11px] text-blue-600/80 mt-1 font-medium">네이버, 쿠팡, 11번가, G마켓/옥션</p>
+        </div>
+
+        <div class="bg-indigo-50/70 border border-indigo-200/80 p-4 rounded-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-indigo-700">글로벌 오픈마켓</span>
+            <span class="text-lg">🌐</span>
+          </div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.global_openmarket || 4 }}개</div>
+          <p class="text-[11px] text-indigo-600/80 mt-1 font-medium">아마존 SP-API, Shopee, 알리, 라쿠텐</p>
+        </div>
+
+        <div class="bg-amber-50/70 border border-amber-200/80 p-4 rounded-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-800">B2B 도매 공급사</span>
+            <span class="text-lg">📦</span>
+          </div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.b2b_supplier || 4 }}개</div>
+          <p class="text-[11px] text-amber-700 mt-1 font-medium">도매꾹, 도매매, 온채널, 오너클랜</p>
+        </div>
+
+        <div class="bg-emerald-50/70 border border-emerald-200/80 p-4 rounded-xl">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-800">글로벌 3PL 물류사</span>
+            <span class="text-lg">🚚</span>
+          </div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.logistics_3pl || 6 }}개</div>
+          <p class="text-[11px] text-emerald-700 mt-1 font-medium">CJ, 한진, 롯데글로벌, 우체국, DHL, FedEx</p>
+        </div>
+      </div>
+
+      <!-- Inbound Webhooks & Security Notice -->
+      <div class="bg-slate-900 text-white rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/30 text-indigo-300 font-mono">INBOUND WEBHOOK ENDPOINT</span>
+            <span class="text-xs text-emerald-400 font-bold">● HMAC-SHA256 SIGNATURE VERIFIED</span>
+          </div>
+          <p class="text-xs text-slate-300 font-mono break-all">
+            POST https://olmoa-api.dnjstjqppk.workers.dev/api/v1/channels/webhooks/:platform_code
+          </p>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-400 font-medium">
+          <i class="fa-solid fa-shield-halved text-emerald-400 text-base"></i>
+          <span>실제 외부 결제/발주 차단 가드(Safe Mock) 및 멱등키 보증</span>
+        </div>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <button
+          v-for="cat in [
+            { id: 'ALL', label: '전체 플랫폼 (18)' },
+            { id: 'DOMESTIC_OPENMARKET', label: '국내 오픈마켓 (4)' },
+            { id: 'GLOBAL_OPENMARKET', label: '글로벌 오픈마켓 (4)' },
+            { id: 'B2B_SUPPLIER', label: 'B2B 도매 공급사 (4)' },
+            { id: '3PL_LOGISTICS', label: '3PL 물류사 (6)' }
+          ]"
+          :key="cat.id"
+          @click="platformCategoryFilter = cat.id"
+          class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+          :class="platformCategoryFilter === cat.id ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+        >
+          {{ cat.label }}
+        </button>
+      </div>
+
+      <!-- Platform Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="platform in filteredPlatforms"
+          :key="platform.platform_code"
+          class="border rounded-xl p-5 bg-white transition hover:shadow-md space-y-4 flex flex-col justify-between"
+          :class="platform.status === 'ACTIVE' ? 'border-indigo-200 ring-1 ring-indigo-50' : 'border-slate-200'"
+        >
+          <div class="space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" v-if="platform.country_code === 'KR'">🇰🇷</span>
+                <span class="text-xl" v-else-if="platform.country_code === 'US'">🇺🇸</span>
+                <span class="text-xl" v-else-if="platform.country_code === 'SG'">🇸🇬</span>
+                <span class="text-xl" v-else-if="platform.country_code === 'JP'">🇯🇵</span>
+                <span class="text-xl" v-else-if="platform.country_code === 'CN'">🇨🇳</span>
+                <span class="text-xl" v-else-if="platform.country_code === 'DE'">🇩🇪</span>
+                <span class="text-xl" v-else>🌐</span>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900 leading-tight">{{ platform.platform_name }}</h3>
+                  <span class="text-[11px] font-mono text-slate-400">{{ platform.platform_code }}</span>
+                </div>
+              </div>
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold font-mono"
+                :class="{
+                  'bg-emerald-100 text-emerald-800': platform.status === 'ACTIVE',
+                  'bg-blue-100 text-blue-800': platform.status === 'READY',
+                  'bg-amber-100 text-amber-800': platform.status === 'BLOCKED_NO_CREDENTIAL' || platform.status === 'INACTIVE'
+                }"
+              >
+                {{ platform.status }}
+              </span>
+            </div>
+
+            <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1 text-xs">
+              <div class="flex justify-between text-slate-600">
+                <span class="text-slate-500">인증 방식:</span>
+                <span class="font-mono font-bold text-slate-800">{{ platform.auth_type }}</span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span class="text-slate-500">채널 수수료율:</span>
+                <span class="font-mono font-bold text-indigo-700">{{ (platform.default_commission_rate * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span class="text-slate-500">카테고리:</span>
+                <span class="font-semibold text-slate-700 text-[11px]">{{ platform.category }}</span>
+              </div>
+            </div>
+
+            <!-- Capabilities Badges -->
+            <div class="space-y-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">지원 기능 (CAPABILITIES)</span>
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="cap in (platform.capabilities || [])"
+                  :key="cap.capability_code"
+                  class="px-2 py-0.5 rounded text-[10px] font-medium"
+                  :class="cap.is_supported === 1 ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-400 line-through'"
+                >
+                  {{ cap.capability_code }}
+                </span>
+                <span v-if="!platform.capabilities || platform.capabilities.length === 0" class="text-xs text-slate-400">
+                  기본 연동 API 규격 정의됨
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span class="font-mono text-[11px]">
+              <i class="fa-solid fa-store mr-1 text-indigo-500"></i>
+              활성 채널: <strong class="text-slate-800">{{ platform.active_channels_count || 0 }}개</strong>
+            </span>
+            <a
+              v-if="platform.api_doc_url"
+              :href="platform.api_doc_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 text-[11px]"
+            >
+              <span>API 개발 문서</span>
+              <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+            </a>
           </div>
         </div>
       </div>

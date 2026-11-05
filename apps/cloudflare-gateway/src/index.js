@@ -21,6 +21,7 @@ import { handleBiddingAndM2cRoutes } from './routes/bidding-m2c.js';
 import { handleProductImportRoutes } from './routes/product-imports.js';
 import { handleSupplier3plRoutes } from './routes/supplier-3pl.js';
 import { handleFeatureFlagRoutes } from './routes/feature-flags.js';
+import { handleMultiChannelRoutes } from './routes/multichannel.js';
 import { handleFinanceRoutes, reconcileIfDue } from './routes/finance.js';
 import { handleOnboardingRoutes } from './routes/onboarding.js';
 import { handleAdminSecurityRoutes } from './routes/admin-security.js';
@@ -42,6 +43,7 @@ const ROUTERS = [
   handleSupplier3plRoutes,
   handleProductImportRoutes,
   handleFeatureFlagRoutes,
+  handleMultiChannelRoutes,
   handleBiddingAndM2cRoutes,
   handleGlobalCustomsAndFxRoutes,
   handleGlobalLogisticsRoutes,

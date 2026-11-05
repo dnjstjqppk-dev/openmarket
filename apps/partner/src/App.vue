@@ -38,6 +38,9 @@ watch(() => route.path, () => {
             <router-link to="/imports" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition flex items-center gap-1.5" active-class="bg-indigo-900 text-amber-400">
               <i class="fa-solid fa-cloud-arrow-down text-emerald-400"></i>URL 수집
             </router-link>
+            <router-link to="/channels" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition flex items-center gap-1.5" active-class="bg-indigo-900 text-amber-400">
+              <i class="fa-solid fa-network-wired text-cyan-400"></i>멀티채널 연동
+            </router-link>
             <router-link to="/bulk-upload" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대량 등록</router-link>
             <router-link to="/shipments" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">주문·배송</router-link>
             <router-link to="/returns" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">반품·클레임</router-link>

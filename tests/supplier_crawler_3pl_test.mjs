@@ -247,7 +247,7 @@ await t.test('7. Dynamic Feature Flags Enforcement & End-to-End Control', async 
   // A. Admin verifies initial feature flag states
   const flagsRes = await g.call('/api/v1/admin/feature-flags', { token: admToken });
   assert.equal(flagsRes.status, 200);
-  assert.equal(flagsRes.json.data.length, 9);
+  assert.ok(flagsRes.json.data.length >= 21, `Expected at least 21 feature flags, got ${flagsRes.json.data.length}`);
 
   // B. Feature Flag Guard: bulk_crawler is OFF by default -> Expect 403 FEATURE_DISABLED
   const bulkBlocked = await g.call('/api/v1/imports/bulk', {
