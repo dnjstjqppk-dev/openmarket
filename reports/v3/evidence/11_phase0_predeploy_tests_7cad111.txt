@@ -1,0 +1,162 @@
+# PHASE 0 pre-deploy test run on 7cad111c1b0a8b06a4ee500288bf771a5b4e5cc3 2026-11-05T06:20:00Z
+=== test:migrations
+[PASS] migrations d1_20_integrity_foundation.sql..d1_29_global_multichannel_and_supply_chain.sql apply with foreign keys ON over legacy data: {"orders":5,"sub_orders":5,"order_items":5,"settlements":5}
+exit_code=0
+=== test:security
+[PASS] S01 forged legacy admin token rejected
+[PASS] S02 customer and partner JWTs cannot use admin API
+[PASS] S03 admin login requires the real password and matching role
+[PASS] S04 partner login without password rejected
+[PASS] S05 identity headers are ignored (X-Partner-Id / X-Customer-Id)
+[PASS] S06 unknown e-mail never falls back to another account
+[PASS] S07 social login with unverified e-mail disabled
+[PASS] S08 password-reset token never returned outside development
+[PASS] S09 tampered / foreign-key / alg=none JWTs rejected
+[PASS] S10 missing JWT_SECRET fails closed (no built-in default secret)
+[PASS] S11 brute force locks the account after 5 failures
+[PASS] S12 password change revokes previously issued tokens
+[PASS] S13 customer cannot read or cancel another customer's order
+[PASS] S14 seller cannot ship another seller's sub-order
+[PASS] S15 unauthenticated payment / carrier webhooks cannot change orders
+[PASS] S16 admin-only side endpoints (SMS dispatch, QC desk, IPR list, control tower) protected
+[PASS] S17 PII endpoints require ownership (tracking, addresses)
+[PASS] S18 upload requires auth and rejects SVG
+[PASS] S19 IPR report by an anonymous party does not hide products
+[PASS] S20 CORS reflects only allow-listed origins in production
+[PASS] S21 internal errors do not leak details in production
+[PASS] S22 dev-only carrier simulator unavailable in production and to customers
+[PASS] I01 checkout reserves stock and creates an UNPAID order (no fake PAID)
+[PASS] I02 client-supplied prices / customer_id ignored (server price authority)
+[PASS] I03 payment confirm: wrong amount rejected, double click idempotent, single capture
+[PASS] I04 duplicate checkout with same idempotency key creates one order
+[PASS] I05 oversell race: concurrent buyer takes last unit between check and write
+[PASS] I06 two buyers, one unit: exactly one order succeeds
+[PASS] I07 coupons: must be owned, single use, restored only on full cancel
+[PASS] I08 credits: cannot exceed balance; concurrent double-spend blocked by DB
+[PASS] I09 cancel unpaid order restores stock & credits exactly once
+[PASS] I10 cancel paid order before shipment: exact PG refund, credits+coupon+stock restored
+[PASS] I11 mixed cart (direct + marketplace): split, PO for direct, settlement for marketplace
+[PASS] I12 partial cancel of one seller in a mixed order refunds exactly that seller's share
+[PASS] I13 seller cannot ship a cancelled sub-order
+[PASS] I14 purchase confirm only after delivery; reward credited once
+[PASS] I15 return: client refund amount ignored, refund computed server-side on seller approval
+[PASS] I16 repeated partial refunds of the same line sum exactly to what was paid
+[PASS] I17 price adjustment: only on a real price drop, once per order
+[PASS] I18 refund after seller payout is carried as a deduction (no silent loss)
+[PASS] I19 PG refund failure releases the reservation; retry succeeds
+[PASS] I20 payment after expiry refused; expiry job releases stock and credits
+[PASS] I21 PG approved but DB commit fails -> payment auto-compensated (never "paid" without order)
+[PASS] I22 verified webhook captures a READY order; duplicate delivery ignored
+[PASS] I23 sandbox payments refused in production; no operator -> no checkout
+[PASS] I24 DIRECT goods without a valid resale authorisation cannot be sold
+[PASS] I25 seller product needs operator review before it is visible or purchasable
+[PASS] I26 seller stock edit cannot overwrite a concurrent reservation
+[PASS] I27 payout-account change is queued for verification, never applied directly
+[PASS] I28 append-only ledgers and frozen entity attribution enforced by the database
+[PASS] I29 sole proprietor -> corporation switch: history stays, new orders go to the corporation
+[PASS] I30 money allocation is exact for random carts (property test, 2,000 cases)
+[PASS] I32 rolling reserve is withheld at payout, stays owed, and is released exactly once after the hold period
+[PASS] I33 reserve is not taken from a net deduction, and released reserve can offset it
+[PASS] I34 after 개인사업자 -> 법인 switch, one payout never mixes entities; each is journalled to its own entity
+[PASS] I35 reconciliation runs on the cron (hourly), is recorded, and alerts on failure
+[PASS] I36 withdrawal: blocked while an order is open, needs credit-forfeit consent, then pseudonymises and revokes
+[PASS] I37 data-subject export returns only the caller's data and is access-logged
+[PASS] I38 admin and seller views of personal data are recorded; the record is append-only and admin-only
+[PASS] I39 retention purge destroys withdrawn members' recipient data after the period, keeps money records
+[PASS] I40 seller application: validated, unique, cannot pick its own commission, and cannot sell before approval
+[PASS] I41 KYB documents are private: only the uploader and operators can read them, and operator reads are logged
+[PASS] I42 submit needs every required document; review cannot be bypassed; approval needs commission + evidence
+[PASS] I43 rejected application stays closed; a reason is mandatory
+[PASS] I44 operator roles are least-privilege everywhere, including inline admin checks; unmapped admin paths fail closed
+[PASS] I45 TOTP 2FA: RFC 6238 vector, enrolment revokes old sessions, codes cannot be replayed, recovery codes are one-time
+[PASS] I46 2FA is mandatory in production (cannot be switched off) and can be required elsewhere
+[PASS] I47 operator IP allow-list applies at login and on every request; customers are unaffected
+[PASS] I48 operator account guards: no self-lockout, always one active super admin, changes revoke sessions
+[PASS] I49 change-of-mind return withholds the seller's return fee; the books stay exact
+[PASS] I50 seller-fault return is free and refunds outbound shipping; shifting blame needs a written reason
+[PASS] I51 exchange: same-price option only, re-shipment moves stock once, and the order completes normally
+[PASS] I52 quantity-level cancel before shipment: exact refund, double-click safe, shipping refunded only with the last unit
+[PASS] I53 saving store settings with the masked account number does not queue a payout-account change
+[PASS] I54 rate limits: login brute force, per-account guessing, checkout floods; customers on one IP are not lumped together
+[PASS] I55 limiter missing: open by default (dev), closed when RATE_LIMIT_REQUIRED=true
+[PASS] I31 full reconciliation passes after every scenario above (R01–R21)
+=== OLMOA Security & Integrity Suite: 77/77 passed, 0 failed ===
+exit_code=0
+=== test:commercial
+[PASS] 1. NTS Korean BRN Validation & Checksum Engine
+[PASS] 2. Cash receipt: owner-only request, no invented NTS approval, operator records issuance, PII masked
+[PASS] 3. Dynamic Reverse Bidding Engine (Campaign, Bid Submission, Awarding)
+[PASS] 4. MD Price Counter-Offer Negotiation & Automatic Price Recalibration
+[PASS] 5. Lightning deals come only from real campaigns; image search refuses instead of inventing similarity scores
+[PASS] 6. Product activity reports measured paid sales only
+=== ALL COMMERCIAL EXPANSION TESTS PASSED 100% ===
+exit_code=0
+=== test:crawler
+[PASS] 1. URL Validation & Strict SSRF Defense
+[PASS] 2. HTML Sanitization & Payload Removal
+[PASS] 3. Multi-adapter Structured Product Extraction
+[PASS] 4. Multi-dimensional Option Matrix & Pricing Automation
+[PASS] 5. Complete Crawler Pipeline with Quality Scoring
+[PASS] 6. AI Translation & Localization Engine
+[PASS] 7. Dynamic Feature Flags Enforcement & End-to-End Control
+=== OLMOA Global URL Crawler & 3PL Integration Suite: 7/7 passed, 0 failed ===
+exit_code=0
+=== test:multichannel
+[PASS] 1. Global Pricing & Margin Engine (FX, Logistics, Customs, Anti-Negative Lock)
+[PASS] 2. Multi-Channel & Supply Chain Platform Connectors
+[PASS] 3. Multi-Channel Gateway Endpoints & Platform Seed Verification
+[PASS] 4. Partner Credentials, Listing Lifecycle & Feature Flag Guard
+[PASS] 5. Multi-Channel Orders, B2B PO Dispatch & 3PL Carrier Fulfillment
+[PASS] 6. Production: connector actions answer 501 and persist nothing
+=== OLMOA Global Multi-Channel & Supply Chain Suite: 6/6 passed, 0 failed ===
+exit_code=0
+=== test:e2e
+[PASS] 01 health, readiness flags and security headers
+[PASS] 02 sitemap lists approved products only
+[PASS] 03 42 root categories, each GNB slug has products
+[PASS] 04 search autocomplete
+[PASS] 05 product detail + customer Q&A + seller answer
+[PASS] 06 seller mini-shop
+[PASS] 07 wishlist toggle + coupon claim
+[PASS] 08 registration with consents grants a journaled welcome credit
+[PASS] 09 address book CRUD and default switching
+[PASS] 10 notifications inbox
+[PASS] 11 mixed checkout -> sandbox payment -> order detail & tracking
+[PASS] 12 sellers ship, delivery, purchase confirmation, operator payout
+[PASS] 13 seller bulk upload goes to review; operator approves
+[PASS] 14 banners and broadcast notifications (admin)
+[PASS] 15 customs: PCCC format, FX, duty estimate, cross-border order invoice
+[PASS] 16 carriers list, owner tracking, signed carrier milestone webhook
+[PASS] 17 partner KYB verification, control tower, FDS evaluation
+[PASS] 18 payment configuration reports the simulator honestly
+[PASS] 19 media upload (seller) and download
+[PASS] 20 SMS/AlimTalk dispatch logs honest status without provider
+[PASS] 21 late-delivery compensation only when actually late, once
+[PASS] 22 verified-purchase review with body metrics; measured sales stats
+[PASS] 23 sample QC request (seller) and inspection (operator)
+[PASS] 24 IPR report recorded for review (product not auto-hidden)
+[PASS] 25 public business disclosure (전자상거래법 사업자 정보 표시)
+[PASS] 26 reconciliation is clean after the full journey
+=== OLMOA Functional E2E (V3 contract): 26/26 passed, 0 failed ===
+exit_code=0
+=== test:exploits
+BLOCKED     E01  Forged "ey-olmoa-admin-*" token grants admin API  | status=503
+BLOCKED     E02  Admin login accepts any password >= 6 chars  | status=401
+BLOCKED     E03  Admin login response leaks admin_secret
+BLOCKED     E04  Partner login without password  | status=400
+BLOCKED     E05  X-Partner-Id header alone reads another seller's settlements  | status=401
+BLOCKED     E06  X-Customer-Id header alone reads victim addresses (PII)  | rows=0
+BLOCKED     E07  Unknown email + no password logs in as u_customer_001  | customer_id=undefined
+BLOCKED     E08  Social login with unverified email takes over existing account  | customer_id=undefined
+BLOCKED     E09  Password reset token returned to requester (account takeover)
+BLOCKED     E10  Order stored as PAID with zero payment transactions  | payment_status=undefined, payment_tx=0
+BLOCKED     E11  Purchase-confirm reward repeatable  | precondition blocked: header-forged checkout rejected (status=401)
+BLOCKED     E12  Returnless claim refunds client-supplied amount  | precondition blocked: header-forged checkout rejected (status=401)
+BLOCKED     E13  Price-match credit without price drop  | precondition blocked: header-forged checkout rejected (status=401)
+BLOCKED     E14  Unauthenticated webhook cancels arbitrary order  | precondition blocked: header-forged checkout rejected (status=401)
+BLOCKED     E15  Unauthenticated carrier webhook sets DELIVERED  | status=503
+BLOCKED     E16  Unauthenticated SMS/AlimTalk dispatch endpoint  | status=401
+BLOCKED     E17  Admin guard accepts any token starting with "ey"  | status=503
+BLOCKED     E18  Order accepted although last unit was sold concurrently (oversell)  | status=401, stock_now=1
+SUMMARY: 0 of 18 exploit checks VULNERABLE
+exit_code=0

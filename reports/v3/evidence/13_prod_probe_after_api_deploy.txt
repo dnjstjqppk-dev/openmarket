@@ -1,0 +1,15 @@
+H01  GET  /finance/tax-invoices (no auth)                       expect=401    got=401
+H02  POST /finance/cash-receipts/request (no auth)              expect=401    got=401
+H03  GET  /finance/cash-receipts/x (no auth)                    expect=401    got=401
+H04  GET  /supplier-orders (no auth)                            expect=401    got=401
+H05  GET  /integrations/health (no auth)                        expect=401    got=401
+H06  GET  /deals/lightning (fabricated feed retired)            expect=410    got=410
+H07  POST /search/visual-similarity (no image model)            expect=501    got=501
+H08  POST /channels/pricing/calculate {} (cost required)        expect=400    got=400
+H09  GET  /channels/credentials (no auth)                       expect=401    got=401
+H10  POST /onboarding/validate-business verification            expect=CHECKSUM_ONLY|NTS got="verification":"CHECKSUM_ONLY"
+H11  GET  /campaigns/lightning (real feed)                      expect=200    got=200
+H12  GET  /products (catalog)                                   expect=200    got=200
+H13  GET  /admin/dashboard forged token                         expect=401    got=401
+H14  CORS from foreign origin (no ACAO echo)                    expect=none   got=
+H15  POST /channels/webhooks/coupang_wing (unsigned)  expect=501 got={"success":false,"error":"[coupang_wing] 웹훅 서명 검증이 구현되지 않아 수신하지 않습니다.","code":"WEBHOOK_NOT_INTEGRATED"} http=501

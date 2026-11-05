@@ -1,0 +1,14 @@
+H01  GET  /finance/tax-invoices (no auth)                       expect=401    got=200
+H02  POST /finance/cash-receipts/request (no auth)              expect=401    got=400
+H03  GET  /finance/cash-receipts/x (no auth)                    expect=401    got=404
+H04  GET  /supplier-orders (no auth)                            expect=401    got=401
+H05  GET  /integrations/health (no auth)                        expect=401    got=200
+H06  GET  /deals/lightning (fabricated feed retired)            expect=410    got=200
+H07  POST /search/visual-similarity (no image model)            expect=501    got=200
+H08  POST /channels/pricing/calculate {} (cost required)        expect=400    got=200
+H09  GET  /channels/credentials (no auth)                       expect=401    got=401
+H10  POST /onboarding/validate-business verification            expect=CHECKSUM_ONLY|NTS got="verification":"CHECKSUM_VERIFIED"
+H11  GET  /campaigns/lightning (real feed)                      expect=200    got=200
+H12  GET  /products (catalog)                                   expect=200    got=200
+H13  GET  /admin/dashboard forged token                         expect=401    got=401
+H14  CORS from foreign origin (no ACAO echo)                    expect=none   got=

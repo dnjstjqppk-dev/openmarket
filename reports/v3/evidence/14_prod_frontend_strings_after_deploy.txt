@@ -1,0 +1,8 @@
+함께 보는 중  live_occurrences=0
+최근 1시간 내 8건 live_occurrences=0
+실시간 1위     live_occurrences=0
+전수 검수 완료 live_occurrences=0
+국세청 승인 완료 live_occurrences=0
+visual-similarity  live_occurrences=0
+14200              live_occurrences=0
+deals/lightning    live_occurrences=0
