@@ -1,0 +1,4 @@
+# after d1_30 2026-11-05T12:38:07Z
+db: {"reviews":0,"sold":21,"products_with_sales":5}
+api store pt_001: {"product_count":56,"total_sold":19,"avg_rating":4.9}
+api products with review_count>0: 0 sold sum 21

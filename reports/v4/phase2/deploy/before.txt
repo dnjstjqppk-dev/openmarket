@@ -1,0 +1,8 @@
+# before deploy 2026-11-05T12:32:04Z
+store pt_001: {"product_count":56,"total_sold":331395,"avg_rating":4.9}
+reviews prod_j_01 (0 reviews): {"avg":4.8,"count":0}
+review POST without auth: 401
+https://olmoa-storefront.dnjstjqppk.workers.dev assets/index-DqMinqiG.js  tailwindcdn=1
+https://openmarket.dnjstjqppk.workers.dev assets/index-DqMinqiG.js  tailwindcdn=1
+https://olmoa-admin.dnjstjqppk.workers.dev assets/index-B_pzCwNz.js  tailwindcdn=1
+https://olmoa-partner.dnjstjqppk.workers.dev assets/index-D1fL7Q5M.js  tailwindcdn=1
