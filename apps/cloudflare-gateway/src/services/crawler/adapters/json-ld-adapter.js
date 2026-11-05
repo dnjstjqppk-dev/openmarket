@@ -91,3 +91,4 @@ function normalizeJsonLdProduct(p) {
     raw_schema: p
   };
 }
+

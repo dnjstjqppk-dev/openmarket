@@ -3,6 +3,7 @@
 
 import { requireAuth, requireApprovedPartner, requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound } from '../lib/http.js';
+import { assertFeatureEnabled } from '../services/feature-flags.js';
 import { newId } from '../lib/ids.js';
 
 export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
@@ -11,6 +12,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   // 1. Create External Supplier Purchase Order (POST /api/v1/supplier-orders)
   if (p === '/api/v1/supplier-orders' && request.method === 'POST') {
     const caller = await requireAuth(request, env, ['ROLE_PARTNER', 'ROLE_ADMIN']);
+    await assertFeatureEnabled(env, 'auto_supplier_po');
     const body = await readJson(request);
 
     const subOrderId = String(body.sub_order_id || '').trim();
@@ -148,6 +150,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   const dispM = p.match(/^\/api\/v1\/supplier-orders\/([^/]+)\/dispatch$/);
   if (dispM && request.method === 'POST') {
     const caller = await requireAuth(request, env, ['ROLE_PARTNER', 'ROLE_ADMIN']);
+    await assertFeatureEnabled(env, 'fulfillment_3pl');
     const body = await readJson(request);
 
     const carrierCode = String(body.carrier_code || 'CJ대한통운').trim();
@@ -196,11 +199,16 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   // 5. Periodic / Manual Price & Stock Sync (POST /api/v1/sync/supplier-inventory)
   if (p === '/api/v1/sync/supplier-inventory' && request.method === 'POST') {
     const caller = await requireAuth(request, env, ['ROLE_PARTNER', 'ROLE_ADMIN']);
+    await assertFeatureEnabled(env, 'stock_sync');
     const body = await readJson(request);
 
     const skuId = String(body.sku_id || '').trim();
     const newStock = body.new_stock !== undefined ? Number(body.new_stock) : null;
     const newPrice = body.new_price !== undefined ? Number(body.new_price) : null;
+
+    if (newPrice !== null) {
+      await assertFeatureEnabled(env, 'auto_pricing');
+    }
 
     if (!skuId) throw bad('SKU_REQUIRED', '동기화할 sku_id 를 입력해 주세요.');
 

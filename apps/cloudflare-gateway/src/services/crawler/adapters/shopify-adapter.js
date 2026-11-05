@@ -75,3 +75,4 @@ export function extractShopify(html) {
     is_available: knownVariants.some((v) => v.available)
   };
 }
+

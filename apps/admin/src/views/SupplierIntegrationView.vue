@@ -43,12 +43,25 @@ interface SyncLog {
   created_at: string;
 }
 
-const currentTab = ref<'orders' | 'imports' | 'sync'>('orders');
+interface FeatureFlag {
+  key: string;
+  name: string;
+  category: string;
+  description: string;
+  is_enabled: number;
+  requires_credential: number;
+  credential_configured: number;
+  risk_level: string;
+  updated_at: string;
+}
+
+const currentTab = ref<'orders' | 'imports' | 'sync' | 'flags'>('orders');
 
 // State
 const orders = ref<SupplierOrder[]>([]);
 const importJobs = ref<ImportJob[]>([]);
 const syncLogs = ref<SyncLog[]>([]);
+const flags = ref<FeatureFlag[]>([]);
 const isLoading = ref(false);
 const actionMsg = ref('');
 const errorMsg = ref('');
@@ -107,6 +120,46 @@ async function loadSyncLogs() {
     console.error('Failed to load sync logs:', err);
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function loadFlags() {
+  isLoading.value = true;
+  try {
+    const r = await adminApi('/api/v1/admin/feature-flags');
+    flags.value = r.data.data || [];
+  } catch (err) {
+    console.error('Failed to load feature flags:', err);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function toggleFlag(flag: FeatureFlag) {
+  const targetState = flag.is_enabled === 1 ? false : true;
+  const verb = targetState ? '활성화(ON)' : '비활성화(OFF)';
+  if (!confirm(`[${flag.name}] 기능을 ${verb} 하시겠습니까?\n주의: ${flag.description}`)) return;
+
+  actionMsg.value = '';
+  errorMsg.value = '';
+
+  try {
+    const r = await adminApi(`/api/v1/admin/feature-flags/${flag.key}/toggle`, {
+      method: 'POST',
+      json: {
+        is_enabled: targetState,
+        reason: `운영자 콘솔 제어: ${verb}`
+      }
+    });
+
+    if (r.ok) {
+      actionMsg.value = `✓ [${flag.name}] 기능이 ${verb} 처리되었습니다.`;
+      loadFlags();
+    } else {
+      errorMsg.value = r.data.error || '플래그 토글 실패';
+    }
+  } catch (err: any) {
+    errorMsg.value = err.message;
   }
 }
 
@@ -175,6 +228,7 @@ onMounted(() => {
   loadOrders();
   loadImportJobs();
   loadSyncLogs();
+  loadFlags();
 });
 </script>
 
@@ -195,7 +249,7 @@ onMounted(() => {
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">3PL 물류 대행 & 위탁판매 통합 관제 센터</h1>
         <p class="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-          외부 위탁 공급업체 발주(PO) 접수 및 3PL 직출고 송장 연동, 전사 URL 상품 수집 작업 감사, 실시간 공급가/재고 변동 알림을 통합 관리합니다.
+          외부 위탁 공급업체 발주(PO) 접수 및 3PL 직출고 송장 연동, 전사 URL 상품 수집 작업 감사, 실시간 공급가/재고 변동 알림 및 <strong>기능별 독립 ON/OFF 제어(Feature Flags)</strong>를 통합 관리합니다.
         </p>
       </div>
       <div class="absolute -right-6 -bottom-6 opacity-10 text-white text-9xl pointer-events-none">
@@ -214,10 +268,10 @@ onMounted(() => {
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-2">
+    <div class="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-2 overflow-x-auto">
       <button
         @click="currentTab = 'orders'; loadOrders()"
-        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer"
+        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'orders' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
         <i class="fa-solid fa-truck-fast"></i>
@@ -227,7 +281,7 @@ onMounted(() => {
 
       <button
         @click="currentTab = 'imports'; loadImportJobs()"
-        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer"
+        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'imports' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
         <i class="fa-solid fa-cloud-arrow-down"></i>
@@ -237,12 +291,22 @@ onMounted(() => {
 
       <button
         @click="currentTab = 'sync'; loadSyncLogs()"
-        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer"
+        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'sync' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
         <i class="fa-solid fa-arrows-rotate"></i>
         <span>재고·공급가 변동 알림 (Sync)</span>
         <span class="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ syncLogs.length }}</span>
+      </button>
+
+      <button
+        @click="currentTab = 'flags'; loadFlags()"
+        class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
+        :class="currentTab === 'flags' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+      >
+        <i class="fa-solid fa-toggle-on text-emerald-500"></i>
+        <span>기능 활성화 관리 (Feature Flags)</span>
+        <span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-mono">9개</span>
       </button>
     </div>
 
@@ -476,6 +540,86 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: Feature Flags Management -->
+    <div v-if="currentTab === 'flags'" class="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-indigo-600"></i>
+            <span>상용 기능별 독립 ON/OFF 제어 (Feature Flags Engine)</span>
+          </h2>
+          <p class="text-xs text-slate-500">
+            외주 발주, 크롤링, AI 번역, 자동 가격 조정 등 대외 영향이 있는 기능은 검증 및 승인 전까지 안전하게 OFF 차단 정책이 적용됩니다.
+          </p>
+        </div>
+        <button
+          @click="loadFlags"
+          class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
+        >
+          <i class="fa-solid fa-rotate-right"></i> 플래그 새로고침
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="flag in flags"
+          :key="flag.key"
+          class="p-5 rounded-2xl border transition-all flex flex-col justify-between"
+          :class="flag.is_enabled === 1 ? 'border-indigo-300 bg-indigo-50/30 shadow-sm' : 'border-slate-200 bg-slate-50/60 opacity-80'"
+        >
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold font-mono px-2 py-0.5 rounded uppercase tracking-wider"
+                :class="{
+                  'bg-rose-100 text-rose-800': flag.risk_level === 'HIGH',
+                  'bg-amber-100 text-amber-800': flag.risk_level === 'MEDIUM',
+                  'bg-slate-200 text-slate-700': flag.risk_level === 'LOW'
+                }"
+              >
+                위험도: {{ flag.risk_level }}
+              </span>
+
+              <!-- Live ON/OFF Switch -->
+              <button
+                @click="toggleFlag(flag)"
+                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                :class="flag.is_enabled === 1 ? 'bg-emerald-600' : 'bg-slate-300'"
+              >
+                <span
+                  class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="flag.is_enabled === 1 ? 'translate-x-5' : 'translate-x-0'"
+                />
+              </button>
+            </div>
+
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-bold text-slate-900">{{ flag.name }}</h3>
+                <span class="text-[10px] font-mono font-semibold" :class="flag.is_enabled === 1 ? 'text-emerald-700' : 'text-slate-400'">
+                  {{ flag.is_enabled === 1 ? '● ACTIVE (ON)' : '○ BLOCKED (OFF)' }}
+                </span>
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono pt-0.5">{{ flag.key }}</div>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">{{ flag.description }}</p>
+          </div>
+
+          <div class="pt-4 border-t border-slate-200/60 mt-4 flex items-center justify-between text-[11px]">
+            <span v-if="flag.requires_credential === 1" class="text-amber-800 font-medium">
+              <i class="fa-solid fa-key mr-1"></i>외부 연동 API 키 필요
+            </span>
+            <span v-else class="text-emerald-700 font-medium">
+              <i class="fa-solid fa-circle-check mr-1"></i>내부 안전 엔진 동작
+            </span>
+            <span class="text-slate-400 font-mono text-[10px]">
+              {{ flag.updated_at ? new Date(flag.updated_at).toLocaleDateString() : '-' }}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
 

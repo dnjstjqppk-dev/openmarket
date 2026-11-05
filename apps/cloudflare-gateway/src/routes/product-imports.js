@@ -1,7 +1,9 @@
 // apps/cloudflare-gateway/src/routes/product-imports.js
-// REST endpoints for URL Product Crawling, Preview, and Automated Catalog Publishing.
+// REST endpoints for URL Product Crawling, Preview, AI Localization, and Automated Catalog Publishing.
 
 import { crawlAndExtractProduct } from '../services/crawler/crawler-service.js';
+import { enhanceProductWithAi } from '../services/crawler/ai-translator.js';
+import { assertFeatureEnabled, isFeatureEnabled } from '../services/feature-flags.js';
 import { requireAuth, requireApprovedPartner, requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, notFound } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
@@ -13,6 +15,8 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
   // 1. Single URL Crawl & Analyze (POST /api/v1/imports/crawl)
   if (p === '/api/v1/imports/crawl' && request.method === 'POST') {
     const caller = await requireApprovedPartner(request, env);
+    await assertFeatureEnabled(env, 'url_crawler');
+
     const body = await readJson(request);
     const targetUrl = String(body.url || '').trim();
     const htmlOverride = body.html_override || null;
@@ -32,22 +36,37 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     const preview = result.data;
     const jobId = newId('imp');
 
-    // Record job in database
-    await env.DB.prepare(`
-      INSERT INTO product_import_jobs (
-        id, partner_id, supplier_id, source_url, domain, status, quality_score,
-        extracted_data_json, preview_data_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'ANALYZED', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(
-      jobId,
-      caller.partner.id,
-      body.supplier_id || null,
-      targetUrl,
-      preview.domain,
-      preview.quality_score,
-      JSON.stringify(preview),
-      JSON.stringify(preview)
-    ).run();
+    // Prepare batch statements
+    const stmts = [
+      env.DB.prepare(`
+        INSERT INTO product_import_jobs (
+          id, partner_id, supplier_id, source_url, domain, status, quality_score,
+          extracted_data_json, preview_data_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'ANALYZED', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).bind(
+        jobId,
+        caller.partner.id,
+        body.supplier_id || null,
+        targetUrl,
+        preview.domain,
+        preview.quality_score,
+        JSON.stringify(preview),
+        JSON.stringify(preview)
+      )
+    ];
+
+    // Ingest images into product_import_assets
+    const images = Array.isArray(preview.product?.images) ? preview.product.images : [preview.product?.thumbnail_url].filter(Boolean);
+    for (const imgUrl of images.slice(0, 10)) {
+      const assetId = newId('ast');
+      stmts.push(env.DB.prepare(`
+        INSERT INTO product_import_assets (
+          id, import_job_id, original_url, media_type, status, created_at
+        ) VALUES (?, ?, ?, 'IMAGE', 'DISCOVERED', CURRENT_TIMESTAMP)
+      `).bind(assetId, jobId, imgUrl));
+    }
+
+    await env.DB.batch(stmts);
 
     preview.job_id = jobId;
 
@@ -78,7 +97,60 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     });
   }
 
-  // 3. Get Import Job Details (GET /api/v1/imports/:id)
+  // 3. AI Localization & Enhancement (POST /api/v1/imports/:id/ai-enhance)
+  const aiM = p.match(/^\/api\/v1\/imports\/([^/]+)\/ai-enhance$/);
+  if (aiM && request.method === 'POST') {
+    const caller = await requireApprovedPartner(request, env);
+    await assertFeatureEnabled(env, 'ai_translation');
+
+    const job = await env.DB.prepare(`
+      SELECT * FROM product_import_jobs WHERE id = ? AND partner_id = ?
+    `).bind(aiM[1], caller.partner.id).first();
+
+    if (!job) throw notFound('수집 작업을 찾을 수 없습니다.');
+
+    let preview = {};
+    try { preview = JSON.parse(job.preview_data_json || job.extracted_data_json || '{}'); } catch {}
+
+    const aiResult = await enhanceProductWithAi(preview.product || {}, { targetLang: 'KO', env });
+    const enhancementId = newId('aie');
+
+    // Update job preview with translated title and summary
+    if (preview.product) {
+      preview.product.title = aiResult.translated_title;
+      preview.product.description_html = aiResult.enhanced_summary;
+      preview.ai_enhanced = true;
+      preview.ai_bullets = aiResult.bullets;
+    }
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO ai_product_enhancements (
+          id, import_job_id, source_language, target_language, original_title,
+          translated_title, enhanced_summary, bullets_json, provider, status, created_at
+        ) VALUES (?, ?, 'EN', 'KO', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).bind(
+        enhancementId, job.id, aiResult.original_title, aiResult.translated_title,
+        aiResult.enhanced_summary, JSON.stringify(aiResult.bullets), aiResult.provider, aiResult.live_external_api_status
+      ),
+      env.DB.prepare(`
+        UPDATE product_import_jobs
+        SET preview_data_json = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(JSON.stringify(preview), job.id)
+    ]);
+
+    return json(corsHeaders, {
+      success: true,
+      job_id: job.id,
+      data: {
+        ...aiResult,
+        updated_preview: preview
+      }
+    });
+  }
+
+  // 4. Get Import Job Details (GET /api/v1/imports/:id)
   const jobM = p.match(/^\/api\/v1\/imports\/([^/]+)$/);
   if (jobM && jobM[1] !== 'jobs' && request.method === 'GET') {
     const caller = await requireApprovedPartner(request, env);
@@ -102,7 +174,7 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     });
   }
 
-  // 3. Publish Crawled Product to Catalog (POST /api/v1/imports/:id/publish)
+  // 5. Publish Crawled Product to Catalog (POST /api/v1/imports/:id/publish)
   const pubM = p.match(/^\/api\/v1\/imports\/([^/]+)\/publish$/);
   if (pubM && request.method === 'POST') {
     const caller = await requireApprovedPartner(request, env);
@@ -129,7 +201,6 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     const descHtml = String(body.description_html || preview.product?.description_html || '<p>공식 공급업체 직출고 검증 정품 상품입니다.</p>');
 
     const prodId = newId('prod');
-    const slug = `${title.toLowerCase().replace(/[^a-z0-9가-힣]/g, '-').slice(0, 30)}-${Date.now().toString(36)}`;
     const variants = Array.isArray(body.variants) && body.variants.length > 0 ? body.variants : (preview.variants || []);
 
     const stmts = [];
@@ -188,11 +259,17 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       }
     }
 
-    // 5. Update import job status
+    // 5. Update import job status and assets
     stmts.push(env.DB.prepare(`
       UPDATE product_import_jobs
       SET status = 'PUBLISHED', published_product_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
+    `).bind(prodId, job.id));
+
+    stmts.push(env.DB.prepare(`
+      UPDATE product_import_assets
+      SET product_id = ?
+      WHERE import_job_id = ?
     `).bind(prodId, job.id));
 
     await env.DB.batch(stmts);
@@ -205,9 +282,11 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     });
   }
 
-  // 5. Bulk URL Crawl Batch (POST /api/v1/imports/bulk)
+  // 6. Bulk URL Crawl Batch (POST /api/v1/imports/bulk)
   if (p === '/api/v1/imports/bulk' && request.method === 'POST') {
     const caller = await requireApprovedPartner(request, env);
+    await assertFeatureEnabled(env, 'bulk_crawler');
+
     const body = await readJson(request);
     const urls = Array.isArray(body.urls) ? body.urls.map(String).filter((u) => u.trim()) : [];
 
@@ -252,7 +331,7 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     }, 201);
   }
 
-  // 6. Admin All Import Jobs Monitoring (GET /api/v1/admin/imports/jobs)
+  // 7. Admin All Import Jobs Monitoring (GET /api/v1/admin/imports/jobs)
   if (p === '/api/v1/admin/imports/jobs' && request.method === 'GET') {
     await requireAdmin(request, env);
     const { results } = await env.DB.prepare(`

@@ -21,3 +21,4 @@ export function sanitizeHtml(rawHtml) {
 
   return clean.trim();
 }
+

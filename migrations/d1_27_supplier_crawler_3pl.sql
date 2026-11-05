@@ -166,3 +166,4 @@ CREATE TABLE IF NOT EXISTS supplier_settlements (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_supplier_settlements_supplier ON supplier_settlements(supplier_id, period_month);
+
