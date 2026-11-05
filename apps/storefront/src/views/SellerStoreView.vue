@@ -36,8 +36,8 @@ watch(() => route.params.id, loadStore)
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded bg-[#00A862] text-white text-[10px] font-black uppercase">Verified Official Partner</span>
-              <span class="text-xs text-gray-300">Biz License: {{ storeData.partner.business_number }}</span>
+              <span v-if="storeData.partner.status === 'APPROVED'" class="px-2 py-0.5 rounded bg-[#00A862] text-white text-[10px] font-black">입점 심사 승인 판매자</span>
+              <span v-if="storeData.partner.business_number" class="text-xs text-gray-300">사업자등록번호 {{ storeData.partner.business_number }}</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-black mt-1">{{ storeData.partner.company_name }}</h1>
             <p class="text-xs text-gray-300 mt-1">
@@ -48,16 +48,17 @@ watch(() => route.params.id, loadStore)
 
         <div class="grid grid-cols-3 gap-3 text-center shrink-0">
           <div class="bg-white/10 px-4 py-2.5 rounded-xl">
-            <div class="text-lg font-black text-[#FFE600]">★ {{ storeData.metrics.avg_rating }}</div>
-            <div class="text-[10px] text-gray-300">Store Rating</div>
+            <div v-if="storeData.metrics.review_count > 0 && storeData.metrics.avg_rating != null" class="text-lg font-black text-[#FFE600]">★ {{ storeData.metrics.avg_rating }}</div>
+            <div v-else class="text-lg font-black text-gray-400">-</div>
+            <div class="text-[10px] text-gray-300">스토어 평점<template v-if="storeData.metrics.review_count > 0"> (후기 {{ storeData.metrics.review_count }})</template></div>
           </div>
           <div class="bg-white/10 px-4 py-2.5 rounded-xl">
             <div class="text-lg font-black text-white">{{ storeData.metrics.product_count }}</div>
-            <div class="text-[10px] text-gray-300">Active Products</div>
+            <div class="text-[10px] text-gray-300">판매 중 상품</div>
           </div>
           <div class="bg-white/10 px-4 py-2.5 rounded-xl">
-            <div class="text-lg font-black text-[#00A862]">{{ (storeData.metrics.total_sold || 0).toLocaleString() }}+</div>
-            <div class="text-[10px] text-gray-300">Orders Fulfilled</div>
+            <div class="text-lg font-black text-[#00A862]">{{ (storeData.metrics.total_sold || 0).toLocaleString() }}</div>
+            <div class="text-[10px] text-gray-300">누적 판매 수량</div>
           </div>
         </div>
       </div>

@@ -127,7 +127,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         };
       });
 
-      const avgVal = avgRow && avgRow.avg_rating ? parseFloat(avgRow.avg_rating.toFixed(1)) : 4.8;
+      const avgVal = avgRow && avgRow.review_count > 0 && avgRow.avg_rating != null ? parseFloat(Number(avgRow.avg_rating).toFixed(1)) : null;
       const cntVal = avgRow ? avgRow.review_count : parsedReviews.length;
 
       return new Response(JSON.stringify({
@@ -159,7 +159,11 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         return new Response(JSON.stringify({ error: '리뷰 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
       }
       const revId = newId('rev');
-      const ratingVal = Math.max(1, Math.min(5, Number(b.rating) || 5));
+      // The buyer must choose the rating; nothing is filled in on their behalf.
+      const ratingVal = Number(b.rating);
+      if (!Number.isInteger(ratingVal) || ratingVal < 1 || ratingVal > 5) {
+        return new Response(JSON.stringify({ success: false, code: 'INVALID_RATING', error: '별점(1~5)을 선택해 주세요.' }), { status: 400, headers: corsHeaders });
+      }
       await env.DB.prepare(
         `INSERT INTO product_reviews (id, product_id, order_id, user_id, reviewer_name, author_name, sku_option_summary, rating, content, images_json, is_verified_purchase, user_height_cm, user_weight_kg, fit_type)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`

@@ -336,7 +336,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       'SELECT id, business_name, business_reg_number, status, base_shipping_fee, free_shipping_threshold, created_at FROM partners WHERE id = ?'
     ).bind(partnerId).first();
 
-    if (!partner) {
+    // Only sellers that passed onboarding review have a public store (pending, rejected and suspended ones do not).
+    if (!partner || partner.status !== 'APPROVED') {
       return new Response(JSON.stringify({ error: 'Partner store not found' }), { status: 404, headers: corsHeaders });
     }
 
@@ -354,6 +355,13 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     ).bind(partner.business_name, partnerId).all();
 
     const totalSold = products.reduce((acc, p) => acc + (p.total_sold_count || 0), 0);
+    // Store rating = average of the reviews actually written on this partner's products; null when there are none.
+    const rv = await env.DB.prepare(
+      `SELECT ROUND(AVG(r.rating), 1) AS avg_rating, COUNT(*) AS review_count
+       FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.partner_id = ?`
+    ).bind(partnerId).first();
+    const storeReviewCount = rv ? Number(rv.review_count) || 0 : 0;
+    const storeRating = storeReviewCount > 0 && rv.avg_rating != null ? Number(rv.avg_rating) : null;
 
     return new Response(JSON.stringify({
       success: true,
@@ -371,12 +379,14 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         stats: {
           product_count: products.length,
           total_sold_count: totalSold,
-          store_rating: 4.9
+          store_rating: storeRating,
+          review_count: storeReviewCount
         },
         metrics: {
           product_count: products.length,
           total_sold: totalSold,
-          avg_rating: 4.9
+          avg_rating: storeRating,
+          review_count: storeReviewCount
         },
         products
       }

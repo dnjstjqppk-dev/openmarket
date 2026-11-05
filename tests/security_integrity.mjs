@@ -1228,6 +1228,58 @@ await t.test('I55 limiter missing: open by default (dev), closed when RATE_LIMIT
   assert.equal((await h.call('/api/v1/products')).status, 200, 'a broken limiter does not take the shop down');
 });
 
+await t.test('I56 d1_30 removes seeded reviews and invented sold counts (present up to d1_29, gone after)', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { listMigrations, MIGRATIONS_DIR } = await import('./lib/harness.mjs');
+  const db = new DatabaseSync(':memory:');
+  const files = listMigrations();
+  const cut = files.indexOf('d1_30_remove_seeded_reviews_and_sales.sql');
+  assert.ok(cut > 0, 'd1_30 is part of the migration chain');
+  for (const f of files.slice(0, cut)) db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'));
+  const before = { reviews: db.prepare('SELECT COUNT(*) c FROM product_reviews').get().c, sold: db.prepare('SELECT SUM(total_sold_count) s FROM products').get().s };
+  assert.ok(before.reviews >= 10 && before.sold > 100000, `fabricated rows exist before d1_30: ${JSON.stringify(before)}`);
+  for (const f of files.slice(cut)) db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'));
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM product_reviews').get().c, 0, 'no review without an order of its author survives');
+  assert.equal(db.prepare('SELECT COALESCE(SUM(total_sold_count), 0) s FROM products').get().s, 0, 'no inventory activity → nothing sold');
+});
+
+await t.test('I57 seller store rating is the real review average (null without reviews); only approved sellers have a store', async () => {
+  const store = await I.call('/api/v1/partners/pt_002/store');
+  assert.equal(store.status, 200, store.text);
+  const real = I.one('SELECT ROUND(AVG(r.rating), 1) a, COUNT(*) c FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.partner_id = ?', 'pt_002');
+  assert.equal(store.json.data.metrics.review_count, real.c);
+  assert.equal(store.json.data.metrics.avg_rating, real.c ? real.a : null);
+  assert.notEqual(store.json.data.metrics.avg_rating, 4.9, 'no fixed 4.9');
+  I.db.prepare("UPDATE partners SET status = 'SUSPENDED' WHERE id = 'pt_002'").run();
+  try {
+    assert.equal((await I.call('/api/v1/partners/pt_002/store')).status, 404, 'suspended seller has no public store');
+  } finally {
+    I.db.prepare("UPDATE partners SET status = 'APPROVED' WHERE id = 'pt_002'").run();
+  }
+});
+
+await t.test('I58 review rating must be chosen by the buyer (no default 5); summary is null without reviews', async () => {
+  const sku = I.one("SELECT s.id, s.product_id FROM product_skus s JOIN products p ON p.id = s.product_id WHERE p.partner_id = 'pt_002' AND s.stock_quantity > 5 AND NOT EXISTS (SELECT 1 FROM product_reviews r WHERE r.product_id = p.id) ORDER BY s.id DESC LIMIT 1");
+  assert.ok(sku, 'a product without reviews exists');
+  const empty = await I.call(`/api/v1/products/${sku.product_id}/reviews`);
+  assert.equal(empty.json.avg_rating, null, 'no invented 4.8');
+  assert.equal(empty.json.review_count, 0);
+  const o = (await I.checkout(c2, [{ sku_id: sku.id, quantity: 1 }])).json;
+  assert.equal((await I.pay(c2, o)).status, 200);
+  await deliver(o.order_id);
+  const noRating = await I.call(`/api/v1/products/${sku.product_id}/reviews`, { method: 'POST', token: c2, body: { content: '잘 받았습니다' } });
+  assert.equal(noRating.status, 400, noRating.text);
+  assert.equal(noRating.json.code, 'INVALID_RATING');
+  assert.equal((await I.call(`/api/v1/products/${sku.product_id}/reviews`, { method: 'POST', token: c2, body: { content: '잘 받았습니다', rating: 3.5 } })).status, 400, 'fractions rejected');
+  const ok = await I.call(`/api/v1/products/${sku.product_id}/reviews`, { method: 'POST', token: c2, body: { content: '잘 받았습니다', rating: 3 } });
+  assert.equal(ok.status, 201, ok.text);
+  const after = await I.call(`/api/v1/products/${sku.product_id}/reviews`);
+  assert.equal(after.json.avg_rating, 3);
+  assert.equal(after.json.review_count, 1);
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R21)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);
