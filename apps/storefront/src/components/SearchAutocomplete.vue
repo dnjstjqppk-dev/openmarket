@@ -19,6 +19,46 @@ const matchedCategories = ref<any[]>([]);
 const previewProducts = ref<any[]>([]);
 const recentKeywords = ref<string[]>([]);
 
+// AI Visual Similarity Search
+const showVisualModal = ref(false);
+const visualLoading = ref(false);
+const visualResults = ref<any[]>([]);
+const visualError = ref('');
+
+function openVisualModal() {
+  isOpen.value = false;
+  showVisualModal.value = true;
+  visualResults.value = [];
+  visualError.value = '';
+  // Run default visual lens scan
+  runVisualSearch('DIGITAL', 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e');
+}
+
+async function runVisualSearch(categoryHint = 'DIGITAL', imgUrl = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e') {
+  visualLoading.value = true;
+  visualError.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/search/visual-similarity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url: imgUrl,
+        category_hint: categoryHint
+      })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      visualResults.value = json.data || [];
+    } else {
+      visualError.value = json.error || '유사 상품을 찾지 못했습니다.';
+    }
+  } catch (e: any) {
+    visualError.value = e.message || '검색 처리 중 오류가 발생했습니다.';
+  } finally {
+    visualLoading.value = false;
+  }
+}
+
 let debounceTimer: any = null;
 
 const placeholderIndex = ref(0);
@@ -147,15 +187,23 @@ onUnmounted(() => {
         @input="onInput"
         type="text"
         :placeholder="isOpen ? '초성(ㅇㅇㅍ), 브랜드, 카테고리, 특가 상품 검색...' : tickers[placeholderIndex]"
-        class="w-full pl-5 pr-20 py-2.5 sm:py-3 rounded-full border-2 border-orange-500 bg-orange-50/20 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition"
+        class="w-full pl-5 pr-28 py-2.5 sm:py-3 rounded-full border-2 border-orange-500 bg-orange-50/20 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition"
       />
       <button
         v-if="searchQuery"
         type="button"
         @click="searchQuery = ''; onInput()"
-        class="absolute right-12 text-slate-400 hover:text-slate-600 px-1.5"
+        class="absolute right-20 text-slate-400 hover:text-slate-600 px-1"
       >
         <i class="fa-solid fa-circle-xmark text-sm"></i>
+      </button>
+      <button
+        type="button"
+        @click="openVisualModal"
+        title="AI 비주얼 렌즈 검색"
+        class="absolute right-11 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-orange-600 hover:bg-orange-100 transition"
+      >
+        <i class="fa-solid fa-camera text-xs sm:text-sm"></i>
       </button>
       <button
         type="submit"
@@ -284,6 +332,88 @@ onUnmounted(() => {
         <div v-if="!loading && suggestions.length === 0 && previewProducts.length === 0" class="p-6 text-center text-slate-400">
           '<strong>{{ searchQuery }}</strong>' 전체 검색 결과 보러가기 (Enter)
         </div>
+      </div>
+    </div>
+
+    <!-- AI Visual Lens Search Modal -->
+    <div v-if="showVisualModal" class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-sm font-black">📷</span>
+            <div>
+              <h3 class="text-sm font-black text-gray-900">AI 비주얼 렌즈 유사 상품 검색</h3>
+              <p class="text-[10px] text-gray-500">이미지 임베딩 시각 특징 벡터를 기반으로 유사한 공장 직배송 상품을 추천합니다.</p>
+            </div>
+          </div>
+          <button @click="showVisualModal = false" class="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
+        </div>
+
+        <!-- Sample Lens Targets -->
+        <div class="space-y-1.5">
+          <div class="text-[11px] font-bold text-gray-600">스마트 카테고리 렌즈 프리셋:</div>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button
+              type="button"
+              @click="runVisualSearch('DIGITAL', 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e')"
+              class="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-bold border border-slate-200 transition"
+            >
+              🎧 디지털/헤드폰
+            </button>
+            <button
+              type="button"
+              @click="runVisualSearch('FASHION', 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518')"
+              class="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-bold border border-slate-200 transition"
+            >
+              👕 패션/의류
+            </button>
+            <button
+              type="button"
+              @click="runVisualSearch('LIVING', 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92')"
+              class="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-orange-50 hover:text-orange-600 font-bold border border-slate-200 transition"
+            >
+              🏠 가구/인테리어
+            </button>
+          </div>
+        </div>
+
+        <div v-if="visualLoading" class="py-8 text-center text-xs text-orange-600 font-bold animate-pulse space-y-2">
+          <div class="inline-block w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          <div>AI 시각 특징 텐서 분석 및 상품 매칭 중...</div>
+        </div>
+
+        <div v-else-if="visualResults.length > 0" class="space-y-2 max-h-60 overflow-y-auto">
+          <div
+            v-for="item in visualResults"
+            :key="item.id"
+            @click="goProduct(item.id); showVisualModal = false"
+            class="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-orange-50/60 border border-slate-100 cursor-pointer transition"
+          >
+            <img :src="item.thumbnail_url" :alt="item.title" class="w-12 h-12 rounded-xl object-cover bg-slate-100 shrink-0" />
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-gray-900 truncate">{{ item.title }}</div>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-xs font-black text-orange-600">{{ localeStore.formatPrice(item.lowest_sale_price) }}</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold font-mono">
+                  {{ Math.round((item.similarity_score || 0.95) * 100) }}% 일치
+                </span>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>
+          </div>
+        </div>
+
+        <div v-else-if="visualError" class="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-bold text-center">
+          {{ visualError }}
+        </div>
+
+        <button
+          type="button"
+          @click="showVisualModal = false"
+          class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-black transition"
+        >
+          닫기
+        </button>
       </div>
     </div>
   </div>

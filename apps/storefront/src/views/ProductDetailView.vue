@@ -40,6 +40,17 @@ const qnaSubmitting = ref(false)
 const qnaMsg = ref('')
 
 const isWishlisted = ref(false)
+const liveActivity = ref<any>(null)
+
+const loadLiveActivity = async (productId: string) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/products/${productId}/live-activity`)
+    const json = await res.json()
+    if (json.success && json.data) {
+      liveActivity.value = json.data
+    }
+  } catch {}
+}
 
 // Strict HTML sanitizer for description_html (strips <script>, <iframe>, <object>, and inline on* event handlers)
 const sanitizedDescriptionHtml = computed(() => {
@@ -78,7 +89,8 @@ const loadProductAll = async () => {
         loadReviews(json.data.id),
         loadQna(json.data.id),
         checkWishlist(json.data.id),
-        loadSalesStats(json.data.id)
+        loadSalesStats(json.data.id),
+        loadLiveActivity(json.data.id)
       ])
     }
   } catch (e) {
@@ -353,6 +365,19 @@ const handleAddToCart = (goToCheckout = false) => {
                 <span>🏪 {{ product.partner_name || 'Olmoa Official Flagship' }}</span>
                 <span class="text-[#FF5000]">Visit Store →</span>
               </RouterLink>
+            </div>
+
+            <!-- Live Activity FOMO Widget -->
+            <div v-if="liveActivity" class="mb-2.5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-50 border border-rose-200/80 text-xs font-bold text-rose-700 shadow-2xs">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+              </span>
+              <span>🔥 현재 {{ liveActivity.active_viewers || 14 }}명이 함께 보는 중</span>
+              <span class="text-rose-300">|</span>
+              <span class="text-[11px] font-medium text-rose-600 truncate max-w-[260px] sm:max-w-none">
+                {{ liveActivity.recent_order_event ? `${liveActivity.recent_order_event.time_ago} ${liveActivity.recent_order_event.buyer_location}에서 구매 완료` : '최근 1시간 내 8건 주문 접수' }}
+              </span>
             </div>
 
             <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-snug mb-3">

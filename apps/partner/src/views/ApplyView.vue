@@ -18,6 +18,42 @@ const f = reactive({
 const error = ref('')
 const loading = ref(false)
 
+// Real-time NTS BRN Verification
+const brnValidating = ref(false)
+const brnStatus = ref<{ valid: boolean; message: string; data?: any } | null>(null)
+
+async function validateBrn() {
+  if (!f.business_reg_number.trim()) {
+    brnStatus.value = { valid: false, message: '사업자등록번호를 입력해 주세요.' }
+    return
+  }
+  brnValidating.value = true
+  brnStatus.value = null
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/onboarding/validate-business`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ registration_number: f.business_reg_number.trim() })
+    })
+    const json = await res.json()
+    if (res.ok && json.success && json.data) {
+      brnStatus.value = {
+        valid: json.data.is_valid,
+        message: json.data.is_valid
+          ? `✓ 국세청 조회 완료: ${json.data.nts_status} (${json.data.tax_type || '과세사업자'})`
+          : `⚠ 유효하지 않은 사업자등록번호 (체크섬 불일치)`,
+        data: json.data
+      }
+    } else {
+      brnStatus.value = { valid: false, message: json.error || '사업자등록 상태 조회 실패' }
+    }
+  } catch (e: any) {
+    brnStatus.value = { valid: false, message: e.message || '검증 서버 연결 오류' }
+  } finally {
+    brnValidating.value = false
+  }
+}
+
 async function submit() {
   error.value = ''
   if (f.password !== f.password2) { error.value = '비밀번호 확인이 일치하지 않습니다.'; return }
@@ -67,7 +103,23 @@ const input = 'w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outlin
         <div class="grid sm:grid-cols-2 gap-3">
           <label class="block"><span class="font-bold text-gray-700">상호</span><input v-model="f.business_name" required :class="input" /></label>
           <label class="block"><span class="font-bold text-gray-700">대표자명</span><input v-model="f.representative_name" required :class="input" /></label>
-          <label class="block sm:col-span-2"><span class="font-bold text-gray-700">사업자등록번호</span><input v-model="f.business_reg_number" inputmode="numeric" placeholder="000-00-00000" required :class="input" /></label>
+          <div class="block sm:col-span-2 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-gray-700">사업자등록번호</span>
+              <button
+                type="button"
+                @click="validateBrn"
+                :disabled="brnValidating || !f.business_reg_number"
+                class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition disabled:opacity-50"
+              >
+                {{ brnValidating ? '국세청 조회 중...' : '국세청 상태 실시간 검증' }}
+              </button>
+            </div>
+            <input v-model="f.business_reg_number" inputmode="numeric" placeholder="000-00-00000" required :class="input" />
+            <div v-if="brnStatus" :class="['p-2 rounded-lg text-[11px] font-bold mt-1', brnStatus.valid ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200']">
+              {{ brnStatus.message }}
+            </div>
+          </div>
         </div>
         <label class="flex items-center gap-2"><input v-model="f.mail_order_exempt" type="checkbox" /> 통신판매업 신고 면제 대상입니다</label>
         <label v-if="!f.mail_order_exempt" class="block"><span class="font-bold text-gray-700">통신판매업 신고번호</span><input v-model="f.mail_order_reg_number" placeholder="제2026-서울강남-0000호" required :class="input" /></label>

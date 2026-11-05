@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
@@ -9,17 +9,39 @@ const campaign = ref<any>(null)
 const deals = ref<any[]>([])
 const loading = ref(true)
 
+const secondsLeft = ref(14200)
+let timer: any = null
+
+const timeLeftFormatted = computed(() => {
+  const h = Math.floor(secondsLeft.value / 3600).toString().padStart(2, '0')
+  const m = Math.floor((secondsLeft.value % 3600) / 60).toString().padStart(2, '0')
+  const s = (secondsLeft.value % 60).toString().padStart(2, '0')
+  return `${h}:${m}:${s}`
+})
+
 onMounted(async () => {
+  timer = setInterval(() => {
+    if (secondsLeft.value > 0) secondsLeft.value--
+  }, 1000)
+
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`)
+    let res = await fetch(`${API_BASE_URL}/api/v1/deals/lightning`)
+    if (!res.ok) res = await fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`)
     const json = await res.json()
     if (json.success && json.data) {
-      campaign.value = json.data.campaign
+      campaign.value = json.data.campaign || { title: 'OLMOA 초특가 번개딜' }
       deals.value = json.data.deals || []
+      if (json.data.remaining_seconds) {
+        secondsLeft.value = json.data.remaining_seconds
+      }
     }
   } catch {} finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
 })
 </script>
 
@@ -36,8 +58,11 @@ onMounted(async () => {
         <p class="text-xs sm:text-sm text-white/90 mt-1"> Direct factory allocation with real-time stock gauges. Once claimed, prices return to standard retail.</p>
       </div>
       <div class="bg-black/25 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20 text-center shrink-0">
-        <div class="text-[10px] uppercase font-bold text-white/80">Campaign Status</div>
-        <div class="text-xl font-black text-[#FFE600]">LIVE NOW • UP TO 70% OFF</div>
+        <div class="text-[10px] uppercase font-bold text-white/80">종료까지 남은 시간</div>
+        <div class="text-xl font-mono font-black text-[#FFE600] flex items-center justify-center gap-1.5">
+          <i class="fa-regular fa-clock text-sm"></i>
+          <span>{{ timeLeftFormatted }}</span>
+        </div>
       </div>
     </div>
 

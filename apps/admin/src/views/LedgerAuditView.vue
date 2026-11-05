@@ -7,15 +7,17 @@ const router = useRouter()
 const settlements = ref<any[]>([])
 const inventoryLogs = ref<any[]>([])
 const claims = ref<any[]>([])
+const taxInvoices = ref<any[]>([])
 const loading = ref(true)
 const actionMsg = ref('')
 
 const loadLedgers = async () => {
   loading.value = true
   try {
-    const [res, claimRes] = await Promise.all([
+    const [res, claimRes, taxRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/admin/ledgers`, { headers: getAdminHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/admin/claims`, { headers: getAdminHeaders() })
+      fetch(`${API_BASE_URL}/api/v1/admin/claims`, { headers: getAdminHeaders() }),
+      fetch(`${API_BASE_URL}/api/v1/finance/tax-invoices`, { headers: getAdminHeaders() }).catch(() => null)
     ])
     const json = await res.json()
     const claimJson = await claimRes.json()
@@ -25,6 +27,10 @@ const loadLedgers = async () => {
     }
     if (claimJson.success) {
       claims.value = claimJson.data || []
+    }
+    if (taxRes && taxRes.ok) {
+      const taxJson = await taxRes.json()
+      if (taxJson.success) taxInvoices.value = taxJson.data || []
     }
   } catch (e) {
     console.error(e)
@@ -134,6 +140,47 @@ onMounted(loadLedgers)
                   Approve Refund
                 </button>
               </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-xl font-black text-gray-900 mb-1">전자세금계산서 및 현금영수증 국세청(홈택스) 전송 원장</h2>
+      <p class="text-xs text-gray-500 mb-4">주문 및 정산 건별 법정 전자세금계산서 승인번호 및 국세청 전송 상태를 실시간 감시합니다.</p>
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
+              <th class="py-3.5 px-5 font-bold">국세청 승인번호</th>
+              <th class="py-3.5 px-5 font-bold">주문 ID</th>
+              <th class="py-3.5 px-5 font-bold">공급자 (파트너)</th>
+              <th class="py-3.5 px-5 font-bold">과세 구분</th>
+              <th class="py-3.5 px-5 font-bold text-right">공급가액</th>
+              <th class="py-3.5 px-5 font-bold text-right">세액</th>
+              <th class="py-3.5 px-5 font-bold text-right">합계금액</th>
+              <th class="py-3.5 px-5 font-bold text-center">전송 상태</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="t in taxInvoices" :key="t.id" class="hover:bg-gray-50">
+              <td class="py-3 px-5 font-mono font-bold text-indigo-700">{{ t.issue_number }}</td>
+              <td class="py-3 px-5 font-mono">{{ t.order_id }}</td>
+              <td class="py-3 px-5 font-bold">{{ t.seller_name || t.partner_id }}</td>
+              <td class="py-3 px-5"><span class="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold">{{ t.tax_type }}</span></td>
+              <td class="py-3 px-5 text-right">{{ Number(t.supply_amount || 0).toLocaleString() }}원</td>
+              <td class="py-3 px-5 text-right">{{ Number(t.vat_amount || 0).toLocaleString() }}원</td>
+              <td class="py-3 px-5 text-right font-black">{{ Number(t.total_amount || 0).toLocaleString() }}원</td>
+              <td class="py-3 px-5 text-center">
+                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                  {{ t.nts_status === 'APPROVED' ? '✓ 국세청 승인' : t.nts_status }}
+                </span>
+              </td>
+            </tr>
+            <tr v-if="taxInvoices.length === 0">
+              <td colspan="8" class="py-8 text-center text-gray-400">발행된 전자세금계산서 내역이 없습니다.</td>
             </tr>
           </tbody>
         </table>

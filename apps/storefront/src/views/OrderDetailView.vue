@@ -50,6 +50,62 @@ const invoiceLoading = ref(false)
 const invoiceError = ref<string>('')
 const invoiceMissingFields = ref<string[]>([])
 
+// Cash Receipt (현금영수증)
+const showCashReceiptModal = ref(false)
+const cashReceiptData = ref<any>(null)
+const cashReceiptLoading = ref(false)
+const cashReceiptError = ref('')
+const cashReceiptType = ref<'PERSONAL' | 'BUSINESS'>('PERSONAL')
+const cashReceiptIdentity = ref('')
+
+const openCashReceiptModal = async () => {
+  if (!order.value) return
+  showCashReceiptModal.value = true
+  cashReceiptLoading.value = true
+  cashReceiptError.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/finance/cash-receipts/${order.value.id}`, { headers: { ...authHeader() } })
+    const json = await res.json()
+    if (res.ok && json.success && json.data) {
+      cashReceiptData.value = json.data
+    } else {
+      cashReceiptData.value = null
+    }
+  } catch {
+    cashReceiptData.value = null
+  } finally {
+    cashReceiptLoading.value = false
+  }
+}
+
+const submitCashReceipt = async () => {
+  if (!order.value || !cashReceiptIdentity.value.trim()) return
+  cashReceiptLoading.value = true
+  cashReceiptError.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/finance/cash-receipts/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({
+        order_id: order.value.id,
+        receipt_type: cashReceiptType.value,
+        identity_number: cashReceiptIdentity.value.trim()
+      })
+    })
+    const json = await res.json()
+    if (res.ok && json.success) {
+      cashReceiptData.value = json.data
+      say('현금영수증이 성공적으로 발급되었습니다. (국세청 전송 승인)', 'ok')
+    } else {
+      cashReceiptError.value = json.error || '현금영수증 발급 요청에 실패했습니다.'
+    }
+  } catch (e: any) {
+    cashReceiptError.value = e.message || '요청 처리 중 오류가 발생했습니다.'
+  } finally {
+    cashReceiptLoading.value = false
+  }
+}
+
 const STATUS_LABEL: Record<string, string> = {
   READY: '결제 대기', PAID: '결제 완료', PARTIAL_REFUNDED: '부분 환불', REFUNDED: '환불 완료', CANCELLED: '주문 취소', EXPIRED: '결제 시간 만료', FAILED: '결제 실패',
   PAYMENT_PENDING: '결제 대기', PAYMENT_CONFIRMED: '결제 완료 · 출고 준비', PREPARING: '상품 준비중', SHIPPED: '출고 완료', IN_TRANSIT: '배송중', DELIVERED: '배송 완료',
@@ -299,6 +355,9 @@ onMounted(loadOrderDetail)
         <button v-if="canPriceAdjust" :disabled="busy" @click="handlePriceAdjust" class="px-4 py-2 rounded-full bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-bold">판매가 인하 차액 보상 신청</button>
         <button v-if="canPriceAdjust" :disabled="busy" @click="handleLateDeliveryClaim" class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold">배송 지연 보상 신청</button>
         <button v-if="order.pccc" @click="loadCommercialInvoice" class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">통관 인보이스</button>
+        <button v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)" @click="openCashReceiptModal" class="px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
+          <i class="fa-solid fa-receipt mr-1"></i>현금영수증 신청/조회
+        </button>
         <span v-if="order.payment_status === 'READY'" class="text-[11px] text-amber-700 self-center">결제가 완료되지 않은 주문입니다. 결제 기한이 지나면 자동 취소됩니다.</span>
       </div>
 
@@ -520,6 +579,108 @@ onMounted(loadOrderDetail)
               <div class="text-[10px] text-gray-500 mt-1 leading-snug">{{ m.desc }}</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Cash Receipt (현금영수증) Modal -->
+      <div v-if="showCashReceiptModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+          <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 class="text-base font-black text-gray-900 flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs">🧾</span>
+              <span>전자 현금영수증 발급/조회</span>
+            </h3>
+            <button @click="showCashReceiptModal = false" class="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
+          </div>
+
+          <div v-if="cashReceiptLoading" class="py-8 text-center text-xs text-gray-500 animate-pulse">
+            국세청 홈택스 시스템 연동 상태 확인 중...
+          </div>
+
+          <!-- Existing Issued Receipt -->
+          <div v-else-if="cashReceiptData" class="space-y-3 text-xs">
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+              <div class="font-black text-sm flex items-center justify-between">
+                <span>✓ 국세청 승인 완료</span>
+                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-200/80">{{ cashReceiptData.receipt_type === 'PERSONAL' ? '개인 소득공제용' : '사업자 지출증빙용' }}</span>
+              </div>
+              <div class="text-[11px] text-emerald-700">국세청(홈택스)으로 전자 영수증이 정식 전송·승인되었습니다.</div>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-2 font-mono">
+              <div class="flex justify-between"><span class="text-gray-500">승인번호</span><span class="font-bold text-gray-900">{{ cashReceiptData.issue_number }}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">발행금액</span><span class="font-bold text-gray-900">{{ won(cashReceiptData.total_amount) }}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">공급가액</span><span>{{ won(cashReceiptData.supply_amount) }}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">부가가치세</span><span>{{ won(cashReceiptData.vat_amount) }}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">식별번호</span><span>{{ cashReceiptData.identity_number }}</span></div>
+              <div class="flex justify-between text-[11px]"><span class="text-gray-500">승인일시</span><span>{{ cashReceiptData.approved_at }}</span></div>
+            </div>
+
+            <button @click="showCashReceiptModal = false" class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs">
+              확인
+            </button>
+          </div>
+
+          <!-- New Issuance Form -->
+          <form v-else @submit.prevent="submitCashReceipt" class="space-y-4 text-xs">
+            <p class="text-gray-600 leading-relaxed">
+              현금 결제 수단(가상계좌, 에스크로, 계좌이체 등) 및 전액 결제분에 대해 국세청 전자 현금영수증을 실시간 신청 및 발급합니다.
+            </p>
+
+            <div class="space-y-1">
+              <label class="block font-bold text-gray-700">발행 용도</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  @click="cashReceiptType = 'PERSONAL'"
+                  :class="['py-2 px-3 rounded-xl border text-center font-bold transition', cashReceiptType === 'PERSONAL' ? 'bg-emerald-50 border-emerald-500 text-emerald-800' : 'border-gray-200 text-gray-600']"
+                >
+                  개인 소득공제용
+                </button>
+                <button
+                  type="button"
+                  @click="cashReceiptType = 'BUSINESS'"
+                  :class="['py-2 px-3 rounded-xl border text-center font-bold transition', cashReceiptType === 'BUSINESS' ? 'bg-emerald-50 border-emerald-500 text-emerald-800' : 'border-gray-200 text-gray-600']"
+                >
+                  사업자 지출증빙용
+                </button>
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <label class="block font-bold text-gray-700">
+                {{ cashReceiptType === 'PERSONAL' ? '휴대폰 번호 또는 주민등록번호' : '사업자등록번호 (10자리)' }}
+              </label>
+              <input
+                v-model="cashReceiptIdentity"
+                type="text"
+                required
+                :placeholder="cashReceiptType === 'PERSONAL' ? '숫자만 입력 (예: 01012345678)' : '숫자 10자리 (예: 1234567890)'"
+                class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div v-if="cashReceiptError" class="p-2.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold">
+              {{ cashReceiptError }}
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                type="button"
+                @click="showCashReceiptModal = false"
+                class="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                :disabled="cashReceiptLoading || !cashReceiptIdentity.trim()"
+                class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black disabled:opacity-50"
+              >
+                실시간 발급 신청
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 

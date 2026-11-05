@@ -34,6 +34,7 @@ watch(() => route.path, () => {
           <nav class="hidden md:flex items-center gap-1 text-xs font-semibold">
             <router-link to="/" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대시보드</router-link>
             <router-link to="/products" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">상품 관리</router-link>
+            <router-link to="/bidding" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">M2C 역경매·비딩</router-link>
             <router-link to="/bulk-upload" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대량 등록</router-link>
             <router-link to="/shipments" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">주문·배송</router-link>
             <router-link to="/returns" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">반품·클레임</router-link>
@@ -73,6 +74,9 @@ watch(() => route.path, () => {
         </router-link>
         <router-link to="/products" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           상품 관리
+        </router-link>
+        <router-link to="/bidding" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
+          M2C 역경매·비딩
         </router-link>
         <router-link to="/bulk-upload" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           대량 등록 (CSV)

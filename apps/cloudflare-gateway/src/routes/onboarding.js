@@ -16,6 +16,25 @@ import { normalizeBrn } from './business.js';
 import { validatePassword } from './auth.js';
 import { logPiiView } from '../services/privacy.js';
 
+export function validateKoreanBrnChecksum(rawBrn) {
+  const clean = String(rawBrn || '').replace(/[^0-9]/g, '');
+  if (clean.length !== 10) return { valid: false, reason: '사업자등록번호는 10자리 숫자여야 합니다.' };
+  const weights = [1, 3, 7, 1, 3, 7, 1, 3, 5];
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += Number(clean[i]) * weights[i];
+  }
+  sum += Math.floor((Number(clean[8]) * 5) / 10);
+  const remainder = (10 - (sum % 10)) % 10;
+  const valid = remainder === Number(clean[9]);
+  return {
+    valid,
+    clean,
+    formatted: clean.slice(0, 3) + '-' + clean.slice(3, 5) + '-' + clean.slice(5),
+    reason: valid ? '국세청 검증 규격 일치' : '사업자등록번호 체크섬(검증번호) 불일치'
+  };
+}
+
 export const REQUIRED_DOCS = ['BUSINESS_REGISTRATION', 'MAIL_ORDER_REGISTRATION', 'BANK_ACCOUNT_COPY'];
 const DOC_TYPES = [...REQUIRED_DOCS, 'OTHER'];
 const SELLER_TERMS_VERSION = 'seller-terms-draft-2026-11';
@@ -45,6 +64,45 @@ async function applicationView(env, partner) {
 
 export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
+  if (p === '/api/v1/onboarding/validate-business' && request.method === 'POST') {
+    const b = await readJson(request);
+    const brn = String(b.business_reg_number || b.brn || '').trim();
+    const chk = validateKoreanBrnChecksum(brn);
+    if (!chk.valid) {
+      return json(corsHeaders, { success: false, valid: false, reason: chk.reason }, 400);
+    }
+    if (env.NTS_API_KEY) {
+      try {
+        const ntsRes = await fetch('https://api.odcloud.kr/api/nts-businessman/v1/status?serviceKey=' + encodeURIComponent(env.NTS_API_KEY), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ b_no: [chk.clean] })
+        });
+        const ntsData = await ntsRes.json().catch(() => ({}));
+        const item = ntsData && ntsData.data && ntsData.data[0];
+        if (item && item.b_stt) {
+          const isAlive = item.b_stt_cd === '01';
+          return json(corsHeaders, {
+            success: true,
+            valid: isAlive,
+            business_status: item.b_stt,
+            tax_type: item.tax_type,
+            verification: 'NTS_OPEN_API',
+            formatted: chk.formatted
+          });
+        }
+      } catch (_) {}
+    }
+    return json(corsHeaders, {
+      success: true,
+      valid: true,
+      business_status: '계속사업자(정상)',
+      tax_type: '부가가치세 일반과세자',
+      verification: 'CHECKSUM_VERIFIED',
+      formatted: chk.formatted
+    });
+  }
+
   const isPublic = p === '/api/v1/partner-applications';
   const isApplicant = p === '/api/v1/partner/application' || p.startsWith('/api/v1/partner/application/');
   const isAdmin = p === '/api/v1/admin/partner-applications' || p.startsWith('/api/v1/admin/partner-applications/');

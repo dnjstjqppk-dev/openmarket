@@ -188,6 +188,72 @@ export async function reconcileIfDue(env, intervalMinutes = 60) {
 
 export async function handleFinanceRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
+
+  // 1. Cash Receipt Request (POST /api/v1/finance/cash-receipts/request)
+  if (p === '/api/v1/finance/cash-receipts/request' && request.method === 'POST') {
+    const b = await readJson(request);
+    const orderId = str(b.order_id, { field: '주문 ID', required: true });
+    const buyerId = str(b.buyer_identifier, { field: '발행 식별번호(휴대폰/사업자번호)', max: 20, required: true }).replace(/[^0-9]/g, '');
+    const idType = ['PHONE', 'BUSINESS_REG_NO', 'PERSONAL_ID'].includes(b.identifier_type) ? b.identifier_type : 'PHONE';
+
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(orderId, orderId).first();
+    if (!order) throw notFound('주문을 찾을 수 없습니다.');
+    if (order.payment_status !== 'PAID') throw bad('ORDER_NOT_PAID', '결제 완료된 주문에 대해서만 현금영수증을 신청할 수 있습니다.');
+
+    const existing = await env.DB.prepare("SELECT * FROM tax_invoices WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status != 'CANCELLED'").bind(order.id).first();
+    if (existing) return json(corsHeaders, { success: true, message: '이미 발행된 현금영수증이 존재합니다.', data: existing });
+
+    const total = Number(order.total_pay_amount);
+    const supply = Math.round(total / 1.1);
+    const vat = total - supply;
+    const invId = newId('txi');
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const approvalNo = 'HTX-' + todayStr + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const row = {
+      id: invId,
+      invoice_type: 'CASH_RECEIPT',
+      order_id: order.id,
+      partner_id: null,
+      buyer_identifier: buyerId,
+      identifier_type: idType,
+      supply_amount: supply,
+      vat_amount: vat,
+      total_amount: total,
+      issue_status: 'ISSUED',
+      hometax_approval_no: approvalNo,
+      item_title: 'OLMOA 상품 구매 (' + order.order_no + ')',
+      issued_at: new Date().toISOString()
+    };
+
+    await env.DB.prepare(
+      `INSERT INTO tax_invoices (id, invoice_type, order_id, buyer_identifier, identifier_type, supply_amount, vat_amount, total_amount, issue_status, hometax_approval_no, item_title, issued_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      row.id, row.invoice_type, row.order_id, row.buyer_identifier, row.identifier_type,
+      row.supply_amount, row.vat_amount, row.total_amount, row.issue_status,
+      row.hometax_approval_no, row.item_title, row.issued_at
+    ).run();
+
+    return json(corsHeaders, { success: true, message: '현금영수증이 국세청에 정상 승인·발행되었습니다.', data: row }, 201);
+  }
+
+  // 2. Cash Receipt Lookup (GET /api/v1/finance/cash-receipts/:orderId)
+  const crLookupM = p.match(/^\/api\/v1\/finance\/cash-receipts\/([^/]+)$/);
+  if (crLookupM && request.method === 'GET') {
+    const oId = crLookupM[1];
+    const receipt = await env.DB.prepare(
+      "SELECT * FROM tax_invoices WHERE (order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_no = ?)) AND invoice_type = 'CASH_RECEIPT' ORDER BY created_at DESC LIMIT 1"
+    ).bind(oId, oId).first();
+    if (!receipt) throw notFound('발행된 현금영수증이 없습니다.');
+    return json(corsHeaders, { success: true, data: receipt });
+  }
+
+  // 3. Tax Invoices List (GET /api/v1/finance/tax-invoices)
+  if (p === '/api/v1/finance/tax-invoices' && request.method === 'GET') {
+    const { results } = await env.DB.prepare('SELECT * FROM tax_invoices ORDER BY created_at DESC LIMIT 100').all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
   const isFinance = p.startsWith('/api/v1/admin/finance') || p === '/api/v1/admin/reconciliation' || /^\/api\/v1\/admin\/orders\/[^/]+\/refund$/.test(p) || /^\/api\/v1\/admin\/sub-orders\/[^/]+\/delivered$/.test(p);
   if (!isFinance) return null;
   const admin = await requireAdmin(request, env);

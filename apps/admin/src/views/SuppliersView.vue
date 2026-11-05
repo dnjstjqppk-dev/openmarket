@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// MODEL A 직영: 공급사 · SKU 소싱(원가·재판매 권한) · 발주서. 공급사 API 연동은 미구현이므로 발주는 수동 전송 후 상태를 기록한다.
+// MODEL A 직영: 공급사 · SKU 소싱(원가·재판매 권한) · 발주서 & M2C 역경매 비딩 엔진
 import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
 
-const tab = ref<'po' | 'suppliers'>('po')
+const tab = ref<'po' | 'suppliers' | 'bidding'>('po')
 const suppliers = ref<any[]>([])
 const pos = ref<any[]>([])
 const poFilter = ref('')
@@ -12,6 +12,61 @@ const selectedSupplier = ref<any>(null)
 const msg = ref('')
 const newSup = ref<any>({ name: '' })
 const newMap = ref<any>({ fulfillment_mode: 'DROP_SHIP', resale_authorized: false, image_use_authorized: false })
+
+// M2C Reverse Bidding Admin State
+const campaigns = ref<any[]>([])
+const activeCampaignId = ref('')
+const campaignBids = ref<any[]>([])
+const showNewCampaignModal = ref(false)
+const newCampaign = ref({
+  title: '2026 Q4 전략 카테고리 역경매 대량 소싱',
+  category_id: 'cat_e_audio',
+  target_wholesale_price: 28000,
+  target_quantity: 1000,
+  deadline_at: '2026-12-31 23:59:59',
+  notes: 'KC인증 완료 및 3일 내 출고 가능한 검증 공장 우선 배정'
+})
+
+async function loadCampaigns() {
+  const r = await adminApi('/api/v1/admin/bidding/campaigns')
+  campaigns.value = r.data.data || []
+}
+
+async function createCampaign() {
+  const r = await adminApi('/api/v1/admin/bidding/campaigns', {
+    method: 'POST',
+    json: {
+      ...newCampaign.value,
+      target_wholesale_price: Number(newCampaign.value.target_wholesale_price),
+      target_quantity: Number(newCampaign.value.target_quantity)
+    }
+  })
+  msg.value = r.ok ? '✓ M2C 역경매 캠페인이 개설되었습니다.' : (r.data.error || '캠페인 개설 실패')
+  if (r.ok) {
+    showNewCampaignModal.value = false
+    loadCampaigns()
+  }
+}
+
+async function viewBids(campaignId: string) {
+  activeCampaignId.value = campaignId
+  const r = await adminApi(`/api/v1/admin/bidding/campaigns/${campaignId}/bids`)
+  campaignBids.value = r.data.data || []
+}
+
+async function awardBid(campaignId: string, bidId: string) {
+  if (!confirm('이 입찰을 최종 낙찰(Award)하고 전탁 독점 상품으로 등록하시겠습니까?')) return
+  const r = await adminApi(`/api/v1/admin/bidding/campaigns/${campaignId}/award`, {
+    method: 'POST',
+    json: { bid_id: bidId }
+  })
+  msg.value = r.ok ? '✓ 입찰이 성공적으로 낙찰되어 전탁 납품 상품이 생성되었습니다.' : (r.data.error || '낙찰 처리 실패')
+  if (r.ok) {
+    loadCampaigns()
+    viewBids(campaignId)
+  }
+}
+
 const NEXT: Record<string, string[]> = { DRAFT: ['SENT', 'CANCELLED'], SENT: ['CONFIRMED', 'FAILED', 'CANCELLED'], CONFIRMED: ['SHIPPED', 'FAILED'], FAILED: ['SENT', 'CANCELLED'] }
 const LABEL: Record<string, string> = { DRAFT: '발주 대기', SENT: '발주 전송', CONFIRMED: '공급사 확인', SHIPPED: '출고', FAILED: '실패/품절', CANCELLED: '취소' }
 
@@ -32,32 +87,37 @@ async function movePo(po: any, status: string) {
   msg.value = r.ok ? `${po.po_no} → ${LABEL[status]}${r.data.next_action ? ` · ${r.data.next_action}` : ''}` : (r.data.error || '변경 실패')
   loadPos()
 }
+
 async function createSupplier() {
   const r = await adminApi('/api/v1/admin/suppliers', { method: 'POST', json: newSup.value })
   msg.value = r.ok ? '공급사가 등록되었습니다.' : (r.data.error || '등록 실패')
   newSup.value = { name: '' }
   loadSuppliers()
 }
+
 async function saveMapping() {
   const r = await adminApi('/api/v1/admin/supplier-mappings', { method: 'POST', json: { ...newMap.value, supplier_id: selectedSupplier.value.id, unit_cost: Number(newMap.value.unit_cost) } })
   msg.value = r.ok ? `소싱 연결 완료 · 마진 ${won(r.data.data.margin_amount)}${r.data.data.below_cost ? ' (⚠ 원가 이하 판매)' : ''}` : (r.data.error || '저장 실패')
   if (r.ok) openSupplier(selectedSupplier.value)
 }
-onMounted(() => { loadPos(); loadSuppliers() })
+
+onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
 </script>
 
 <template>
   <div class="max-w-7xl mx-auto px-4 py-6 space-y-5 text-xs">
     <div>
-      <h1 class="text-xl font-black">직영(B2B 소싱) · 공급사 발주</h1>
+      <h1 class="text-xl font-black">직영(B2B 소싱) · 공급사 발주 &amp; M2C 역경매</h1>
       <p class="text-slate-500 mt-1">공급사 API 연동: <b class="text-amber-700">미연동</b> — 발주는 공급사에 수동 전달 후 이 화면에서 상태를 기록합니다. 재판매 권한이 확인되지 않은 SKU는 결제 단계에서 판매가 차단됩니다.</p>
     </div>
     <div class="flex gap-2">
       <button :class="['h-9 px-4 rounded-lg font-bold', tab === 'po' ? 'bg-slate-900 text-white' : 'bg-white border']" @click="tab = 'po'">발주서</button>
       <button :class="['h-9 px-4 rounded-lg font-bold', tab === 'suppliers' ? 'bg-slate-900 text-white' : 'bg-white border']" @click="tab = 'suppliers'">공급사 · 소싱</button>
+      <button :class="['h-9 px-4 rounded-lg font-bold', tab === 'bidding' ? 'bg-slate-900 text-white' : 'bg-white border']" @click="tab = 'bidding'">M2C 역경매 비딩 &amp; MD 네고</button>
     </div>
     <div v-if="msg" role="status" class="p-3 rounded-lg bg-indigo-50 text-indigo-900 font-bold">{{ msg }}</div>
 
+    <!-- Tab 1: PO List -->
     <section v-if="tab === 'po'" class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
       <div class="p-3 flex gap-2 border-b">
         <select v-model="poFilter" @change="loadPos" class="h-8 px-2 rounded border"><option value="">전체 상태</option><option v-for="(l, k) in LABEL" :key="k" :value="k">{{ l }}</option></select>
@@ -80,7 +140,8 @@ onMounted(() => { loadPos(); loadSuppliers() })
       </table>
     </section>
 
-    <section v-else class="grid lg:grid-cols-[320px_1fr] gap-4">
+    <!-- Tab 2: Suppliers List -->
+    <section v-else-if="tab === 'suppliers'" class="grid lg:grid-cols-[320px_1fr] gap-4">
       <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <form class="flex gap-2" @submit.prevent="createSupplier"><input v-model="newSup.name" required placeholder="새 공급사명" class="flex-1 h-9 px-2 rounded border" /><button class="px-3 rounded bg-slate-900 text-white font-bold">등록</button></form>
         <button v-for="s in suppliers" :key="s.id" class="w-full text-left p-3 rounded-lg border" :class="selectedSupplier?.id === s.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200'" @click="openSupplier(s)">
@@ -111,5 +172,111 @@ onMounted(() => { loadPos(); loadSuppliers() })
         </table></div>
       </div>
     </section>
+
+    <!-- Tab 3: M2C Reverse Bidding Admin Section -->
+    <section v-else-if="tab === 'bidding'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black text-slate-900">M2C 공장 직접 역경매 캠페인 관리</h2>
+          <p class="text-slate-500">대량 조달 목표 도매가를 설정하고 등록 파트너사들의 역경매 입찰을 받아 전탁(위탁) 납품 계약을 체결합니다.</p>
+        </div>
+        <button
+          @click="showNewCampaignModal = true"
+          class="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer"
+        >
+          + 새 역경매 캠페인 개설
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Campaigns List -->
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <h3 class="font-bold text-slate-800 border-b pb-2">개설된 비딩 캠페인 목록 ({{ campaigns.length }})</h3>
+          <div v-for="c in campaigns" :key="c.id" class="p-3 rounded-lg border border-slate-100 hover:border-indigo-400 cursor-pointer transition space-y-1" @click="viewBids(c.id)" :class="activeCampaignId === c.id ? 'bg-indigo-50/50 border-indigo-500' : ''">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900">{{ c.title }}</span>
+              <span class="px-2 py-0.5 rounded font-mono text-[10px] bg-slate-100 font-bold">{{ c.status }}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 flex gap-3">
+              <span>목표 도매가: <strong class="text-rose-600">{{ won(c.target_wholesale_price) }}</strong></span>
+              <span>목표 수량: <strong>{{ c.target_quantity }}개</strong></span>
+            </div>
+            <div class="text-[10px] text-indigo-600 font-bold">👉 클릭하여 입찰 제안서 {{ c.bid_count || 0 }}건 조회</div>
+          </div>
+          <div v-if="campaigns.length === 0" class="py-8 text-center text-slate-400">개설된 캠페인이 없습니다.</div>
+        </div>
+
+        <!-- Bids for selected campaign -->
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <h3 class="font-bold text-slate-800 border-b pb-2">
+            제출된 파트너사 입찰 제안서 {{ activeCampaignId ? `(#${activeCampaignId})` : '' }}
+          </h3>
+          <div v-if="!activeCampaignId" class="py-12 text-center text-slate-400">
+            좌측 캠페인을 선택하면 입찰 목록이 표시됩니다.
+          </div>
+          <div v-else-if="campaignBids.length === 0" class="py-12 text-center text-slate-400">
+            아직 제출된 입찰 제안서가 없습니다.
+          </div>
+          <div v-else class="space-y-2">
+            <div v-for="b in campaignBids" :key="b.id" class="p-3 rounded-lg border border-slate-100 space-y-1.5 bg-slate-50">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-900">{{ b.partner_name || b.partner_id }}</span>
+                <span :class="['px-2 py-0.5 rounded text-[10px] font-bold', b.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700']">
+                  {{ b.status === 'ACCEPTED' ? '★ 낙찰 완료' : b.status }}
+                </span>
+              </div>
+              <div class="flex justify-between text-[11px]">
+                <span>제시 도매가: <strong class="text-rose-600">{{ won(b.wholesale_supply_price) }}</strong></span>
+                <span>공급 가능: <strong>{{ b.supply_capacity }}개</strong> ({{ b.delivery_lead_days }}일 출고)</span>
+              </div>
+              <div v-if="b.bid_notes" class="text-[10px] text-slate-500 italic">"{{ b.bid_notes }}"</div>
+              <div v-if="b.status === 'PENDING'" class="pt-1 flex justify-end">
+                <button
+                  @click="awardBid(activeCampaignId, b.id)"
+                  class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
+                >
+                  최종 낙찰(Award) 승인
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- New Campaign Modal -->
+    <div v-if="showNewCampaignModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 class="text-sm font-black text-slate-900">새 M2C 역경매 소싱 캠페인 개설</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">캠페인 제목</label>
+            <input v-model="newCampaign.title" class="w-full h-9 px-3 rounded border border-slate-300" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">카테고리 ID</label>
+              <input v-model="newCampaign.category_id" class="w-full h-9 px-3 rounded border border-slate-300" />
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">목표 조달 수량</label>
+              <input v-model.number="newCampaign.target_quantity" type="number" class="w-full h-9 px-3 rounded border border-slate-300" />
+            </div>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">MD 목표 도매 상한가 (KRW)</label>
+            <input v-model.number="newCampaign.target_wholesale_price" type="number" class="w-full h-9 px-3 rounded border border-slate-300 font-bold text-rose-600" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">소싱 요건 및 품질 메모</label>
+            <textarea v-model="newCampaign.notes" rows="2" class="w-full p-2 rounded border border-slate-300"></textarea>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button @click="showNewCampaignModal = false" class="flex-1 h-9 rounded border">취소</button>
+          <button @click="createCampaign" class="flex-1 h-9 rounded bg-indigo-600 text-white font-bold">캠페인 개설</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
