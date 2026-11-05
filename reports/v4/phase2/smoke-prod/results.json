@@ -1,0 +1,1471 @@
+{
+  "api": "https://olmoa-api.dnjstjqppk.workers.dev",
+  "logged_in": false,
+  "generated": "2026-11-05T12:55:01.250Z",
+  "results": [
+    {
+      "app": "storefront",
+      "route": "/",
+      "view": "HomeView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/",
+      "desktop": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/HomeView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/HomeView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/categories",
+      "view": "CategoriesView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/categories",
+      "desktop": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CategoriesView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CategoriesView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/category/:slug",
+      "view": "CategoryView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/category/womens-clothing",
+      "desktop": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CategoryView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CategoryView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/product/:slug",
+      "view": "ProductDetailView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/product/prod_001",
+      "desktop": {
+        "final_path": "/product/prod_001",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ProductDetailView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/product/prod_001",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ProductDetailView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/cart",
+      "view": "CartView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/cart",
+      "desktop": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CartView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CartView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/checkout",
+      "view": "CheckoutView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/checkout",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CheckoutView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CheckoutView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/profile",
+      "view": "ProfileView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/profile",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ProfileView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ProfileView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/orders",
+      "view": "OrdersView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/orders",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/OrdersView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/OrdersView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/orders/:id",
+      "view": "OrderDetailView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/orders/unknown-order",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/OrderDetailView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/OrderDetailView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/search",
+      "view": "SearchView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/search",
+      "desktop": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SearchView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SearchView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/login",
+      "view": "LoginView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/login",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LoginView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LoginView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/forgot-password",
+      "view": "ForgotPasswordView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/forgot-password",
+      "desktop": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ForgotPasswordView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/ForgotPasswordView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/register",
+      "view": "RegisterView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/register",
+      "desktop": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/RegisterView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/RegisterView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/channel/lightning-deals",
+      "view": "LightningDealsView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/channel/lightning-deals",
+      "desktop": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LightningDealsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LightningDealsView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/channel/best-sellers",
+      "view": "BestSellersView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/channel/best-sellers",
+      "desktop": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/BestSellersView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/BestSellersView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/coupons",
+      "view": "CouponsView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/coupons",
+      "desktop": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 401 () https://olmoa-api.dnjstjqppk.workers.dev/api/v1/credits?customer_id="
+        ],
+        "http_errors": [
+          "401 API/api/v1/credits?customer_id="
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CouponsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 401 () https://olmoa-api.dnjstjqppk.workers.dev/api/v1/credits?customer_id="
+        ],
+        "http_errors": [
+          "401 API/api/v1/credits?customer_id="
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/CouponsView_mobile.png"
+      },
+      "verdict": "WARN_CONSOLE"
+    },
+    {
+      "app": "storefront",
+      "route": "/addresses",
+      "view": "AddressesView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/addresses",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/AddressesView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/AddressesView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/wishlist",
+      "view": "WishlistView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/wishlist",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/WishlistView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/WishlistView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/store/:id",
+      "view": "SellerStoreView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/store/pt_001",
+      "desktop": {
+        "final_path": "/store/pt_001",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SellerStoreView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/store/pt_001",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SellerStoreView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/support",
+      "view": "SupportView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/support",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SupportView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/SupportView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/policy/:type",
+      "view": "PolicyView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/policy/shipping",
+      "desktop": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PolicyView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PolicyView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/legal/terms",
+      "view": "LegalTermsView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/legal/terms",
+      "desktop": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalTermsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalTermsView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/legal/privacy",
+      "view": "LegalPrivacyView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/legal/privacy",
+      "desktop": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalPrivacyView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalPrivacyView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/payments/success",
+      "view": "PaymentResultView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/payments/success",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PaymentResultView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PaymentResultView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/payments/fail",
+      "view": "PaymentResultView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/payments/fail",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PaymentResultView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/PaymentResultView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/legal/refund",
+      "view": "LegalRefundView",
+      "url": "https://olmoa-storefront.dnjstjqppk.workers.dev/legal/refund",
+      "desktop": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalRefundView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/storefront/LegalRefundView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/login",
+      "view": "LoginView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/login",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/LoginView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/LoginView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/",
+      "view": "DashboardView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/DashboardView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/DashboardView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/products",
+      "view": "ProductManageView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/products",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ProductManageView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ProductManageView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/partners",
+      "view": "PartnerVerifyView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/partners",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/PartnerVerifyView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/PartnerVerifyView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/ledger",
+      "view": "LedgerAuditView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/ledger",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/LedgerAuditView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/LedgerAuditView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/orders",
+      "view": "OrdersView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/orders",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/OrdersView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/OrdersView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/users",
+      "view": "UsersView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/users",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/UsersView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/UsersView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/reviews",
+      "view": "ReviewsView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/reviews",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ReviewsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ReviewsView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/coupons",
+      "view": "CouponsView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/coupons",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/CouponsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/CouponsView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/categories",
+      "view": "CategoriesView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/categories",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/CategoriesView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/CategoriesView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/marketing",
+      "view": "MarketingView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/marketing",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/MarketingView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/MarketingView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/business",
+      "view": "BusinessEntitiesView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/business",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/BusinessEntitiesView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/BusinessEntitiesView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/suppliers",
+      "view": "SuppliersView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/suppliers",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SuppliersView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SuppliersView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/supplier-integrations",
+      "view": "SupplierIntegrationView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/supplier-integrations",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SupplierIntegrationView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SupplierIntegrationView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/reconciliation",
+      "view": "ReconciliationView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/reconciliation",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ReconciliationView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/ReconciliationView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/partner-applications",
+      "view": "PartnerApplicationsView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/partner-applications",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/PartnerApplicationsView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/PartnerApplicationsView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/security",
+      "view": "SecurityView",
+      "url": "https://olmoa-admin.dnjstjqppk.workers.dev/security",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SecurityView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/admin/SecurityView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/login",
+      "view": "LoginView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/login",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/LoginView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/LoginView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/apply",
+      "view": "ApplyView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/apply",
+      "desktop": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ApplyView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ApplyView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/application",
+      "view": "ApplicationView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/application",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ApplicationView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ApplicationView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/",
+      "view": "DashboardView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/DashboardView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/DashboardView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/products",
+      "view": "ProductManageView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/products",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ProductManageView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ProductManageView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/bidding",
+      "view": "BiddingView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/bidding",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/BiddingView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/BiddingView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/bulk-upload",
+      "view": "BulkUploadView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/bulk-upload",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/BulkUploadView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/BulkUploadView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/imports",
+      "view": "UrlImportView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/imports",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/UrlImportView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/UrlImportView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/channels",
+      "view": "MultiChannelListingView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/channels",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/MultiChannelListingView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/MultiChannelListingView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/shipments",
+      "view": "ShipmentView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/shipments",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ShipmentView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ShipmentView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/returns",
+      "view": "ReturnsManageView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/returns",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ReturnsManageView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ReturnsManageView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/settlements",
+      "view": "SettlementView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/settlements",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/SettlementView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/SettlementView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/qna",
+      "view": "QnaManageView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/qna",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/QnaManageView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/QnaManageView_mobile.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/profile",
+      "view": "ProfileManageView",
+      "url": "https://olmoa-partner.dnjstjqppk.workers.dev/profile",
+      "desktop": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ProfileManageView_desktop.png"
+      },
+      "mobile": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": true,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke-prod/partner/ProfileManageView_mobile.png"
+      },
+      "verdict": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# after code deploy 2026-11-05T12:50:24Z commit 72f9a2f
+olmoa-api (100%) 6aa4cff6-2c30-4e1b-bc57-8f842921dca1
+olmoa-storefront (100%) beecc375-792c-4ecc-a737-5b319e4aef08
+openmarket (100%) 5029c006-4f28-4cff-b16a-2e156422c64a
+olmoa-partner (100%) f88ecca6-7a58-480f-9b75-0bd59b7498c6
+olmoa-admin (100%) 439781a1-f67e-45d1-a632-dce8e1eeb2c4
+olmoa-storefront live=assets/index-DriGJG3Y.js local=assets/index-DriGJG3Y.js match=yes tailwindcdn=0
+openmarket live=assets/index-DriGJG3Y.js local=assets/index-DriGJG3Y.js match=yes tailwindcdn=0
+olmoa-admin live=assets/index-b7-WjG3f.js local=assets/index-b7-WjG3f.js match=yes tailwindcdn=0
+olmoa-partner live=assets/index-Q6VZTghg.js local=assets/index-Q6VZTghg.js match=yes tailwindcdn=0

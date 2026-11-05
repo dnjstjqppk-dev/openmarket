@@ -18,7 +18,11 @@ const API = process.env.API_URL || 'https://olmoa-api.dnjstjqppk.workers.dev';
 const HOST = process.env.HOST || '127.0.0.1';
 const PORTS = (process.env.PORTS || '4183,4184,4185').split(',').map(Number);
 const DIST = process.env.DIST || 'dist';
-const APPS = [{ app: 'storefront', port: PORTS[0] }, { app: 'admin', port: PORTS[1] }, { app: 'partner', port: PORTS[2] }];
+// REMOTE=<storefront>,<admin>,<partner> opens already deployed sites instead of local vite previews (GET only).
+const REMOTE = process.env.REMOTE ? process.env.REMOTE.split(',') : null;
+if (REMOTE && process.env.LOGIN === '1') { console.error('LOGIN=1 is not allowed with REMOTE'); process.exit(2); }
+const APPS = [{ app: 'storefront', port: PORTS[0] }, { app: 'admin', port: PORTS[1] }, { app: 'partner', port: PORTS[2] }]
+  .map((a, i) => ({ ...a, base: REMOTE ? REMOTE[i].replace(/\/$/, '') : `http://${HOST}:${a.port}` }));
 const inv = JSON.parse(fs.readFileSync(path.join(ROOT, 'reports/v4/phase1/inventory.json'), 'utf8'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LOGIN = process.env.LOGIN === '1';
@@ -54,12 +58,12 @@ const catSlug = (cats[0] && (cats[0].slug || cats[0].id)) || 'none';
 const fill = (url, app) => url.replace(':slug', url.startsWith('/category') ? catSlug : params.slug).replace(':id', app === 'storefront' && url.startsWith('/orders') ? 'unknown-order' : params.id).replace(':type', params.type);
 
 const servers = [];
-for (const a of APPS) {
+for (const a of REMOTE ? [] : APPS) {
   const p = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['vite', 'preview', '--outDir', DIST, '--port', String(a.port), '--strictPort', '--host', HOST], { cwd: path.join(ROOT, 'apps', a.app), shell: true, stdio: 'ignore' });
   servers.push(p);
 }
 for (const a of APPS) {
-  for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://${HOST}:${a.port}/`)).ok) break; } catch { /* starting */ } await sleep(500); }
+  for (let i = 0; i < 60; i++) { try { if ((await fetch(`${a.base}/`)).ok) break; } catch { /* starting */ } await sleep(500); }
 }
 
 const browser = await launchBrowser({ port: 9341 });
@@ -67,10 +71,10 @@ const page = await browser.newPage();
 const results = [];
 try {
   for (const a of APPS) {
-    if (LOGIN) console.log(`signed in to ${a.app} as ${LOGINS[a.app].email} → ${await signIn(page, `http://${HOST}:${a.port}`, a.app)}`);
+    if (LOGIN) console.log(`signed in to ${a.app} as ${LOGINS[a.app].email} → ${await signIn(page, a.base, a.app)}`);
     for (const s of inv[a.app].screens) {
       if (s.redirect || !s.view) continue;
-      const url = `http://${HOST}:${a.port}${fill(s.url, a.app)}`;
+      const url = `${a.base}${fill(s.url, a.app)}`;
       const row = { app: a.app, route: s.url, view: s.view, url };
       for (const vp of ['desktop', 'mobile']) {
         await page.viewport(vp);
