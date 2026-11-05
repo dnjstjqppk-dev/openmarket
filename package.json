@@ -34,7 +34,9 @@
     "dev:db": "node scripts/local-db-reset.mjs",
     "dev:api": "wrangler dev --config apps/cloudflare-gateway/wrangler.jsonc --local --persist-to .wrangler/local-state --port 8787",
     "test:runtime": "node tests/runtime/v3_1_smoke.mjs",
-    "test:migrations": "node tests/migration_fk_rehearsal.mjs"
+    "test:migrations": "node tests/migration_fk_rehearsal.mjs",
+    "typecheck": "npm run typecheck --workspace=packages/ui && npm run typecheck --workspace=apps/storefront && npm run typecheck --workspace=apps/admin && npm run typecheck --workspace=apps/partner",
+    "test:ui": "node tests/ui/autocomplete_core.test.mjs"
   },
   "keywords": [
     "olmoa",
@@ -48,5 +50,11 @@
     "flutter"
   ],
   "author": "OLMOA Global Core Team",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.49",
+    "pretendard": "1.3.9",
+    "tailwindcss": "3.4.19"
+  }
 }

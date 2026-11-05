@@ -55,3 +55,7 @@ scratch/
 # Generated local dev seed (contains dev-password hashes) and production DB backups (PII)
 migrations/dev/seed_local_dev.sql
 backups/
+
+# local-API builds for browser smoke (tests/browser/route_smoke.mjs)
+apps/*/dist-local/
+reports/v4/phase2/smoke/**/*.png

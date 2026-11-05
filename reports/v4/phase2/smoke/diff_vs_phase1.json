@@ -1,0 +1,1239 @@
+{
+  "baseDir": "C:/Users/dnjst/AppData/Local/Temp/claude/9e37e864c5c68e89/79eb17d0-d23c-4954-937b-0d4c19959312/scratchpad/base/smoke-base",
+  "newDir": "reports/v4/phase2/smoke",
+  "generated": "2026-11-05T12:15:46.533Z",
+  "rows": [
+    {
+      "screen": "storefront/LightningDealsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 30.37,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/SellerStoreView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 28.31,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/HomeView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 24.89,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/SellerStoreView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 23.39,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/BestSellersView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 23.28,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/LightningDealsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 20.51,
+      "changed_rows": [
+        6,
+        852
+      ]
+    },
+    {
+      "screen": "storefront/BestSellersView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 20.33,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/SearchView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 19.72,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/SearchView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 19.56,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/CategoryView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 19.4,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/CategoryView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 18.49,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/HomeView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 17.22,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/LegalTermsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 15.99,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/CouponsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 15.75,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/CouponsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 15.74,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/LegalPrivacyView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 15.36,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/ProductDetailView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 14.21,
+      "changed_rows": [
+        22,
+        1672
+      ]
+    },
+    {
+      "screen": "storefront/LegalRefundView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 14.09,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/PolicyView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 14.09,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/ProductDetailView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 12.88,
+      "changed_rows": [
+        6,
+        897
+      ]
+    },
+    {
+      "screen": "storefront/ForgotPasswordView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 11.79,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/AddressesView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/CheckoutView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/LoginView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/OrderDetailView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/OrdersView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/PaymentResultView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/ProfileView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/SupportView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/WishlistView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.78,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/LegalTermsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 10.32,
+      "changed_rows": [
+        6,
+        878
+      ]
+    },
+    {
+      "screen": "storefront/PolicyView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 9.62,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/ForgotPasswordView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 9.57,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/LegalRefundView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 9.38,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/RegisterView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 9.36,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/LegalPrivacyView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 9.01,
+      "changed_rows": [
+        6,
+        875
+      ]
+    },
+    {
+      "screen": "storefront/CategoriesView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 8.85,
+      "changed_rows": [
+        6,
+        899
+      ]
+    },
+    {
+      "screen": "storefront/AddressesView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/CheckoutView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/LoginView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/OrderDetailView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/OrdersView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/PaymentResultView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/ProfileView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/SupportView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/WishlistView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 8.63,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "storefront/CartView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 8.01,
+      "changed_rows": [
+        6,
+        874
+      ]
+    },
+    {
+      "screen": "storefront/CategoriesView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 7.74,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "partner/ApplyView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 7.7,
+      "changed_rows": [
+        169,
+        1667
+      ]
+    },
+    {
+      "screen": "storefront/CartView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 7.52,
+      "changed_rows": [
+        22,
+        1662
+      ]
+    },
+    {
+      "screen": "partner/ApplicationView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/BiddingView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/BulkUploadView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/DashboardView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/LoginView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/MultiChannelListingView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/ProductManageView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/ProfileManageView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/QnaManageView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/ReturnsManageView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/SettlementView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/ShipmentView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "partner/UrlImportView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 6.91,
+      "changed_rows": [
+        450,
+        1333
+      ]
+    },
+    {
+      "screen": "storefront/RegisterView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 6.16,
+      "changed_rows": [
+        6,
+        892
+      ]
+    },
+    {
+      "screen": "partner/ApplyView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 3.71,
+      "changed_rows": [
+        101,
+        899
+      ]
+    },
+    {
+      "screen": "admin/BusinessEntitiesView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/CategoriesView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/CouponsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/DashboardView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/LedgerAuditView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/LoginView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/MarketingView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/OrdersView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/PartnerApplicationsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/PartnerVerifyView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/ProductManageView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/ReconciliationView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/ReviewsView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/SecurityView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/SupplierIntegrationView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/SuppliersView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "admin/UsersView_mobile.png",
+      "w": 780,
+      "h": 1688,
+      "size_changed": false,
+      "changed_pct": 2.55,
+      "changed_rows": [
+        532,
+        1219
+      ]
+    },
+    {
+      "screen": "partner/ApplicationView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/BiddingView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/BulkUploadView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/DashboardView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/LoginView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/MultiChannelListingView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/ProductManageView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/ProfileManageView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/QnaManageView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/ReturnsManageView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/SettlementView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/ShipmentView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "partner/UrlImportView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 1.48,
+      "changed_rows": [
+        272,
+        692
+      ]
+    },
+    {
+      "screen": "admin/BusinessEntitiesView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/CategoriesView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/CouponsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/DashboardView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/LedgerAuditView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/LoginView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/MarketingView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/OrdersView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/PartnerApplicationsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/PartnerVerifyView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/ProductManageView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/ReconciliationView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/ReviewsView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/SecurityView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/SupplierIntegrationView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/SuppliersView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    },
+    {
+      "screen": "admin/UsersView_desktop.png",
+      "w": 1440,
+      "h": 900,
+      "size_changed": false,
+      "changed_pct": 0.84,
+      "changed_rows": [
+        302,
+        645
+      ]
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+/* @olmoa/ui — design tokens ("OLMOA Lagoon").
+ * Single source of truth for colour, type, spacing, radius, shadow, z-index and motion.
+ * Components and apps reference the semantic tokens (--om-bg, --om-text, --om-primary …), never raw hex.
+ * Theme: light by default; dark via [data-theme="dark"] on <html>, or the OS preference unless [data-theme="light"].
+ * Colour values are stored as "R G B" channels so Tailwind can apply opacity (rgb(var(--x) / <alpha>)). */
+
+:root {
+  /* ---- palette (raw) ------------------------------------------------------------------------------------ */
+  --om-lagoon-50: 230 246 247;   /* #E6F6F7 */
+  --om-lagoon-100: 194 234 238;  /* #C2EAEE */
+  --om-lagoon-200: 138 213 221;  /* #8AD5DD */
+  --om-lagoon-300: 77 188 200;   /* #4DBCC8 */
+  --om-lagoon-400: 31 162 177;   /* #1FA2B1 */
+  --om-lagoon-500: 15 130 146;   /* #0F8292 */
+  --om-lagoon-600: 11 110 121;   /* #0B6E79  brand */
+  --om-lagoon-700: 9 90 99;      /* #095A63 */
+  --om-lagoon-800: 7 71 78;      /* #07474E */
+  --om-lagoon-900: 5 53 58;      /* #05353A */
+
+  --om-ruby-50: 253 236 239;     /* #FDECEF */
+  --om-ruby-500: 214 48 74;      /* #D6304A  price / sale */
+  --om-ruby-600: 184 33 58;      /* #B8213A */
+  --om-amber-50: 254 246 222;    /* #FEF6DE */
+  --om-amber-400: 242 169 0;     /* #F2A900  highlight */
+  --om-amber-700: 140 96 0;      /* #8C6000 */
+
+  --om-stone-0: 255 255 255;
+  --om-stone-25: 251 251 250;
+  --om-stone-50: 246 246 244;
+  --om-stone-100: 237 237 234;
+  --om-stone-200: 220 220 215;
+  --om-stone-300: 194 194 187;
+  --om-stone-400: 154 154 146;
+  --om-stone-500: 116 116 109;
+  --om-stone-600: 87 87 82;
+  --om-stone-700: 63 63 59;
+  --om-stone-800: 40 40 38;
+  --om-stone-900: 23 23 22;
+
+  --om-green-50: 232 246 238;  --om-green-600: 22 128 74;    /* success #16804A */
+  --om-orange-50: 255 243 224; --om-orange-600: 184 110 0;   /* warning #B86E00 */
+  --om-red-50: 253 236 238;    --om-red-600: 200 40 60;      /* danger  #C8283C */
+  --om-blue-50: 233 240 252;   --om-blue-600: 36 99 209;     /* info    #2463D1 */
+
+  /* ---- semantic (light) -------------------------------------------------------------------------------- */
+  --om-bg: var(--om-stone-25);
+  --om-surface: var(--om-stone-0);
+  --om-surface-2: var(--om-stone-50);
+  --om-surface-3: var(--om-stone-100);
+  --om-text: var(--om-stone-900);
+  --om-text-muted: var(--om-stone-500);
+  --om-text-subtle: var(--om-stone-400);
+  --om-text-inverse: var(--om-stone-0);
+  --om-border: var(--om-stone-200);
+  --om-border-strong: var(--om-stone-300);
+  --om-divider: var(--om-stone-100);
+
+  --om-primary: var(--om-lagoon-600);
+  --om-primary-hover: var(--om-lagoon-700);
+  --om-primary-active: var(--om-lagoon-800);
+  --om-primary-soft: var(--om-lagoon-50);
+  --om-primary-soft-text: var(--om-lagoon-800);
+  --om-on-primary: var(--om-stone-0);
+
+  --om-secondary: var(--om-stone-900);
+  --om-secondary-hover: var(--om-stone-700);
+  --om-on-secondary: var(--om-stone-0);
+
+  --om-accent: var(--om-ruby-500);          /* prices, discounts */
+  --om-accent-soft: var(--om-ruby-50);
+  --om-highlight: var(--om-amber-400);      /* deal badges, rating stars */
+  --om-highlight-soft: var(--om-amber-50);
+  --om-highlight-text: var(--om-amber-700);
+
+  --om-success: var(--om-green-600);  --om-success-soft: var(--om-green-50);
+  --om-warning: var(--om-orange-600); --om-warning-soft: var(--om-orange-50);
+  --om-danger: var(--om-red-600);     --om-danger-soft: var(--om-red-50);
+  --om-info: var(--om-blue-600);      --om-info-soft: var(--om-blue-50);
+
+  --om-focus: var(--om-lagoon-400);
+  --om-overlay: 15 18 20;
+
+  /* ---- typography -------------------------------------------------------------------------------------- */
+  --om-font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', Roboto, sans-serif;
+  --om-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --om-text-2xs: 0.6875rem; /* 11 */
+  --om-text-xs: 0.75rem;    /* 12 */
+  --om-text-sm: 0.8125rem;  /* 13 */
+  --om-text-md: 0.9375rem;  /* 15 */
+  --om-text-lg: 1.0625rem;  /* 17 */
+  --om-text-xl: 1.25rem;    /* 20 */
+  --om-text-2xl: 1.5rem;    /* 24 */
+  --om-text-3xl: 1.875rem;  /* 30 */
+  --om-text-4xl: 2.375rem;  /* 38 */
+  --om-weight-regular: 400;
+  --om-weight-medium: 500;
+  --om-weight-semibold: 600;
+  --om-weight-bold: 700;
+  --om-leading-tight: 1.25;
+  --om-leading-normal: 1.5;
+
+  /* ---- shape, depth, layers, motion ------------------------------------------------------------------- */
+  --om-radius-xs: 4px;
+  --om-radius-sm: 6px;
+  --om-radius-md: 10px;
+  --om-radius-lg: 14px;
+  --om-radius-xl: 20px;
+  --om-radius-2xl: 24px;
+  --om-radius-3xl: 28px;
+  --om-radius-full: 9999px;
+  --om-shadow-sm: 0 1px 2px rgb(23 23 22 / 0.06);
+  --om-shadow-md: 0 4px 12px -2px rgb(23 23 22 / 0.08), 0 2px 4px -2px rgb(23 23 22 / 0.05);
+  --om-shadow-lg: 0 16px 32px -8px rgb(23 23 22 / 0.14), 0 4px 8px -4px rgb(23 23 22 / 0.06);
+  --om-shadow-overlay: 0 24px 64px -12px rgb(23 23 22 / 0.28);
+  --om-z-dropdown: 1000;
+  --om-z-sticky: 1100;
+  --om-z-drawer: 1200;
+  --om-z-modal: 1300;
+  --om-z-toast: 1400;
+  --om-z-tooltip: 1500;
+  --om-ease: cubic-bezier(0.2, 0, 0, 1);
+  --om-duration-fast: 120ms;
+  --om-duration: 200ms;
+  --om-duration-slow: 320ms;
+  --om-header-h: 64px;
+  --om-container: 1320px;
+
+  color-scheme: light;
+}
+
+/* ---- dark theme --------------------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  --om-bg: 14 16 17;
+  --om-surface: 22 25 26;
+  --om-surface-2: 30 33 35;
+  --om-surface-3: 40 44 46;
+  --om-text: 236 237 235;
+  --om-text-muted: 160 163 160;
+  --om-text-subtle: 118 121 118;
+  --om-text-inverse: 23 23 22;
+  --om-border: 52 56 58;
+  --om-border-strong: 74 79 81;
+  --om-divider: 38 42 44;
+  --om-primary: var(--om-lagoon-400);
+  --om-primary-hover: var(--om-lagoon-300);
+  --om-primary-active: var(--om-lagoon-200);
+  --om-primary-soft: 9 52 57;
+  --om-primary-soft-text: var(--om-lagoon-100);
+  --om-on-primary: 5 30 33;
+  --om-secondary: 236 237 235;
+  --om-secondary-hover: 200 202 199;
+  --om-on-secondary: 23 23 22;
+  --om-accent: 240 98 118;
+  --om-accent-soft: 64 22 30;
+  --om-highlight-soft: 58 44 8;
+  --om-highlight-text: 248 204 98;
+  --om-success: 74 196 128;  --om-success-soft: 16 52 33;
+  --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
+  --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
+  --om-info: 110 160 245;    --om-info-soft: 18 36 70;
+  --om-overlay: 0 0 0;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --om-bg: 14 16 17;
+    --om-surface: 22 25 26;
+    --om-surface-2: 30 33 35;
+    --om-surface-3: 40 44 46;
+    --om-text: 236 237 235;
+    --om-text-muted: 160 163 160;
+    --om-text-subtle: 118 121 118;
+    --om-text-inverse: 23 23 22;
+    --om-border: 52 56 58;
+    --om-border-strong: 74 79 81;
+    --om-divider: 38 42 44;
+    --om-primary: var(--om-lagoon-400);
+    --om-primary-hover: var(--om-lagoon-300);
+    --om-primary-active: var(--om-lagoon-200);
+    --om-primary-soft: 9 52 57;
+    --om-primary-soft-text: var(--om-lagoon-100);
+    --om-on-primary: 5 30 33;
+    --om-secondary: 236 237 235;
+    --om-secondary-hover: 200 202 199;
+    --om-on-secondary: 23 23 22;
+    --om-accent: 240 98 118;
+    --om-accent-soft: 64 22 30;
+    --om-highlight-soft: 58 44 8;
+    --om-highlight-text: 248 204 98;
+    --om-success: 74 196 128;  --om-success-soft: 16 52 33;
+    --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
+    --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
+    --om-info: 110 160 245;    --om-info-soft: 18 36 70;
+    --om-overlay: 0 0 0;
+    color-scheme: dark;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --om-duration-fast: 0ms; --om-duration: 0ms; --om-duration-slow: 0ms; }
+}

@@ -1,0 +1,35 @@
+/* @olmoa/ui global stylesheet — imported once by each app's main.ts. */
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    @apply bg-bg text-ink font-sans text-md antialiased;
+    font-feature-settings: 'tnum' 0;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  :focus-visible { outline: 2px solid rgb(var(--om-focus)); outline-offset: 2px; }
+  ::selection { background: rgb(var(--om-lagoon-200) / 0.6); }
+  h1, h2, h3, h4 { @apply font-bold tracking-tight; }
+  img { max-width: 100%; height: auto; }
+  button, [role='button'] { -webkit-tap-highlight-color: transparent; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+}
+
+@layer components {
+  /* prices and every number in tables line up */
+  .om-num { font-variant-numeric: tabular-nums; }
+  .om-container { @apply mx-auto w-full max-w-container px-4 sm:px-6 lg:px-8; }
+  .om-skeleton-bg {
+    background: linear-gradient(90deg, rgb(var(--om-surface-3)) 0%, rgb(var(--om-surface-2)) 50%, rgb(var(--om-surface-3)) 100%);
+    background-size: 800px 100%;
+  }
+  .om-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .om-scrollbar-none { scrollbar-width: none; }
+  .om-scrollbar-none::-webkit-scrollbar { display: none; }
+}

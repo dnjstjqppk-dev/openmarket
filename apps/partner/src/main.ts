@@ -1,3 +1,5 @@
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+import '@olmoa/ui/styles.css';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
