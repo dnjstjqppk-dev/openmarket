@@ -1,7 +1,8 @@
 // tests/browser/route_smoke.mjs — opens EVERY route of the three built apps (dist, `vite preview`) in headless
 // Chrome at desktop 1440 and mobile 390, records: rendered (non-empty #app), final URL (login redirect),
 // console errors, failed HTTP requests, horizontal overflow; saves screenshots.
-// Uses whatever API the build points at with GET requests only (no login, no writes).
+// Uses whatever API the build points at with GET requests only (no login, no writes) — unless LOGIN=1, which signs in
+// through each app's real login form with the dev-seed accounts first. LOGIN=1 is refused unless API_URL is local.
 //   node tests/browser/route_smoke.mjs [outDir]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +21,29 @@ const DIST = process.env.DIST || 'dist';
 const APPS = [{ app: 'storefront', port: PORTS[0] }, { app: 'admin', port: PORTS[1] }, { app: 'partner', port: PORTS[2] }];
 const inv = JSON.parse(fs.readFileSync(path.join(ROOT, 'reports/v4/phase1/inventory.json'), 'utf8'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const LOGIN = process.env.LOGIN === '1';
+if (LOGIN && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(API)) {
+  console.error(`LOGIN=1 only runs against a local API (got ${API})`);
+  process.exit(2);
+}
+const DEV_PASSWORD = process.env.SMOKE_PASSWORD || 'DevPass!2026#'; // migrations/dev/seed_local_dev.sql
+const LOGINS = {
+  storefront: { email: 'customer@example.com', fields: ['#login-email', '#login-password'] },
+  admin: { email: 'admin@openmarket.com', fields: ['#adm-email', '#adm-pw'] },
+  partner: { email: 'seller@temu-supply.com', fields: ['#pt-email', '#pt-pw'] }
+};
+async function signIn(page, base, app) {
+  const { email, fields } = LOGINS[app];
+  await page.goto(`${base}/login`);
+  await page.waitFor(`document.querySelector('${fields[0]}')`);
+  await page.eval(`(() => {
+    const set = (sel, v) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set('${fields[0]}', ${JSON.stringify(email)}); set('${fields[1]}', ${JSON.stringify(DEV_PASSWORD)});
+    document.querySelector('${fields[0]}').closest('form').requestSubmit();
+  })()`);
+  await page.waitFor("!location.pathname.endsWith('/login')", 15000);
+  return page.eval('location.pathname');
+}
 
 // real identifiers for dynamic routes (read-only)
 const j = async (p) => { try { return await (await fetch(API + p)).json(); } catch { return {}; } };
@@ -43,6 +67,7 @@ const page = await browser.newPage();
 const results = [];
 try {
   for (const a of APPS) {
+    if (LOGIN) console.log(`signed in to ${a.app} as ${LOGINS[a.app].email} → ${await signIn(page, `http://${HOST}:${a.port}`, a.app)}`);
     for (const s of inv[a.app].screens) {
       if (s.redirect || !s.view) continue;
       const url = `http://${HOST}:${a.port}${fill(s.url, a.app)}`;
@@ -67,7 +92,7 @@ try {
         };
       }
       const d = row.desktop; const m = row.mobile;
-      row.verdict = !d.rendered || !m.rendered ? 'FAIL_BLANK' : d.console_errors.length || m.console_errors.length ? 'WARN_CONSOLE' : m.horizontal_overflow ? 'WARN_OVERFLOW' : 'PASS';
+      row.verdict = !d.rendered || !m.rendered ? 'FAIL_BLANK' : LOGIN && (d.redirected_to_login || m.redirected_to_login) ? 'FAIL_AUTH' : d.console_errors.length || m.console_errors.length ? 'WARN_CONSOLE' : m.horizontal_overflow ? 'WARN_OVERFLOW' : 'PASS';
       results.push(row);
       console.log(`${row.verdict.padEnd(13)} ${a.app.padEnd(10)} ${s.url.padEnd(26)} → ${d.final_path}${d.console_errors.length ? ` console:${d.console_errors.length}` : ''}${m.horizontal_overflow ? ' overflow@390' : ''}`);
     }
@@ -77,6 +102,6 @@ try {
   for (const p of servers) { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(p.pid), '/T', '/F']) : p.kill(); } catch { /* ignore */ } }
 }
 fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ api: API, generated: new Date().toISOString(), results }, null, 2));
+fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ api: API, logged_in: LOGIN, generated: new Date().toISOString(), results }, null, 2));
 const count = (v) => results.filter((r) => r.verdict === v).length;
-console.log(JSON.stringify({ routes: results.length, PASS: count('PASS'), WARN_CONSOLE: count('WARN_CONSOLE'), WARN_OVERFLOW: count('WARN_OVERFLOW'), FAIL_BLANK: count('FAIL_BLANK') }));
+console.log(JSON.stringify({ routes: results.length, PASS: count('PASS'), WARN_CONSOLE: count('WARN_CONSOLE'), WARN_OVERFLOW: count('WARN_OVERFLOW'), FAIL_BLANK: count('FAIL_BLANK'), FAIL_AUTH: count('FAIL_AUTH') }));
