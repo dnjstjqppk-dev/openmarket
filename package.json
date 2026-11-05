@@ -29,7 +29,8 @@
     "test:exploits": "node tests/security/exploit_proof_baseline.mjs",
     "test:browser": "node tests/browser/e2e_browser.mjs",
     "dev:db": "node scripts/local-db-reset.mjs",
-    "dev:api": "wrangler dev --config apps/cloudflare-gateway/wrangler.jsonc --local --persist-to .wrangler/local-state --port 8787"
+    "dev:api": "wrangler dev --config apps/cloudflare-gateway/wrangler.jsonc --local --persist-to .wrangler/local-state --port 8787",
+    "test:runtime": "node tests/runtime/v3_1_smoke.mjs"
   },
   "keywords": [
     "olmoa",

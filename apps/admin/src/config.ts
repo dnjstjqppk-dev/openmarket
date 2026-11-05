@@ -13,7 +13,13 @@ export const getAdminHeaders = (): Record<string, string> => {
 }
 
 export const setAdminToken = (t: string) => localStorage.setItem(TOKEN_KEY, t)
-export const clearAdminToken = () => { try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('admin_token') } catch { /* ignore */ } }
+export const clearAdminToken = () => { try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('admin_token'); localStorage.removeItem(ROLE_KEY) } catch { /* ignore */ } }
+
+// Display-only: the server enforces the operator role on every request (lib/admin-policy.js).
+const ROLE_KEY = 'olmoa_admin_role'
+export const getAdminRole = (): string => { try { return localStorage.getItem(ROLE_KEY) || '' } catch { return '' } }
+export const setAdminRole = (r: string) => { try { localStorage.setItem(ROLE_KEY, r || '') } catch { /* ignore */ } }
+export const ADMIN_ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: '최고관리자', FINANCE: '재무', OPERATIONS: '운영·MD', CS: '고객지원', PRIVACY_OFFICER: '개인정보 보호책임' }
 
 export async function adminApi<T = any>(path: string, init: RequestInit & { json?: any } = {}): Promise<{ ok: boolean; status: number; data: T | any }> {
   const res = await fetch(`${API_BASE_URL}${path}`, {

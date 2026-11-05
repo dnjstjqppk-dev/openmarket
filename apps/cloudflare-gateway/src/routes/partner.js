@@ -6,6 +6,8 @@ import { requireAuth } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str, intParam, HttpError } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
+import { logPiiView } from '../services/privacy.js';
+import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 
 
 function optionSummary(json) {
@@ -50,7 +52,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         bank_account_holder: partner.bank_account_holder, payout_account_verified: Number(partner.payout_account_verified) === 1,
         payout_change_pending: Boolean(partner.payout_change_request_json),
         settlement_cycle: partner.settlement_cycle, return_shipping_address: partner.return_shipping_address,
-        customer_service_phone: partner.customer_service_phone, base_shipping_fee: partner.base_shipping_fee, free_shipping_threshold: partner.free_shipping_threshold
+        customer_service_phone: partner.customer_service_phone, base_shipping_fee: partner.base_shipping_fee, free_shipping_threshold: partner.free_shipping_threshold,
+        return_shipping_fee: partner.return_shipping_fee ?? partner.base_shipping_fee
       }
     });
   }
@@ -68,8 +71,16 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ).bind(['WEEKLY', 'BIWEEKLY', 'MONTHLY'].includes(b.settlement_cycle) ? b.settlement_cycle : partner.settlement_cycle,
       b.return_shipping_address !== undefined ? str(b.return_shipping_address, { max: 200 }) : partner.return_shipping_address,
       b.customer_service_phone !== undefined ? str(b.customer_service_phone, { max: 30 }) : partner.customer_service_phone, fee, threshold, partnerId)];
+    if (b.return_shipping_fee !== undefined) {
+      // O14: one-way return courier fee withheld on customer-fault returns (shown to buyers before they request a return).
+      const rf = b.return_shipping_fee === null ? null : intParam(b.return_shipping_fee, { min: 0, max: 100000, field: '반품 배송비(편도)' });
+      st.push(env.DB.prepare('UPDATE partners SET return_shipping_fee = ? WHERE id = ?').bind(rf, partnerId));
+    }
     let payoutChange = false;
-    if (b.bank_code || b.bank_account_number || b.bank_account_holder) {
+    // The profile API returns the account number masked ("****1234"); echoing it back is not a change request.
+    if (typeof b.bank_account_number === 'string' && b.bank_account_number.includes('*')) delete b.bank_account_number;
+    const bankChanged = (b.bank_code && b.bank_code !== partner.bank_code) || b.bank_account_number || (b.bank_account_holder && b.bank_account_holder !== partner.bank_account_holder);
+    if (bankChanged) {
       // Payout account changes are a classic takeover vector: queue for operator verification, never apply directly.
       payoutChange = true;
       st.push(env.DB.prepare('UPDATE partners SET payout_change_request_json = ? WHERE id = ?').bind(JSON.stringify({
@@ -233,6 +244,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     for (const s of subs) {
       s.items = (await env.DB.prepare('SELECT i.*, p.thumbnail_url FROM order_items i LEFT JOIN products p ON p.id = i.product_id WHERE i.sub_order_id = ?').bind(s.id).all()).results;
     }
+    // Recipient data provided to the seller for fulfilment (개인정보 제3자 제공/처리위탁) is access-logged.
+    await logPiiView(env, me, 'partner.orders', 'order', subs.map((s) => s.parent_order_id), 'recipient_name,recipient_phone,shipping_address,shipping_memo,pccc', request);
     return json(corsHeaders, { success: true, partner_id: partnerId, count: subs.length, data: subs });
   }
 
@@ -302,7 +315,14 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       paid_amount: live.filter((s) => s.status === 'PAID_OUT').reduce((a, s) => a + s.net_payout_amount, 0)
     };
     summary.totalGross = summary.gross_sales; summary.commission = summary.total_commission; summary.netPayout = summary.net_payout;
-    const { results: payouts } = await env.DB.prepare('SELECT id, amount, status, bank_transfer_ref, created_at FROM payouts WHERE partner_id = ? ORDER BY created_at DESC LIMIT 50').bind(partnerId).all();
+    const { results: payouts } = await env.DB.prepare('SELECT id, amount, gross_amount, reserve_held, reserve_released, status, bank_transfer_ref, created_at FROM payouts WHERE partner_id = ? ORDER BY created_at DESC LIMIT 50').bind(partnerId).all();
+    // Rolling reserve (O18): money withheld from payouts that is still owed to the seller.
+    const reserve = await env.DB.prepare(
+      'SELECT COALESCE(SUM(amount),0) AS outstanding, MIN(release_after) AS next_release FROM payout_reserve_holds WHERE partner_id = ? AND released_payout_id IS NULL'
+    ).bind(partnerId).first();
+    summary.reserve_outstanding = reserve ? reserve.outstanding : 0;
+    summary.next_reserve_release = reserve ? reserve.next_release : null;
+    summary.rolling_reserve_pct = Number(partner.rolling_reserve_pct || 0);
     const rows = results.map((s) => ({ ...s, order_id: s.order_no, effective_net_payout: eff(s), settlement_status: s.status }));
     return json(corsHeaders, { success: true, partner_id: partnerId, business_name: partner.business_name, summary, count: rows.length, settlements: rows, payouts, data: { settlements: rows, summary, payouts } });
   }
@@ -330,6 +350,56 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, partner_id: partnerId, count: results.length, data: results });
   }
 
+  // O14: exchange re-shipment — replacement goes out (stock moves, ledgered), sub-order re-enters the delivery flow.
+  const reshipM = p.match(/^\/api\/v1\/partner\/returns\/([^/]+)\/reship$/);
+  if (reshipM && request.method === 'POST') {
+    const b = await readJson(request);
+    const claim = await env.DB.prepare('SELECT r.*, so.partner_id, so.tracking_number AS sub_tracking, so.status AS sub_status FROM returns r JOIN sub_orders so ON so.id = r.sub_order_id WHERE r.id = ?').bind(reshipM[1]).first();
+    if (!claim || claim.partner_id !== partnerId) throw forbidden('본인 판매 주문의 클레임만 처리할 수 있습니다.');
+    if (claim.claim_type !== 'EXCHANGE' || claim.status !== 'APPROVED' || claim.exchange_status !== 'AWAITING_RESHIPMENT') throw conflict('NOT_AWAITING_RESHIPMENT', '승인되어 재출고를 기다리는 교환 건이 아닙니다.');
+    const tracking = String(b.tracking_number || '').trim();
+    if (!/^[A-Za-z0-9-]{6,40}$/.test(tracking)) throw bad('INVALID_TRACKING', '송장번호 형식이 올바르지 않습니다.');
+    const carrier = str(b.carrier || b.carrier_code, { field: '택배사', max: 40, required: true });
+    const received = b.return_received === true;
+    const items = JSON.parse(claim.exchange_items_json || '[]');
+    if (!items.length) throw conflict('NO_EXCHANGE_ITEMS', '교환 품목 정보가 없습니다.');
+    const st = [];
+    for (const it of items) {
+      // stock >= 0 is enforced by trg_sku_stock_nonnegative: an out-of-stock replacement aborts the whole batch.
+      st.push(env.DB.prepare('UPDATE product_skus SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(it.quantity, it.to_sku_id));
+      st.push(env.DB.prepare(`INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
+                              VALUES (?, ?, 'MANUAL_ADJUST', ?, (SELECT stock_quantity FROM product_skus WHERE id = ?), ?, ?)`)
+        .bind(newId('ldg'), it.to_sku_id, -it.quantity, it.to_sku_id, claim.id, `exchange-out:${claim.id}:${it.order_item_id}`));
+      if (received) {
+        st.push(env.DB.prepare("UPDATE product_skus SET stock_quantity = stock_quantity + ?, status = CASE WHEN stock_quantity + ? > 0 THEN 'IN_STOCK' ELSE status END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(it.quantity, it.quantity, it.from_sku_id));
+        st.push(env.DB.prepare(`INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
+                                VALUES (?, ?, 'RETURN_RESTOCK', ?, (SELECT stock_quantity FROM product_skus WHERE id = ?), ?, ?)`)
+          .bind(newId('ldg'), it.from_sku_id, it.quantity, it.from_sku_id, claim.id, `exchange-in:${claim.id}:${it.order_item_id}`));
+      }
+    }
+    st.push(env.DB.prepare(`UPDATE returns SET exchange_status = 'RESHIPPED', exchange_carrier = ?, exchange_tracking_number = ?, exchange_shipped_at = CURRENT_TIMESTAMP,
+                            original_tracking_number = ?, return_received = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP
+                            WHERE id = ? AND status = 'APPROVED' AND exchange_status = 'AWAITING_RESHIPMENT'`)
+      .bind(carrier, tracking, claim.sub_tracking || null, received ? 1 : 0, me.userId, claim.id));
+    st.push(env.DB.prepare(`UPDATE sub_orders SET status = 'SHIPPED', milestone_status = 'SHIPPED', carrier_code = ?, tracking_number = ?, shipped_at = CURRENT_TIMESTAMP,
+                            delivered_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'RETURN_REQUESTED'`).bind(carrier, tracking, claim.sub_order_id));
+    st.push(env.DB.prepare(`INSERT INTO milestone_tracking_logs (id, sub_order_id, carrier_code, tracking_number, stage_code, stage_name, location, description, occurred_at)
+                            VALUES (?, ?, ?, ?, 'SHIPPED', '교환품 출고', '판매자 출고지', '교환 상품 운송장이 등록되었습니다.', CURRENT_TIMESTAMP)`).bind(newId('trk'), claim.sub_order_id, carrier, tracking));
+    // Concurrent double submit, or the sub-order is no longer awaiting the exchange: abort everything (no stock moved twice).
+    st.push(env.DB.prepare(`INSERT INTO batch_assertions (code) SELECT 'EXCHANGE_RESHIP_DRIFT' WHERE
+                              (SELECT exchange_status FROM returns WHERE id = ?) != 'RESHIPPED' OR (SELECT tracking_number FROM sub_orders WHERE id = ?) != ?
+                              OR (SELECT processed_by FROM returns WHERE id = ?) IS NULL`).bind(claim.id, claim.sub_order_id, tracking, claim.id));
+    try {
+      await env.DB.batch(st);
+    } catch (e) {
+      const m = String(e && e.message);
+      if (m.includes('STOCK')) throw conflict('EXCHANGE_OUT_OF_STOCK', '교환할 옵션의 재고가 부족합니다. 반품(환불)으로 전환해 주세요.');
+      if (m.includes('BATCH_ASSERTION') || m.includes('UNIQUE')) throw conflict('NOT_AWAITING_RESHIPMENT', '이미 재출고된 교환 건입니다.');
+      throw e;
+    }
+    return json(corsHeaders, { success: true, claim_id: claim.id, exchange_status: 'RESHIPPED', sub_order_status: 'SHIPPED' });
+  }
+
   const retM = p.match(/^\/api\/v1\/partner\/returns\/([^/]+)(?:\/status)?$/);
   if (retM && (request.method === 'PUT' || request.method === 'POST')) {
     const b = await readJson(request);
@@ -347,21 +417,34 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       return json(corsHeaders, { success: true, claim_id: claim.id, status: 'REJECTED' });
     }
     if (!['APPROVED', 'APPROVE', 'REFUNDED'].includes(decision)) throw bad('INVALID_DECISION', 'decision은 APPROVE 또는 REJECT 이어야 합니다.');
+    // O14 fault: the customer's reason decides; the seller may only shift it to the customer with a written reason.
+    const override = b.fault ? String(b.fault).toUpperCase() : null;
+    if (override && !['CUSTOMER', 'SELLER'].includes(override)) throw bad('INVALID_FAULT', 'fault 는 CUSTOMER 또는 SELLER 입니다.');
+    const fault = override || claim.fault || null;
+    if (override === 'CUSTOMER' && claim.fault !== 'CUSTOMER' && !notes) throw bad('FAULT_REASON_REQUIRED', '고객 귀책으로 판단한 근거를 적어 주세요. 고객이 이의를 제기할 수 있습니다.');
     if (claim.claim_type === 'EXCHANGE') {
-      await env.DB.prepare("UPDATE returns SET status = 'APPROVED', notes = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'").bind(notes || null, me.userId, claim.id).run();
-      return json(corsHeaders, { success: true, claim_id: claim.id, status: 'APPROVED', next_action: '교환품을 재출고해 주세요.' });
+      await env.DB.prepare("UPDATE returns SET status = 'APPROVED', exchange_status = 'AWAITING_RESHIPMENT', fault = ?, fault_note = ?, notes = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'")
+        .bind(fault, override ? notes : null, notes || null, me.userId, claim.id).run();
+      return json(corsHeaders, { success: true, claim_id: claim.id, status: 'APPROVED', exchange_status: 'AWAITING_RESHIPMENT', next_action: 'POST /api/v1/partner/returns/:id/reship 으로 교환품 송장을 등록해 주세요.' });
     }
     const lines = JSON.parse(claim.items_json || '[]');
     const returnless = b.returnless === true;
+    const bundle = await loadOrderBundle(env, claim.order_id);
+    const subRow = bundle.subs.find((s) => s.id === claim.sub_order_id);
+    const subItems = bundle.items.filter((i) => i.sub_order_id === claim.sub_order_id);
+    const fullReturn = isFullReturn(subItems, lines);
+    const returnFee = returnFeeFor({ fault, returnless, fullReturn, subShippingFee: subRow.shipping_fee, fees: await partnerReturnFees(env, partnerId) });
+    await env.DB.prepare("UPDATE returns SET fault = ?, fault_note = ? WHERE id = ? AND status = 'REQUESTED'").bind(fault, override ? notes : null, claim.id).run();
     const r = await refundOrder(env, me, claim.order_id, {
-      lines, shippingSubOrderIds: [], subOrderId: claim.sub_order_id, claimId: claim.id, reasonCode: 'RETURN',
-      restock: !returnless && b.restock !== false, idemKey: `claim:${claim.id}`, subStatusOnFull: 'RETURNED', orderStatusOnFull: 'REFUNDED'
+      lines, shippingSubOrderIds: fault === 'SELLER' && fullReturn ? [claim.sub_order_id] : [], subOrderId: claim.sub_order_id, claimId: claim.id, reasonCode: 'RETURN',
+      restock: !returnless && b.restock !== false, idemKey: `claim:${claim.id}`, subStatusOnFull: 'RETURNED', orderStatusOnFull: 'REFUNDED', returnFee
     });
+    if (r.refund) await env.DB.prepare('UPDATE returns SET return_fee_amount = ? WHERE id = ?').bind(r.refund.return_fee_amount || 0, claim.id).run();
     if (returnless) await env.DB.prepare("UPDATE returns SET is_returnless = 1, returnless_reason = ? WHERE id = ?").bind(notes || '판매자 회수 생략 승인', claim.id).run();
     const after = await loadOrderBundle(env, claim.order_id);
     const sub = after.subs.find((s) => s.id === claim.sub_order_id);
     if (sub && sub.status === 'RETURN_REQUESTED') await env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(sub.id).run();
-    return json(corsHeaders, { success: true, claim_id: claim.id, status: 'REFUNDED', refund: r.refund });
+    return json(corsHeaders, { success: true, claim_id: claim.id, status: 'REFUNDED', fault, return_fee: r.refund ? r.refund.return_fee_amount || 0 : 0, refund: r.refund });
   }
 
   if (p === '/api/v1/partner/metrics' && request.method === 'GET') {

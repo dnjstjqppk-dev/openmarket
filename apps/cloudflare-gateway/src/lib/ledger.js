@@ -12,7 +12,8 @@ export const ACCOUNTS = Object.freeze({
   SELLER_PAYABLE: 'SELLER_PAYABLE',                   // liability: owed to marketplace sellers
   COMMISSION_REVENUE: 'COMMISSION_REVENUE',           // revenue: marketplace commission
   DIRECT_SALES_REVENUE: 'DIRECT_SALES_REVENUE',       // revenue: MODEL A goods + shipping
-  BANK: 'BANK'                                        // asset: operator bank account (payouts)
+  BANK: 'BANK',                                       // asset: operator bank account (payouts)
+  CREDIT_FORFEITURE_INCOME: 'CREDIT_FORFEITURE_INCOME' // income: credit balance forfeited on member withdrawal (tax treatment: confirm with accountant)
 });
 
 /**
@@ -69,7 +70,7 @@ export function auditStatement(env, principal, { action, targetType, targetId = 
   return env.DB.prepare(
     `INSERT INTO admin_audit_log (id, actor_user_id, actor_role, action, target_type, target_id, before_json, after_json, ip)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(newId('aud'), principal.userId, principal.role, action, targetType, targetId,
+  ).bind(newId('aud'), principal.userId, principal.adminRole ? `${principal.role}:${principal.adminRole}` : principal.role, action, targetType, targetId,
     before === null ? null : JSON.stringify(before), after === null ? null : JSON.stringify(after), ip);
 }
 

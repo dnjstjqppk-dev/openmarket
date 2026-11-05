@@ -8,6 +8,9 @@ import SettlementView from '../views/SettlementView.vue';
 import QnaManageView from '../views/QnaManageView.vue';
 import ProfileManageView from '../views/ProfileManageView.vue';
 import ReturnsManageView from '../views/ReturnsManageView.vue';
+import ApplyView from '../views/ApplyView.vue';
+import ApplicationView from '../views/ApplicationView.vue';
+import { getPartnerStatus } from '../config';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +20,8 @@ const router = createRouter({
       name: 'login',
       component: LoginView
     },
+    { path: '/apply', name: 'apply', component: ApplyView },
+    { path: '/application', name: 'application', component: ApplicationView, meta: { requiresAuth: true, applicant: true } },
     {
       path: '/',
       name: 'dashboard',
@@ -72,6 +77,9 @@ router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('partner_token');
   if (to.meta.requiresAuth && !token) {
     next({ path: '/login', query: { redirect: to.fullPath } });
+  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() && getPartnerStatus() !== 'APPROVED') {
+    // Sellers under review only see their application.
+    next({ path: '/application' });
   } else {
     next();
   }

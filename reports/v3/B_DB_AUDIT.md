@@ -84,9 +84,11 @@ erDiagram
 
 D1의 `batch()`는 단일 트랜잭션입니다. 모든 상태 변경은 한 배치로 커밋하고, 배치 사이(조회→쓰기) 경쟁은 트리거·유니크 제약이 배치를 롤백시켜 처리합니다. 테스트 하네스는 조회와 쓰기 사이에 경쟁 쓰기를 주입해 이를 재현합니다(I05, I21, I26). 환불은 PG 호출(외부)을 사이에 두므로 **예약(1차 배치) → PG 취소 → 확정(2차 배치)** 2단계이며, PG 실패 시 예약을 되돌립니다(I19). 10분 넘게 `PENDING`인 환불은 대사 R07이 표시합니다.
 
-## 5. 데이터 대사 (`GET /api/v1/admin/reconciliation`, 18개 검사)
+## 5. 데이터 대사 (`GET /api/v1/admin/reconciliation`, 22개 검사 — V3.1에서 R18~R21 추가)
 
-R01 분개 차대 일치 · R02 주문 산식 · R03 품목 배분 · R04/R04b 하위주문 합계 · R05 결제 1건=결제액 · R06 환불 누계 · R07 정체 환불 · R08 PG 정산계정 · R09 적립금 원장=부채−결제대기 예약분 · R10 판매자 미지급금 · R11 정산 산식 · R12 판매모델별 정산/발주 · R13 직영 발주서 · R14 재고원장=주문수량 · R15 음수재고 · R16/R17 사업자 귀속.
+R01 분개 차대 일치 · R02 주문 산식 · R03 품목 배분 · R04/R04b 하위주문 합계 · R05 결제 1건=결제액 · R06 환불 누계 · R07 정체 환불 · R08 PG 정산계정 · R09 적립금 원장=부채−결제대기 예약분 · R10 판매자 미지급금 · R11 정산 산식 · R12 판매모델별 정산/발주 · R13 직영 발주서 · R14 재고원장=주문수량 · R15 음수재고 · R16/R17 사업자 귀속 · **R18 지급 산식(이체액 = 정산액 − 리저브 보류 + 리저브 해제, 보류 행과 일치)** · **R19 지급 1건 = 운영 사업자 1곳** · **R20 환불 1건: PG + 적립금 + 차감 반품배송비 = 환불 품목·배송비 몫** · **R21 주문 환불 누계 + 차감액 = 품목·배송비 환불 몫 합계**.
+
+V3.1부터 대사는 Cron에서 1시간마다 자동 실행되어 `reconciliation_runs`에 기록되고(수동 실행도 기록), 실패 시 `ALERT_WEBHOOK_URL`로 알림합니다.
 모든 테스트 시나리오(취소·부분취소·반품·정산 후 환불·법인 전환 포함) 실행 후 전부 통과합니다 (I31, 기능 E2E 26, 브라우저 B11).
 
 ## 6. 마이그레이션 · 복구 계획 (운영 적용은 승인 후)
@@ -97,3 +99,15 @@ R01 분개 차대 일치 · R02 주문 산식 · R03 품목 배분 · R04/R04b �
 4. **검증**: `/health`, 대사 API, 주문 0건 상태에서 테스트 결제(토스 테스트 키).
 5. **롤백**: `wrangler d1 time-travel restore openmarket-db --bookmark=<1단계 북마크>` 후 이전 Worker 버전 재배포. `d1_20`은 테이블을 재구성하므로 SQL 역마이그레이션 대신 Time Travel 복원을 표준 롤백으로 합니다.
 6. 기존 주문 행은 `legacy_record = 1`, 사업자 미귀속으로 보존되며 대사에서 제외됩니다 (실거래가 아니었던 데이터).
+
+## 7. V3.1 추가 마이그레이션 (모두 추가 전용, `d1_20` 이후 순서대로)
+
+| 파일 | 내용 | 롤백 |
+|---|---|---|
+| `d1_21_reserve_and_ops.sql` | `partners.rolling_reserve_days`, `payouts.gross_amount/reserve_held/reserve_released`, `payout_reserve_holds`(1회 해제·삭제 불가 트리거), `payouts` 금액 동결·삭제 금지 트리거, `reconciliation_runs` | 새 객체 미사용 또는 Time Travel |
+| `d1_23_seller_onboarding.sql` | 입점 신청·심사 컬럼, `partner_kyb_documents`(삭제 금지, 파일 교체 금지), `storage_objects.visibility` | 새 객체 미사용 또는 Time Travel |
+| `d1_24_admin_security.sql` | `users.admin_role`(기존 운영자 → SUPER_ADMIN), TOTP 비밀키(암호화)·마지막 사용 시간단계·복구코드 해시, 운영자 외 역할 부여 금지 트리거 | 새 컬럼 미사용 또는 Time Travel |
+| `d1_25_claims_policy.sql` | `partners.return_shipping_fee`, `returns` 사유·귀책·차감액·교환 컬럼, `refunds.return_fee_amount`(변경 금지) | 새 컬럼 미사용 또는 Time Travel |
+| `d1_22_privacy_lifecycle.sql` | `users.withdrawn_at`, `orders.pii_purged_at`, `support_inquiries.pii_purged_at`, `pii_access_log`(수정·삭제 불가), 탈퇴 계정 복구 금지 트리거 | 새 객체 미사용 또는 Time Travel |
+
+적용 절차는 6절과 같습니다(백업 → 리허설 → 적용 → 대사). 운영 D1 적용은 **승인 후** 진행하며 이번 작업에서 운영 DB는 건드리지 않았습니다.

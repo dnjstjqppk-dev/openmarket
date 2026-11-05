@@ -1,4 +1,5 @@
 import { authenticate } from '../lib/auth.js';
+import { logPiiView } from '../services/privacy.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
 
@@ -237,6 +238,7 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
       return new Response(JSON.stringify({ error: 'Order not found', order_id: orderId }), { status: 404, headers: corsHeaders });
     }
 
+    if (isAdmin && order.customer_id) await logPiiView(env, principal, 'admin.commercial-invoice', 'order', [order.id], 'recipient_name,recipient_phone,shipping_address,pccc,customer_email', request);
     if (!isAdmin && order.customer_id !== customerId) {
       return new Response(JSON.stringify({
         error: 'Access denied: You do not have permission to view this order commercial invoice',

@@ -73,6 +73,10 @@ onMounted(loadSettlements)
           Pending: <span class="text-amber-600">₩{{ Number(summary.pending_amount || 0).toLocaleString() }}</span> •
           Paid: <span class="text-emerald-600">₩{{ Number(summary.paid_amount || 0).toLocaleString() }}</span>
         </div>
+        <div v-if="summary.reserve_outstanding" class="text-[11px] text-gray-500 mt-1" data-testid="reserve-outstanding">
+          롤링 리저브 보류 ₩{{ Number(summary.reserve_outstanding).toLocaleString() }} ({{ summary.rolling_reserve_pct }}%)
+          · 다음 해제 {{ summary.next_reserve_release }} UTC — 보류 기간이 끝나면 다음 지급에 포함됩니다.
+        </div>
       </div>
     </div>
 

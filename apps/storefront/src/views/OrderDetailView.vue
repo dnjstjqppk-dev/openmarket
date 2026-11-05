@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL, authHeader } from '../config'
+import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 
 const route = useRoute()
 const locale = useLocaleStore()
@@ -18,6 +18,29 @@ const showClaimModal = ref(false)
 const claimType = ref<'RETURN' | 'EXCHANGE'>('RETURN')
 const claimSubOrderId = ref('')
 const claimReason = ref('')
+// O14: the reason decides who pays the return courier (전자상거래법 제18조)
+const REASONS = [
+  { code: 'CHANGE_OF_MIND', label: '단순 변심', fault: 'CUSTOMER' },
+  { code: 'SIZE_COLOR', label: '사이즈·색상 교환/불만', fault: 'CUSTOMER' },
+  { code: 'DEFECTIVE', label: '상품 불량·고장', fault: 'SELLER' },
+  { code: 'DAMAGED', label: '배송 중 파손', fault: 'SELLER' },
+  { code: 'WRONG_ITEM', label: '다른 상품이 왔어요 (오배송)', fault: 'SELLER' },
+  { code: 'NOT_AS_DESCRIBED', label: '상품 설명과 달라요', fault: 'SELLER' }
+]
+const claimReasonCode = ref('CHANGE_OF_MIND')
+const claimSub = ref<any>(null)
+const exchangeOptions = ref<Record<string, any[]>>({})
+const exchangeChoice = ref<Record<string, string>>({})
+const claimFault = computed(() => REASONS.find((r) => r.code === claimReasonCode.value)?.fault || null)
+const claimFeePreview = computed(() => {
+  const sub = claimSub.value
+  if (!sub || claimFault.value !== 'CUSTOMER') return 0
+  const oneWay = Number(sub.return_shipping_fee || 0)
+  if (claimType.value === 'EXCHANGE') return oneWay * 2
+  return oneWay + (Number(sub.shipping_fee) === 0 ? Number(sub.outbound_shipping_fee_basis || 0) : 0)
+})
+// Quantity-level cancel before shipment (one idempotency key per confirmed click)
+const qtyCancel = ref<Record<string, number>>({})
 const trackingInfo = ref<any>(null)
 const loadingTracking = ref(false)
 
@@ -117,6 +140,24 @@ async function handleCancelOrder() {
   await loadOrderDetail()
 }
 
+async function handleCancelQty(sub: any, it: any) {
+  const remaining = it.quantity - (it.refunded_quantity || 0)
+  const qty = Math.max(1, Math.min(remaining, Number(qtyCancel.value[it.id] || 1)))
+  if (!confirm(`${it.product_title} ${qty}개를 취소하시겠습니까?${qty === remaining && sub.items.every((x: any) => x.id === it.id || x.quantity === (x.refunded_quantity || 0)) ? ' (남은 상품이 없어 배송비도 환불됩니다)' : ' 배송비는 남은 상품과 함께 그대로 유지됩니다.'}`)) return
+  busy.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': newIdempotencyKey('qcx'), ...authHeader() },
+      body: JSON.stringify({ items: [{ order_item_id: it.id, quantity: qty }] })
+    })
+    const json = await res.json().catch(() => ({}))
+    say(res.ok && json.success ? `${qty}개 취소 · 환불 ${won((json.refund?.pg_amount || 0) + (json.refund?.credit_amount || 0))}` : (json.error || '취소하지 못했습니다.'), res.ok && json.success ? 'ok' : 'warn')
+  } finally {
+    busy.value = false
+  }
+  await loadOrderDetail()
+}
+
 async function handleCancelSub(sub: any) {
   if (!confirm(`${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`)) return
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`)
@@ -142,18 +183,38 @@ async function handleLateDeliveryClaim() {
   await loadOrderDetail()
 }
 
-function openClaim(sub: any) {
+async function openClaim(sub: any) {
   claimSubOrderId.value = sub.id
+  claimSub.value = sub
   claimType.value = 'RETURN'
   claimReason.value = ''
+  claimReasonCode.value = 'CHANGE_OF_MIND'
+  exchangeChoice.value = {}
   showClaimModal.value = true
+  // Exchange is offered only for options of the same product at the same price (server enforces it too).
+  for (const it of sub.items) {
+    if (!it.product_id || exchangeOptions.value[it.id]) continue
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(it.product_id)}`)
+      const json = await res.json()
+      const own = (json.data?.skus || []).find((x: any) => x.id === it.sku_id)
+      exchangeOptions.value[it.id] = (json.data?.skus || []).filter((x: any) => own && x.sale_price === own.sale_price && (x.id === it.sku_id || x.stock_quantity > 0))
+    } catch { exchangeOptions.value[it.id] = [] }
+  }
 }
 
 async function submitClaim() {
-  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, { type: claimType.value, sub_order_id: claimSubOrderId.value, reason: claimReason.value })
+  const items = claimType.value === 'EXCHANGE' && claimSub.value
+    ? claimSub.value.items.filter((it: any) => it.quantity > (it.refunded_quantity || 0)).map((it: any) => ({ order_item_id: it.id, quantity: it.quantity - (it.refunded_quantity || 0), exchange_sku_id: exchangeChoice.value[it.id] || it.sku_id }))
+    : undefined
+  const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, {
+    type: claimType.value, sub_order_id: claimSubOrderId.value, reason: claimReason.value || REASONS.find((r) => r.code === claimReasonCode.value)?.label, reason_code: claimReasonCode.value, items
+  })
   if (ok) {
     showClaimModal.value = false
-    say(claimType.value === 'RETURN' ? `반품 신청이 접수되었습니다. 예상 환불액 ${won(json.estimated_refund_amount)} (판매자 확인 후 환불)` : '교환 신청이 접수되었습니다.')
+    say(claimType.value === 'RETURN'
+      ? `반품 신청이 접수되었습니다. 예상 환불액 ${won(json.estimated_refund_amount)}${json.estimated_return_fee ? ` (반품 배송비 ${won(json.estimated_return_fee)} 차감)` : ''} · 판매자 확인 후 환불`
+      : `교환 신청이 접수되었습니다.${json.customer_shipping_note ? ' ' + json.customer_shipping_note : ''}`)
   } else {
     say(json.error || '신청하지 못했습니다.', 'warn')
   }
@@ -210,7 +271,11 @@ onMounted(loadOrderDetail)
           <ul class="text-xs space-y-1.5 mb-3">
             <li v-for="it in sub.items" :key="it.id" class="flex justify-between gap-3">
               <span class="text-gray-700">{{ it.product_title }} <span class="text-slate-400">· {{ it.option_summary }} × {{ it.quantity }}</span>
-                <span v-if="it.refunded_quantity" class="ml-1 text-[#E60023]">({{ it.refunded_quantity }}개 환불)</span></span>
+                <span v-if="it.refunded_quantity" class="ml-1 text-[#E60023]">({{ it.refunded_quantity }}개 환불)</span>
+                <span v-if="['PAYMENT_CONFIRMED','PREPARING'].includes(sub.status) && it.quantity - (it.refunded_quantity || 0) > 1" class="ml-2 inline-flex items-center gap-1">
+                  <input v-model.number="qtyCancel[it.id]" type="number" min="1" :max="it.quantity - (it.refunded_quantity || 0)" :aria-label="`${it.product_title} 취소 수량`" class="w-12 h-6 px-1 rounded border border-gray-300" placeholder="1" />
+                  <button type="button" :disabled="busy" class="text-[#E60023] font-bold underline" @click="handleCancelQty(sub, it)">수량 취소</button>
+                </span></span>
               <span class="font-bold whitespace-nowrap">{{ won(it.total_price) }}</span>
             </li>
             <li class="flex justify-between text-slate-500"><span>배송비</span><span>{{ sub.shipping_fee ? won(sub.shipping_fee) : '무료' }}</span></li>
@@ -249,9 +314,28 @@ onMounted(loadOrderDetail)
               <option value="RETURN">반품 (환불)</option>
               <option value="EXCHANGE">교환</option>
             </select></label>
-          <label class="block sm:col-span-2"><span class="block font-bold text-gray-700 mb-1">사유</span>
-            <input v-model="claimReason" type="text" maxlength="500" placeholder="예: 사이즈가 맞지 않음" class="w-full h-10 px-3 rounded-lg border border-gray-300" /></label>
+          <label class="block"><span class="block font-bold text-gray-700 mb-1">사유</span>
+            <select v-model="claimReasonCode" class="w-full h-10 px-3 rounded-lg border border-gray-300 font-bold" data-testid="claim-reason">
+              <option v-for="r in REASONS" :key="r.code" :value="r.code">{{ r.label }}</option>
+            </select></label>
+          <label class="block sm:col-span-2"><span class="block font-bold text-gray-700 mb-1">자세한 내용 (선택)</span>
+            <input v-model="claimReason" type="text" maxlength="500" placeholder="예: 화면과 색상이 달라요" class="w-full h-10 px-3 rounded-lg border border-gray-300" /></label>
+          <div v-if="claimType === 'EXCHANGE' && claimSub" class="sm:col-span-2 space-y-2">
+            <div v-for="it in claimSub.items" :key="it.id">
+              <span class="block font-bold text-gray-700 mb-1">{{ it.product_title }} · 교환받을 옵션</span>
+              <select v-model="exchangeChoice[it.id]" class="w-full h-10 px-3 rounded-lg border border-gray-300">
+                <option value="">같은 옵션으로 교환 ({{ it.option_summary }})</option>
+                <option v-for="o in (exchangeOptions[it.id] || []).filter((x) => x.id !== it.sku_id)" :key="o.id" :value="o.id">{{ Object.values(o.options || {}).join(' / ') || o.id }}</option>
+              </select>
+            </div>
+            <p class="text-[11px] text-slate-500">같은 가격의 옵션으로만 교환할 수 있습니다. 다른 상품이나 가격이 다른 옵션은 반품 후 새로 주문해 주세요.</p>
+          </div>
         </div>
+        <p class="text-xs p-3 rounded-lg" :class="claimFault === 'CUSTOMER' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'" data-testid="claim-fee-preview">
+          <template v-if="claimFault === 'CUSTOMER' && claimType === 'RETURN'">고객 사유 반품은 반품 배송비 <b>{{ won(claimFeePreview) }}</b>이 환불액에서 차감됩니다{{ claimSub && Number(claimSub.shipping_fee) === 0 ? ' (무료배송 주문을 전부 반품하면 처음 배송비 포함 왕복)' : '' }}. 판매자가 회수하지 않기로 하면 차감하지 않습니다.</template>
+          <template v-else-if="claimFault === 'CUSTOMER'">고객 사유 교환은 왕복 배송비 {{ won(claimFeePreview) }}을 판매자 안내에 따라 따로 부담합니다.</template>
+          <template v-else>판매자 사유(불량·파손·오배송·설명과 다름)는 배송비를 부담하지 않습니다. 전체 반품 시 처음 낸 배송비도 환불됩니다.</template>
+        </p>
         <p class="text-[11px] text-slate-500">환불 금액은 실제 결제 금액(쿠폰·적립금 배분 반영)을 기준으로 판매자 확인 후 확정됩니다. 단순 변심 반품 시 반품 배송비가 부과될 수 있습니다.</p>
         <div class="flex justify-end gap-2 pt-2">
           <button @click="showClaimModal = false" class="px-4 py-2 rounded-full border border-gray-300 text-xs font-bold">취소</button>

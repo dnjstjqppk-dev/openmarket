@@ -44,7 +44,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
   const { results: subs } = await env.DB.prepare(
     `SELECT s.*, st.id AS settlement_id, st.gross_amount AS st_gross, st.commission_amount AS st_commission,
             st.commission_rate_bps AS st_bps, st.shipping_fee AS st_shipping, st.net_payout_amount AS st_net, st.status AS st_status,
-            pt.business_name
+            pt.business_name, pt.base_shipping_fee AS partner_base_fee, pt.return_shipping_fee AS partner_return_fee
      FROM sub_orders s
      LEFT JOIN settlements st ON st.sub_order_id = s.id
      LEFT JOIN partners pt ON pt.id = s.partner_id
@@ -471,7 +471,9 @@ export async function expireStaleOrders(env, limit = 50) {
 // ---------------------------------------------------------------------------------------------
 /**
  * request: { lines: [{ order_item_id, quantity }], shippingSubOrderIds: [], reasonCode, claimId, restock, idemKey,
- *            subStatusOnFull: 'CANCELLED'|'RETURNED', orderStatusOnFull: 'CANCELLED'|'REFUNDED', restoreCoupon }
+ *            subStatusOnFull: 'CANCELLED'|'RETURNED', orderStatusOnFull: 'CANCELLED'|'REFUNDED', restoreCoupon,
+ *            returnFee }   // O14: customer-fault return courier fee withheld from this refund (requires subOrderId)
+ * Money identity per refund: pg_amount + credit_amount + return_fee_amount = refunded item shares + refunded shipping shares.
  */
 export async function refundOrder(env, actor, orderRef, request) {
   const b = await loadOrderBundle(env, orderRef);
@@ -498,8 +500,16 @@ export async function refundOrder(env, actor, orderRef, request) {
   const shipSubs = (request.shippingSubOrderIds || []).map((id) => b.subs.find((s) => s.id === id)).filter((s) => s && !s.shipping_refunded && s.shipping_fee > 0);
   if (!plan.length && !shipSubs.length) throw bad('NOTHING_TO_REFUND', '환불할 항목이 없습니다.');
 
-  const pg = plan.reduce((a, p) => a + p.pgPart, 0) + shipSubs.reduce((a, s) => a + s.shipping_pg_alloc, 0);
-  const credit = plan.reduce((a, p) => a + p.crPart, 0) + shipSubs.reduce((a, s) => a + s.shipping_credit_alloc, 0);
+  const pgGross = plan.reduce((a, p) => a + p.pgPart, 0) + shipSubs.reduce((a, s) => a + s.shipping_pg_alloc, 0);
+  const creditGross = plan.reduce((a, p) => a + p.crPart, 0) + shipSubs.reduce((a, s) => a + s.shipping_credit_alloc, 0);
+  // Return fee: taken from the cash refund first, then from the credit refund; never more than is being refunded.
+  const feeAsked = Number(request.returnFee || 0);
+  if (!Number.isSafeInteger(feeAsked) || feeAsked < 0) throw new Error('REFUND_INVARIANT: returnFee must be a non-negative integer');
+  if (feeAsked > 0 && !request.subOrderId) throw new Error('REFUND_INVARIANT: returnFee requires subOrderId');
+  const returnFee = Math.min(feeAsked, pgGross + creditGross);
+  const feeFromPg = Math.min(returnFee, pgGross);
+  const pg = pgGross - feeFromPg;
+  const credit = creditGross - (returnFee - feeFromPg);
   const coupon = plan.reduce((a, p) => a + p.cpPart, 0);
   const goods = plan.reduce((a, p) => a + p.goods, 0);
   const shipping = shipSubs.reduce((a, s) => a + s.shipping_fee, 0);
@@ -510,9 +520,11 @@ export async function refundOrder(env, actor, orderRef, request) {
   const reserve = [
     env.DB.prepare(
       `INSERT INTO refunds (id, order_id, sub_order_id, claim_id, operator_entity_id, reason_code, goods_amount, shipping_amount, coupon_reversal_amount,
-         pg_amount, credit_amount, items_json, status, is_sandbox, idempotency_key, requested_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`
-    ).bind(refundId, o.id, request.subOrderId || null, request.claimId || null, o.operator_entity_id, request.reasonCode, goods, shipping, coupon, pg, credit, itemsJson, o.is_sandbox, idemKey, actor.userId),
+         pg_amount, credit_amount, return_fee_amount, items_json, status, is_sandbox, idempotency_key, requested_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`
+    // goods_amount is the NET goods value returned to the customer (DB CHECK: goods + shipping = coupon + pg + credit);
+    // the gross identity incl. the withheld fee is verified by reconciliation R20.
+    ).bind(refundId, o.id, request.subOrderId || null, request.claimId || null, o.operator_entity_id, request.reasonCode, goods - returnFee, shipping, coupon, pg, credit, returnFee, itemsJson, o.is_sandbox, idemKey, actor.userId),
     env.DB.prepare('UPDATE orders SET refunded_pg_amount = refunded_pg_amount + ?, refunded_credit_amount = refunded_credit_amount + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(pg, credit, o.id)
   ];
   for (const p of plan) {
@@ -563,13 +575,14 @@ export async function refundOrder(env, actor, orderRef, request) {
     const s = after.subs.find((x) => x.id === sid);
     const goodsRefund = plan.filter((p) => p.it.sub_order_id === sid).reduce((a, p) => a + p.goods, 0);
     const shipRefund = shipSubs.some((x) => x.id === sid) ? s.shipping_fee : 0;
+    const feeHere = sid === request.subOrderId ? returnFee : 0;
     if (s.sales_model === 'MARKETPLACE' && s.settlement_id) {
       const adj = await env.DB.prepare('SELECT COALESCE(SUM(gross_delta),0) g, COALESCE(SUM(commission_delta),0) c, COALESCE(SUM(shipping_delta),0) sh FROM settlement_adjustments WHERE settlement_id = ?').bind(s.settlement_id).first();
       const grossNow = s.st_gross + adj.g;
       const commNow = s.st_commission + adj.c;
       const grossNew = grossNow - goodsRefund;
       const commDelta = applyBps(grossNew, s.st_bps) - commNow;
-      const shipDelta = -shipRefund;
+      const shipDelta = -shipRefund + feeHere; // seller keeps the return-shipping fee it pays the courier with
       const netDelta = -goodsRefund - commDelta + shipDelta;
       fin.push(env.DB.prepare(
         `INSERT INTO settlement_adjustments (id, settlement_id, partner_id, refund_id, gross_delta, commission_delta, shipping_delta, net_delta, reason)
@@ -582,7 +595,7 @@ export async function refundOrder(env, actor, orderRef, request) {
       journal.push({ account: ACCOUNTS.SELLER_PAYABLE, debit: -netDelta, sub_order_id: sid, partner_id: s.partner_id });
       journal.push({ account: ACCOUNTS.COMMISSION_REVENUE, debit: -commDelta, sub_order_id: sid, partner_id: s.partner_id });
     } else {
-      journal.push({ account: ACCOUNTS.DIRECT_SALES_REVENUE, debit: goodsRefund + shipRefund, sub_order_id: sid, partner_id: s.partner_id });
+      journal.push({ account: ACCOUNTS.DIRECT_SALES_REVENUE, debit: goodsRefund + shipRefund - feeHere, sub_order_id: sid, partner_id: s.partner_id, memo: feeHere ? `return fee ${feeHere}` : undefined });
     }
     const subItems = after.items.filter((i) => i.sub_order_id === sid);
     const subFully = subItems.every((i) => i.refunded_quantity === i.quantity) && (s.shipping_fee === 0 || s.shipping_refunded === 1 || !PRE_SHIPMENT.includes(s.status));
@@ -641,7 +654,7 @@ export async function cancelOrder(env, actor, orderRef, { isAdmin = false } = {}
 }
 
 /** Partial cancellation: one seller's part of a mixed order (before shipment). */
-export async function cancelSubOrder(env, actor, orderRef, subOrderId, { isAdmin = false } = {}) {
+export async function cancelSubOrder(env, actor, orderRef, subOrderId, { isAdmin = false, lines = null, idemKey = null } = {}) {
   const b = await loadOrderBundle(env, orderRef);
   if (!b) throw notFound('주문을 찾을 수 없습니다.');
   if (!isAdmin && b.order.customer_id !== actor.userId) throw forbidden();
@@ -649,6 +662,33 @@ export async function cancelSubOrder(env, actor, orderRef, subOrderId, { isAdmin
   if (!s) throw notFound('판매자 주문을 찾을 수 없습니다.');
   if (!PRE_SHIPMENT.includes(s.status) || s.status === 'PAYMENT_PENDING') {
     throw conflict('SUB_ORDER_NOT_CANCELLABLE', `취소할 수 없는 상태입니다. (${s.status})`);
+  }
+  // O14: quantity-level cancel before shipment. Shipping is refunded only when nothing of the sub-order is left to ship.
+  if (lines && lines.length) {
+    const subItems = b.items.filter((i) => i.sub_order_id === s.id);
+    const norm = new Map();
+    for (const l of lines) {
+      const it = subItems.find((i) => i.id === String(l.order_item_id));
+      const q = Number(l.quantity);
+      if (!it || !Number.isSafeInteger(q) || q < 1) throw bad('INVALID_ITEMS', '취소할 상품과 수량을 확인해 주세요.');
+      norm.set(it.id, (norm.get(it.id) || 0) + q);
+    }
+    for (const [id, q] of norm) {
+      const it = subItems.find((i) => i.id === id);
+      if (q > it.quantity - it.refunded_quantity) throw conflict('REFUND_EXCEEDS_PAID', '취소 가능 수량을 초과했습니다.', { order_item_id: id, remaining: it.quantity - it.refunded_quantity });
+    }
+    const leavesNothing = subItems.every((i) => i.quantity - i.refunded_quantity - (norm.get(i.id) || 0) === 0);
+    if (!leavesNothing && s.sales_model === 'DIRECT') {
+      const po = await env.DB.prepare("SELECT COUNT(*) c FROM purchase_orders WHERE sub_order_id = ? AND status != 'CANCELLED'").bind(s.id).first('c');
+      if (po > 0) throw conflict('SUPPLIER_PO_EXISTS', '공급사 발주서가 생성된 직영 주문은 일부 수량만 취소할 수 없습니다. 전체 취소하거나 고객센터에 문의해 주세요.');
+    }
+    // Idempotency key = request content + current refund state: a double click replays, a later "cancel one more" does not.
+    const state = [...norm.keys()].sort().map((id) => `${id}x${norm.get(id)}@${subItems.find((i) => i.id === id).refunded_quantity}`).join(',');
+    const r = await refundOrder(env, actor, b.order.id, {
+      lines: [...norm].map(([order_item_id, quantity]) => ({ order_item_id, quantity })), shippingSubOrderIds: leavesNothing ? [s.id] : [], subOrderId: s.id,
+      reasonCode: 'CUSTOMER_QTY_CANCEL', restock: true, idemKey: idemKey ? `qcancel:${s.id}:key:${idemKey}` : `qcancel:${s.id}:${state}`, orderStatusOnFull: 'CANCELLED', restoreCoupon: false
+    });
+    return { status: r.orderStatus, refund: r.refund, warnings: r.warnings, replay: r.replay, partial: !leavesNothing };
   }
   const r = await refundOrder(env, actor, b.order.id, {
     lines: allRemainingLines(b, s.id), shippingSubOrderIds: [s.id], subOrderId: s.id, reasonCode: 'CUSTOMER_PARTIAL_CANCEL',

@@ -20,7 +20,18 @@ interface ReturnItem {
   total_amount?: number;
   customer_email?: string;
   customer_name?: string;
+  reason_code?: string | null;
+  fault?: 'CUSTOMER' | 'SELLER' | null;
+  return_fee_amount?: number;
+  exchange_status?: 'AWAITING_RESHIPMENT' | 'RESHIPPED' | null;
+  exchange_items_json?: string | null;
+  exchange_tracking_number?: string | null;
 }
+
+const REASON_LABEL: Record<string, string> = {
+  CHANGE_OF_MIND: '단순 변심', SIZE_COLOR: '사이즈·색상', DEFECTIVE: '불량·고장', DAMAGED: '배송 중 파손',
+  WRONG_ITEM: '오배송', NOT_AS_DESCRIBED: '상품 설명과 다름', OTHER: '기타'
+};
 
 const returns = ref<ReturnItem[]>([]);
 const loading = ref(true);
@@ -31,9 +42,12 @@ const toast = ref('');
 // Action Modal
 const activeModal = ref(false);
 const targetItem = ref<ReturnItem | null>(null);
-const targetStatus = ref<'APPROVED' | 'REFUNDED' | 'REJECTED'>('APPROVED');
+const targetStatus = ref<'APPROVED' | 'REJECTED' | 'RESHIP'>('APPROVED');
 const sellerNote = ref('');
 const processing = ref(false);
+const faultChoice = ref<'' | 'CUSTOMER' | 'SELLER'>('');
+const returnless = ref(false);
+const reship = ref({ carrier: 'CJ대한통운', tracking_number: '', return_received: true });
 
 const loadReturns = async () => {
   loading.value = true;
@@ -75,31 +89,39 @@ const filteredReturns = computed(() => {
   });
 });
 
-const openStatusModal = (item: ReturnItem, status: 'APPROVED' | 'REFUNDED' | 'REJECTED') => {
+const openStatusModal = (item: ReturnItem, status: 'APPROVED' | 'REJECTED' | 'RESHIP') => {
   targetItem.value = item;
   targetStatus.value = status;
-  sellerNote.value = item.notes || '';
+  sellerNote.value = '';
+  faultChoice.value = '';
+  returnless.value = false;
+  reship.value = { carrier: 'CJ대한통운', tracking_number: '', return_received: true };
   activeModal.value = true;
 };
+// Changing the customer's reason to "customer fault" requires a written reason (the buyer can dispute it).
+const needsFaultNote = computed(() => faultChoice.value === 'CUSTOMER' && targetItem.value?.fault !== 'CUSTOMER');
 
 const confirmStatusUpdate = async () => {
   if (!targetItem.value) return;
   processing.value = true;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/returns/${targetItem.value.id}/status`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getPartnerHeaders()
-      },
-      body: JSON.stringify({
-        status: targetStatus.value,
-        notes: sellerNote.value.trim()
+    const isReship = targetStatus.value === 'RESHIP';
+    const res = await fetch(`${API_BASE}/api/v1/partner/returns/${targetItem.value.id}${isReship ? '/reship' : ''}`, {
+      method: isReship ? 'POST' : 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
+      body: JSON.stringify(isReship ? reship.value : {
+        decision: targetStatus.value === 'REJECTED' ? 'REJECT' : 'APPROVE',
+        notes: sellerNote.value.trim(),
+        ...(faultChoice.value ? { fault: faultChoice.value } : {}),
+        ...(returnless.value ? { returnless: true } : {})
       })
     });
     const json = await res.json();
     if (json.success) {
-      toast.value = `✓ 클레임(${targetItem.value.id})이 '${targetStatus.value}' 상태로 갱신되었습니다.`;
+      toast.value = isReship ? '✓ 교환품 출고가 등록되었습니다.'
+        : targetStatus.value === 'REJECTED' ? '✓ 클레임을 반려했습니다.'
+        : json.status === 'REFUNDED' ? `✓ 환불 완료${json.return_fee ? ` (반품 배송비 ${formatPrice(json.return_fee)} 차감)` : ''}`
+        : '✓ 교환을 승인했습니다. 교환품 송장을 등록해 주세요.';
       setTimeout(() => { toast.value = ''; }, 3000);
       activeModal.value = false;
       await loadReturns();
@@ -140,7 +162,7 @@ onMounted(() => {
           </span>
         </h1>
         <p class="text-xs text-gray-500 mt-1">
-          고객이 접수한 90일 무료 반품, 교환 및 보상 클레임을 신속하게 검토하고 에스크로 환불을 승인합니다.
+          수령 후 7일 이내 접수된 반품·교환을 검토합니다. 고객 사유(단순변심·사이즈)는 반품 배송비를 차감하고, 판매자 사유(불량·오배송 등)는 배송비를 판매자가 부담합니다.
         </p>
       </div>
 
@@ -288,11 +310,19 @@ onMounted(() => {
                 >
                   {{ item.claim_type === 'RETURN' ? '반품 환불' : item.claim_type === 'EXCHANGE' ? '교환 접수' : '차액 보상' }}
                 </span>
+                <p v-if="item.reason_code" class="text-[11px] font-bold" :class="item.fault === 'CUSTOMER' ? 'text-amber-700' : 'text-rose-700'">
+                  {{ REASON_LABEL[item.reason_code] || item.reason_code }} · {{ item.fault === 'CUSTOMER' ? '고객 귀책' : item.fault === 'SELLER' ? '판매자 귀책' : '귀책 미정' }}
+                </p>
                 <p class="text-xs text-gray-700 truncate" :title="item.reason">{{ item.reason }}</p>
+                <p v-if="item.exchange_status" class="text-[10px] text-blue-700 font-bold mt-0.5">{{ item.exchange_status === 'RESHIPPED' ? `교환품 출고됨 · ${item.exchange_tracking_number}` : '교환품 출고 대기' }}</p>
                 <p v-if="item.notes" class="text-[10px] text-indigo-600 mt-0.5">메모: {{ item.notes }}</p>
               </td>
               <td class="py-3.5 px-4">
-                <span class="font-black text-gray-900">{{ formatPrice(item.refund_amount || item.total_amount) }}</span>
+                <span v-if="item.claim_type === 'EXCHANGE'" class="text-gray-400">교환 (환불 없음)</span>
+                <template v-else>
+                  <span class="font-black text-gray-900">{{ formatPrice(item.refund_amount) }}</span>
+                  <span v-if="item.return_fee_amount" class="block text-[10px] text-amber-700">반품 배송비 {{ formatPrice(item.return_fee_amount) }} 차감</span>
+                </template>
               </td>
               <td class="py-3.5 px-4">
                 <span
@@ -313,14 +343,14 @@ onMounted(() => {
                   @click="openStatusModal(item, 'APPROVED')"
                   class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] cursor-pointer"
                 >
-                  반품 승인
+                  {{ item.claim_type === 'EXCHANGE' ? '교환 승인' : '반품 승인·환불' }}
                 </button>
                 <button
-                  v-if="item.status === 'REQUESTED' || item.status === 'APPROVED'"
-                  @click="openStatusModal(item, 'REFUNDED')"
+                  v-if="item.claim_type === 'EXCHANGE' && item.status === 'APPROVED' && item.exchange_status === 'AWAITING_RESHIPMENT'"
+                  @click="openStatusModal(item, 'RESHIP')"
                   class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer"
                 >
-                  환불 집행
+                  교환품 출고
                 </button>
                 <button
                   v-if="item.status === 'REQUESTED'"
@@ -329,7 +359,7 @@ onMounted(() => {
                 >
                   반려
                 </button>
-                <span v-if="item.status === 'REFUNDED' || item.status === 'REJECTED'" class="text-[11px] text-gray-400 font-medium">
+                <span v-if="item.status === 'REFUNDED' || item.status === 'REJECTED' || item.exchange_status === 'RESHIPPED'" class="text-[11px] text-gray-400 font-medium">
                   완료됨
                 </span>
               </td>
@@ -344,7 +374,7 @@ onMounted(() => {
       <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <div class="flex items-center justify-between border-b pb-3">
           <h3 class="font-black text-gray-900 text-base">
-            클레임 상태 변경 ({{ targetStatus }})
+            {{ targetStatus === 'RESHIP' ? '교환품 출고 등록' : targetStatus === 'REJECTED' ? '클레임 반려' : targetItem.claim_type === 'EXCHANGE' ? '교환 승인' : '반품 승인 · 환불' }}
           </h3>
           <button @click="activeModal = false" class="text-gray-400 hover:text-gray-600 text-lg">✕</button>
         </div>
@@ -352,12 +382,28 @@ onMounted(() => {
         <div class="space-y-2 text-xs text-gray-600">
           <div><strong class="text-gray-800">클레임 ID:</strong> {{ targetItem.id }}</div>
           <div><strong class="text-gray-800">원 주문번호:</strong> {{ targetItem.order_no || targetItem.order_id }}</div>
-          <div><strong class="text-gray-800">환불 금액:</strong> {{ formatPrice(targetItem.refund_amount || targetItem.total_amount) }}</div>
-          <div><strong class="text-gray-800">사유:</strong> {{ targetItem.reason }}</div>
+          <div v-if="targetItem.claim_type === 'RETURN'"><strong class="text-gray-800">예상 환불 금액:</strong> {{ formatPrice(targetItem.refund_amount) }} <span class="text-gray-400">(귀책에 따라 확정)</span></div>
+          <div><strong class="text-gray-800">사유:</strong> {{ REASON_LABEL[targetItem.reason_code || ''] || '-' }} — {{ targetItem.reason }}</div>
         </div>
 
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">셀러 처리 메모 (선택/택배 수거 송장 등)</label>
+        <div v-if="targetStatus === 'APPROVED'" class="space-y-2 text-xs">
+          <label class="block"><span class="font-bold text-gray-700">귀책 판단</span>
+            <select v-model="faultChoice" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300">
+              <option value="">고객이 고른 사유대로 ({{ targetItem.fault === 'CUSTOMER' ? '고객 귀책' : targetItem.fault === 'SELLER' ? '판매자 귀책' : '판매자 귀책으로 처리' }})</option>
+              <option value="SELLER">판매자 귀책 — 배송비 판매자 부담</option>
+              <option value="CUSTOMER">고객 귀책 — 반품 배송비 차감 (근거 필수)</option>
+            </select></label>
+          <label v-if="targetItem.claim_type === 'RETURN'" class="flex items-center gap-2"><input v-model="returnless" type="checkbox" /> 회수 없이 환불 (반품 배송비 차감 안 함, 재입고 안 함)</label>
+        </div>
+
+        <div v-if="targetStatus === 'RESHIP'" class="grid grid-cols-2 gap-2 text-xs">
+          <label class="block"><span class="font-bold text-gray-700">택배사</span><input v-model="reship.carrier" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300" /></label>
+          <label class="block"><span class="font-bold text-gray-700">교환품 송장번호</span><input v-model="reship.tracking_number" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300 font-mono" /></label>
+          <label class="col-span-2 flex items-center gap-2"><input v-model="reship.return_received" type="checkbox" /> 고객이 보낸 원래 상품을 회수했습니다 (재고 복원)</label>
+        </div>
+
+        <div v-if="targetStatus !== 'RESHIP'">
+          <label class="block text-xs font-bold text-gray-700 mb-1">{{ targetStatus === 'REJECTED' ? '반려 사유 (필수, 고객에게 표시)' : needsFaultNote ? '고객 귀책 판단 근거 (필수)' : '처리 메모 (선택)' }}</label>
           <textarea
             v-model="sellerNote"
             rows="3"
@@ -375,7 +421,7 @@ onMounted(() => {
           </button>
           <button
             @click="confirmStatusUpdate"
-            :disabled="processing"
+            :disabled="processing || ((targetStatus === 'REJECTED' || needsFaultNote) && !sellerNote.trim()) || (targetStatus === 'RESHIP' && !reship.tracking_number.trim())"
             class="px-5 py-2 rounded-xl bg-[#FF5000] hover:bg-[#e04700] text-white font-black text-xs shadow-md disabled:opacity-50"
           >
             {{ processing ? '처리 중...' : '확인 및 적용' }}

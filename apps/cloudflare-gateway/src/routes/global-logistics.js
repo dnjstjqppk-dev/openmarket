@@ -48,6 +48,8 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
       return new Response(JSON.stringify({ error: 'Missing sub_order_id' }), { status: 400, headers: corsHeaders });
     }
 
+    const viewer = await authenticate(request, env);
+    if (!viewer) throw unauthorized();
     const subOrder = await env.DB.prepare(
       `SELECT s.*, o.order_no, o.recipient_name, o.recipient_phone, o.shipping_address_line1, o.shipping_address_line2, o.pccc, o.customs_duty_type, p.business_name as partner_name
        FROM sub_orders s
@@ -59,8 +61,6 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     if (!subOrder) {
       return new Response(JSON.stringify({ error: 'Sub-order not found', sub_order_id: subOrderId }), { status: 404, headers: corsHeaders });
     }
-    const viewer = await authenticate(request, env);
-    if (!viewer) throw unauthorized();
     const ownerId = (await env.DB.prepare('SELECT customer_id FROM orders WHERE id = ?').bind(subOrder.parent_order_id).first('customer_id'));
     const allowed = viewer.role === 'ROLE_ADMIN' || viewer.userId === ownerId || (viewer.role === 'ROLE_PARTNER' && viewer.partnerId === subOrder.partner_id);
     if (!allowed) throw forbidden('본인 주문의 배송 정보만 조회할 수 있습니다.');

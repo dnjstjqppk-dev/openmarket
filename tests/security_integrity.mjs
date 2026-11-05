@@ -547,7 +547,654 @@ await t.test('I30 money allocation is exact for random carts (property test, 2,0
     assert.equal(refunded, parts[0], 'sequential partial refunds sum to the allocated amount');
   }
 });
-await t.test('I31 full reconciliation passes after every scenario above (R01–R17)', async () => {
+// ---- O18 rolling reserve / entity-split payouts, O19 scheduled reconciliation (fresh gateways) ----
+async function bootMarketplace(env = {}) {
+  const g = await boot(env);
+  const tok = { c: await g.login('customer@example.com'), p1: await g.login('seller@temu-supply.com', 'PARTNER'), p2: await g.login('partner2@olmoa-tech.com', 'PARTNER'), ad: await g.login('admin@openmarket.com', 'ADMIN') };
+  const sellAndConfirm = async (items) => {
+    const o = (await g.checkout(tok.c, items)).json;
+    assert.equal((await g.pay(tok.c, o)).status, 200);
+    await g.ship(tok.p1, o.order_id); await g.ship(tok.p2, o.order_id);
+    for (const s of g.q("SELECT id FROM sub_orders WHERE parent_order_id = ? AND status = 'SHIPPED'", o.order_id)) {
+      assert.equal((await g.call(`/api/v1/admin/sub-orders/${s.id}/delivered`, { method: 'POST', token: tok.ad, body: { evidence: 'CJ 조회 배송완료' } })).status, 200);
+    }
+    assert.equal((await g.call(`/api/v1/orders/${o.order_id}/confirm`, { method: 'POST', token: tok.c })).status, 200);
+    return o;
+  };
+  const payout = () => g.call('/api/v1/admin/finance/payouts', { method: 'POST', token: tok.ad, body: { partner_id: 'pt_002' } });
+  const recon = async () => {
+    const r = await g.call('/api/v1/admin/reconciliation', { token: tok.ad });
+    assert.equal(r.status, 200, r.text);
+    return r.json.data.checks.filter((c) => !c.ok && c.id !== 'R07').map((c) => `${c.id}:${JSON.stringify(c.violations).slice(0, 200)}`);
+  };
+  return { ...g, tok, sellAndConfirm, payout, recon };
+}
+
+await t.test('I32 rolling reserve is withheld at payout, stays owed, and is released exactly once after the hold period', async () => {
+  const g = await bootMarketplace();
+  const verify = (body) => g.call('/api/v1/admin/partners/pt_002/verify', { method: 'PUT', token: g.tok.ad, body: { status: 'APPROVED', ...body } });
+  assert.equal((await verify({ rolling_reserve_pct: 80 })).status, 400, 'reserve above 50% rejected');
+  assert.equal((await verify({ rolling_reserve_pct: -1 })).status, 400);
+  assert.equal((await verify({ rolling_reserve_pct: 10, rolling_reserve_days: 0 })).status, 400);
+  assert.equal((await verify({ rolling_reserve_pct: 10, rolling_reserve_days: 30 })).status, 200);
+
+  await g.sellAndConfirm([{ sku_id: g.mpSkus[0].id, quantity: 3 }]);
+  const gross = g.one("SELECT SUM(net_payout_amount) n FROM settlements WHERE partner_id = 'pt_002' AND status = 'ELIGIBLE_FOR_PAYOUT'").n;
+  const p1 = await g.payout();
+  assert.equal(p1.status, 201, p1.text);
+  const held = Math.floor(gross * 1000 / 10000);
+  assert.ok(held > 0);
+  assert.deepEqual([p1.json.data.gross_amount, p1.json.data.reserve_held, p1.json.data.amount], [gross, held, gross - held]);
+  const hold = g.one('SELECT * FROM payout_reserve_holds WHERE held_by_payout_id = ?', p1.json.data.payout_id);
+  assert.equal(hold.amount, held);
+  assert.ok(g.one("SELECT julianday(?) - julianday('now') d", hold.release_after).d > 29, 'held for the contract period');
+  const bank = g.one("SELECT SUM(credit) c FROM journal_entries WHERE txn_type = 'SELLER_PAYOUT' AND account_code = 'BANK'").c;
+  assert.equal(bank, gross - held, 'only the wired amount leaves the bank; the reserve stays in SELLER_PAYABLE');
+
+  const early = await g.payout();
+  assert.equal(early.json.code, 'NOTHING_TO_PAY', 'reserve is not paid before its release date');
+  const ps = await g.call('/api/v1/partner/settlements', { token: g.tok.p2 });
+  assert.equal(ps.json.summary.reserve_outstanding, held, 'seller sees what is withheld');
+
+  g.db.prepare("UPDATE payout_reserve_holds SET release_after = datetime('now', '-1 minute') WHERE id = ?").run(hold.id);
+  const p2 = await g.payout();
+  assert.equal(p2.status, 201, p2.text);
+  assert.deepEqual([p2.json.data.gross_amount, p2.json.data.reserve_released, p2.json.data.reserve_held, p2.json.data.amount], [0, held, 0, held]);
+  assert.equal((await g.payout()).json.code, 'NOTHING_TO_PAY', 'a hold is released once');
+  assert.throws(() => g.db.prepare('UPDATE payout_reserve_holds SET released_payout_id = NULL WHERE id = ?').run(hold.id), /RESERVE_HOLD_IMMUTABLE/);
+  assert.throws(() => g.db.prepare('UPDATE payouts SET amount = amount + 1 WHERE id = ?').run(p2.json.data.payout_id), /PAYOUT_AMOUNTS_FROZEN/);
+  assert.throws(() => g.db.prepare('DELETE FROM payouts WHERE id = ?').run(p1.json.data.payout_id), /IMMUTABLE_LEDGER/);
+  assert.equal(g.one("SELECT SUM(credit) - SUM(debit) b FROM journal_entries WHERE account_code = 'SELLER_PAYABLE'").b, 0, 'seller fully paid, nothing lost or duplicated');
+  assert.deepEqual(await g.recon(), []);
+});
+
+await t.test('I33 reserve is not taken from a net deduction, and released reserve can offset it', async () => {
+  const g = await bootMarketplace();
+  await g.call('/api/v1/admin/partners/pt_002/verify', { method: 'PUT', token: g.tok.ad, body: { status: 'APPROVED', rolling_reserve_pct: 20, rolling_reserve_days: 10 } });
+  const o = await g.sellAndConfirm([{ sku_id: g.mpSkus[0].id, quantity: 2 }]);
+  const p1 = await g.payout();
+  assert.equal(p1.status, 201, p1.text);
+  const item = g.one('SELECT i.* FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.parent_order_id = ?', o.order_id);
+  assert.equal((await g.call(`/api/v1/admin/orders/${o.order_id}/refund`, { method: 'POST', token: g.tok.ad, body: { lines: [{ order_item_id: item.id, quantity: 1 }], reason: 'post-payout return' } })).status, 200);
+  const neg = await g.payout();
+  assert.equal(neg.json.code, 'NEGATIVE_BALANCE_CARRIED');
+  assert.equal(g.one('SELECT COUNT(*) c FROM payout_reserve_holds').c, 1, 'no new reserve on a negative balance');
+  g.db.prepare("UPDATE payout_reserve_holds SET release_after = datetime('now', '-1 minute')").run();
+  const deduction = g.one('SELECT SUM(net_delta) n FROM settlement_adjustments WHERE applied_payout_id IS NULL').n;
+  const held = p1.json.data.reserve_held;
+  const p2 = await g.payout();
+  if (held + deduction > 0) {
+    assert.equal(p2.status, 201, p2.text);
+    assert.equal(p2.json.data.amount, held + deduction);
+  } else {
+    assert.equal(p2.json.code, 'NEGATIVE_BALANCE_CARRIED');
+  }
+  assert.deepEqual(await g.recon(), []);
+});
+
+await t.test('I34 after 개인사업자 -> 법인 switch, one payout never mixes entities; each is journalled to its own entity', async () => {
+  const g = await bootMarketplace();
+  await g.sellAndConfirm([{ sku_id: g.mpSkus[0].id, quantity: 1 }]);
+  const create = await g.call('/api/v1/admin/business-entities', { method: 'POST', token: g.tok.ad, body: {
+    entity_type: 'CORPORATION', legal_name: '주식회사 올모아(개발)', representative_name: '개발 대표', business_reg_number: '2208100016', corporate_reg_number: '110111-1234567',
+    mail_order_reg_number: '제0000-법인-0001호', address: '서울특별시 (법인 개발 주소)', cs_phone: '02-1111-1111', cs_email: 'cs@corp.invalid', privacy_officer_name: '법인 책임자', privacy_officer_email: 'p@corp.invalid' } });
+  const corpId = create.json.data.id;
+  assert.equal((await g.call(`/api/v1/admin/business-entities/${corpId}/activate`, { method: 'POST', token: g.tok.ad, body: { confirm_legal_review: true, note: 'test switch' } })).status, 200);
+  await g.sellAndConfirm([{ sku_id: g.mpSkus[1].id, quantity: 1 }]);
+  const a = await g.payout();
+  assert.equal(a.status, 201, a.text);
+  assert.equal(a.json.data.operator_entity_id, 'be_dev_sole');
+  assert.equal(a.json.data.other_entities_pending, true);
+  const b = await g.payout();
+  assert.equal(b.status, 201, b.text);
+  assert.equal(b.json.data.operator_entity_id, corpId);
+  assert.equal(b.json.data.other_entities_pending, false);
+  for (const [pid, ent] of [[a.json.data.payout_id, 'be_dev_sole'], [b.json.data.payout_id, corpId]]) {
+    assert.equal(g.one("SELECT DISTINCT entity_id e FROM journal_entries WHERE txn_type = 'SELLER_PAYOUT' AND memo = ?", pid).e, ent);
+  }
+  assert.deepEqual(await g.recon(), []);
+});
+
+await t.test('I35 reconciliation runs on the cron (hourly), is recorded, and alerts on failure', async () => {
+  const g = await bootMarketplace();
+  const { recordReconciliation } = await import('../apps/cloudflare-gateway/src/routes/finance.js');
+  const tick = async () => { await g.worker.scheduled({ cron: '*/5 * * * *' }, g.env, g.ctx); await Promise.all(g.scheduled.splice(0)); };
+  await tick();
+  assert.equal(g.one("SELECT COUNT(*) c FROM reconciliation_runs WHERE trigger_source = 'CRON'").c, 1);
+  await tick();
+  assert.equal(g.one("SELECT COUNT(*) c FROM reconciliation_runs WHERE trigger_source = 'CRON'").c, 1, 'not re-run inside the interval');
+  assert.equal(g.one("SELECT ok FROM reconciliation_runs WHERE trigger_source = 'CRON'").ok, 1);
+
+  // Corrupt the books: an unbalanced journal line must be caught and alerted.
+  g.db.prepare("INSERT INTO journal_entries (id, txn_id, txn_type, account_code, debit, credit) VALUES ('jrn_bad', 'txn_bad', 'TEST', 'BANK', 1, 0)").run();
+  const sent = [];
+  const r1 = await recordReconciliation({ ...g.env, ALERT_WEBHOOK_URL: 'https://hooks.example.invalid/x' }, 'CRON', { fetchImpl: async (u, init) => { sent.push(JSON.parse(init.body)); return { ok: true }; } });
+  assert.equal(r1.ok, false);
+  assert.equal(r1.alert_status, 'SENT');
+  assert.ok(sent[0].failed.some((f) => f.id === 'R01'));
+  const r2 = await recordReconciliation(g.env, 'CRON');
+  assert.equal(r2.alert_status, 'NO_CHANNEL', 'missing alert channel is recorded, not silently ignored');
+  const r3 = await recordReconciliation({ ...g.env, ALERT_WEBHOOK_URL: 'https://hooks.example.invalid/x' }, 'CRON', { fetchImpl: async () => { throw new Error('down'); } });
+  assert.equal(r3.alert_status, 'FAILED');
+  const runs = await g.call('/api/v1/admin/finance/reconciliation-runs', { token: g.tok.ad });
+  assert.equal(runs.status, 200);
+  assert.equal(runs.json.data.last_cron.ok, false);
+  assert.ok(runs.json.data.last_cron.failed_checks.some((f) => f.id === 'R01'));
+  assert.equal((await g.call('/api/v1/admin/finance/reconciliation-runs', { token: g.tok.p2 })).status, 403);
+  assert.throws(() => g.db.prepare('UPDATE reconciliation_runs SET ok = 1').run(), /IMMUTABLE_LEDGER/);
+});
+
+// ---- O10 withdrawal, data-subject export, PII access log, retention purge ----
+const P = await bootMarketplace();
+const NEW_PW = 'Withdraw!2026#ok';
+const reg = await P.call('/api/v1/auth/register', { method: 'POST', body: { email: 'leaver@example.com', full_name: '김탈퇴', phone: '010-9999-0000', password: NEW_PW, agree_terms: true, agree_privacy: true } });
+const leaverId = reg.json.customer_id;
+let leaverTok = reg.json.token;
+let leaverOrder;
+
+await t.test('I36 withdrawal: blocked while an order is open, needs credit-forfeit consent, then pseudonymises and revokes', async () => {
+  assert.equal(reg.status, 201, reg.text);
+  P.db.prepare("INSERT INTO user_addresses (id, user_id, recipient_name, phone, postal_code, address_line1) VALUES ('adr_leaver', ?, '김탈퇴', '010-9999-0000', '06236', '서울 강남구 1')").run(leaverId);
+  const pid = P.one('SELECT product_id p FROM product_skus WHERE id = ?', P.mpSkus[0].id).p;
+  P.db.prepare("INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, user_height_cm) VALUES ('rv_leaver', ?, ?, '김탈퇴', 5, '좋아요', 170)").run(pid, leaverId);
+  leaverOrder = (await P.checkout(leaverTok, [{ sku_id: P.mpSkus[0].id, quantity: 1 }])).json;
+  assert.equal((await P.pay(leaverTok, leaverOrder)).status, 200);
+
+  const w = (body) => P.call('/api/v1/auth/withdraw', { method: 'POST', token: leaverTok, body: { password: NEW_PW, confirm: true, ...body } });
+  const pre = await P.call('/api/v1/auth/withdraw/precheck', { token: leaverTok });
+  assert.equal(pre.json.data.can_withdraw, false);
+  const blocked = await w({ acknowledge_credit_forfeit: true });
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.json.code, 'WITHDRAWAL_BLOCKED', 'cannot withdraw with a paid, undelivered order');
+  assert.equal((await P.call(`/api/v1/orders/${leaverOrder.order_id}/cancel`, { method: 'POST', token: leaverTok })).status, 200);
+
+  assert.equal((await w({ password: 'wrong-password-1A!' })).status, 400, 'password re-confirmation required');
+  assert.equal((await w({ confirm: false })).status, 400);
+  const credit = P.credit(leaverId);
+  assert.ok(credit > 0, 'welcome credit present');
+  const needConsent = await w({});
+  assert.equal(needConsent.json.code, 'CREDIT_FORFEIT_CONSENT_REQUIRED');
+  assert.equal((await P.call('/api/v1/auth/withdraw', { method: 'POST', token: P.tok.p2, body: { password: PW, confirm: true } })).json.code, 'WITHDRAWAL_NOT_SELF_SERVICE');
+
+  const ok = await w({ acknowledge_credit_forfeit: true });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(ok.json.data.credit_forfeited, credit);
+  const u = P.one('SELECT * FROM users WHERE id = ?', leaverId);
+  assert.equal(u.full_name, '탈퇴회원'); assert.equal(u.phone, ''); assert.equal(u.is_active, 0); assert.ok(u.withdrawn_at);
+  assert.ok(!u.email.includes('leaver'), 'e-mail no longer stored');
+  assert.equal(P.credit(leaverId), 0);
+  assert.equal(P.one("SELECT COUNT(*) c FROM user_addresses WHERE user_id = ?", leaverId).c, 0);
+  const rv = P.one("SELECT * FROM product_reviews WHERE id = 'rv_leaver'");
+  assert.deepEqual([rv.reviewer_name, rv.user_height_cm, rv.content], ['탈퇴회원', null, '좋아요']);
+  assert.equal(P.one('SELECT COUNT(*) c FROM orders WHERE customer_id = ?', leaverId).c, 1, 'order record retained for the legal period');
+  assert.equal((await P.call('/api/v1/auth/me', { token: leaverTok })).status, 401, 'existing session revoked');
+  assert.equal((await P.call('/api/v1/auth/login', { method: 'POST', body: { email: 'leaver@example.com', password: NEW_PW } })).status, 401);
+  assert.throws(() => P.db.prepare('UPDATE users SET is_active = 1 WHERE id = ?').run(leaverId), /ACCOUNT_WITHDRAWN/);
+  assert.equal((await w({ acknowledge_credit_forfeit: true })).status, 401, 'cannot withdraw twice');
+  const again = await P.call('/api/v1/auth/register', { method: 'POST', body: { email: 'leaver@example.com', full_name: '재가입', phone: '010-9999-0001', password: NEW_PW, agree_terms: true, agree_privacy: true } });
+  assert.equal(again.status, 201, 'e-mail released for a new account');
+  assert.notEqual(again.json.customer_id, leaverId);
+  assert.ok(P.one("SELECT COUNT(*) c FROM pii_access_log WHERE action = 'WITHDRAW' AND subject_ids_json LIKE ?", `%${leaverId}%`).c === 1);
+});
+
+await t.test('I37 data-subject export returns only the caller\'s data and is access-logged', async () => {
+  const tok = await P.login('customer@example.com');
+  const r = await P.call('/api/v1/auth/privacy/export', { token: tok });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.data.account.id, 'u_customer_001');
+  assert.ok(Array.isArray(r.json.data.orders));
+  assert.ok(!JSON.stringify(r.json.data).includes('leaver'), 'no other member\'s data');
+  assert.equal(r.json.data.account.password_hash, undefined);
+  assert.equal(P.one("SELECT COUNT(*) c FROM pii_access_log WHERE action = 'EXPORT' AND actor_user_id = 'u_customer_001'").c, 1);
+  assert.equal((await P.call('/api/v1/auth/privacy/export', { token: P.tok.p2 })).status, 403);
+  assert.equal((await P.call('/api/v1/auth/privacy/export')).status, 401);
+});
+
+await t.test('I38 admin and seller views of personal data are recorded; the record is append-only and admin-only', async () => {
+  const before = P.one('SELECT COUNT(*) c FROM pii_access_log').c;
+  assert.equal((await P.call('/api/v1/admin/users', { token: P.tok.ad })).status, 200);
+  assert.equal((await P.call('/api/v1/admin/orders', { token: P.tok.ad })).status, 200);
+  assert.equal((await P.call('/api/v1/partner/orders', { token: P.tok.p2 })).status, 200);
+  const rows = P.q('SELECT * FROM pii_access_log ORDER BY rowid DESC LIMIT 3');
+  assert.equal(P.one('SELECT COUNT(*) c FROM pii_access_log').c, before + 3);
+  assert.deepEqual(rows.map((r) => r.resource).sort(), ['admin.orders', 'admin.users', 'partner.orders']);
+  const seller = rows.find((r) => r.resource === 'partner.orders');
+  assert.equal(seller.actor_partner_id, 'pt_002');
+  assert.ok(seller.subject_count > 0);
+  const log = await P.call(`/api/v1/admin/privacy/access-log?subject_id=${encodeURIComponent(leaverOrder.order_id)}`, { token: P.tok.ad });
+  assert.equal(log.status, 200, log.text);
+  assert.ok(log.json.data.length >= 1 && log.json.data.every((r) => r.subject_ids.includes(leaverOrder.order_id)), 'filter by data subject');
+  assert.equal((await P.call('/api/v1/admin/privacy/access-log', { token: P.tok.p2 })).status, 403);
+  assert.equal((await P.call('/api/v1/admin/privacy/access-log', { token: await P.login('customer@example.com') })).status, 403);
+  assert.throws(() => P.db.prepare('DELETE FROM pii_access_log').run(), /IMMUTABLE_LEDGER/);
+  assert.throws(() => P.db.prepare("UPDATE pii_access_log SET actor_user_id = 'x'").run(), /IMMUTABLE_LEDGER/);
+});
+
+await t.test('I39 retention purge destroys withdrawn members\' recipient data after the period, keeps money records', async () => {
+  const { purgeExpiredPii } = await import('../apps/cloudflare-gateway/src/services/privacy.js');
+  assert.deepEqual(await purgeExpiredPii(P.env), { orders: 0, inquiries: 0 }, 'nothing before the retention period ends');
+  P.db.prepare("UPDATE orders SET created_at = datetime('now', '-1826 days') WHERE id = ?").run(leaverOrder.order_id);
+  const activeOld = P.one("SELECT id FROM orders WHERE customer_id = 'u_customer_001' LIMIT 1");
+  if (activeOld) P.db.prepare("UPDATE orders SET created_at = datetime('now', '-1826 days') WHERE id = ?").run(activeOld.id);
+  const money = P.one('SELECT total_pay_amount, refunded_pg_amount, refunded_credit_amount FROM orders WHERE id = ?', leaverOrder.order_id);
+  const r = await purgeExpiredPii(P.env);
+  assert.equal(r.orders, 1, 'only the withdrawn member\'s expired order');
+  const o = P.one('SELECT * FROM orders WHERE id = ?', leaverOrder.order_id);
+  assert.deepEqual([o.recipient_name, o.recipient_phone, o.shipping_postal_code, o.pccc], ['(파기됨)', '', '', null]);
+  assert.ok(o.pii_purged_at);
+  assert.deepEqual({ total_pay_amount: o.total_pay_amount, refunded_pg_amount: o.refunded_pg_amount, refunded_credit_amount: o.refunded_credit_amount }, money);
+  if (activeOld) assert.notEqual(P.one('SELECT recipient_name n FROM orders WHERE id = ?', activeOld.id).n, '(파기됨)', 'active members are untouched');
+  assert.equal(P.one("SELECT COUNT(*) c FROM pii_access_log WHERE action = 'PURGE' AND actor_role = 'SYSTEM'").c, 1);
+  assert.deepEqual(await purgeExpiredPii(P.env), { orders: 0, inquiries: 0 }, 'idempotent');
+  assert.deepEqual(await P.recon(), [], 'credit forfeiture and purge keep the books reconciled');
+});
+
+// ---- O05 seller onboarding: application, private KYB documents, review ----
+const brnOf = (nine) => { // valid 사업자등록번호 for test data (NTS check digit)
+  const d = String(nine).split('').map(Number); const w = [1, 3, 7, 1, 3, 7, 1, 3, 5];
+  let s = d.reduce((a, x, i) => a + x * w[i], 0) + Math.floor((d[8] * 5) / 10);
+  return `${nine}${(10 - (s % 10)) % 10}`;
+};
+const O = await bootMarketplace();
+const APP_PW = 'SellerApply!2026';
+const application = (over = {}) => ({
+  email: 'newseller@example.com', password: APP_PW, contact_name: '신청 담당', phone: '010-2222-3333', business_name: '새판매자상회', representative_name: '대표 이름',
+  business_reg_number: brnOf('123456789'), mail_order_reg_number: '제2026-서울강남-0001호', bank_code: '004', bank_account_number: '123-456-789012', bank_account_holder: '새판매자상회',
+  customer_service_phone: '02-123-4567', return_shipping_address: '서울특별시 강남구 반품로 1', agree_seller_terms: true, agree_privacy: true, ...over
+});
+const upload = (token, folder = 'kyb', type = 'application/pdf') => O.call('/api/v1/storage/upload', { method: 'POST', token, body: { file_name: 'doc.pdf', content_type: type, folder, file_data: Buffer.from('%PDF-1.4 test').toString('base64') } });
+let appTok; let appPartnerId;
+
+await t.test('I40 seller application: validated, unique, cannot pick its own commission, and cannot sell before approval', async () => {
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ business_reg_number: '1234567890' }) })).json.code, 'INVALID_BRN');
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ mail_order_reg_number: '' }) })).json.code, 'MAIL_ORDER_REQUIRED');
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ agree_seller_terms: false }) })).json.code, 'CONSENT_REQUIRED');
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ password: 'short' }) })).json.code, 'WEAK_PASSWORD');
+  const r = await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ commission_rate: 0, commission_rate_bps: 0, status: 'APPROVED' }) });
+  assert.equal(r.status, 201, r.text);
+  appTok = r.json.data.token; appPartnerId = r.json.data.partner.id;
+  const pt = O.one('SELECT * FROM partners WHERE id = ?', appPartnerId);
+  assert.deepEqual([pt.status, pt.kyc_status, pt.commission_rate_bps, pt.payout_account_verified], ['PENDING', 'DRAFT', null, 0], 'client cannot set status or commission');
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ email: 'other@example.com' }) })).json.code, 'BRN_EXISTS');
+  assert.equal((await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ business_reg_number: brnOf('987654321') }) })).json.code, 'EMAIL_TAKEN');
+  const login = await O.call('/api/v1/auth/login', { method: 'POST', body: { email: 'newseller@example.com', password: APP_PW, role: 'PARTNER' } });
+  assert.equal(login.status, 200, 'applicant can log in to follow the application');
+  const blocked = await O.call('/api/v1/partner/products', { token: appTok });
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.json.code, 'PARTNER_NOT_APPROVED');
+});
+
+let kybFile;
+await t.test('I41 KYB documents are private: only the uploader and operators can read them, and operator reads are logged', async () => {
+  const up = await upload(appTok);
+  assert.equal(up.status, 201, up.text);
+  assert.equal(up.json.data.visibility, 'PRIVATE');
+  kybFile = up.json.data.file_id;
+  const path = `/api/v1/storage/file/${kybFile}`;
+  assert.equal((await O.call(path)).status, 404, 'anonymous cannot read');
+  assert.equal((await O.call(path, { token: O.tok.p2 })).status, 404, 'another seller cannot read');
+  assert.equal((await O.call(path, { token: O.tok.c })).status, 404, 'a customer cannot read');
+  const own = await O.call(path, { token: appTok });
+  assert.equal(own.status, 200);
+  assert.match(own.headers.get('cache-control'), /no-store/);
+  const before = O.one("SELECT COUNT(*) c FROM pii_access_log WHERE resource = 'admin.kyb-document'").c;
+  const adm = await O.call(path, { token: O.tok.ad });
+  assert.equal(adm.status, 200);
+  assert.equal(adm.headers.get('access-control-allow-origin') === '*', false, 'never wildcard-CORS a private document');
+  assert.equal(O.one("SELECT COUNT(*) c FROM pii_access_log WHERE resource = 'admin.kyb-document'").c, before + 1);
+  assert.equal((await upload(O.tok.c)).status, 403, 'customers cannot write into the KYB area');
+  assert.equal((await upload(appTok, 'kyb', 'image/gif')).status, 400);
+});
+
+await t.test('I42 submit needs every required document; review cannot be bypassed; approval needs commission + evidence', async () => {
+  const attach = async (doc_type, file_id) => O.call('/api/v1/partner/application/documents', { method: 'POST', token: appTok, body: { doc_type, file_id } });
+  assert.equal((await O.call('/api/v1/partner/application/submit', { method: 'POST', token: appTok })).json.code, 'DOCUMENTS_MISSING');
+  const pub = (await upload(appTok, 'products', 'image/png')).json.data.file_id;
+  assert.equal((await attach('BUSINESS_REGISTRATION', pub)).json.code, 'INVALID_FILE', 'a public file is not a KYB document');
+  const othersFile = (await O.call('/api/v1/storage/upload', { method: 'POST', token: O.tok.p2, body: { file_name: 'x.pdf', content_type: 'application/pdf', folder: 'kyb', file_data: Buffer.from('%PDF').toString('base64') } })).json.data.file_id;
+  assert.equal((await attach('BUSINESS_REGISTRATION', othersFile)).json.code, 'INVALID_FILE', 'cannot attach another seller\'s file');
+  assert.equal((await attach('BUSINESS_REGISTRATION', kybFile)).status, 201);
+  assert.equal((await attach('MAIL_ORDER_REGISTRATION', (await upload(appTok)).json.data.file_id)).status, 201);
+  const bankDoc = (await upload(appTok)).json.data.file_id;
+  assert.equal((await attach('BANK_ACCOUNT_COPY', bankDoc)).status, 201);
+  const sub = await O.call('/api/v1/partner/application/submit', { method: 'POST', token: appTok });
+  assert.equal(sub.status, 200, sub.text);
+  assert.equal(sub.json.data.kyc_status, 'SUBMITTED');
+  assert.equal((await attach('OTHER', (await upload(appTok)).json.data.file_id)).json.code, 'APPLICATION_LOCKED');
+
+  assert.equal((await O.call(`/api/v1/admin/partners/${appPartnerId}/verify`, { method: 'PUT', token: O.tok.ad, body: { status: 'APPROVED' } })).json.code, 'USE_APPLICATION_REVIEW', 'no shortcut around document review');
+  const review = (body, token = O.tok.ad) => O.call(`/api/v1/admin/partner-applications/${appPartnerId}/review`, { method: 'POST', token, body });
+  assert.equal((await review({ decision: 'APPROVE', confirm_documents_checked: true, business_status_evidence: '국세청 조회: 계속사업자' }, appTok)).status, 403);
+  assert.equal((await review({ decision: 'APPROVE', confirm_documents_checked: true, business_status_evidence: '국세청 조회: 계속사업자' })).json.code, 'INVALID_COMMISSION');
+  assert.equal((await review({ decision: 'APPROVE', confirm_documents_checked: true, commission_rate: 12.5 })).status, 400, 'business status evidence required');
+  assert.equal((await review({ decision: 'APPROVE', business_status_evidence: 'x', commission_rate: 12.5 })).json.code, 'CONFIRM_REQUIRED');
+
+  const queue = await O.call('/api/v1/admin/partner-applications', { token: O.tok.ad });
+  const bankRow = queue.json.data.find((a) => a.partner_id === appPartnerId).documents.find((d) => d.doc_type === 'BANK_ACCOUNT_COPY');
+  const re = await review({ decision: 'REQUEST_RESUBMIT', note: '통장 사본의 예금주가 보이지 않습니다.', rejected_document_ids: [bankRow.id] });
+  assert.equal(re.status, 200, re.text);
+  assert.deepEqual([re.json.data.kyc_status, re.json.data.missing_documents], ['RESUBMIT_REQUIRED', ['BANK_ACCOUNT_COPY']]);
+  const mine = await O.call('/api/v1/partner/application', { token: appTok });
+  assert.equal(mine.json.data.review_note, '통장 사본의 예금주가 보이지 않습니다.', 'applicant sees why');
+  assert.equal((await attach('BANK_ACCOUNT_COPY', (await upload(appTok)).json.data.file_id)).status, 201);
+  assert.equal((await O.call('/api/v1/partner/application/submit', { method: 'POST', token: appTok })).status, 200);
+
+  const ok = await review({ decision: 'APPROVE', confirm_documents_checked: true, business_status_evidence: '국세청 조회: 계속사업자(일반과세자)', commission_rate: 12.5 });
+  assert.equal(ok.status, 200, ok.text);
+  const pt = O.one('SELECT * FROM partners WHERE id = ?', appPartnerId);
+  assert.deepEqual([pt.status, pt.kyc_status, pt.commission_rate_bps, pt.payout_account_verified], ['APPROVED', 'APPROVED', 1250, 0], 'payout account is verified separately');
+  assert.equal((await review({ decision: 'APPROVE', confirm_documents_checked: true, business_status_evidence: 'x', commission_rate: 1 })).json.code, 'NOT_SUBMITTED', 'cannot be re-approved with another rate');
+  assert.equal((await O.call('/api/v1/partner/products', { token: appTok })).status, 200, 'approved seller can now work');
+  assert.ok(O.one("SELECT COUNT(*) c FROM admin_audit_log WHERE action = 'PARTNER_APPLICATION_APPROVE' AND target_id = ?", appPartnerId).c === 1);
+});
+
+await t.test('I43 rejected application stays closed; a reason is mandatory', async () => {
+  const r = await O.call('/api/v1/partner-applications', { method: 'POST', body: application({ email: 'reject@example.com', business_reg_number: brnOf('555666777'), mail_order_reg_number: '', mail_order_exempt_reason: '간이과세자 통신판매업 신고 면제' }) });
+  assert.equal(r.status, 201, r.text);
+  const tok = r.json.data.token; const id = r.json.data.partner.id;
+  const view = await O.call('/api/v1/partner/application', { token: tok });
+  assert.deepEqual(view.json.data.required_documents, ['BUSINESS_REGISTRATION', 'BANK_ACCOUNT_COPY'], 'exempt seller needs no mail-order certificate');
+  for (const dt of ['BUSINESS_REGISTRATION', 'BANK_ACCOUNT_COPY']) {
+    const f = (await upload(tok)).json.data.file_id;
+    assert.equal((await O.call('/api/v1/partner/application/documents', { method: 'POST', token: tok, body: { doc_type: dt, file_id: f } })).status, 201);
+  }
+  assert.equal((await O.call('/api/v1/partner/application/submit', { method: 'POST', token: tok })).status, 200);
+  assert.equal((await O.call(`/api/v1/admin/partner-applications/${id}/review`, { method: 'POST', token: O.tok.ad, body: { decision: 'REJECT' } })).json.code, 'NOTE_REQUIRED');
+  assert.equal((await O.call(`/api/v1/admin/partner-applications/${id}/review`, { method: 'POST', token: O.tok.ad, body: { decision: 'REJECT', note: '취급 품목 정책 위반' } })).status, 200);
+  assert.equal(O.one('SELECT status s FROM partners WHERE id = ?', id).s, 'REJECTED');
+  assert.equal((await O.call('/api/v1/partner/application/submit', { method: 'POST', token: tok })).json.code, 'APPLICATION_LOCKED');
+  assert.equal((await O.call(`/api/v1/admin/partners/${id}/verify`, { method: 'PUT', token: O.tok.ad, body: { status: 'APPROVED' } })).json.code, 'USE_APPLICATION_REVIEW');
+  assert.throws(() => O.db.prepare('DELETE FROM partner_kyb_documents WHERE partner_id = ?').run(id), /IMMUTABLE_LEDGER/);
+  assert.deepEqual(await O.recon(), []);
+});
+
+// ---- O11 operator least privilege, TOTP 2FA, IP allow-list ----
+const { totpAt, currentStep, base32Encode } = await import('../apps/cloudflare-gateway/src/lib/totp.js');
+const { twoFactorRequired, ipAllowed } = await import('../apps/cloudflare-gateway/src/lib/admin-policy.js');
+const A = await bootMarketplace();
+const OP_PW = 'Operator!2026#pw';
+const mkOperator = async (email, admin_role, token = A.tok.ad) => A.call('/api/v1/admin/admin-users', { method: 'POST', token, body: { email, full_name: email.split('@')[0], admin_role, password: OP_PW } });
+const opLogin = async (email, extra = {}, headers = {}) => A.call('/api/v1/auth/login', { method: 'POST', headers, body: { email, password: OP_PW, role: 'ADMIN', ...extra } });
+
+await t.test('I44 operator roles are least-privilege everywhere, including inline admin checks; unmapped admin paths fail closed', async () => {
+  for (const [e, r] of [['fin@olmoa.test', 'FINANCE'], ['cs@olmoa.test', 'CS'], ['ops@olmoa.test', 'OPERATIONS'], ['dpo@olmoa.test', 'PRIVACY_OFFICER']]) {
+    const c = await mkOperator(e, r);
+    assert.equal(c.status, 201, c.text);
+  }
+  assert.equal((await mkOperator('bad@olmoa.test', 'GOD')).json.code, 'INVALID_ADMIN_ROLE');
+  const tk = {};
+  for (const e of ['fin', 'cs', 'ops', 'dpo']) tk[e] = (await opLogin(`${e}@olmoa.test`)).json.token;
+  const order = (await A.checkout(A.tok.c, [{ sku_id: A.mpSkus[0].id, quantity: 1 }])).json;
+  await A.pay(A.tok.c, order);
+  const st = async (tok, path, method = 'GET', body) => (await A.call(path, { method, token: tok, body })).status;
+  const matrix = [
+    // [token, path, method, expected]
+    ['fin', '/api/v1/admin/reconciliation', 'GET', 200], ['fin', '/api/v1/admin/finance/payouts', 'GET', 200],
+    ['fin', '/api/v1/admin/products', 'GET', 403], ['fin', '/api/v1/admin/privacy/access-log', 'GET', 403], ['fin', '/api/v1/admin/admin-users', 'GET', 403],
+    ['fin', '/api/v1/admin/business-entities', 'POST', 403],
+    ['cs', '/api/v1/admin/orders', 'GET', 200], ['cs', '/api/v1/admin/users', 'GET', 200], ['cs', `/api/v1/orders/${order.order_id}`, 'GET', 200],
+    ['cs', '/api/v1/admin/finance/payouts', 'POST', 403], ['cs', '/api/v1/admin/reconciliation', 'GET', 403], ['cs', '/api/v1/admin/partner-applications', 'GET', 403],
+    ['ops', '/api/v1/admin/partner-applications', 'GET', 200], ['ops', '/api/v1/admin/products', 'GET', 200],
+    ['ops', '/api/v1/admin/partners/pt_002/payout-account', 'POST', 403], ['ops', `/api/v1/admin/orders/${order.order_id}/refund`, 'POST', 403],
+    ['dpo', '/api/v1/admin/privacy/access-log', 'GET', 200], ['dpo', '/api/v1/admin/orders', 'GET', 403], ['dpo', `/api/v1/orders/${order.order_id}`, 'GET', 403],
+    ['fin', '/api/v1/admin/some-future-endpoint', 'GET', 403], ['fin', '/api/v1/orders/cron/expire', 'POST', 403]
+  ];
+  const wrong = [];
+  for (const [who, path, method, exp] of matrix) {
+    const got = await st(tk[who], path, method, method === 'GET' ? undefined : {});
+    if (got !== exp) wrong.push(`${who} ${method} ${path}: ${got} != ${exp}`);
+  }
+  assert.deepEqual(wrong, []);
+  assert.equal(await st(A.tok.ad, '/api/v1/admin/some-future-endpoint'), 404, 'super admin reaches the router (404), others are stopped first');
+  const denied = await A.call('/api/v1/admin/products', { token: tk.fin });
+  assert.equal(denied.json.code, 'ADMIN_PERMISSION_DENIED');
+  const cancel = await A.call(`/api/v1/orders/${order.order_id}/cancel`, { method: 'POST', token: tk.dpo });
+  assert.equal(cancel.status, 403, 'operator cancel = refund needs orders.refund');
+  assert.equal((await A.call(`/api/v1/orders/${order.order_id}/cancel`, { method: 'POST', token: tk.cs })).status, 200);
+  assert.ok(A.one("SELECT COUNT(*) c FROM admin_audit_log WHERE actor_role = 'ROLE_ADMIN:SUPER_ADMIN' AND action = 'ADMIN_USER_CREATE'").c >= 4, 'audit records the operator role');
+  assert.throws(() => A.db.prepare("UPDATE users SET admin_role = 'SUPER_ADMIN' WHERE id = 'u_customer_001'").run(), /ADMIN_ROLE_SCOPE/);
+});
+
+await t.test('I45 TOTP 2FA: RFC 6238 vector, enrolment revokes old sessions, codes cannot be replayed, recovery codes are one-time', async () => {
+  const rfc = base32Encode(new TextEncoder().encode('12345678901234567890'));
+  assert.equal(await totpAt(rfc, 1), '287082', 'RFC 6238 SHA-1 vector at T=59s (last 6 digits of 94287082)');
+  assert.equal(await totpAt(rfc, 37037036), '081804', 'RFC 6238 vector at T=1111111109');
+  let tok = (await opLogin('ops@olmoa.test')).json.token;
+  assert.equal((await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: '000000' } })).json.code, 'MFA_SETUP_NOT_STARTED');
+  const setup = await A.call('/api/v1/auth/2fa/setup', { method: 'POST', token: tok });
+  assert.equal(setup.status, 200, setup.text);
+  const secret = setup.json.data.secret;
+  assert.match(setup.json.data.otpauth_uri, /^otpauth:\/\/totp\//);
+  const stored = A.one("SELECT totp_pending_enc FROM users WHERE email = 'ops@olmoa.test'").totp_pending_enc;
+  assert.ok(stored.startsWith('v1:') && !stored.includes(secret), 'secret is encrypted at rest');
+  assert.equal((await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: '123456' === (await totpAt(secret, currentStep())) ? '654321' : '123456' } })).json.code, 'OTP_INVALID');
+  const en = await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: await totpAt(secret, currentStep()) } });
+  assert.equal(en.status, 200, en.text);
+  assert.equal(en.json.data.recovery_codes.length, 10);
+  assert.equal((await A.call('/api/v1/admin/products', { token: tok })).status, 401, 'pre-2FA session revoked');
+  assert.equal((await A.call('/api/v1/admin/products', { token: en.json.data.token })).status, 200);
+
+  assert.equal((await opLogin('ops@olmoa.test')).json.code, 'OTP_REQUIRED');
+  assert.equal((await opLogin('ops@olmoa.test', { otp: await totpAt(secret, currentStep()) })).json.code, 'OTP_INVALID', 'the code used for enrolment cannot be replayed');
+  const next = await totpAt(secret, currentStep() + 1);
+  const ok = await opLogin('ops@olmoa.test', { otp: next });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(ok.json.mfa_enabled, true);
+  assert.equal((await opLogin('ops@olmoa.test', { otp: next })).json.code, 'OTP_INVALID', 'same code twice = replay');
+  const rc = en.json.data.recovery_codes[0];
+  assert.equal((await opLogin('ops@olmoa.test', { recovery_code: rc })).status, 200);
+  assert.equal((await opLogin('ops@olmoa.test', { recovery_code: rc })).json.code, 'OTP_INVALID', 'recovery code is single-use');
+  const u = A.one("SELECT id, token_version FROM users WHERE email = 'ops@olmoa.test'");
+  const forged = await signJwt({ sub: u.id, role: 'ROLE_ADMIN', tv: u.token_version }, SECRET, 600);
+  const noMfa = await A.call('/api/v1/admin/products', { token: forged });
+  assert.equal(noMfa.json.code, 'MFA_REQUIRED', 'a password-only token is useless once 2FA is on');
+
+  const reset = await A.call(`/api/v1/admin/admin-users/${u.id}`, { method: 'PUT', token: A.tok.ad, body: { reset_2fa: true } });
+  assert.equal(reset.status, 200, reset.text);
+  assert.equal((await A.call('/api/v1/admin/products', { token: ok.json.token })).status, 401, 'reset revokes sessions');
+  assert.equal((await opLogin('ops@olmoa.test')).status, 200, 'after reset the operator re-enrols');
+});
+
+await t.test('I46 2FA is mandatory in production (cannot be switched off) and can be required elsewhere', async () => {
+  assert.equal(twoFactorRequired({ ENVIRONMENT: 'production' }), true);
+  assert.equal(twoFactorRequired({ ENVIRONMENT: 'production', ADMIN_2FA_REQUIRED: 'false' }), true);
+  assert.equal(twoFactorRequired({ ENVIRONMENT: 'test' }), false);
+  const g = await boot({ ADMIN_2FA_REQUIRED: 'true' });
+  const lg = await g.call('/api/v1/auth/login', { method: 'POST', body: { email: 'admin@openmarket.com', password: PW, role: 'ADMIN' } });
+  assert.equal(lg.status, 200);
+  assert.equal(lg.json.mfa_setup_required, true);
+  const d = await g.call('/api/v1/admin/dashboard', { token: lg.json.token });
+  assert.equal(d.json.code, 'ADMIN_2FA_SETUP_REQUIRED');
+  assert.equal((await g.call(`/api/v1/orders/x`, { token: lg.json.token })).json.code, 'ADMIN_2FA_SETUP_REQUIRED', 'inline-checked routes are covered too');
+  const s = await g.call('/api/v1/auth/2fa/setup', { method: 'POST', token: lg.json.token });
+  assert.equal(s.status, 200, 'enrolment itself stays reachable');
+  const en = await g.call('/api/v1/auth/2fa/enable', { method: 'POST', token: lg.json.token, body: { code: await totpAt(s.json.data.secret, currentStep()) } });
+  assert.equal((await g.call('/api/v1/admin/dashboard', { token: en.json.data.token })).status, 200);
+});
+
+await t.test('I47 operator IP allow-list applies at login and on every request; customers are unaffected', async () => {
+  assert.equal(ipAllowed({ ADMIN_IP_ALLOWLIST: '203.0.113.0/24' }, '203.0.113.200'), true);
+  assert.equal(ipAllowed({ ADMIN_IP_ALLOWLIST: '203.0.113.0/24' }, '203.0.114.1'), false);
+  assert.equal(ipAllowed({ ADMIN_IP_ALLOWLIST: '203.0.113.0/24, 2001:db8::1' }, '2001:DB8::1'), true);
+  assert.equal(ipAllowed({ ADMIN_IP_ALLOWLIST: '203.0.113.0/24' }, null), false);
+  const g = await boot({ ADMIN_IP_ALLOWLIST: '203.0.113.0/24' });
+  const login = (ip) => g.call('/api/v1/auth/login', { method: 'POST', headers: ip ? { 'CF-Connecting-IP': ip } : {}, body: { email: 'admin@openmarket.com', password: PW, role: 'ADMIN' } });
+  assert.equal((await login('198.51.100.7')).json.code, 'ADMIN_IP_NOT_ALLOWED');
+  assert.equal((await login(null)).json.code, 'ADMIN_IP_NOT_ALLOWED');
+  const ok = await login('203.0.113.9');
+  assert.equal(ok.status, 200);
+  assert.equal((await g.call('/api/v1/admin/dashboard', { token: ok.json.token, headers: { 'CF-Connecting-IP': '203.0.113.50' } })).status, 200);
+  assert.equal((await g.call('/api/v1/admin/dashboard', { token: ok.json.token, headers: { 'CF-Connecting-IP': '198.51.100.7' } })).json.code, 'ADMIN_IP_NOT_ALLOWED', 'stolen token is useless elsewhere');
+  const c = await g.call('/api/v1/auth/login', { method: 'POST', headers: { 'CF-Connecting-IP': '198.51.100.7' }, body: { email: 'customer@example.com', password: PW } });
+  assert.equal(c.status, 200);
+});
+
+await t.test('I48 operator account guards: no self-lockout, always one active super admin, changes revoke sessions', async () => {
+  const me = A.one("SELECT id FROM users WHERE email = 'admin@openmarket.com'").id;
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${me}`, { method: 'PUT', token: A.tok.ad, body: { admin_role: 'CS' } })).json.code, 'SELF_LOCKOUT');
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${me}`, { method: 'PUT', token: A.tok.ad, body: { is_active: false } })).json.code, 'SELF_LOCKOUT');
+  const s2 = await mkOperator('super2@olmoa.test', 'SUPER_ADMIN');
+  const s2tok = (await opLogin('super2@olmoa.test')).json.token;
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${me}`, { method: 'PUT', token: s2tok, body: { is_active: false } })).status, 200, 'another super admin may deactivate');
+  assert.equal((await A.call('/api/v1/admin/dashboard', { token: A.tok.ad })).status, 401, 'deactivated operator is out immediately');
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${s2.json.data.id}`, { method: 'PUT', token: s2tok, body: { admin_role: 'FINANCE' } })).json.code, 'SELF_LOCKOUT');
+  const fin = A.one("SELECT id FROM users WHERE email = 'fin@olmoa.test'").id;
+  const finTok = (await opLogin('fin@olmoa.test')).json.token;
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${fin}`, { method: 'PUT', token: s2tok, body: { admin_role: 'CS' } })).status, 200);
+  assert.equal((await A.call('/api/v1/admin/reconciliation', { token: finTok })).status, 401, 'role change revokes old sessions');
+  // Re-activate the original super admin so later checks (I31 uses the I gateway) are unaffected here.
+  assert.equal((await A.call(`/api/v1/admin/admin-users/${me}`, { method: 'PUT', token: s2tok, body: { is_active: true } })).status, 200);
+});
+
+// ---- O14 return shipping fee, exchange flow, quantity-level cancel ----
+const C = await bootMarketplace();
+const deliverOnly = async (orderId) => {
+  await C.ship(C.tok.p1, orderId); await C.ship(C.tok.p2, orderId);
+  for (const s of C.q("SELECT id FROM sub_orders WHERE parent_order_id = ? AND status = 'SHIPPED'", orderId)) {
+    assert.equal((await C.call(`/api/v1/admin/sub-orders/${s.id}/delivered`, { method: 'POST', token: C.tok.ad, body: { evidence: 'CJ 조회 배송완료' } })).status, 200);
+  }
+};
+const buyDelivered = async (items) => { const o = (await C.checkout(C.tok.c, items)).json; assert.equal((await C.pay(C.tok.c, o)).status, 200); await deliverOnly(o.order_id); return o; };
+const subOf = (orderId) => C.one('SELECT * FROM sub_orders WHERE parent_order_id = ?', orderId);
+const itemOf = (orderId) => C.one('SELECT i.* FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.parent_order_id = ?', orderId);
+const claim = (orderId, body) => C.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: C.tok.c, body });
+const decide = (claimId, body) => C.call(`/api/v1/partner/returns/${claimId}`, { method: 'PUT', token: C.tok.p2, body });
+
+await t.test('I49 change-of-mind return withholds the seller\'s return fee; the books stay exact', async () => {
+  assert.equal((await C.call('/api/v1/partner/profile', { method: 'PUT', token: C.tok.p2, body: { return_shipping_fee: 3500 } })).status, 200);
+  const o = await buyDelivered([{ sku_id: C.mpSkus[0].id, quantity: 2 }]);
+  const detail = await C.call(`/api/v1/orders/${o.order_id}`, { token: C.tok.c });
+  assert.equal(detail.json.data.sub_orders[0].return_shipping_fee, 3500, 'buyer sees the fee before asking');
+  const it = itemOf(o.order_id);
+  assert.equal((await claim(o.order_id, { type: 'RETURN', reason_code: 'NOPE', items: [{ order_item_id: it.id, quantity: 1 }] })).json.code, 'INVALID_REASON_CODE');
+  const c = await claim(o.order_id, { type: 'RETURN', reason_code: 'CHANGE_OF_MIND', reason: '마음이 바뀜', items: [{ order_item_id: it.id, quantity: 1 }] });
+  assert.equal(c.status, 201, c.text);
+  const share = Math.floor((it.pg_alloc + it.credit_alloc) / 2);
+  assert.deepEqual([c.json.fault, c.json.estimated_return_fee, c.json.estimated_refund_amount], ['CUSTOMER', 3500, share - 3500]);
+  const settleBefore = C.one('SELECT COALESCE(SUM(net_delta),0) n FROM settlement_adjustments').n;
+  const ok = await decide(c.json.claim_id, { decision: 'APPROVE' });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(ok.json.return_fee, 3500);
+  const rf = C.one('SELECT * FROM refunds WHERE claim_id = ?', c.json.claim_id);
+  assert.equal(rf.pg_amount + rf.credit_amount, share - 3500, 'customer gets the item share minus the fee');
+  assert.equal(rf.return_fee_amount, 3500);
+  const adj = C.one('SELECT * FROM settlement_adjustments WHERE refund_id = ?', rf.id);
+  assert.equal(adj.shipping_delta, 3500, 'the seller, who pays the courier, keeps the fee');
+  assert.equal(C.one('SELECT COALESCE(SUM(net_delta),0) n FROM settlement_adjustments').n - settleBefore, adj.net_delta);
+  assert.throws(() => C.db.prepare('UPDATE refunds SET return_fee_amount = 0 WHERE id = ?').run(rf.id), /IMMUTABLE_LEDGER/);
+  assert.deepEqual(await C.recon(), []);
+});
+
+await t.test('I50 seller-fault return is free and refunds outbound shipping; shifting blame needs a written reason', async () => {
+  const o = await buyDelivered([{ sku_id: C.mpSkus[1].id, quantity: 1 }]);
+  const sub = subOf(o.order_id);
+  const it = itemOf(o.order_id);
+  const c = await claim(o.order_id, { type: 'RETURN', reason_code: 'DEFECTIVE', reason: '불량' });
+  assert.deepEqual([c.json.fault, c.json.estimated_return_fee], ['SELLER', 0]);
+  const ok = await decide(c.json.claim_id, { decision: 'APPROVE' });
+  assert.equal(ok.status, 200, ok.text);
+  const rf = C.one('SELECT * FROM refunds WHERE claim_id = ?', c.json.claim_id);
+  assert.equal(rf.return_fee_amount, 0);
+  assert.equal(rf.pg_amount + rf.credit_amount, it.pg_alloc + it.credit_alloc + sub.shipping_pg_alloc + sub.shipping_credit_alloc, 'full refund incl. outbound shipping');
+  assert.equal(subOf(o.order_id).shipping_refunded, sub.shipping_fee > 0 ? 1 : 0);
+
+  const o2 = await buyDelivered([{ sku_id: C.mpSkus[2].id, quantity: 1 }]);
+  const c2 = await claim(o2.order_id, { type: 'RETURN', reason_code: 'NOT_AS_DESCRIBED' });
+  assert.equal((await decide(c2.json.claim_id, { decision: 'APPROVE', fault: 'CUSTOMER' })).json.code, 'FAULT_REASON_REQUIRED');
+  const ok2 = await decide(c2.json.claim_id, { decision: 'APPROVE', fault: 'CUSTOMER', notes: '회수 상품 확인 결과 상세페이지와 동일, 사용 흔적 있음' });
+  assert.equal(ok2.status, 200, ok2.text);
+  assert.ok(ok2.json.return_fee > 0);
+  const row = C.one('SELECT fault, fault_note, return_fee_amount FROM returns WHERE id = ?', c2.json.claim_id);
+  assert.equal(row.fault, 'CUSTOMER'); assert.ok(row.fault_note.includes('사용 흔적'));
+  assert.equal(row.return_fee_amount, ok2.json.return_fee);
+  assert.deepEqual(await C.recon(), []);
+});
+
+await t.test('I51 exchange: same-price option only, re-shipment moves stock once, and the order completes normally', async () => {
+  const base = C.mpSkus[0];
+  const cols = C.q('PRAGMA table_info(product_skus)').map((c) => c.name);
+  C.db.exec('CREATE TEMP TABLE sku_clone AS SELECT * FROM product_skus WHERE 0');
+  C.db.prepare('INSERT INTO sku_clone SELECT * FROM product_skus WHERE id = ?').run(base.id);
+  const sets = ["id = 'sku_exchange_alt'", 'stock_quantity = 5', ...['sku_code', 'option_name', 'option_value', 'barcode'].filter((c) => cols.includes(c)).map((c) => `${c} = ${c} || '-ALT'`)];
+  C.db.exec(`UPDATE sku_clone SET ${sets.join(', ')}`);
+  C.db.exec('INSERT INTO product_skus SELECT * FROM sku_clone; DROP TABLE sku_clone');
+  const o = await buyDelivered([{ sku_id: base.id, quantity: 1 }]);
+  const it = itemOf(o.order_id);
+  const other = C.mpSkus.find((s) => C.one('SELECT product_id p FROM product_skus WHERE id = ?', s.id).p !== C.one('SELECT product_id p FROM product_skus WHERE id = ?', base.id).p);
+  if (other) assert.equal((await claim(o.order_id, { type: 'EXCHANGE', reason_code: 'SIZE_COLOR', items: [{ order_item_id: it.id, quantity: 1, exchange_sku_id: other.id }] })).json.code, 'EXCHANGE_OTHER_PRODUCT');
+  C.db.prepare('UPDATE product_skus SET sale_price = sale_price + 1000 WHERE id = ?').run('sku_exchange_alt');
+  assert.equal((await claim(o.order_id, { type: 'EXCHANGE', reason_code: 'SIZE_COLOR', items: [{ order_item_id: it.id, quantity: 1, exchange_sku_id: 'sku_exchange_alt' }] })).json.code, 'EXCHANGE_PRICE_DIFFERS');
+  C.db.prepare('UPDATE product_skus SET sale_price = sale_price - 1000 WHERE id = ?').run('sku_exchange_alt');
+  const c = await claim(o.order_id, { type: 'EXCHANGE', reason_code: 'SIZE_COLOR', items: [{ order_item_id: it.id, quantity: 1, exchange_sku_id: 'sku_exchange_alt' }] });
+  assert.equal(c.status, 201, c.text);
+  assert.ok(c.json.customer_shipping_note, 'customer-fault exchange tells the buyer about round-trip shipping');
+  const ap = await decide(c.json.claim_id, { decision: 'APPROVE' });
+  assert.equal(ap.json.exchange_status, 'AWAITING_RESHIPMENT');
+  assert.equal(subOf(o.order_id).status, 'RETURN_REQUESTED');
+  assert.equal((await claim(o.order_id, { type: 'RETURN', reason_code: 'DEFECTIVE' })).status, 409, 'no second claim while the exchange is open');
+  const reship = (body, token = C.tok.p2) => C.call(`/api/v1/partner/returns/${c.json.claim_id}/reship`, { method: 'POST', token, body });
+  assert.equal((await reship({ carrier: 'CJ대한통운', tracking_number: 'EXCH0001' }, C.tok.p1)).status, 403, 'another seller cannot reship');
+  C.db.prepare("UPDATE product_skus SET stock_quantity = 0 WHERE id = 'sku_exchange_alt'").run();
+  const oos = await reship({ carrier: 'CJ대한통운', tracking_number: 'EXCH0001', return_received: true });
+  assert.equal(oos.json.code, 'EXCHANGE_OUT_OF_STOCK');
+  assert.equal(C.one("SELECT COUNT(*) c FROM inventory_ledger WHERE reference_id = ?", c.json.claim_id).c, 0, 'nothing moved on failure');
+  C.db.prepare("UPDATE product_skus SET stock_quantity = 5 WHERE id = 'sku_exchange_alt'").run();
+  const fromBefore = C.stock(base.id);
+  const rs = await reship({ carrier: 'CJ대한통운', tracking_number: 'EXCH0001', return_received: true });
+  assert.equal(rs.status, 200, rs.text);
+  assert.deepEqual([C.stock('sku_exchange_alt'), C.stock(base.id)], [4, fromBefore + 1]);
+  assert.equal(C.one("SELECT COUNT(*) c FROM inventory_ledger WHERE reference_id = ?", c.json.claim_id).c, 2);
+  assert.equal((await reship({ carrier: 'CJ대한통운', tracking_number: 'EXCH0002', return_received: true })).json.code, 'NOT_AWAITING_RESHIPMENT');
+  assert.equal(C.stock('sku_exchange_alt'), 4, 'stock moved exactly once');
+  const sub = subOf(o.order_id);
+  assert.deepEqual([sub.status, sub.tracking_number], ['SHIPPED', 'EXCH0001']);
+  assert.equal(C.one('SELECT original_tracking_number t FROM returns WHERE id = ?', c.json.claim_id).t !== null, true);
+  assert.equal((await C.call(`/api/v1/admin/sub-orders/${sub.id}/delivered`, { method: 'POST', token: C.tok.ad, body: { evidence: '교환품 배송완료' } })).status, 200);
+  assert.equal((await C.call(`/api/v1/orders/${o.order_id}/confirm`, { method: 'POST', token: C.tok.c })).status, 200, 'previously stuck: exchange orders now complete');
+  assert.equal(C.one('SELECT status s FROM settlements WHERE sub_order_id = ?', sub.id).s, 'ELIGIBLE_FOR_PAYOUT');
+  assert.deepEqual(await C.recon(), []);
+});
+
+await t.test('I52 quantity-level cancel before shipment: exact refund, double-click safe, shipping refunded only with the last unit', async () => {
+  const o = (await C.checkout(C.tok.c, [{ sku_id: C.mpSkus[2].id, quantity: 3 }])).json;
+  await C.pay(C.tok.c, o);
+  const sub = subOf(o.order_id);
+  const it = itemOf(o.order_id);
+  const cancel = (qty, key = `qc-${qty}-${Math.random().toString(36).slice(2, 10)}`) => C.call(`/api/v1/orders/${o.order_id}/sub-orders/${sub.id}/cancel`, { method: 'POST', token: C.tok.c, headers: { 'X-Idempotency-Key': key }, body: { items: [{ order_item_id: it.id, quantity: qty }] } });
+  const stock0 = C.stock(C.mpSkus[2].id);
+  const a = await cancel(1, 'qcancel-click-0001');
+  assert.equal(a.status, 200, a.text);
+  assert.equal(a.json.partial, true);
+  assert.equal(a.json.refund.pg_amount + a.json.refund.credit_amount, Math.floor((it.pg_alloc + it.credit_alloc) / 3));
+  assert.equal(subOf(o.order_id).shipping_refunded, 0, 'still shipping the rest');
+  const again = await cancel(1, 'qcancel-click-0001');
+  assert.equal(again.json.replay, true, 'a retry with the same idempotency key is a replay');
+  assert.equal(C.one('SELECT COUNT(*) c FROM refunds WHERE order_id = ?', o.order_id).c, 1);
+  assert.equal(C.stock(C.mpSkus[2].id), stock0 + 1);
+  assert.equal((await cancel(3)).json.code, 'REFUND_EXCEEDS_PAID');
+  const b = await cancel(2);
+  assert.equal(b.status, 200, b.text);
+  const after = C.one('SELECT * FROM order_items WHERE id = ?', it.id);
+  assert.deepEqual([after.refunded_pg_amount, after.refunded_credit_amount], [it.pg_alloc, it.credit_alloc], 'three partial cancels sum exactly to what was paid');
+  const s2 = subOf(o.order_id);
+  assert.deepEqual([s2.status, s2.shipping_refunded], ['CANCELLED', s2.shipping_fee > 0 ? 1 : 0]);
+  await C.ship(C.tok.p2, o.order_id);
+  assert.deepEqual(await C.recon(), []);
+});
+
+await t.test('I53 saving store settings with the masked account number does not queue a payout-account change', async () => {
+  const prof = await C.call('/api/v1/partner/profile', { token: C.tok.p2 });
+  assert.ok(prof.json.data.bank_account_number.startsWith('****'));
+  const r = await C.call('/api/v1/partner/profile', { method: 'PUT', token: C.tok.p2, body: { ...prof.json.data, return_shipping_fee: 4000 } });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.payout_change_pending, false);
+  assert.equal(C.one("SELECT payout_change_request_json j FROM partners WHERE id = 'pt_002'").j, null);
+  assert.equal(C.one("SELECT return_shipping_fee f FROM partners WHERE id = 'pt_002'").f, 4000);
+  const real = await C.call('/api/v1/partner/profile', { method: 'PUT', token: C.tok.p2, body: { bank_account_number: '110-999-888777' } });
+  assert.equal(real.json.payout_change_pending, true, 'a real change is still queued for verification');
+});
+
+await t.test('I31 full reconciliation passes after every scenario above (R01–R21)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);
   const failedChecks = r.json.data.checks.filter((c) => !c.ok && c.id !== 'R07');

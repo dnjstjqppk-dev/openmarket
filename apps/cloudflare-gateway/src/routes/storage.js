@@ -1,7 +1,12 @@
-import { requireAuth } from '../lib/auth.js';
+import { requireAuth, authenticate } from '../lib/auth.js';
+import { logPiiView } from '../services/privacy.js';
 import { newId } from '../lib/ids.js';
 // apps/cloudflare-gateway/src/routes/storage.js
 // OLMOA Cloudflare R2 & D1 Resilient Media Storage Engine
+
+// Folders whose objects are never publicly served (seller KYB documents: business registration, bank account copy).
+const PRIVATE_FOLDERS = new Set(['kyb']);
+const PRIVATE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 
 const ALLOWED_CONTENT_TYPES = [
   'image/jpeg',
@@ -81,6 +86,16 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       }), { status: 400, headers: corsHeaders });
     }
 
+    const isPrivate = PRIVATE_FOLDERS.has(folder);
+    if (isPrivate) {
+      if (uploader.role !== 'ROLE_PARTNER') {
+        return new Response(JSON.stringify({ success: false, code: 'FORBIDDEN', error: '입점 서류는 판매자 계정만 업로드할 수 있습니다.' }), { status: 403, headers: corsHeaders });
+      }
+      if (!PRIVATE_CONTENT_TYPES.includes(mimeType)) {
+        return new Response(JSON.stringify({ success: false, code: 'INVALID_FILE_TYPE', error: '입점 서류는 PDF, JPG, PNG만 업로드할 수 있습니다.' }), { status: 400, headers: corsHeaders });
+      }
+    }
+
     const byteSize = fileBytes.byteLength;
     if (byteSize > 10 * 1024 * 1024) {
       return new Response(JSON.stringify({ error: 'File size exceeds 10MB limit' }), { status: 400, headers: corsHeaders });
@@ -109,8 +124,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
     // 2. Metadata & resilient base64 fallback in D1
     await env.DB.prepare(
-      `INSERT INTO storage_objects (id, original_name, content_type, byte_size, folder, storage_backend, data_base64, public_url, uploader_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO storage_objects (id, original_name, content_type, byte_size, folder, storage_backend, data_base64, public_url, uploader_id, visibility)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       fileId,
       originalName,
@@ -120,7 +135,8 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       storageBackend,
       storageBackend === 'D1_EMBEDDED' ? fileBase64 : null,
       publicUrl,
-      uploader.userId
+      uploader.userId,
+      isPrivate ? 'PRIVATE' : 'PUBLIC'
     ).run();
 
     return new Response(JSON.stringify({
@@ -133,6 +149,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
         byte_size: byteSize,
         storage_backend: storageBackend,
         public_url: publicUrl,
+        visibility: isPrivate ? 'PRIVATE' : 'PUBLIC',
         uploaded_at: new Date().toISOString()
       }
     }), { status: 201, headers: corsHeaders });
@@ -145,6 +162,20 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       return new Response('Missing file key', { status: 400, headers: corsHeaders });
     }
 
+    const meta = await env.DB.prepare('SELECT id, uploader_id, visibility, folder FROM storage_objects WHERE id = ?').bind(fileKey).first();
+    const isPrivate = (meta && meta.visibility === 'PRIVATE') || PRIVATE_FOLDERS.has(fileKey.split('/')[0]);
+    let privateHeaders = null;
+    if (isPrivate) {
+      const viewer = await authenticate(request, env);
+      const allowed = viewer && meta && (viewer.role === 'ROLE_ADMIN' || viewer.userId === meta.uploader_id);
+      if (!allowed) {
+        // Same answer for "missing" and "not yours": no existence oracle.
+        return new Response(JSON.stringify({ error: 'File not found in storage' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (viewer.role === 'ROLE_ADMIN') await logPiiView(env, viewer, 'admin.kyb-document', 'storage_object', [meta.id], 'kyb_document', request);
+      privateHeaders = { ...corsHeaders, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': 'inline' };
+    }
+
     // A. Check R2 Bucket first
     if (env.R2 || env.BUCKET) {
       try {
@@ -154,8 +185,12 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
           const headers = new Headers();
           object.writeHttpMetadata(headers);
           headers.set('etag', object.httpEtag);
-          headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-          headers.set('Access-Control-Allow-Origin', '*');
+          if (privateHeaders) {
+            for (const [k, v] of Object.entries(privateHeaders)) headers.set(k, v);
+          } else {
+            headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+            headers.set('Access-Control-Allow-Origin', '*');
+          }
           return new Response(object.body, { headers });
         }
       } catch (_) {}
@@ -176,6 +211,9 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
+    if (privateHeaders) {
+      return new Response(bytes.buffer, { status: 200, headers: { ...privateHeaders, 'Content-Type': row.content_type, 'Content-Length': String(row.byte_size || bytes.byteLength) } });
+    }
     return new Response(bytes.buffer, {
       status: 200,
       headers: {

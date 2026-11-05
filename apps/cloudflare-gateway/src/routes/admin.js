@@ -6,6 +6,7 @@ import { readJson, json, bad, conflict, notFound, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
+import { logPiiView } from '../services/privacy.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
@@ -65,7 +66,21 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
               (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
        FROM users ORDER BY created_at DESC LIMIT 100`
     ).all();
+    await logPiiView(env, admin, 'admin.users', 'user', results.map((u) => u.id), 'email,full_name,phone', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+  }
+
+  // O10: 개인정보 접속기록 조회 (who viewed / exported / destroyed personal data).
+  if (url.pathname === '/api/v1/admin/privacy/access-log' && request.method === 'GET') {
+    const actor = url.searchParams.get('actor_user_id');
+    const subject = url.searchParams.get('subject_id');
+    const action = url.searchParams.get('action');
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM pii_access_log WHERE (? IS NULL OR actor_user_id = ?) AND (? IS NULL OR action = ?)
+         AND (? IS NULL OR EXISTS (SELECT 1 FROM json_each(subject_ids_json) WHERE value = ?))
+       ORDER BY rowid DESC LIMIT 500`
+    ).bind(actor, actor, action, action, subject, subject).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results.map((r) => ({ ...r, subject_ids: JSON.parse(r.subject_ids_json || '[]') })) });
   }
 
   if (url.pathname === '/api/v1/admin/partners' && request.method === 'GET') {
@@ -76,6 +91,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        LEFT JOIN users u ON p.owner_user_id = u.id
        ORDER BY p.created_at DESC`
     ).all();
+    await logPiiView(env, admin, 'admin.partners', 'user', results.map((r) => r.owner_user_id), 'email,full_name,phone,bank_account', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
@@ -85,23 +101,34 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const body = await request.json().catch(() => ({}));
     if (!['APPROVED', 'REJECTED', 'SUSPENDED', 'PENDING'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
     const status = body.status;
-    const beforePartner = await env.DB.prepare('SELECT id, status, risk_tier, rolling_reserve_pct FROM partners WHERE id = ?').bind(partnerId).first();
+    const beforePartner = await env.DB.prepare('SELECT id, status, kyc_status, applied_at, risk_tier, rolling_reserve_pct, rolling_reserve_days FROM partners WHERE id = ?').bind(partnerId).first();
     if (!beforePartner) throw notFound('입점사를 찾을 수 없습니다.');
+    // O05: an onboarding applicant is approved only through the document review (no shortcut around KYB).
+    if (beforePartner.applied_at && beforePartner.kyc_status !== 'APPROVED' && status === 'APPROVED') {
+      throw conflict('USE_APPLICATION_REVIEW', '입점 신청 판매자는 서류 심사(POST /api/v1/admin/partner-applications/:id/review)로만 승인할 수 있습니다.');
+    }
     const riskTier = body.risk_tier || 'TIER_1_NORMAL';
+    if (!['TIER_1_NORMAL', 'TIER_2_WATCH', 'TIER_3_HIGH_RISK'].includes(riskTier)) throw bad('INVALID_RISK_TIER', 'risk_tier 값이 올바르지 않습니다.');
     const reservePct = body.rolling_reserve_pct !== undefined ? Number(body.rolling_reserve_pct) : (riskTier === 'TIER_3_HIGH_RISK' ? 10.0 : (riskTier === 'TIER_2_WATCH' ? 5.0 : 0.0));
-    const kycNotes = body.kyc_notes ? String(body.kyc_notes).trim() : null;
+    // Reserve is applied at payout time (finance.js); keep it in a range a seller contract can plausibly state.
+    if (!Number.isFinite(reservePct) || reservePct < 0 || reservePct > 50 || Math.abs(Math.round(reservePct * 100) - reservePct * 100) > 1e-6) {
+      throw bad('INVALID_RESERVE_PCT', '롤링 리저브 비율은 0~50% (소수점 둘째 자리까지) 이어야 합니다.');
+    }
+    const reserveDays = body.rolling_reserve_days !== undefined ? Number(body.rolling_reserve_days) : Number(beforePartner.rolling_reserve_days || 90);
+    if (!Number.isInteger(reserveDays) || reserveDays < 1 || reserveDays > 365) throw bad('INVALID_RESERVE_DAYS', '리저브 보류 기간은 1~365일 정수여야 합니다.');
+    const kycNotes = body.kyc_notes ? String(body.kyc_notes).trim().slice(0, 2000) : null;
 
     await env.DB.batch([
       env.DB.prepare(
         `UPDATE partners
-         SET status = ?, kyc_status = ?, risk_tier = ?, rolling_reserve_pct = ?, kyc_notes = COALESCE(?, kyc_notes), updated_at = CURRENT_TIMESTAMP
+         SET status = ?, kyc_status = CASE WHEN applied_at IS NULL THEN ? ELSE kyc_status END, risk_tier = ?, rolling_reserve_pct = ?, rolling_reserve_days = ?, kyc_notes = COALESCE(?, kyc_notes), updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`
-      ).bind(status, status, riskTier, reservePct, kycNotes, partnerId),
-      audit('PARTNER_VERIFY', 'partner', partnerId, beforePartner, { status, riskTier, reservePct, kycNotes })
+      ).bind(status, status, riskTier, reservePct, reserveDays, kycNotes, partnerId),
+      audit('PARTNER_VERIFY', 'partner', partnerId, beforePartner, { status, riskTier, reservePct, reserveDays, kycNotes })
     ]);
 
     return new Response(JSON.stringify({
-      success: true, brand: 'OLMOA', partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes, data: { partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, kyc_notes: kycNotes }
+      success: true, brand: 'OLMOA', partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, rolling_reserve_days: reserveDays, kyc_notes: kycNotes, data: { partner_id: partnerId, status, risk_tier: riskTier, rolling_reserve_pct: reservePct, rolling_reserve_days: reserveDays, kyc_notes: kycNotes }
     }), { headers: corsHeaders });
   }
 
@@ -193,6 +220,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       ).bind(ord.id).all();
       ord.sub_orders = subs;
     }
+    await logPiiView(env, admin, 'admin.orders', 'order', orders.map((o) => o.id), 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, data: orders }), { headers: corsHeaders });
   }
 

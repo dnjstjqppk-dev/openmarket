@@ -26,6 +26,7 @@ const handlePartnerLogin = async () => {
       return
     }
     savePartnerSession(json.token, json.partner)
+    if (json.partner.status !== 'APPROVED') { router.replace('/application'); return }
     const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
     router.replace(r)
   } catch {
@@ -70,7 +71,8 @@ function fillDev(which: 1 | 2) {
           <button type="button" class="flex-1 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold" @click="fillDev(2)">개발용: 입점 판매자</button>
         </div>
       </form>
-      <p class="mt-6 text-[11px] text-slate-400">입점 심사가 완료된 판매자만 이용할 수 있습니다. 계정 문의는 운영 사업자 고객센터로 연락해 주세요.</p>
+      <p class="mt-6 text-xs text-slate-600">아직 판매자가 아니신가요? <router-link to="/apply" class="font-bold text-[#FF5000] underline">입점 신청하기</router-link></p>
+      <p class="mt-2 text-[11px] text-slate-400">입점 심사 중인 계정은 로그인 후 신청 현황과 서류 제출만 이용할 수 있습니다.</p>
     </div>
   </div>
 </template>

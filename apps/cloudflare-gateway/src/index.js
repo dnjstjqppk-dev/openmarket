@@ -17,13 +17,18 @@ import { handleStorageRoutes } from './routes/storage.js';
 import { handleTemuOpsRoutes } from './routes/temu-ops.js';
 import { handleBusinessRoutes } from './routes/business.js';
 import { handleSupplierRoutes } from './routes/suppliers.js';
-import { handleFinanceRoutes } from './routes/finance.js';
+import { handleFinanceRoutes, reconcileIfDue } from './routes/finance.js';
+import { handleOnboardingRoutes } from './routes/onboarding.js';
+import { handleAdminSecurityRoutes } from './routes/admin-security.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
+import { purgeExpiredPii } from './services/privacy.js';
 
 const SERVICE_VERSION = '2.0.0-v3-integrity';
 
 const ROUTERS = [
+  handleAdminSecurityRoutes, // /auth/2fa/* and /admin/admin-users before the generic auth/admin routers
   handleAuthRoutes,
+  handleOnboardingRoutes, // before partner/admin routers: '/api/v1/partner-applications' shares their prefixes
   handleBusinessRoutes,
   handlePaymentRoutes,
   handleFinanceRoutes,
@@ -110,7 +115,25 @@ export default {
     ctx.waitUntil((async () => {
       const expired = await expireStaleOrders(env, 200);
       const confirmed = await autoConfirmDelivered(env, 7, 200);
-      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed }));
+      // O19: hourly reconciliation with persisted result + alert (ALERT_WEBHOOK_URL) on any failed check.
+      let reconciliation = 'NOT_DUE';
+      try {
+        const r = await reconcileIfDue(env, Number(env.RECONCILE_INTERVAL_MINUTES) || 60);
+        if (r) reconciliation = r.ok ? 'OK' : `FAILED:${r.alert_status}`;
+      } catch (e) {
+        reconciliation = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'reconciliation', error: String(e && e.message || e) }));
+      }
+      // O10: destroy withdrawn members' PII whose legal retention period ended (once per hour: first tick of the hour).
+      let purged = null;
+      if (new Date(event.scheduledTime || Date.now()).getUTCMinutes() < 5) {
+        try {
+          purged = await purgeExpiredPii(env, 500);
+        } catch (e) {
+          console.error(JSON.stringify({ level: 'error', job: 'pii_purge', error: String(e && e.message || e) }));
+        }
+      }
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged }));
     })());
   }
 };

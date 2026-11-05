@@ -6,13 +6,16 @@ import { issueToken, requireAuth } from '../lib/auth.js';
 import { json, readJson, bad, unauthorized, conflict, str, HttpError } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { grantCreditStatements, getActiveOperator } from '../lib/ledger.js';
+import { exportCustomerData, withdrawalBlockers, withdrawCustomer } from '../services/privacy.js';
+import { ipAllowed, clientIp, twoFactorRequired } from '../lib/admin-policy.js';
+import { verifyAdminSecondFactor } from './admin-security.js';
 
 const MAX_FAILED = 5;
 const LOCK_MS = 15 * 60 * 1000;
 const WELCOME_CREDIT = 10000;
 const ROLE_ALIASES = { ADMIN: 'ROLE_ADMIN', ROLE_ADMIN: 'ROLE_ADMIN', PARTNER: 'ROLE_PARTNER', ROLE_PARTNER: 'ROLE_PARTNER', CUSTOMER: 'ROLE_CUSTOMER', ROLE_CUSTOMER: 'ROLE_CUSTOMER' };
 
-function validatePassword(pw) {
+export function validatePassword(pw) {
   if (typeof pw !== 'string' || pw.length < 10 || pw.length > 128) throw bad('WEAK_PASSWORD', '비밀번호는 10자 이상 128자 이하여야 합니다.');
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(pw)).length;
   if (classes < 3) throw bad('WEAK_PASSWORD', '비밀번호는 영문 대/소문자, 숫자, 특수문자 중 3종류 이상을 포함해야 합니다.');
@@ -46,6 +49,20 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }
     if (Number(user.is_active) !== 1) throw new HttpError(403, 'ACCOUNT_DISABLED', '비활성화된 계정입니다.');
     if (user.role !== expectedRole) throw generic; // do not reveal which role the account has
+    let mfa = false;
+    if (user.role === 'ROLE_ADMIN') {
+      if (!ipAllowed(env, clientIp(request))) throw new HttpError(403, 'ADMIN_IP_NOT_ALLOWED', '허용되지 않은 위치에서의 관리자 로그인입니다.');
+      if (user.totp_enabled_at) {
+        if (!body.otp && !body.recovery_code) throw new HttpError(401, 'OTP_REQUIRED', '인증 앱의 6자리 코드를 입력해 주세요.');
+        if (!(await verifyAdminSecondFactor(env, user, { otp: body.otp, recoveryCode: body.recovery_code }))) {
+          const fails = Number(user.failed_login_count || 0) + 1;
+          await env.DB.prepare('UPDATE users SET failed_login_count = ?, locked_until = ? WHERE id = ?')
+            .bind(fails >= MAX_FAILED ? 0 : fails, fails >= MAX_FAILED ? sqlNow(LOCK_MS) : null, user.id).run();
+          throw new HttpError(401, 'OTP_INVALID', '인증 코드가 올바르지 않거나 이미 사용되었습니다.');
+        }
+        mfa = true;
+      }
+    }
     await env.DB.prepare('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = ?').bind(user.id).run();
 
     let partner = null;
@@ -53,9 +70,10 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       partner = await env.DB.prepare('SELECT id, business_name, status, sales_model FROM partners WHERE owner_user_id = ?').bind(user.id).first();
       if (!partner) throw new HttpError(403, 'PARTNER_PROFILE_MISSING', '입점사 정보가 연결되지 않은 판매자 계정입니다.');
     }
-    const token = await issueToken(env, user, partner);
+    const token = await issueToken(env, user, partner, { mfa });
     const payload = {
       role: user.role, token, expiresIn: 43200, user: publicUser(user),
+      ...(user.role === 'ROLE_ADMIN' ? { admin_role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at), mfa_setup_required: !user.totp_enabled_at && twoFactorRequired(env) } : {}),
       ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
       ...(partner ? { partner_id: partner.id, partner } : {})
     };
@@ -104,7 +122,8 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       'SELECT COUNT(*) AS c FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?'
     ).bind(me.userId, sqlNow()).first('c');
     const wish = await env.DB.prepare('SELECT COUNT(*) AS c FROM wishlists WHERE user_id = ?').bind(me.userId).first('c');
-    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish } });
+    const adminInfo = user.role === 'ROLE_ADMIN' ? { admin: { role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at), mfa_setup_required: !user.totp_enabled_at && twoFactorRequired(env) } } : {};
+    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish, ...adminInfo } });
   }
 
   if (p === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
@@ -124,8 +143,32 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     await env.DB.prepare('UPDATE users SET full_name = ?, phone = ?, password_hash = ?, token_version = ?, password_changed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE password_changed_at END, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(fullName, phone, hash, tokenVersion, body.new_password !== undefined ? 1 : 0, me.userId).run();
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
-    const token = tokenVersion !== Number(user.token_version || 0) ? await issueToken(env, updated, me.partner) : undefined;
+    const token = tokenVersion !== Number(user.token_version || 0) ? await issueToken(env, updated, me.partner, { mfa: me.mfa }) : undefined;
     return json(corsHeaders, { success: true, message: '회원 정보가 수정되었습니다.', data: { user: publicUser(updated), token } });
+  }
+
+  // O10: 개인정보 열람 (data-subject export) and 회원 탈퇴 (withdrawal).
+  if (p === '/api/v1/auth/privacy/export' && request.method === 'GET') {
+    const me = await requireAuth(request, env, ['ROLE_CUSTOMER']);
+    return json(corsHeaders, { success: true, data: await exportCustomerData(env, me, request) });
+  }
+
+  if (p === '/api/v1/auth/withdraw/precheck' && request.method === 'GET') {
+    const me = await requireAuth(request, env, ['ROLE_CUSTOMER']);
+    const blockers = await withdrawalBlockers(env, me.userId);
+    const credit = await env.DB.prepare('SELECT COALESCE(SUM(amount_delta), 0) AS b FROM user_credits WHERE user_id = ?').bind(me.userId).first('b');
+    return json(corsHeaders, { success: true, data: { can_withdraw: blockers.length === 0, blockers, credit_balance: credit } });
+  }
+
+  if (p === '/api/v1/auth/withdraw' && request.method === 'POST') {
+    const me = await requireAuth(request, env);
+    if (me.role !== 'ROLE_CUSTOMER') throw conflict('WITHDRAWAL_NOT_SELF_SERVICE', '판매자·운영자 계정은 정산·계약 정리 후 운영자 절차로 해지합니다.');
+    const body = await readJson(request);
+    if (body.confirm !== true) throw bad('CONFIRM_REQUIRED', '탈퇴 안내를 확인하고 동의해 주세요.');
+    const user = await env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(me.userId).first();
+    if (!(await verifyPassword(String(body.password || ''), user.password_hash))) throw bad('CURRENT_PASSWORD_MISMATCH', '비밀번호가 일치하지 않습니다.');
+    const r = await withdrawCustomer(env, me, { acknowledgeCreditForfeit: body.acknowledge_credit_forfeit === true, request });
+    return json(corsHeaders, { success: true, message: '회원 탈퇴가 완료되었습니다. 법령에 따라 보관하는 거래 기록은 보관 기간이 끝나면 파기됩니다.', data: r });
   }
 
   if (p === '/api/v1/auth/logout-all' && request.method === 'POST') {

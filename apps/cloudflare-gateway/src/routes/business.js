@@ -12,7 +12,7 @@ const OPERATIONAL_FIELDS = ['mail_order_reg_number', 'address', 'cs_phone', 'cs_
   'hosting_provider', 'pg_provider', 'pg_merchant_ref', 'escrow_service_ref', 'settlement_bank_ref', 'terms_version'];
 const REQUIRED_FOR_ACTIVATION = ['legal_name', 'representative_name', 'business_reg_number', 'mail_order_reg_number', 'address', 'cs_phone', 'cs_email', 'privacy_officer_name', 'privacy_officer_email'];
 
-function normalizeBrn(v) {
+export function normalizeBrn(v) {
   const digits = String(v || '').replace(/\D/g, '');
   if (digits.length !== 10) throw bad('INVALID_BRN', '사업자등록번호는 10자리 숫자여야 합니다.');
   // National Tax Service check digit

@@ -4,6 +4,7 @@
 
 import { verifyJwt, signJwt } from '../utils/crypto-auth.js';
 import { HttpError, unauthorized, forbidden, unavailable } from './http.js';
+import { enforceAdminPolicy } from './admin-policy.js';
 
 const principalCache = new WeakMap();
 
@@ -15,8 +16,9 @@ export function getJwtSecret(env) {
   return s;
 }
 
-export async function issueToken(env, user, partner) {
+export async function issueToken(env, user, partner, { mfa = false } = {}) {
   const claims = { sub: user.id, role: user.role, tv: user.token_version || 0 };
+  if (mfa) claims.mfa = 1;
   if (partner) claims.pid = partner.id;
   return signJwt(claims, getJwtSecret(env), 60 * 60 * 12);
 }
@@ -31,10 +33,12 @@ export async function authenticate(request, env) {
     const payload = await verifyJwt(m[1], getJwtSecret(env));
     if (payload && typeof payload.sub === 'string') {
       const user = await env.DB.prepare(
-        'SELECT id, email, full_name, role, is_active, token_version FROM users WHERE id = ?'
+        'SELECT id, email, full_name, role, is_active, token_version, admin_role, totp_enabled_at FROM users WHERE id = ?'
       ).bind(payload.sub).first();
       if (user && Number(user.is_active) === 1 && Number(user.token_version || 0) === Number(payload.tv || 0) && user.role === payload.role) {
-        principal = { userId: user.id, role: user.role, email: user.email, name: user.full_name, partnerId: null, partner: null };
+        // O11: operator tokens pass IP allow-list, 2FA and least-privilege checks on every request (throws).
+        if (user.role === 'ROLE_ADMIN') enforceAdminPolicy(request, env, user, payload);
+        principal = { userId: user.id, role: user.role, email: user.email, name: user.full_name, partnerId: null, partner: null, adminRole: user.admin_role || null, mfa: payload.mfa === 1 };
         if (user.role === 'ROLE_PARTNER') {
           const partner = await env.DB.prepare('SELECT * FROM partners WHERE owner_user_id = ?').bind(user.id).first();
           if (partner && (!payload.pid || payload.pid === partner.id)) {

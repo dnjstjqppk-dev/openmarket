@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { API_BASE_URL, setAdminToken } from '../config'
+import { API_BASE_URL, setAdminToken, setAdminRole } from '../config'
 
 const router = useRouter()
 const route = useRoute()
@@ -9,6 +9,9 @@ const email = ref('')
 const password = ref('')
 const errorMsg = ref('')
 const loading = ref(false)
+const otpStep = ref(false)
+const otp = ref('')
+const useRecovery = ref(false)
 const isDev = Boolean((import.meta as any).env?.DEV)
 
 const handleAdminLogin = async () => {
@@ -18,14 +21,18 @@ const handleAdminLogin = async () => {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'ADMIN', email: email.value, password: password.value })
+      body: JSON.stringify({ role: 'ADMIN', email: email.value, password: password.value, ...(otpStep.value ? (useRecovery.value ? { recovery_code: otp.value } : { otp: otp.value }) : {}) })
     })
     const json = await res.json().catch(() => ({}))
+    if (json.code === 'OTP_REQUIRED') { otpStep.value = true; return }
     if (!res.ok || !json.success || !json.token) {
       errorMsg.value = json.error || '로그인에 실패했습니다.'
+      otp.value = ''
       return
     }
     setAdminToken(json.token)
+    setAdminRole(json.admin_role || '')
+    if (json.mfa_setup_required) { router.replace('/security'); return }
     const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
     router.replace(r)
   } catch {
@@ -57,6 +64,11 @@ const fillDev = () => { email.value = 'admin@openmarket.com'; password.value = '
         <div>
           <label for="adm-pw" class="block font-bold text-gray-700 mb-1">비밀번호</label>
           <input id="adm-pw" v-model="password" type="password" autocomplete="current-password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
+        </div>
+        <div v-if="otpStep" class="p-3 rounded-xl bg-indigo-50 space-y-2" data-testid="otp-step">
+          <label for="adm-otp" class="block font-bold text-indigo-900">{{ useRecovery ? '복구 코드 (xxxx-xxxx)' : '인증 앱의 6자리 코드' }}</label>
+          <input id="adm-otp" v-model="otp" :inputmode="useRecovery ? 'text' : 'numeric'" autocomplete="one-time-code" required autofocus class="w-full h-11 px-3.5 rounded-xl border border-gray-300 tracking-widest font-mono" />
+          <button type="button" class="text-indigo-700 underline" @click="useRecovery = !useRecovery; otp = ''">{{ useRecovery ? '인증 앱 코드로 입력' : '휴대폰을 잃어버렸어요 · 복구 코드 사용' }}</button>
         </div>
         <p v-if="errorMsg" role="alert" class="text-red-600 font-bold">{{ errorMsg }}</p>
         <button type="submit" :disabled="loading" class="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-sm">{{ loading ? '확인 중...' : '로그인' }}</button>

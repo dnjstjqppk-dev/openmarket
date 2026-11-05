@@ -15,6 +15,7 @@ interface PartnerProfile {
   customer_service_phone: string;
   base_shipping_fee: number;
   free_shipping_threshold: number;
+  return_shipping_fee: number;
   status: string;
 }
 
@@ -31,8 +32,11 @@ const profile = ref<PartnerProfile>({
   customer_service_phone: '',
   base_shipping_fee: 3000,
   free_shipping_threshold: 30000,
+  return_shipping_fee: 3000,
   status: 'APPROVED'
 });
+// Snapshot of the payout account as loaded (number is masked by the API). Bank fields are sent only when really edited.
+const loadedBank = ref({ bank_code: '', bank_account_number: '', bank_account_holder: '' });
 
 const loading = ref(true);
 const isSaving = ref(false);
@@ -58,6 +62,7 @@ async function loadProfile() {
     const json = await res.json();
     if (json.success && json.data) {
       profile.value = json.data;
+      loadedBank.value = { bank_code: json.data.bank_code, bank_account_number: json.data.bank_account_number, bank_account_holder: json.data.bank_account_holder };
     }
   } catch (e) {
     console.error('Failed to load partner profile:', e);
@@ -66,17 +71,31 @@ async function loadProfile() {
   }
 }
 
+function settingsPayload() {
+  const p = profile.value;
+  const body: Record<string, unknown> = {
+    settlement_cycle: p.settlement_cycle, return_shipping_address: p.return_shipping_address, customer_service_phone: p.customer_service_phone,
+    base_shipping_fee: p.base_shipping_fee, free_shipping_threshold: p.free_shipping_threshold, return_shipping_fee: p.return_shipping_fee
+  };
+  const b = loadedBank.value;
+  const bankEdited = p.bank_code !== b.bank_code || p.bank_account_holder !== b.bank_account_holder
+    || (p.bank_account_number !== b.bank_account_number && !String(p.bank_account_number).startsWith('****'));
+  if (bankEdited) Object.assign(body, { bank_code: p.bank_code, bank_account_number: String(p.bank_account_number).startsWith('****') ? undefined : p.bank_account_number, bank_account_holder: p.bank_account_holder });
+  return body;
+}
+
 async function saveProfile() {
   isSaving.value = true;
   try {
     const res = await fetch(`${API_BASE}/api/v1/partner/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
-      body: JSON.stringify(profile.value)
+      body: JSON.stringify(settingsPayload())
     });
     const json = await res.json();
     if (json.success) {
-      toastMsg.value = '✓ 정산 계좌 및 배송 설정이 성공적으로 저장되었습니다.';
+      toastMsg.value = `✓ ${json.message || '설정이 저장되었습니다.'}`;
+      await loadProfile();
       setTimeout(() => { toastMsg.value = ''; }, 3500);
     }
   } catch (e) {
@@ -226,6 +245,17 @@ onMounted(loadProfile);
               step="5000"
               class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
             />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">반품 배송비 · 편도 (원)</label>
+            <input
+              v-model.number="profile.return_shipping_fee"
+              type="number"
+              min="0"
+              step="500"
+              class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <p class="text-[11px] text-slate-500 mt-1">단순변심·사이즈 반품 때 환불액에서 차감됩니다 (무료배송 주문 전체 반품은 기본 배송비를 더해 왕복). 주문 화면에 미리 표시됩니다.</p>
           </div>
           <div class="sm:col-span-2">
             <label class="block font-bold text-slate-700 mb-1">고객 안심반품 수거지 주소</label>

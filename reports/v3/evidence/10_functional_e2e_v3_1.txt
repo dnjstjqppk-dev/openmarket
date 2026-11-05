@@ -1,0 +1,28 @@
+[PASS] 01 health, readiness flags and security headers
+[PASS] 02 sitemap lists approved products only
+[PASS] 03 42 root categories, each GNB slug has products
+[PASS] 04 search autocomplete
+[PASS] 05 product detail + customer Q&A + seller answer
+[PASS] 06 seller mini-shop
+[PASS] 07 wishlist toggle + coupon claim
+[PASS] 08 registration with consents grants a journaled welcome credit
+[PASS] 09 address book CRUD and default switching
+[PASS] 10 notifications inbox
+[PASS] 11 mixed checkout -> sandbox payment -> order detail & tracking
+[PASS] 12 sellers ship, delivery, purchase confirmation, operator payout
+[PASS] 13 seller bulk upload goes to review; operator approves
+[PASS] 14 banners and broadcast notifications (admin)
+[PASS] 15 customs: PCCC format, FX, duty estimate, cross-border order invoice
+[PASS] 16 carriers list, owner tracking, signed carrier milestone webhook
+[PASS] 17 partner KYB verification, control tower, FDS evaluation
+[PASS] 18 payment configuration reports the simulator honestly
+[PASS] 19 media upload (seller) and download
+[PASS] 20 SMS/AlimTalk dispatch logs honest status without provider
+[PASS] 21 late-delivery compensation only when actually late, once
+[PASS] 22 verified-purchase review with body metrics; measured sales stats
+[PASS] 23 sample QC request (seller) and inspection (operator)
+[PASS] 24 IPR report recorded for review (product not auto-hidden)
+[PASS] 25 public business disclosure (전자상거래법 사업자 정보 표시)
+[PASS] 26 reconciliation is clean after the full journey
+
+=== OLMOA Functional E2E (V3 contract): 26/26 passed, 0 failed ===

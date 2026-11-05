@@ -1,0 +1,16 @@
+Real Workers runtime (wrangler dev --local, workerd + local D1), 2026-11-05T01:46:44Z. Migrations d1_01..d1_25 + dev seed applied via scripts/local-db-reset.mjs without error.
+PASS health: {"auth_configured":true,"operator_entity_active":true,"payment":"LOCAL_SIMULATOR","email_delivery":"NOT_INTEGRATED","carrier_tracking_api":"NOT_INTEGRATED","supplier_order_api":"NOT_INTEGRATED"}
+PASS admin login (admin_role from d1_24): admin_role=SUPER_ADMIN
+PASS reconciliation R01–R21 on workerd D1 (json_each etc.): checks=22 failing=none
+PASS reconciliation run recorded: 
+PASS TOTP setup (WebCrypto AES-GCM on workerd): 
+PASS seller application (d1_23): {"success":true,"message":"입점 신청서가 저장되었습니다. 서류를 올리고 심사를 요청해 주세요.","data":{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+PASS private KYB upload: 
+PASS KYB file hidden from anonymous: status=404
+PASS withdrawal precheck (d1_22): 
+PASS data export: 
+PASS create CS operator: {"success":true,"data":{"id":"usr_12dcc54a96a44e77bb45558ae9fe9a89","email":"cs205241@olmoa.test","a
+PASS CS denied finance: 
+PASS CS allowed orders: 
+
+RUNTIME SMOKE: 13 passed, 0 failed

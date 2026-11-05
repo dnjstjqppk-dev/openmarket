@@ -5,12 +5,16 @@ import { requireAuth, requireCustomer, authenticate } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { grantCreditStatements } from '../lib/ledger.js';
+import { REASON_CODES, faultOf, partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 import {
   createOrder, cancelOrder, cancelSubOrder, confirmPurchase, loadOrderBundle, mapDbError, autoConfirmDelivered, expireStaleOrders
 } from '../services/orders.js';
 
 export const RETURN_WINDOW_DAYS_DEFAULT = 7;
 const PRICE_ADJUST_WINDOW_DAYS = 30;
+
+// A claim blocks new claims until it is finished; an exchange is finished once the replacement has shipped.
+export const OPEN_CLAIM_SQL = "SELECT COUNT(*) c FROM returns WHERE sub_order_id = ? AND (status = 'REQUESTED' OR (status = 'APPROVED' AND COALESCE(exchange_status, '') != 'RESHIPPED'))";
 
 function presentOrder(b) {
   const { order, subs, items } = b;
@@ -20,6 +24,9 @@ function presentOrder(b) {
     coupon_discount_allocated: s.coupon_discount_allocated, carrier_code: s.carrier_code, tracking_number: s.tracking_number,
     shipped_at: s.shipped_at, delivered_at: s.delivered_at, purchase_confirmed_at: s.purchase_confirmed_at,
     estimated_delivery_date: s.estimated_delivery_date, is_late_compensated: s.is_late_compensated,
+    // Shown before a return is requested (단순변심 반품 시 차감되는 편도 배송비)
+    return_shipping_fee: s.partner_return_fee ?? s.partner_base_fee ?? null,
+    outbound_shipping_fee_basis: s.partner_base_fee ?? null, // added to the fee when a free-shipping order is fully returned for a customer reason
     items: items.filter((i) => i.sub_order_id === s.id)
   }));
   return {
@@ -108,8 +115,11 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
   const subCancel = action.match(/^sub-orders\/([^/]+)\/cancel$/);
   if (subCancel && request.method === 'POST') {
     const me = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
-    const r = await cancelSubOrder(env, me, ordId, decodeURIComponent(subCancel[1]), { isAdmin: me.role === 'ROLE_ADMIN' });
-    return json(corsHeaders, { success: true, status: r.status, refund: r.refund, warnings: r.warnings || [] });
+    const body = await readJson(request).catch(() => ({}));
+    const lines = Array.isArray(body.items) ? body.items : null;
+    const idem = request.headers.get('X-Idempotency-Key');
+    const r = await cancelSubOrder(env, me, ordId, decodeURIComponent(subCancel[1]), { isAdmin: me.role === 'ROLE_ADMIN', lines, idemKey: idem && /^[A-Za-z0-9_-]{8,80}$/.test(idem) ? idem : null });
+    return json(corsHeaders, { success: true, status: r.status, refund: r.refund, partial: Boolean(r.partial), replay: Boolean(r.replay), warnings: r.warnings || [] });
   }
 
   if (action === 'confirm' && request.method === 'POST') {
@@ -200,15 +210,46 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       if (!it || !Number.isSafeInteger(l.quantity) || l.quantity < 1 || l.quantity > it.quantity - it.refunded_quantity) throw bad('INVALID_ITEMS', '반품 수량이 올바르지 않습니다.');
       estimate += Math.floor(((it.pg_alloc + it.credit_alloc) * l.quantity) / it.quantity);
     }
-    const open = await env.DB.prepare("SELECT COUNT(*) c FROM returns WHERE sub_order_id = ? AND status IN ('REQUESTED','APPROVED')").bind(sub.id).first('c');
+    const open = await env.DB.prepare(OPEN_CLAIM_SQL).bind(sub.id).first('c');
     if (open > 0) throw conflict('CLAIM_ALREADY_OPEN', '이미 처리 중인 반품/교환 신청이 있습니다.');
+    // O14: the reason decides who pays the return courier; legacy clients without a code leave it to the seller.
+    const reasonCode = body.reason_code ? String(body.reason_code).toUpperCase() : null;
+    if (reasonCode && !REASON_CODES.includes(reasonCode)) throw bad('INVALID_REASON_CODE', `reason_code 는 ${REASON_CODES.join(', ')} 중 하나여야 합니다.`);
+    const fault = faultOf(reasonCode);
+    let exchangeItems = null;
+    if (type === 'EXCHANGE') {
+      exchangeItems = [];
+      for (const l of lines) {
+        const it = subItems.find((i) => i.id === l.order_item_id);
+        const wanted = (Array.isArray(body.items) ? body.items.find((x) => String(x.order_item_id) === it.id) : null)?.exchange_sku_id;
+        const toSku = String(wanted || it.sku_id);
+        if (toSku !== it.sku_id) {
+          const [from, to] = await Promise.all([
+            env.DB.prepare('SELECT product_id, sale_price FROM product_skus WHERE id = ?').bind(it.sku_id).first(),
+            env.DB.prepare('SELECT product_id, sale_price, stock_quantity FROM product_skus WHERE id = ?').bind(toSku).first()
+          ]);
+          if (!to || !from || to.product_id !== from.product_id) throw bad('EXCHANGE_OTHER_PRODUCT', '같은 상품의 다른 옵션으로만 교환할 수 있습니다. 다른 상품은 반품 후 새로 주문해 주세요.');
+          if (to.sale_price !== from.sale_price) throw conflict('EXCHANGE_PRICE_DIFFERS', '가격이 다른 옵션으로는 교환할 수 없습니다. 반품 후 새로 주문해 주세요.');
+          if (to.stock_quantity < l.quantity) throw conflict('EXCHANGE_OUT_OF_STOCK', '교환할 옵션의 재고가 부족합니다.');
+        }
+        exchangeItems.push({ order_item_id: it.id, quantity: l.quantity, from_sku_id: it.sku_id, to_sku_id: toSku });
+      }
+    }
+    const fees = await partnerReturnFees(env, sub.partner_id);
+    const feeEstimate = type === 'RETURN' ? Math.min(estimate, returnFeeFor({ fault, returnless: false, fullReturn: isFullReturn(subItems, lines), subShippingFee: sub.shipping_fee, fees })) : 0;
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, items_json, status, refund_amount, notes)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, JSON.stringify(lines), type === 'RETURN' ? estimate : 0, str(body.notes, { max: 500 }) || null),
+      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, reason_code, fault, items_json, exchange_items_json, status, refund_amount, notes)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, reasonCode, fault, JSON.stringify(lines),
+        exchangeItems ? JSON.stringify(exchangeItems) : null, type === 'RETURN' ? estimate - feeEstimate : 0, str(body.notes, { max: 500 }) || null),
       env.DB.prepare("UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'DELIVERED'").bind(sub.id)
     ]);
-    const data = { claim_id: claimId, claim_type: type, status: 'REQUESTED', estimated_refund_amount: type === 'RETURN' ? estimate : 0 };
-    return json(corsHeaders, { success: true, ...data, data, message: '반품/교환 신청이 접수되었습니다. 판매자 확인 후 환불이 진행됩니다.' }, 201);
+    const data = {
+      claim_id: claimId, claim_type: type, status: 'REQUESTED', reason_code: reasonCode, fault,
+      estimated_refund_amount: type === 'RETURN' ? estimate - feeEstimate : 0, estimated_return_fee: feeEstimate,
+      exchange_items: exchangeItems,
+      ...(type === 'EXCHANGE' && fault === 'CUSTOMER' ? { customer_shipping_note: `단순변심 교환은 왕복 배송비 ${(fees.oneWay * 2).toLocaleString('ko-KR')}원을 판매자 안내에 따라 별도로 부담합니다.` } : {})
+    };
+    return json(corsHeaders, { success: true, ...data, data, message: '반품/교환 신청이 접수되었습니다. 판매자 확인 후 처리됩니다.' }, 201);
   }
 
   return null;

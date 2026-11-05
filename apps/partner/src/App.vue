@@ -7,7 +7,7 @@ const router = useRouter();
 const route = useRoute();
 const mobileMenuOpen = ref(false);
 
-const isLoginPage = computed(() => route.path === '/login');
+const isLoginPage = computed(() => ['/login', '/apply', '/application'].includes(route.path));
 const partnerName = computed(() => (route.path, getPartnerName()));
 
 function handleLogout() {

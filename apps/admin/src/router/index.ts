@@ -13,6 +13,8 @@ import UsersView from '../views/UsersView.vue';
 import BusinessEntitiesView from '../views/BusinessEntitiesView.vue';
 import SuppliersView from '../views/SuppliersView.vue';
 import ReconciliationView from '../views/ReconciliationView.vue';
+import PartnerApplicationsView from '../views/PartnerApplicationsView.vue';
+import SecurityView from '../views/SecurityView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView },
@@ -28,7 +30,9 @@ const routes = [
   { path: '/marketing', name: 'marketing', component: MarketingView },
   { path: '/business', name: 'business', component: BusinessEntitiesView },
   { path: '/suppliers', name: 'suppliers', component: SuppliersView },
-  { path: '/reconciliation', name: 'reconciliation', component: ReconciliationView }
+  { path: '/reconciliation', name: 'reconciliation', component: ReconciliationView },
+  { path: '/partner-applications', name: 'partner-applications', component: PartnerApplicationsView },
+  { path: '/security', name: 'security', component: SecurityView }
 ];
 
 const router = createRouter({

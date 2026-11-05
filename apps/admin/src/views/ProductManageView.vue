@@ -12,6 +12,7 @@ interface AdminProduct {
   status: 'ACTIVE' | 'HIDDEN' | 'DELETED';
   sku_count: number;
   total_stock: number;
+  review_status?: string;
   created_at: string;
 }
 

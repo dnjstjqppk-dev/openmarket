@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { getAdminToken, clearAdminToken } from './config';
+import { getAdminToken, clearAdminToken, getAdminRole, ADMIN_ROLE_LABEL } from './config';
 
 const router = useRouter();
 const route = useRoute();
 const isLoggedIn = ref(false);
+const adminRole = ref('');
 const mobileMenuOpen = ref(false);
 
 const checkAuth = () => {
   isLoggedIn.value = !!getAdminToken() && route.path !== '/login';
+  adminRole.value = getAdminRole();
 };
 
 const handleLogout = () => {
@@ -39,7 +41,7 @@ onMounted(() => {
               <span class="text-orange-500">O</span>LMOA <span class="text-orange-400 text-xs font-bold">ADMIN</span>
             </span>
             <span class="hidden sm:inline-block bg-indigo-900 text-indigo-200 border border-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded">
-              ROLE_SUPER_ADMIN
+              {{ ADMIN_ROLE_LABEL[adminRole] || '운영자' }}
             </span>
           </div>
         </div>
@@ -73,9 +75,11 @@ onMounted(() => {
           <router-link to="/ledger" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             에스크로 원장
           </router-link>
+          <router-link to="/partner-applications" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">입점 심사</router-link>
           <router-link to="/business" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">운영 사업자</router-link>
           <router-link to="/suppliers" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">공급사·발주</router-link>
           <router-link to="/reconciliation" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">데이터 대사</router-link>
+          <router-link to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
           <router-link to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             마케팅·배너
           </router-link>
@@ -110,9 +114,11 @@ onMounted(() => {
         <router-link to="/ledger" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           에스크로 원장
         </router-link>
+        <router-link to="/partner-applications" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">입점 심사</router-link>
         <router-link to="/business" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">운영 사업자</router-link>
         <router-link to="/suppliers" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">공급사·발주</router-link>
         <router-link to="/reconciliation" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">데이터 대사</router-link>
+        <router-link to="/security" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">계정 보안</router-link>
         <router-link to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           마케팅·배너 & 알림 센터
         </router-link>

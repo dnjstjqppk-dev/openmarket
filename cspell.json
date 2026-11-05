@@ -112,7 +112,11 @@
     "Incoterms",
     "AMOLED",
     "PFOA",
-    "HEPA"
+    "HEPA",
+    "precheck",
+    "pseudonymises",
+    "pseudonymised",
+    "journalled"
   ],
   "ignorePaths": [
     "**/node_modules/**",

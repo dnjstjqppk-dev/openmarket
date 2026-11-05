@@ -158,6 +158,68 @@ const handleLogout = () => {
   }
 }
 
+// 개인정보 열람 · 회원 탈퇴
+const exporting = ref(false)
+const withdrawOpen = ref(false)
+const precheck = ref<any>(null)
+const forfeitCredit = ref(false)
+const withdrawConfirm = ref(false)
+const withdrawPassword = ref('')
+const withdrawError = ref('')
+const withdrawing = ref(false)
+const retentionYears = 5
+
+const downloadMyData = async () => {
+  exporting.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/privacy/export`, { headers: { ...authHeader() } })
+    const json = await res.json()
+    if (!json.success) throw new Error(json.error || '내려받기에 실패했습니다.')
+    const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `olmoa-my-data-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  } catch (e: any) {
+    errorMsg.value = e.message || '네트워크 오류'
+  } finally {
+    exporting.value = false
+  }
+}
+
+const openWithdraw = async () => {
+  withdrawOpen.value = true
+  withdrawError.value = ''
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/withdraw/precheck`, { headers: { ...authHeader() } })
+  const json = await res.json().catch(() => ({}))
+  precheck.value = json.success ? json.data : { can_withdraw: false, blockers: [{ code: 'ERROR', count: 0, message: json.error || '탈퇴 가능 여부를 확인하지 못했습니다.' }] }
+}
+
+const submitWithdraw = async () => {
+  withdrawing.value = true
+  withdrawError.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ password: withdrawPassword.value, confirm: withdrawConfirm.value, acknowledge_credit_forfeit: forfeitCredit.value })
+    })
+    const json = await res.json()
+    if (!json.success) {
+      withdrawError.value = json.error || '탈퇴 처리에 실패했습니다.'
+      return
+    }
+    alert(json.message || '회원 탈퇴가 완료되었습니다.')
+    auth.logout()
+    router.push('/')
+  } catch (e: any) {
+    withdrawError.value = e.message || '네트워크 오류'
+  } finally {
+    withdrawing.value = false
+  }
+}
+
 const formatDate = (dStr?: string) => {
   if (!dStr) return '2026.01.01'
   const d = new Date(dStr)
@@ -194,9 +256,6 @@ onMounted(() => {
           <div>
             <div class="flex items-center gap-2 mb-1">
               <h1 class="text-xl sm:text-2xl font-black tracking-tight">{{ userInfo.full_name || auth.user?.name || '구매 고객' }}</h1>
-              <span class="px-2.5 py-0.5 rounded-full bg-amber-400 text-black text-[10px] font-black uppercase">
-                VIP 등급
-              </span>
             </div>
             <p class="text-xs text-gray-300 font-mono">{{ userInfo.email || 'customer@olmoa.com' }}</p>
             <p class="text-[11px] text-gray-400 mt-1">가입일: {{ formatDate(userInfo.created_at) }}</p>
@@ -368,7 +427,7 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">새 비밀번호 (6자 이상)</label>
+            <label class="block font-bold text-gray-700 mb-1">새 비밀번호 (10자 이상, 영문 대/소문자·숫자·특수문자 중 3종류)</label>
             <input
               v-model="newPassword"
               type="password"
@@ -399,6 +458,49 @@ onMounted(() => {
         </form>
       </div>
     </div>
+
+    <!-- 개인정보 열람 · 회원 탈퇴 (O10) -->
+    <section class="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs space-y-4 text-xs" data-testid="privacy-section">
+      <h2 class="font-black text-gray-900 text-sm border-b pb-3">개인정보 열람 · 회원 탈퇴</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-gray-600">올모아가 보관 중인 내 개인정보(회원정보·배송지·주문·적립금·문의)를 파일로 내려받습니다.</p>
+        <button type="button" :disabled="exporting" class="h-10 px-4 rounded-xl border border-gray-300 font-bold hover:border-gray-900 disabled:opacity-50" @click="downloadMyData">
+          {{ exporting ? '준비 중...' : '내 정보 내려받기 (JSON)' }}
+        </button>
+      </div>
+
+      <div class="pt-4 border-t border-gray-100 space-y-3">
+        <button v-if="!withdrawOpen" type="button" class="text-gray-500 underline" @click="openWithdraw">회원 탈퇴</button>
+        <div v-else class="space-y-3" data-testid="withdraw-panel">
+          <ul class="list-disc pl-5 text-gray-600 space-y-1">
+            <li>회원정보(이름·이메일·휴대폰), 배송지, 찜, 알림은 즉시 삭제되며 복구할 수 없습니다.</li>
+            <li>주문·결제·환불 기록은 전자상거래법에 따라 {{ retentionYears }}년간 보관한 뒤 수령인 정보를 파기합니다.</li>
+            <li>작성한 상품 후기와 문의는 남지만 작성자는 '탈퇴회원'으로 표시됩니다.</li>
+            <li>같은 이메일로 다시 가입할 수 있지만, 이전 주문 내역·적립금은 이어지지 않습니다.</li>
+          </ul>
+          <div v-if="precheck && !precheck.can_withdraw" class="p-3 rounded-xl bg-amber-50 text-amber-900 font-bold" role="alert">
+            <p v-for="b in precheck.blockers" :key="b.code">{{ b.message }} ({{ b.count }}건)</p>
+          </div>
+          <template v-else-if="precheck">
+            <label v-if="precheck.credit_balance > 0" class="flex items-start gap-2">
+              <input v-model="forfeitCredit" type="checkbox" class="mt-0.5" />
+              <span>남은 적립금 <b>{{ precheck.credit_balance.toLocaleString('ko-KR') }}원</b>이 탈퇴와 함께 소멸되는 것에 동의합니다.</span>
+            </label>
+            <label class="flex items-start gap-2"><input v-model="withdrawConfirm" type="checkbox" class="mt-0.5" /><span>위 내용을 확인했으며 탈퇴합니다.</span></label>
+            <input v-model="withdrawPassword" type="password" autocomplete="current-password" placeholder="본인 확인을 위해 비밀번호 입력"
+              class="w-full sm:w-80 h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]" />
+            <p v-if="withdrawError" class="text-rose-600 font-bold" role="alert">{{ withdrawError }}</p>
+            <div class="flex gap-2">
+              <button type="button" class="h-10 px-4 rounded-xl border border-gray-300 font-bold" @click="withdrawOpen = false">취소</button>
+              <button type="button" :disabled="withdrawing || !withdrawConfirm || !withdrawPassword || (precheck.credit_balance > 0 && !forfeitCredit)"
+                class="h-10 px-4 rounded-xl bg-rose-600 text-white font-black disabled:opacity-40" @click="submitWithdraw">
+                {{ withdrawing ? '처리 중...' : '회원 탈퇴' }}
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
