@@ -1,0 +1,3 @@
+# after d1_31 2026-11-05T12:44:38Z
+{"paid_without_payment":0,"audit_rows":17,"ledger_rows":15,"units_restocked":21,"open_settlements":6,"paid_orders":0,"sold_total":0,"reviews":0,"order_statuses":"CANCELLED"}
+api store pt_001: {"product_count":56,"total_sold":0,"avg_rating":4.9}

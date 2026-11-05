@@ -59,3 +59,6 @@ backups/
 # local-API builds for browser smoke (tests/browser/route_smoke.mjs)
 apps/*/dist-local/
 reports/v4/phase2/**/*.png
+
+# production row dumps (may contain personal data) - keep local, never commit
+.ops-backups/

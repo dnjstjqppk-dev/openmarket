@@ -1,0 +1,60 @@
+[
+  {
+    "results": [
+      {
+        "name": "trg_admin_audit_no_delete",
+        "sql": "CREATE TRIGGER trg_admin_audit_no_delete BEFORE DELETE ON admin_audit_log BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_LEDGER'); END"
+      },
+      {
+        "name": "trg_admin_audit_no_update",
+        "sql": "CREATE TRIGGER trg_admin_audit_no_update BEFORE UPDATE ON admin_audit_log BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_LEDGER'); END"
+      },
+      {
+        "name": "trg_inventory_ledger_no_delete",
+        "sql": "CREATE TRIGGER trg_inventory_ledger_no_delete BEFORE DELETE ON inventory_ledger BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_LEDGER'); END"
+      },
+      {
+        "name": "trg_inventory_ledger_no_update",
+        "sql": "CREATE TRIGGER trg_inventory_ledger_no_update BEFORE UPDATE ON inventory_ledger BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_LEDGER'); END"
+      },
+      {
+        "name": "trg_orders_entity_frozen",
+        "sql": "CREATE TRIGGER trg_orders_entity_frozen\r\nBEFORE UPDATE OF operator_entity_id ON orders\r\nWHEN OLD.operator_entity_id IS NOT NULL AND (NEW.operator_entity_id IS NULL OR NEW.operator_entity_id != OLD.operator_entity_id)\r\nBEGIN SELECT RAISE(ABORT, 'ENTITY_ATTRIBUTION_IMMUTABLE'); END"
+      },
+      {
+        "name": "trg_orders_payment_transition",
+        "sql": "CREATE TRIGGER trg_orders_payment_transition\r\nBEFORE UPDATE OF payment_status ON orders\r\nWHEN NOT (\r\n       (OLD.payment_status = 'READY' AND NEW.payment_status IN ('PAID', 'FAILED', 'EXPIRED', 'CANCELLED'))\r\n    OR (OLD.payment_status = 'PAID' AND NEW.payment_status IN ('PARTIAL_REFUNDED', 'REFUNDED', 'CANCELLED'))\r\n    OR (OLD.payment_status = 'PARTIAL_REFUNDED' AND NEW.payment_status IN ('PARTIAL_REFUNDED', 'REFUNDED', 'CANCELLED'))\r\n    OR (OLD.payment_status = 'DELIVERED' AND NEW.payment_status IN ('PARTIAL_REFUNDED', 'REFUNDED'))\r\n)\r\nBEGIN SELECT RAISE(ABORT, 'ILLEGAL_PAYMENT_TRANSITION'); END"
+      },
+      {
+        "name": "trg_settlements_entity_frozen",
+        "sql": "CREATE TRIGGER trg_settlements_entity_frozen\r\nBEFORE UPDATE OF operator_entity_id ON settlements\r\nWHEN OLD.operator_entity_id IS NOT NULL AND (NEW.operator_entity_id IS NULL OR NEW.operator_entity_id != OLD.operator_entity_id)\r\nBEGIN SELECT RAISE(ABORT, 'ENTITY_ATTRIBUTION_IMMUTABLE'); END"
+      },
+      {
+        "name": "trg_sku_stock_nonnegative",
+        "sql": "CREATE TRIGGER trg_sku_stock_nonnegative\r\nBEFORE UPDATE OF stock_quantity ON product_skus\r\nWHEN NEW.stock_quantity < 0\r\nBEGIN SELECT RAISE(ABORT, 'STOCK_INSUFFICIENT'); END"
+      },
+      {
+        "name": "trg_sub_orders_shipping_refund_once",
+        "sql": "CREATE TRIGGER trg_sub_orders_shipping_refund_once\r\nBEFORE UPDATE OF shipping_refunded ON sub_orders\r\nWHEN OLD.shipping_refunded = 1 AND NEW.shipping_refunded = 1\r\nBEGIN SELECT RAISE(ABORT, 'SHIPPING_ALREADY_REFUNDED'); END"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "ICN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2515
+      },
+      "duration": 0.2515,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 1400832,
+      "rows_read": 309,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

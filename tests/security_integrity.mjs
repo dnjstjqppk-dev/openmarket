@@ -1280,6 +1280,47 @@ await t.test('I58 review rating must be chosen by the buyer (no default 5); summ
   assert.equal(after.json.review_count, 1);
 });
 
+await t.test('I59 d1_31 voids orders marked PAID without payment: stock, ledger, settlements, audit; real orders untouched; idempotent', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { MIGRATIONS_DIR } = await import('./lib/harness.mjs');
+  const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, 'd1_31_void_unpaid_orders_marked_paid.sql'), 'utf8');
+  const sku = I.one("SELECT s.id, s.product_id FROM product_skus s JOIN products p ON p.id = s.product_id WHERE p.partner_id = 'pt_002' AND s.stock_quantity > 20 ORDER BY s.id LIMIT 1 OFFSET 2");
+  const real = (await I.checkout(c1, [{ sku_id: sku.id, quantity: 1 }])).json;
+  assert.equal((await I.pay(c1, real)).status, 200);
+  const stockBefore = I.stock(sku.id);
+  // what the pre-V3 checkout left behind: PAID with no paid_at / payment_key / transaction, settlements PENDING
+  const fakes = [];
+  for (const qty of [2, 3]) {
+    const o = (await I.checkout(c1, [{ sku_id: sku.id, quantity: qty }])).json;
+    I.db.prepare("UPDATE orders SET payment_status = 'PAID', paid_at = NULL, payment_key = NULL WHERE id = ?").run(o.order_id);
+    I.db.prepare("UPDATE sub_orders SET status = 'PAYMENT_CONFIRMED' WHERE parent_order_id = ?").run(o.order_id);
+    I.db.prepare("UPDATE settlements SET status = 'PENDING' WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").run(o.order_id);
+    fakes.push(o.order_id);
+  }
+  assert.equal(I.stock(sku.id), stockBefore - 5);
+  const realBefore = I.one('SELECT payment_status, paid_at, payment_key FROM orders WHERE id = ?', real.order_id);
+
+  I.db.exec(sql);
+
+  for (const id of fakes) {
+    assert.equal(I.one('SELECT payment_status FROM orders WHERE id = ?', id).payment_status, 'CANCELLED');
+    assert.deepEqual(I.q('SELECT DISTINCT status FROM sub_orders WHERE parent_order_id = ?', id).map((r) => r.status), ['CANCELLED']);
+    assert.deepEqual(I.q('SELECT DISTINCT st.status FROM settlements st JOIN sub_orders s ON s.id = st.sub_order_id WHERE s.parent_order_id = ?', id).map((r) => r.status), ['CANCELLED']);
+    assert.equal(I.one("SELECT COUNT(*) c FROM inventory_ledger WHERE reference_id = ? AND change_type = 'ORDER_CANCEL'", id).c, 1);
+    assert.equal(I.one("SELECT COUNT(*) c FROM admin_audit_log WHERE target_id = ? AND action = 'ORDER_VOID_NO_PAYMENT'", id).c, 1);
+  }
+  assert.equal(I.stock(sku.id), stockBefore, 'exactly the deducted stock comes back');
+  assert.deepEqual(I.one('SELECT payment_status, paid_at, payment_key FROM orders WHERE id = ?', real.order_id), realBefore, 'real paid order untouched');
+  const ledgerSold = I.one("SELECT -SUM(l.quantity_delta) q FROM inventory_ledger l JOIN product_skus s ON s.id = l.sku_id WHERE s.product_id = ? AND l.change_type IN ('PURCHASE_DEDUCT','ORDER_CANCEL','RETURN_RESTOCK')", sku.product_id).q;
+  assert.equal(I.one('SELECT total_sold_count c FROM products WHERE id = ?', sku.product_id).c, Math.max(0, ledgerSold));
+
+  const snap = () => JSON.stringify([I.stock(sku.id), I.one('SELECT COUNT(*) c FROM inventory_ledger').c, I.one('SELECT COUNT(*) c FROM admin_audit_log').c, I.q('SELECT id, status FROM settlements ORDER BY id')]);
+  const s1 = snap();
+  I.db.exec(sql);
+  assert.equal(snap(), s1, 'second run changes nothing');
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R21)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);
