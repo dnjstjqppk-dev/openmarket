@@ -49,6 +49,8 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       JSON.stringify(preview)
     ).run();
 
+    preview.job_id = jobId;
+
     return json(corsHeaders, {
       success: true,
       job_id: jobId,
@@ -56,9 +58,29 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     }, 201);
   }
 
-  // 2. Get Import Job Details (GET /api/v1/imports/:id)
+  // 2. Partner Import Jobs List (GET /api/v1/imports/jobs) - Placed before /:id to prevent route collision
+  if (p === '/api/v1/imports/jobs' && request.method === 'GET') {
+    const caller = await requireApprovedPartner(request, env);
+    const { results } = await env.DB.prepare(`
+      SELECT j.id, j.source_url, j.domain, j.status, j.quality_score, j.published_product_id, j.created_at,
+             p.title as published_title
+      FROM product_import_jobs j
+      LEFT JOIN products p ON p.id = j.published_product_id
+      WHERE j.partner_id = ?
+      ORDER BY j.created_at DESC
+      LIMIT 50
+    `).bind(caller.partner.id).all();
+
+    return json(corsHeaders, {
+      success: true,
+      count: results.length,
+      data: results
+    });
+  }
+
+  // 3. Get Import Job Details (GET /api/v1/imports/:id)
   const jobM = p.match(/^\/api\/v1\/imports\/([^/]+)$/);
-  if (jobM && request.method === 'GET') {
+  if (jobM && jobM[1] !== 'jobs' && request.method === 'GET') {
     const caller = await requireApprovedPartner(request, env);
     const job = await env.DB.prepare(`
       SELECT * FROM product_import_jobs WHERE id = ? AND partner_id = ?
@@ -180,26 +202,6 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       product_id: prodId,
       sku_count: variants.length,
       message: '상품이 카탈로그에 공식 판매 등록되었습니다.'
-    });
-  }
-
-  // 4. Partner Import Jobs List (GET /api/v1/imports/jobs)
-  if (p === '/api/v1/imports/jobs' && request.method === 'GET') {
-    const caller = await requireApprovedPartner(request, env);
-    const { results } = await env.DB.prepare(`
-      SELECT j.id, j.source_url, j.domain, j.status, j.quality_score, j.published_product_id, j.created_at,
-             p.title as published_title
-      FROM product_import_jobs j
-      LEFT JOIN products p ON p.id = j.published_product_id
-      WHERE j.partner_id = ?
-      ORDER BY j.created_at DESC
-      LIMIT 50
-    `).bind(caller.partner.id).all();
-
-    return json(corsHeaders, {
-      success: true,
-      count: results.length,
-      data: results
     });
   }
 
