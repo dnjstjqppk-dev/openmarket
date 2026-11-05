@@ -1354,6 +1354,26 @@ await t.test('I60 R22/R23 detect PAID-without-payment and payable settlements on
   assert.equal(I.one('SELECT COUNT(*) c FROM admin_audit_log').c, audits, 'second run changes nothing');
 });
 
+await t.test('I61 /fx/rates reports only the operator table with its real timestamps (no invented feed or fallback rates)', async () => {
+  const r = await I.call('/api/v1/fx/rates');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.source, 'OPERATOR_TABLE');
+  assert.ok(!/Bank of Korea|ECB|Synchron/i.test(r.text), 'no claimed external source');
+  const row = I.one("SELECT inverse_rate, updated_at FROM exchange_rates WHERE base_currency = 'KRW' AND target_currency = 'USD'");
+  assert.equal(r.json.inverse_rates.USD, row.inverse_rate);
+  assert.equal(r.json.updated_at.USD, row.updated_at, 'timestamp is the row\'s, not the request time');
+  const saved = I.one("SELECT * FROM exchange_rates WHERE base_currency = 'KRW' AND target_currency = 'JPY'");
+  I.db.prepare("DELETE FROM exchange_rates WHERE base_currency = 'KRW' AND target_currency = 'JPY'").run();
+  try {
+    const r2 = await I.call('/api/v1/fx/rates');
+    assert.equal(r2.json.inverse_rates.JPY, undefined, 'a currency without a row is not published');
+    assert.ok(!r2.json.supported_currencies.includes('JPY'));
+  } finally {
+    I.db.prepare('INSERT INTO exchange_rates (base_currency, target_currency, rate, inverse_rate, spread_pct, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(saved.base_currency, saved.target_currency, saved.rate, saved.inverse_rate, saved.spread_pct, saved.updated_at);
+  }
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R23)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);

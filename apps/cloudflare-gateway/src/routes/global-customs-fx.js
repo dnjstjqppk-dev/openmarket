@@ -87,48 +87,35 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     }), { headers: corsHeaders });
   }
 
-  // 2. Real-Time Dynamic Exchange Rates (FX Engine)
+  // 2. Display exchange rates. There is no external FX feed: the only source is the operator-maintained
+  //    exchange_rates table, so the response says exactly that and carries each row's own updated_at.
+  //    Currencies without a row are simply absent (clients must not convert into them).
   if (url.pathname === '/api/v1/fx/rates' && request.method === 'GET') {
-    let dbRates = [];
-    if (env && env.DB) {
-      try {
-        const { results } = await env.DB.prepare('SELECT * FROM exchange_rates WHERE base_currency = ?').bind('KRW').all();
-        if (results && results.length > 0) dbRates = results;
-      } catch (_) {}
+    let rows = [];
+    try {
+      rows = (await env.DB.prepare('SELECT target_currency, rate, inverse_rate, spread_pct, updated_at FROM exchange_rates WHERE base_currency = ?').bind('KRW').all()).results || [];
+    } catch (_) { rows = []; }
+    const valid = rows.filter((r) => Number(r.rate) > 0 && Number(r.inverse_rate) > 0);
+    const rates = { KRW: 1 };
+    const inverseRates = {};
+    const updatedAt = {};
+    for (const r of valid) {
+      rates[r.target_currency] = Number(r.rate);
+      inverseRates[r.target_currency] = Number(r.inverse_rate);
+      updatedAt[r.target_currency] = r.updated_at;
     }
-
-    const rates = {
-      KRW: 1.0,
-      USD: 0.0007246, // ~1380 KRW / USD
-      JPY: 0.1111,    // ~9.0 KRW / JPY (100 JPY = 900 KRW)
-      EUR: 0.0006711, // ~1490 KRW / EUR
-      CNY: 0.005208   // ~192 KRW / CNY
-    };
-
-    const inverseRates = {
-      USD: 1380.0,
-      JPY: 9.0,
-      EUR: 1490.0,
-      CNY: 192.0
-    };
-
-    if (dbRates.length > 0) {
-      for (const r of dbRates) {
-        rates[r.target_currency] = Number(r.rate);
-        inverseRates[r.target_currency] = Number(r.inverse_rate);
-      }
-    }
+    const oldest = valid.map((r) => r.updated_at).sort()[0] || null;
 
     return new Response(JSON.stringify({
       success: true,
-      brand: 'OLMOA Global FX Engine',
       base_currency: 'KRW',
-      supported_currencies: ['KRW', 'USD', 'JPY', 'EUR', 'CNY'],
+      supported_currencies: ['KRW', ...valid.map((r) => r.target_currency)],
       rates,
       inverse_rates: inverseRates,
-      spread_margin_pct: 1.2,
-      last_updated: new Date().toISOString(),
-      source: 'Bank of Korea / ECB Edge Synchronizer'
+      updated_at: updatedAt,
+      last_updated: oldest,
+      source: 'OPERATOR_TABLE',
+      source_note: '운영자가 입력한 참고 환율입니다. 실시간 시세가 아니며 결제는 원화(KRW)로 진행됩니다.'
     }), {
       headers: {
         ...corsHeaders,

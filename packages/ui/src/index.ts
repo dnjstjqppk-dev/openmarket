@@ -34,12 +34,13 @@ import OmFileUploader from './components/OmFileUploader.vue'
 import OmSearchBar from './components/OmSearchBar.vue'
 import OmField from './components/OmField.vue'
 import OmSpinner from './components/OmSpinner.vue'
+import OmFooter from './components/OmFooter.vue'
 
 export {
   OmButton, OmIconButton, OmInput, OmTextarea, OmSelect, OmCheckbox, OmRadio, OmSwitch, OmModal, OmDrawer,
   OmDropdown, OmTooltip, OmPopover, OmTabs, OmBadge, OmAvatar, OmCard, OmDataTable, OmPagination, OmBreadcrumb,
   OmSidebar, OmHeader, OmNavigation, OmToast, OmAlert, OmSkeleton, OmEmptyState, OmErrorState, OmDatePicker,
-  OmFileUploader, OmSearchBar, OmField, OmSpinner
+  OmFileUploader, OmSearchBar, OmField, OmSpinner, OmFooter
 }
 
 /** The 31 components required by the PHASE 2 directive (OmField / OmSpinner are internal helpers). */
@@ -50,6 +51,9 @@ export const COMPONENT_CATALOG = [
   'OmFileUploader', 'OmSearchBar'
 ] as const
 
+export type { FooterColumn } from './components/OmFooter.vue'
+export type { NavItem } from './components/OmNavigation.vue'
+export type { DropdownItem } from './components/OmDropdown.vue'
 export { useToast, toastState } from './composables/useToast'
 export { useClickOutside } from './composables/useClickOutside'
 export { useOverlay } from './composables/useOverlay'
@@ -62,7 +66,7 @@ const all: Record<string, any> = {
   OmButton, OmIconButton, OmInput, OmTextarea, OmSelect, OmCheckbox, OmRadio, OmSwitch, OmModal, OmDrawer,
   OmDropdown, OmTooltip, OmPopover, OmTabs, OmBadge, OmAvatar, OmCard, OmDataTable, OmPagination, OmBreadcrumb,
   OmSidebar, OmHeader, OmNavigation, OmToast, OmAlert, OmSkeleton, OmEmptyState, OmErrorState, OmDatePicker,
-  OmFileUploader, OmSearchBar, OmField, OmSpinner
+  OmFileUploader, OmSearchBar, OmField, OmSpinner, OmFooter
 }
 export default {
   install(app: App) {

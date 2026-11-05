@@ -2,7 +2,7 @@
 // OLMOA Global Multi-Language (KO/EN/JA) & Multi-Currency (KRW/USD/JPY/EUR) Store
 
 import { defineStore } from 'pinia';
-import { ref, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { API_BASE_URL } from '../config';
 
 export type SupportedLocale = 'ko-KR' | 'en-US' | 'ja-JP';
@@ -72,12 +72,14 @@ const DICT: Record<SupportedLocale, Record<string, string>> = {
 export const useLocaleStore = defineStore('locale', () => {
   const locale = ref<SupportedLocale>('ko-KR');
   const currency = ref<SupportedCurrency>('KRW');
-  const fxRates = ref<Record<string, number>>({
-    USD: 1380,
-    JPY: 9.0,
-    EUR: 1490,
-    CNY: 192
-  });
+  // KRW per 1 unit of the currency, only as published by /fx/rates (operator table). No built-in numbers:
+  // a currency without a published rate is shown in KRW instead of a made-up conversion.
+  const fxRates = ref<Record<string, number>>({});
+  const fxUpdatedAt = ref<string | null>(null);
+  const fxNote = ref<string>('');
+  const availableCurrencies = computed<SupportedCurrency[]>(() =>
+    (['KRW', 'USD', 'JPY', 'EUR'] as SupportedCurrency[]).filter((c) => c === 'KRW' || fxRates.value[c] > 0)
+  );
 
   try {
     const savedLoc = localStorage.getItem('olmoa_locale') as SupportedLocale;
@@ -93,12 +95,11 @@ export const useLocaleStore = defineStore('locale', () => {
       if (res.ok) {
         const json = await res.json();
         if (json.inverse_rates) {
-          fxRates.value = {
-            USD: Number(json.inverse_rates.USD) || 1380,
-            JPY: Number(json.inverse_rates.JPY) || 9.0,
-            EUR: Number(json.inverse_rates.EUR) || 1490,
-            CNY: Number(json.inverse_rates.CNY) || 192
-          };
+          const next: Record<string, number> = {};
+          for (const [k, v] of Object.entries(json.inverse_rates)) if (Number(v) > 0) next[k] = Number(v);
+          fxRates.value = next;
+          fxUpdatedAt.value = json.last_updated || null;
+          fxNote.value = json.source_note || '';
         }
       }
     } catch (_) {}
@@ -123,19 +124,12 @@ export const useLocaleStore = defineStore('locale', () => {
   function formatPrice(amountKrw: number | undefined | null, targetCurrency?: SupportedCurrency): string {
     const val = Number(amountKrw) || 0;
     const cur = targetCurrency || currency.value;
-
-    if (cur === 'USD') {
-      const rate = fxRates.value.USD || 1380;
-      return '$' + (val / rate).toFixed(2);
-    }
-    if (cur === 'JPY') {
-      const rate = fxRates.value.JPY || 9.0;
-      return '¥' + Math.round(val / rate).toLocaleString();
-    }
-    if (cur === 'EUR') {
-      const rate = fxRates.value.EUR || 1490;
-      return '€' + (val / rate).toFixed(2);
-    }
+    const rate = fxRates.value[cur];
+    // no published rate (or rates not loaded yet): show the real KRW price rather than a guessed conversion
+    if (cur === 'KRW' || !(rate > 0)) return '₩' + Math.round(val).toLocaleString();
+    if (cur === 'USD') return '$' + (val / rate).toFixed(2);
+    if (cur === 'JPY') return '¥' + Math.round(val / rate).toLocaleString();
+    if (cur === 'EUR') return '€' + (val / rate).toFixed(2);
     return '₩' + Math.round(val).toLocaleString();
   }
 
@@ -143,6 +137,9 @@ export const useLocaleStore = defineStore('locale', () => {
     locale,
     currency,
     fxRates,
+    fxUpdatedAt,
+    fxNote,
+    availableCurrencies,
     setLocale,
     setCurrency,
     fetchFxRates,

@@ -18,6 +18,8 @@ const API = process.env.API_URL || 'https://olmoa-api.dnjstjqppk.workers.dev';
 const HOST = process.env.HOST || '127.0.0.1';
 const PORTS = (process.env.PORTS || '4183,4184,4185').split(',').map(Number);
 const DIST = process.env.DIST || 'dist';
+// ONLY=<regex> limits the run to matching "app:/route" keys, e.g. ONLY='^storefront:/(cart)?$'
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 // REMOTE=<storefront>,<admin>,<partner> opens already deployed sites instead of local vite previews (GET only).
 const REMOTE = process.env.REMOTE ? process.env.REMOTE.split(',') : null;
 if (REMOTE && process.env.LOGIN === '1') { console.error('LOGIN=1 is not allowed with REMOTE'); process.exit(2); }
@@ -74,6 +76,7 @@ try {
     if (LOGIN) console.log(`signed in to ${a.app} as ${LOGINS[a.app].email} → ${await signIn(page, a.base, a.app)}`);
     for (const s of inv[a.app].screens) {
       if (s.redirect || !s.view) continue;
+      if (ONLY && !ONLY.test(`${a.app}:${s.url}`)) continue;
       const url = `${a.base}${fill(s.url, a.app)}`;
       const row = { app: a.app, route: s.url, view: s.view, url };
       for (const vp of ['desktop', 'mobile']) {
