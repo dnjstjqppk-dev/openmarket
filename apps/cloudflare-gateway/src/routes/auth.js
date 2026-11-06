@@ -189,9 +189,11 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       // E-mail delivery provider is not integrated yet; the token is only exposed in local development.
       if (env.ENVIRONMENT === 'development') devToken = token;
     }
+    // No mail provider is integrated, so nothing is sent: say so instead of "안내가 발송됩니다" (a buyer would
+    // wait for a mail that never comes). Same answer for registered and unknown addresses (no enumeration).
     return json(corsHeaders, {
       success: true,
-      message: '가입된 이메일이라면 비밀번호 재설정 안내가 발송됩니다.',
+      message: '현재 이메일 발송 기능이 연동되어 있지 않아 재설정 안내 메일을 보내지 못합니다. 고객센터로 문의해 주세요.',
       email_delivery: 'NOT_INTEGRATED',
       ...(devToken ? { dev_reset_token: devToken } : {})
     });

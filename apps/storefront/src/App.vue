@@ -10,6 +10,7 @@ import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
 import { useCatalogStore } from './stores/catalog'
+import { useBusinessStore } from './stores/business'
 import { API_BASE_URL, PARTNER_CONSOLE_URL, authHeader } from './config'
 
 const cart = useCartStore()
@@ -78,8 +79,10 @@ function onSearchSubmit(q: string) {
 }
 
 // ---- business disclosure (전자상거래법 제10조) ----------------------------------------------------------
-const biz = ref<any>(null)
-const bizLoaded = ref(false)
+// Operator legal disclosure — shared store (password reset also shows the CS contact from it).
+const business = useBusinessStore()
+const biz = computed(() => business.info)
+const bizLoaded = computed(() => business.loaded)
 
 function logout() { auth.logout(); router.push('/') }
 
@@ -107,7 +110,7 @@ const hideBottomNav = computed(() => route.path.startsWith('/product/') || route
 
 onMounted(async () => {
   fetchNotifications()
-  fetch(`${API_BASE_URL}/api/v1/business-info`).then((r) => r.json()).then((j) => { biz.value = j && j.configured ? j.data : null }).catch(() => { biz.value = null }).finally(() => { bizLoaded.value = true })
+  business.load()
   // On failure the category bar still works; the menu just stays empty.
   await catalog.load()
   activeRoot.value = rootCategories.value[0] || null

@@ -90,6 +90,11 @@ await t.test('S08 password-reset token never returned outside development', asyn
   assert.equal(r.json.dev_reset_token, undefined);
   const stored = S.one('SELECT token FROM password_reset_tokens ORDER BY created_at DESC LIMIT 1');
   assert.match(stored.token, /^[0-9a-f]{64}$/, 'only the SHA-256 of the token is stored');
+  // No mail provider: the answer must not claim a mail was sent, and must not reveal whether the address exists.
+  assert.equal(r.json.email_delivery, 'NOT_INTEGRATED');
+  assert.ok(!/발송됩니다|발송되었습니다|sent/i.test(r.json.message), r.json.message);
+  const unknown = await S.call('/api/v1/auth/forgot-password', { method: 'POST', body: { email: 'nobody-here@example.com' } });
+  assert.equal(unknown.json.message, r.json.message, 'same answer for unknown e-mail');
 });
 await t.test('S09 tampered / foreign-key / alg=none JWTs rejected', async () => {
   const [h, , sig] = cust.split('.');
