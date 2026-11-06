@@ -36,6 +36,15 @@ async function shots(page, name, views = ['desktop', 'mobile']) {
   return out;
 }
 
+// The product page makes the buyer choose every option (no pre-selected SKU); pick the first in-stock value
+// of each group, twice so groups that depend on an earlier choice are filled too.
+async function chooseOptions(page) {
+  for (let i = 0; i < 2; i++) {
+    await page.eval(`(() => { for (const fs of document.querySelectorAll('fieldset')) { if (fs.querySelector('[aria-pressed=true]')) continue;
+      const b = [...fs.querySelectorAll('button')].find((x) => !x.disabled && !/품절/.test(x.textContent)); if (b) b.click(); } })()`);
+    await page.idle(200);
+  }
+}
 const api = async (p, init = {}) => (await fetch(`${API}${p}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } })).json();
 const mp = (await api('/api/v1/products?partner_id=pt_002&limit=5')).data[0];
 const direct = (await api('/api/v1/products?partner_id=pt_001&limit=5')).data[0];
@@ -59,12 +68,14 @@ await step('B02 protected route redirects anonymous users to login', page, async
 await step('B03 product detail (marketplace seller) and add to cart', page, async () => {
   await page.goto(`${STORE}/product/${mp.id}`, { waitFor: "[...document.querySelectorAll('button')].some(b => /장바구니|Cart/i.test(b.textContent))" });
   await shots(page, 'store_product', ['desktop', 'mobile']);
-  await page.eval("[...document.querySelectorAll('button')].find(b => /장바구니|Add to Cart/i.test(b.textContent) && b.offsetParent).click()");
+  await chooseOptions(page);
+  await page.eval("[...document.querySelectorAll('button')].find(b => /장바구니 담기|Add to Cart/i.test(b.textContent) && b.offsetParent && !b.disabled).click()");
   await page.idle(500);
 });
 await step('B04 add a direct-sales (MODEL A) product -> mixed cart', page, async () => {
   await page.goto(`${STORE}/product/${direct.id}`, { waitFor: "[...document.querySelectorAll('button')].some(b => /장바구니|Cart/i.test(b.textContent))" });
-  await page.eval("[...document.querySelectorAll('button')].find(b => /장바구니|Add to Cart/i.test(b.textContent) && b.offsetParent).click()");
+  await chooseOptions(page);
+  await page.eval("[...document.querySelectorAll('button')].find(b => /장바구니 담기|Add to Cart/i.test(b.textContent) && b.offsetParent && !b.disabled).click()");
   await page.idle(500);
   const n = await page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
   if (n < 2) throw new Error(`cart has ${n} items`);

@@ -1,5 +1,11 @@
 // apps/storefront/src/stores/cart.ts
-// OLMOA Cart Store: Real SKU Binding, Stock Ceilings, Partner-Grouped Split Shipping Calculation
+// Buyer cart (browser-local). Lines are real SKUs; the server re-prices and re-checks stock at quote/checkout.
+//  - selection: every line is selected by default; only selected lines go to checkout ("선택 상품 주문").
+//    The unselected set is persisted so a reload keeps the buyer's choice.
+//  - after payment only the lines that were in that order are removed (markPending / completeCheckout),
+//    not the whole cart.
+//  - applyServerPrices: when the server quote reports a different sale price than the one saved when the line
+//    was added, the saved price is updated so the cart's estimate matches what checkout will charge.
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
@@ -34,134 +40,132 @@ export interface PartnerCartGroup {
 }
 
 const STORAGE_KEY = 'olmoa_cart_items_v3';
+const UNSELECTED_KEY = 'olmoa_cart_unselected_v1';
+const PENDING_KEY = 'olmoa_cart_pending_checkout_v1';
 const UNKNOWN_SELLER = '__unknown_seller__';
 
-export const useCartStore = defineStore('cart', () => {
-  const items = ref<CartItem[]>([]);
-
+function readJson<T>(key: string, fallback: T): T {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('olmoa_cart_items_v2');
-    if (saved) {
-      items.value = JSON.parse(saved);
-    }
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+function writeJson(key: string, value: unknown) {
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
   } catch (_) {}
+}
+
+function optionSummary(sku: any): string {
+  try {
+    const opt = typeof sku.option_combination_json === 'string' ? JSON.parse(sku.option_combination_json) : (sku.options || {});
+    return Object.entries(opt).map(([k, v]) => `${k}: ${v}`).join(' / ') || '기본';
+  } catch (_) {
+    return '기본';
+  }
+}
+
+/** Groups lines by seller exactly like the server splits sub-orders (services/orders.js). */
+function groupBySeller(list: CartItem[]): PartnerCartGroup[] {
+  const map = new Map<string, CartItem[]>();
+  for (const it of list) {
+    const pid = it.partner_id || UNKNOWN_SELLER;
+    if (!map.has(pid)) map.set(pid, []);
+    map.get(pid)!.push(it);
+  }
+  return [...map.entries()].map(([pid, groupItems]) => {
+    const goods = groupItems.reduce((sum, it) => sum + lineTotal(it.price, it.quantity), 0);
+    const threshold = groupItems[0].free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD;
+    const fee = shippingFeeFor(goods, groupItems[0].base_shipping_fee, groupItems[0].free_shipping_threshold);
+    const name = groupItems[0].business_name || (pid === UNKNOWN_SELLER ? '판매자 확인 필요' : '판매자');
+    const remaining = threshold > 0 && fee > 0 ? Math.max(0, threshold - goods) : 0;
+    return {
+      partner_id: pid,
+      partner_name: name,
+      business_name: name,
+      items: groupItems,
+      goods_amount: goods,
+      shipping_fee: fee,
+      free_shipping_threshold: threshold,
+      free_shipping_remaining: remaining,
+      remaining_for_free: remaining
+    };
+  });
+}
+
+export const useCartStore = defineStore('cart', () => {
+  const items = ref<CartItem[]>(readJson<CartItem[]>(STORAGE_KEY, readJson<CartItem[]>('olmoa_cart_items_v2', [])));
+  const unselected = ref<Set<string>>(new Set(readJson<string[]>(UNSELECTED_KEY, [])));
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items.value));
-    } catch (_) {}
+    writeJson(STORAGE_KEY, items.value);
+    // Forget selection state of lines that no longer exist.
+    const live = new Set(items.value.map((i) => i.sku_id));
+    unselected.value = new Set([...unselected.value].filter((id) => live.has(id)));
+    writeJson(UNSELECTED_KEY, [...unselected.value]);
   }
 
   /** Adds a real SKU (never an invented one). Returns false when nothing was added (no SKU / out of stock). */
   function addItem(product: any, sku?: any, quantity: number = 1): boolean {
-  // Support flat-object call style used by newer views
-  if (sku === undefined && product && product.sku_id && product.price != null) {
-    const o = product;
-    const prod = {
-      id: o.product_id,
-      title: o.title,
-      thumbnail_url: o.thumbnail_url,
-      partner_id: o.partner_id,
-      business_name: o.partner_name || o.business_name,
-      lowest_sale_price: o.price,
-      lowest_original_price: o.original_price,
-      base_shipping_fee: o.base_shipping_fee,
-      free_shipping_threshold: o.free_shipping_threshold
-    };
-    const skuObj = {
-      id: o.sku_id,
-      sale_price: o.price,
-      original_price: o.original_price,
-      stock_quantity: o.stock_quantity,
-      option_combination_json: JSON.stringify({ Option: o.option_Label || o.option_summary || 'Standard' })
-    };
-    return addItem(prod, skuObj, o.quantity || 1);
-  }
-
-  // No SKU, no cart line: the old fallback invented `sku_<product>` with stock 100, which checkout rejects.
-  if (!sku || !sku.id) {
-      if (product.skus && product.skus.length === 1) sku = product.skus[0];
+    // No SKU, no cart line: the old fallback invented `sku_<product>` with stock 100, which checkout rejects.
+    if (!sku || !sku.id) {
+      if (product?.skus && product.skus.length === 1) sku = product.skus[0];
       else return false;
     }
     if (!product.partner_id) return false;
-
-    const skuId = sku.id;
-    let summary = '기본';
-    try {
-      const opt = typeof sku.option_combination_json === 'string'
-        ? JSON.parse(sku.option_combination_json)
-        : (sku.options || {});
-      summary = Object.entries(opt).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
-    } catch (_) {}
 
     // Unknown stock is not capped here; checkout re-checks stock on the server (STOCK_INSUFFICIENT).
     const maxStock = sku.stock_quantity != null ? Number(sku.stock_quantity) : Number.MAX_SAFE_INTEGER;
     if (maxStock <= 0) return false;
 
-    const existing = items.value.find(i => i.sku_id === skuId);
+    const existing = items.value.find((i) => i.sku_id === sku.id);
     if (existing) {
       existing.quantity = Math.min(existing.quantity + quantity, maxStock);
+      existing.price = Number(sku.sale_price ?? existing.price);
+      existing.stock_quantity = sku.stock_quantity != null ? Number(sku.stock_quantity) : existing.stock_quantity;
     } else {
       items.value.push({
-        sku_id: skuId,
+        sku_id: sku.id,
         product_id: product.id,
         title: product.title,
-        option_summary: summary,
-        price: sku.sale_price || product.lowest_sale_price,
-        original_price: sku.original_price || product.lowest_original_price,
+        option_summary: optionSummary(sku),
+        price: Number(sku.sale_price ?? product.lowest_sale_price),
+        original_price: Number(sku.original_price ?? product.lowest_original_price ?? 0),
         thumbnail_url: product.thumbnail_url,
         quantity: Math.min(quantity, maxStock),
         stock_quantity: sku.stock_quantity != null ? Number(sku.stock_quantity) : undefined,
         partner_id: product.partner_id,
         business_name: product.business_name || product.partner_name || '',
-        base_shipping_fee: product.base_shipping_fee != null ? product.base_shipping_fee : 3000,
-        free_shipping_threshold: product.free_shipping_threshold != null ? product.free_shipping_threshold : 30000
+        base_shipping_fee: product.base_shipping_fee ?? undefined,
+        free_shipping_threshold: product.free_shipping_threshold ?? undefined
       });
     }
+    const s = new Set(unselected.value); s.delete(sku.id); unselected.value = s;
     save();
     return true;
   }
 
-  function updateSku(oldSkuId: string, newSku: any) {
-    const item = items.value.find(i => i.sku_id === oldSkuId);
-    if (!item || !newSku) return;
-
-    item.sku_id = newSku.id;
-    item.price = newSku.sale_price;
-    item.original_price = newSku.original_price;
-    item.stock_quantity = newSku.stock_quantity;
-
-    let summary = '기본';
-    try {
-      const opt = typeof newSku.option_combination_json === 'string'
-        ? JSON.parse(newSku.option_combination_json)
-        : (newSku.options || {});
-      summary = Object.entries(opt).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
-    } catch (_) {}
-    item.option_summary = summary;
-
-    if (item.quantity > newSku.stock_quantity) {
-      item.quantity = Math.max(1, newSku.stock_quantity);
-    }
+  function removeItem(skuId: string) {
+    items.value = items.value.filter((i) => i.sku_id !== skuId);
     save();
   }
 
-  function removeItem(skuId: string) {
-    items.value = items.value.filter(i => i.sku_id !== skuId);
+  function removeMany(skuIds: string[]) {
+    const drop = new Set(skuIds);
+    items.value = items.value.filter((i) => !drop.has(i.sku_id));
     save();
   }
 
   function updateQuantity(skuId: string, quantity: number) {
-    const item = items.value.find(i => i.sku_id === skuId);
-    if (item) {
-      if (quantity <= 0) {
-        removeItem(skuId);
-      } else {
-        const ceiling = item.stock_quantity != null ? item.stock_quantity : Number.MAX_SAFE_INTEGER;
-        item.quantity = Math.min(quantity, ceiling);
-        save();
-      }
-    }
+    const item = items.value.find((i) => i.sku_id === skuId);
+    if (!item) return;
+    if (quantity <= 0) { removeItem(skuId); return; }
+    const ceiling = item.stock_quantity != null ? item.stock_quantity : Number.MAX_SAFE_INTEGER;
+    item.quantity = Math.max(1, Math.min(Math.floor(quantity), ceiling));
+    save();
   }
 
   function clearCart() {
@@ -169,71 +173,94 @@ export const useCartStore = defineStore('cart', () => {
     save();
   }
 
-  // Group by seller exactly like the server splits sub-orders (services/orders.js): goods = sum of volume-tier
-  // line totals, shipping = 0 when threshold > 0 && goods >= threshold, else the seller's base fee.
-  // Lines saved by an older build without partner_id are grouped as "판매자 확인 필요" instead of being
-  // assigned to a real seller id; checkout resolves the seller from the SKU anyway.
-  const partnerGroups = computed<PartnerCartGroup[]>(() => {
-    const map: Record<string, CartItem[]> = {};
-    for (const it of items.value) {
-      const pid = it.partner_id || UNKNOWN_SELLER;
-      if (!map[pid]) map[pid] = [];
-      map[pid].push(it);
-    }
-    return Object.entries(map).map(([pid, groupItems]) => {
-      const goods = groupItems.reduce((sum, it) => sum + lineTotal(it.price, it.quantity), 0);
-      const threshold = groupItems[0].free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD;
-      const fee = shippingFeeFor(goods, groupItems[0].base_shipping_fee, groupItems[0].free_shipping_threshold);
-      const name = groupItems[0].business_name || (pid === UNKNOWN_SELLER ? '판매자 확인 필요' : '판매자');
-      const remaining = threshold > 0 && fee > 0 ? Math.max(0, threshold - goods) : 0;
-      return {
-        partner_id: pid,
-        partner_name: name,
-        business_name: name,
-        items: groupItems,
-        goods_amount: goods,
-        shipping_fee: fee,
-        free_shipping_threshold: threshold,
-        free_shipping_remaining: remaining,
-        remaining_for_free: remaining
-      };
-    });
-  });
+  // ---- selection --------------------------------------------------------------------------------------
+  const isSelected = (skuId: string) => !unselected.value.has(skuId);
+  function setSelected(skuId: string, on: boolean) {
+    const s = new Set(unselected.value);
+    if (on) s.delete(skuId); else s.add(skuId);
+    unselected.value = s;
+    save();
+  }
+  function selectAll(on: boolean) {
+    unselected.value = on ? new Set() : new Set(items.value.map((i) => i.sku_id));
+    save();
+  }
+  /** "바로 구매": only this line goes to checkout; the rest of the cart stays as it was, unselected. */
+  function selectOnly(skuIds: string[]) {
+    const keep = new Set(skuIds);
+    unselected.value = new Set(items.value.map((i) => i.sku_id).filter((id) => !keep.has(id)));
+    save();
+  }
+  const selectedItems = computed(() => items.value.filter((i) => !unselected.value.has(i.sku_id)));
+  const allSelected = computed(() => items.value.length > 0 && selectedItems.value.length === items.value.length);
 
+  // ---- checkout bookkeeping ---------------------------------------------------------------------------
+  /** Remembers which lines an order was created from, so only those leave the cart once it is paid. */
+  function markPending(orderNo: string, skuIds: string[]) {
+    writeJson(PENDING_KEY, { order_no: orderNo, sku_ids: skuIds });
+  }
+  /** Called when an order is paid. Unknown order -> nothing is removed (never guess which lines were bought). */
+  function completeCheckout(orderNo: string): number {
+    const p = readJson<{ order_no: string; sku_ids: string[] } | null>(PENDING_KEY, null);
+    if (!p || p.order_no !== orderNo) return 0;
+    const before = items.value.length;
+    removeMany(p.sku_ids);
+    writeJson(PENDING_KEY, null);
+    return before - items.value.length;
+  }
+
+  /** Updates saved sale prices from a server quote ({ sku_id: base unit price }). Returns the changed lines. */
+  function applyServerPrices(prices: Record<string, number>): CartItem[] {
+    const changed: CartItem[] = [];
+    for (const it of items.value) {
+      const p = prices[it.sku_id];
+      if (p != null && Number.isFinite(Number(p)) && Number(p) !== it.price) {
+        it.price = Number(p);
+        changed.push(it);
+      }
+    }
+    if (changed.length) save();
+    return changed;
+  }
+
+  // ---- totals (selected lines only: this is what checkout will order) --------------------------------
+  const partnerGroups = computed(() => groupBySeller(items.value));
+  const selectedGroups = computed(() => groupBySeller(selectedItems.value));
   const totalCount = computed(() => items.value.reduce((sum, item) => sum + item.quantity, 0));
-  /** Goods after quantity tiers (what the server charges before coupons/credit). */
-  const totalGoodsAmount = computed(() => partnerGroups.value.reduce((sum, g) => sum + g.goods_amount, 0));
+  const selectedCount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.quantity, 0));
+  /** Selected goods before quantity tiers. */
+  const listGoodsAmount = computed(() => selectedItems.value.reduce((sum, it) => sum + it.price * it.quantity, 0));
+  /** Selected goods after quantity tiers (what the server charges before coupons/credit). */
+  const totalGoodsAmount = computed(() => selectedGroups.value.reduce((sum, g) => sum + g.goods_amount, 0));
   /** Saving from quantity tiers only. */
-  const volumeSavings = computed(() => items.value.reduce((sum, it) => sum + (it.price * it.quantity - lineTotal(it.price, it.quantity)), 0));
-  const shippingFee = computed(() => partnerGroups.value.reduce((sum, g) => sum + g.shipping_fee, 0));
-  const freeShippingRemaining = computed(() => partnerGroups.value.reduce((sum, g) => sum + g.free_shipping_remaining, 0));
+  const volumeSavings = computed(() => listGoodsAmount.value - totalGoodsAmount.value);
+  const shippingFee = computed(() => selectedGroups.value.reduce((sum, g) => sum + g.shipping_fee, 0));
   const totalPayAmount = computed(() => totalGoodsAmount.value + shippingFee.value);
-  /** List-price saving + quantity-tier saving. */
-  const totalSavings = computed(() => items.value.reduce((sum, item) => {
-    const orig = item.original_price || item.price;
-    return sum + Math.max(0, (orig - item.price) * item.quantity);
-  }, 0) + volumeSavings.value);
-  const partnerShippingBreakdown = partnerGroups;
-  const subtotalAmount = totalGoodsAmount;
-  const finalTotal = totalPayAmount;
 
   return {
     items,
+    selectedItems,
+    allSelected,
     partnerGroups,
-    volumeSavings,
-    partnerShippingBreakdown,
+    selectedGroups,
     addItem,
-    updateSku,
     removeItem,
+    removeMany,
     updateQuantity,
     clearCart,
+    isSelected,
+    setSelected,
+    selectAll,
+    selectOnly,
+    markPending,
+    completeCheckout,
+    applyServerPrices,
     totalCount,
+    selectedCount,
+    listGoodsAmount,
     totalGoodsAmount,
-    subtotalAmount,
+    volumeSavings,
     shippingFee,
-    freeShippingRemaining,
-    totalPayAmount,
-    finalTotal,
-    totalSavings
+    totalPayAmount
   };
 });

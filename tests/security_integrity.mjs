@@ -1374,6 +1374,18 @@ await t.test('I61 /fx/rates reports only the operator table with its real timest
   }
 });
 
+await t.test('I62 PCCC check never claims a customs (Uni-Pass) match it did not get', async () => {
+  const r = await I.call('/api/v1/customs/validate-pccc', { method: 'POST', body: { pccc: 'P123456789012', name: '김올모', phone: '010-2222-3333' } });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.verified, false, 'no UNIPASS_API_KEY -> no match claimed');
+  assert.equal(r.json.format_valid, true);
+  assert.equal(r.json.verification_mode, 'FORMAT_ONLY');
+  assert.ok(!/검증 완료|검증이 완료|일치합니다/.test(r.text), 'no "verified by customs" wording');
+  const bad = await I.call('/api/v1/customs/validate-pccc', { method: 'POST', body: { pccc: 'P12345' } });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.json.verified, false);
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R23)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);

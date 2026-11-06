@@ -142,7 +142,8 @@ function addToCart(goCheckout: boolean) {
   // The cart stores the base unit price; quantity tiers are applied from the quantity (cart & server alike).
   const ok = cart.addItem(product.value, selectedSku.value, quantity.value)
   if (!ok) { toast.error('장바구니에 담지 못했습니다. 옵션과 재고를 확인해 주세요.'); return }
-  if (goCheckout) router.push('/checkout')
+  // "바로 구매" orders only this option; other cart lines stay in the cart, unselected.
+  if (goCheckout) { cart.selectOnly([selectedSku.value.id]); router.push('/checkout') }
   else toast.success(`장바구니에 담았습니다 (${quantity.value}개)`, { title: product.value.title })
 }
 async function toggleWishlist() {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const model = defineModel<boolean | any[]>({ default: false })
-withDefaults(defineProps<{ label?: string; description?: string; value?: any; disabled?: boolean; error?: boolean; indeterminate?: boolean }>(), { disabled: false, error: false, indeterminate: false })
+// ariaLabel names the input when there is no visible label (e.g. a row-selection checkbox).
+withDefaults(defineProps<{ label?: string; description?: string; value?: any; disabled?: boolean; error?: boolean; indeterminate?: boolean; ariaLabel?: string }>(), { disabled: false, error: false, indeterminate: false })
 </script>
 
 <template>
@@ -13,6 +14,7 @@ withDefaults(defineProps<{ label?: string; description?: string; value?: any; di
         :disabled="disabled"
         :indeterminate.prop="indeterminate"
         :aria-invalid="error || undefined"
+        :aria-label="ariaLabel"
         :class="[
           'peer h-[18px] w-[18px] appearance-none rounded-xs border bg-surface transition-colors duration-fast',
           'checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',

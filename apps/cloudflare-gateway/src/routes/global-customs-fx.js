@@ -41,11 +41,12 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
       }), { status: 400, headers: corsHeaders });
     }
 
-    // Algorithmic check: Valid PCCC format verified
-    let isVerified = true;
-    let verificationMode = 'UNIPASS_ALGORITHM_VERIFIED';
-
-    // Real Korea Customs Service Uni-Pass OpenAPI Call if key provided
+    // Only a Uni-Pass (관세청) lookup can say the code belongs to this person. A well-formed code is just
+    // well-formed: it used to be reported as verified=true / "관세청 전산망 일치 검증 완료" without any lookup,
+    // and stayed verified even when the configured Uni-Pass call failed or found nothing.
+    let verified = false;
+    let verificationMode = 'FORMAT_ONLY';
+    let message = '형식이 올바른 개인통관고유부호입니다. 관세청 조회는 연동되어 있지 않아 명의 일치 여부는 확인하지 않았습니다.';
     if (env && env.UNIPASS_API_KEY) {
       try {
         const queryParams = new URLSearchParams({
@@ -56,34 +57,39 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         });
         const unipassUrl = `https://unipass.customs.go.kr:38010/ext/rest/persEcmQry/retrievePersEcm?${queryParams.toString()}`;
         const uRes = await fetch(unipassUrl);
-        if (uRes.ok) {
-          const xmlText = await uRes.text();
-          if (xmlText.includes('<tCo>1</tCo>') || xmlText.includes('성공') || xmlText.includes('정상')) {
-            isVerified = true;
-            verificationMode = 'UNIPASS_LIVE_NETWORK';
-          }
+        const xmlText = uRes.ok ? await uRes.text() : '';
+        // tCo = number of matching records in the Uni-Pass response.
+        const count = Number((xmlText.match(/<tCo>(\d+)<\/tCo>/) || [])[1] || 0);
+        if (count > 0) {
+          verified = true;
+          verificationMode = 'UNIPASS_MATCH';
+          message = '관세청 조회 결과 성명·연락처와 일치합니다.';
+        } else if (uRes.ok) {
+          verificationMode = 'UNIPASS_NO_MATCH';
+          message = '관세청 조회 결과 일치하는 정보가 없습니다. 성명·연락처·부호를 확인해 주세요.';
+        } else {
+          verificationMode = 'UNIPASS_UNAVAILABLE';
+          message = '관세청 조회에 실패했습니다. 형식만 확인되었습니다.';
         }
       } catch (_) {
-        // Fallback to strict algorithmic verification
-        verificationMode = 'UNIPASS_FALLBACK_ALGORITHM';
+        verificationMode = 'UNIPASS_UNAVAILABLE';
+        message = '관세청 조회에 실패했습니다. 형식만 확인되었습니다.';
       }
     }
 
     return new Response(JSON.stringify({
       success: true,
-      verified: isVerified,
+      verified,
+      format_valid: true,
+      verification_mode: verificationMode,
+      message,
       data: {
         pccc: rawPccc,
-        recipient_name: recipientName || '인증 완료',
-        recipient_phone: recipientPhone,
-        status: 'VERIFIED',
-        issued_agency: '관세청 전자통관시스템(Uni-Pass)',
+        verified,
+        format_valid: true,
         verification_mode: verificationMode,
-        exemption_limit_usd: 150,
-        us_exemption_limit_usd: 200,
-        message: '관세청 전산망 일치 검증이 완료되었습니다. 안전하게 해외 통관이 진행됩니다.'
-      },
-      message: '관세청 전산망 일치 검증 완료'
+        message
+      }
     }), { headers: corsHeaders });
   }
 
