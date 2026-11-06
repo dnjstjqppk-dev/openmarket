@@ -1,128 +1,115 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
-import { useCartStore } from '../stores/cart'
-import { useLocaleStore } from '../stores/locale'
+// Category page (PHASE 2 redesign). Products: /products?category=<slug> (server includes direct children);
+// category tree from the shared store. "verified products available with instant shipping" and the blanket
+// "무료배송" badge were not facts and are gone; ProductCard shows free shipping only where it applies.
+import { ref, watch, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import { OmBreadcrumb, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, OmButton, discountRate, formatNumber } from '@olmoa/ui'
+import ProductCard from '../components/ProductCard.vue'
+import { useCatalogStore } from '../stores/catalog'
 import { API_BASE_URL } from '../config'
 
 const route = useRoute()
-const cart = useCartStore()
-const locale = useLocaleStore()
+const catalog = useCatalogStore()
 const products = ref<any[]>([])
-const categories = ref<any[]>([])
 const loading = ref(true)
-const sortBy = ref<'popular' | 'price_asc' | 'price_desc'>('popular')
+const loadError = ref<string | null>(null)
+const sortBy = ref<'popular' | 'discount' | 'price_asc' | 'price_desc' | 'newest'>('popular')
+const sortOptions = [
+  { value: 'popular', label: '구매 많은 순' },
+  { value: 'newest', label: '최신 등록 순' },
+  { value: 'discount', label: '할인율 높은 순' },
+  { value: 'price_asc', label: '낮은 가격 순' },
+  { value: 'price_desc', label: '높은 가격 순' }
+]
 
-const currentSlug = computed(() => String(route.params.slug || ''))
-const currentCategory = computed(() => categories.value.find(c => c.slug === currentSlug.value))
-const childCategories = computed(() => {
-  if (!currentCategory.value) return []
-  return categories.value.filter(c => c.parent_id === currentCategory.value.id)
+const slug = computed(() => String(route.params.slug || ''))
+const current = computed(() => catalog.bySlugOrId(slug.value))
+const parent = computed(() => (current.value?.parent_id ? catalog.categories.find((c) => c.id === current.value!.parent_id) || null : null))
+// On a sub-category show its siblings, on a root show its children.
+const chips = computed(() => {
+  if (!current.value) return []
+  const base = parent.value ? catalog.childrenOf(parent.value.id) : catalog.childrenOf(current.value.id)
+  return base.filter((c) => Number(c.product_count) > 0 || c.id === current.value!.id)
 })
+const crumbs = computed(() => [
+  { label: '홈', to: '/' },
+  { label: '전체 카테고리', to: '/categories' },
+  ...(parent.value ? [{ label: parent.value.name, to: `/category/${parent.value.slug}` }] : []),
+  { label: current.value?.name || slug.value }
+])
 
-const fetchCategoryData = async () => {
+let seq = 0
+async function load() {
+  const my = ++seq
   loading.value = true
+  loadError.value = null
   try {
-    const [prodRes, catRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(currentSlug.value)}`),
-      fetch(`${API_BASE_URL}/api/v1/categories`)
-    ])
-    const prodJson = await prodRes.json()
-    const catJson = await catRes.json()
-    if (prodJson.success) products.value = prodJson.data
-    if (catJson.success) categories.value = catJson.data
-  } catch (e) {
-    console.error(e)
+    const res = await fetch(`${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(slug.value)}&limit=200`)
+    const json = await res.json().catch(() => null)
+    if (my !== seq) return // a newer category was opened meanwhile
+    if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다 (${res.status})`)
+    products.value = Array.isArray(json.data) ? json.data : []
+  } catch (e: any) {
+    if (my === seq) loadError.value = e?.message || '상품을 불러오지 못했습니다'
   } finally {
-    loading.value = false
+    if (my === seq) loading.value = false
   }
 }
+onMounted(() => { catalog.load(); load() })
+watch(slug, () => { sortBy.value = 'popular'; load() })
 
-onMounted(fetchCategoryData)
-watch(() => route.params.slug, fetchCategoryData)
-
-const sortedProducts = computed(() => {
+const sorted = computed(() => {
   const list = [...products.value]
+  const rate = (p: any) => discountRate(p.lowest_original_price, p.lowest_sale_price)
   if (sortBy.value === 'price_asc') return list.sort((a, b) => a.lowest_sale_price - b.lowest_sale_price)
   if (sortBy.value === 'price_desc') return list.sort((a, b) => b.lowest_sale_price - a.lowest_sale_price)
+  if (sortBy.value === 'discount') return list.sort((a, b) => rate(b) - rate(a))
+  if (sortBy.value === 'newest') return list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
   return list.sort((a, b) => (b.total_sold_count || 0) - (a.total_sold_count || 0))
 })
+const unknownCategory = computed(() => catalog.loaded && !current.value)
 </script>
 
 <template>
-  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-6">
-    <!-- Breadcrumbs -->
-    <nav class="flex items-center gap-2 text-xs text-gray-500 mb-4">
-      <RouterLink to="/" class="hover:text-[#FF5000]">Home</RouterLink>
-      <span>/</span>
-      <RouterLink to="/categories" class="hover:text-[#FF5000]">Categories</RouterLink>
-      <span>/</span>
-      <span class="font-bold text-gray-900">{{ currentCategory?.name || currentSlug }}</span>
-    </nav>
+  <div class="mx-auto max-w-container px-4 py-6 sm:px-6">
+    <OmBreadcrumb :items="crumbs" />
 
-    <!-- Category Header -->
-    <div class="bg-white rounded-2xl p-6 border border-gray-200/80 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-black text-gray-900">{{ currentCategory?.name || currentSlug.toUpperCase() }}</h1>
-        <p class="text-xs text-gray-500 mt-1">{{ sortedProducts.length }} verified products available with instant shipping</p>
-        <div v-if="childCategories.length > 0" class="flex flex-wrap gap-2 mt-3">
-          <RouterLink
-            v-for="sub in childCategories"
-            :key="sub.id"
-            :to="`/category/${sub.slug}`"
-            class="px-3 py-1 rounded-full bg-orange-50 hover:bg-[#FF5000] text-[#FF5000] hover:text-white text-xs font-bold transition-colors"
-          >
-            {{ sub.name }}
-          </RouterLink>
+    <header class="mb-5 mt-3">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold text-ink">{{ current?.name || (unknownCategory ? '카테고리를 찾을 수 없습니다' : '') }}</h1>
+          <p v-if="!loading && !loadError" class="mt-1 text-sm text-ink-muted">판매 중인 상품 {{ formatNumber(products.length) }}개</p>
         </div>
+        <div class="w-44"><OmSelect v-model="sortBy" :options="sortOptions" size="sm" aria-label="정렬" /></div>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 font-medium">Sort:</span>
-        <select v-model="sortBy" class="bg-gray-50 border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-bold">
-          <option value="popular">Best Selling</option>
-          <option value="price_asc">Price: Low to High</option>
-          <option value="price_desc">Price: High to Low</option>
-        </select>
-      </div>
-    </div>
+      <nav v-if="chips.length" class="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" aria-label="하위 카테고리">
+        <RouterLink
+          v-if="parent"
+          :to="`/category/${parent.slug}`"
+          class="shrink-0 rounded-full border border-line bg-surface px-3.5 py-1.5 text-sm text-ink hover:border-line-strong"
+        >{{ parent.name }} 전체</RouterLink>
+        <RouterLink
+          v-for="c in chips"
+          :key="c.id"
+          :to="`/category/${c.slug}`"
+          :aria-current="c.id === current?.id ? 'page' : undefined"
+          class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition"
+          :class="c.id === current?.id ? 'border-secondary bg-secondary text-secondary-on' : 'border-line bg-surface text-ink hover:border-line-strong'"
+        >
+          {{ c.name }} <span class="tabular-nums" :class="c.id === current?.id ? 'text-secondary-on/70' : 'text-ink-subtle'">{{ c.product_count }}</span>
+        </RouterLink>
+      </nav>
+    </header>
 
-    <!-- Product Grid -->
-    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <div v-for="n in 5" :key="n" class="h-72 bg-white rounded-xl animate-pulse"></div>
-    </div>
-
-    <div v-else-if="sortedProducts.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200">
-      <p class="text-base font-bold text-gray-700 mb-2">No products found in this subcategory yet.</p>
-      <RouterLink to="/categories" class="inline-block mt-2 px-5 py-2.5 rounded-full bg-[#FF5000] text-white text-xs font-black">Browse All Departments</RouterLink>
-    </div>
-
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <RouterLink
-        v-for="product in sortedProducts"
-        :key="product.id"
-        :to="`/product/${product.slug}`"
-        class="group bg-white rounded-2xl overflow-hidden border border-slate-200/80 hover:border-[#FF5000] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col relative"
-      >
-        <div class="aspect-square bg-gray-100 overflow-hidden relative">
-          <img :src="product.thumbnail_url" :alt="product.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        </div>
-        <div class="p-3.5 flex-1 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
-              <span class="text-[10px] font-bold text-slate-400 uppercase">{{ product.brand }}</span>
-              <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-1.5 py-0.2 rounded-full inline-flex items-center">🚀 무료배송</span>
-            </div>
-            <h3 class="text-xs font-bold text-slate-800 line-clamp-2 mt-0.5 mb-2 group-hover:text-[#FF5000] transition-colors leading-snug">{{ product.title }}</h3>
-          </div>
-          <div>
-            <div class="text-base font-black text-gray-900">{{ locale.formatPrice(product.lowest_sale_price) }}</div>
-            <div class="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-              <span v-if="product.review_count > 0 && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
-              <span v-if="product.total_sold_count > 0">{{ Number(product.total_sold_count).toLocaleString() }}개 판매</span>
-            </div>
-          </div>
-        </div>
-      </RouterLink>
+    <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
+    <OmErrorState v-else-if="loadError" :message="loadError" @retry="load" />
+    <OmEmptyState v-else-if="!sorted.length" :title="unknownCategory ? '존재하지 않는 카테고리입니다' : '이 카테고리에 판매 중인 상품이 없습니다'" description="다른 카테고리를 둘러보거나 검색해 보세요.">
+      <OmButton to="/categories" variant="outline" size="sm">전체 카테고리</OmButton>
+    </OmEmptyState>
+    <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <ProductCard v-for="(p, i) in sorted" :key="p.id" :product="p" :eager="i < 5" />
     </div>
   </div>
 </template>

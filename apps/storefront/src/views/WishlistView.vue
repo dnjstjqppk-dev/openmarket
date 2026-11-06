@@ -1,77 +1,99 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import { useLocaleStore } from '../stores/locale'
+// Wishlist (PHASE 2 redesign). GET /wishlist returns the customer's saved products (the server takes the customer
+// from the token; the old ?customer_id= / body customer_id were ignored and are no longer sent). POST toggles.
+// Saved products that are no longer ACTIVE stay listed but are marked and not linked as purchasable.
+// The old empty-state promise of "price-drop alerts" described a feature that does not exist.
+import { ref, computed, onMounted } from 'vue'
+import { Heart, X } from 'lucide-vue-next'
+import { OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmIconButton, OmBadge, useToast, formatDate } from '@olmoa/ui'
+import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL, authHeader } from '../config'
 
-const auth = useAuthStore()
-const locale = useLocaleStore()
+const toast = useToast()
 const items = ref<any[]>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
+const removing = ref<Set<string>>(new Set())
 
-const loadWishlist = async () => {
+async function load() {
   loading.value = true
-  const cid = auth.user?.id || ''
+  loadError.value = null
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/wishlist?customer_id=${encodeURIComponent(cid)}`, {
-      headers: { ...authHeader() }
-    })
-    const json = await res.json()
-    if (json.success) items.value = json.data || []
-  } catch {} finally {
+    const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, { headers: { ...authHeader() } })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `찜 목록을 불러오지 못했습니다 (${res.status})`)
+    items.value = json.data || []
+  } catch (e: any) {
+    loadError.value = e?.message || '찜 목록을 불러오지 못했습니다'
+  } finally {
     loading.value = false
   }
 }
 
-const removeWish = async (productId: string) => {
-  const cid = auth.user?.id || ''
-  await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader() },
-    body: JSON.stringify({ customer_id: cid, product_id: productId })
-  })
-  await loadWishlist()
+async function remove(item: any) {
+  const id = item.product_id
+  if (removing.value.has(id)) return
+  removing.value = new Set(removing.value).add(id)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ product_id: id })
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `삭제하지 못했습니다 (${res.status})`)
+    // The endpoint toggles; if it reports "ADDED" the item had already been removed elsewhere — re-sync.
+    if (json.wished) { await load(); return }
+    items.value = items.value.filter((i) => i.product_id !== id)
+    toast.success('찜 목록에서 삭제했습니다.')
+  } catch (e: any) {
+    toast.error(e?.message || '삭제하지 못했습니다')
+  } finally {
+    const s = new Set(removing.value); s.delete(id); removing.value = s
+  }
 }
 
-onMounted(loadWishlist)
+onMounted(load)
+const activeCount = computed(() => items.value.filter((i) => i.status === 'ACTIVE').length)
 </script>
 
 <template>
-  <div class="max-w-[1280px] mx-auto px-4 sm:px-6 py-8">
-    <h1 class="text-2xl font-black text-gray-900 mb-6">My Saved Wishlist ({{ items.length }})</h1>
+  <div class="mx-auto max-w-container px-4 py-6 sm:px-6">
+    <OmBreadcrumb :items="[{ label: '홈', to: '/' }, { label: '찜한 상품' }]" />
+    <header class="mb-6 mt-3">
+      <h1 class="text-2xl font-bold text-ink">찜한 상품</h1>
+      <p v-if="!loading && !loadError && items.length" class="mt-1 text-sm text-ink-muted">
+        {{ items.length }}개<template v-if="activeCount !== items.length"> · 판매 중 {{ activeCount }}개</template>
+      </p>
+    </header>
 
-    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div v-for="n in 4" :key="n" class="h-64 bg-white rounded-2xl animate-pulse"></div>
-    </div>
+    <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="5" /></div>
+    <OmErrorState v-else-if="loadError" :message="loadError" @retry="load" />
+    <OmEmptyState v-else-if="!items.length" title="찜한 상품이 없습니다" description="상품 상세에서 하트를 누르면 이곳에 저장됩니다.">
+      <template #icon><Heart class="h-8 w-8 text-ink-subtle" aria-hidden="true" /></template>
+      <OmButton to="/" variant="outline" size="sm">상품 둘러보기</OmButton>
+    </OmEmptyState>
 
-    <div v-else-if="items.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200">
-      <div class="text-4xl mb-2">♥</div>
-      <p class="text-base font-bold text-gray-800 mb-2">Your wishlist is empty</p>
-      <p class="text-xs text-gray-500 mb-5">Tap the heart icon on any product page to save items for price-drop alerts.</p>
-      <RouterLink to="/" class="inline-block px-6 py-2.5 rounded-full bg-[#FF5000] text-white text-xs font-black">Explore Products</RouterLink>
-    </div>
-
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-      <div
-        v-for="item in items"
-        :key="item.wishlist_id"
-        class="bg-white rounded-2xl overflow-hidden border border-gray-200 flex flex-col justify-between p-3"
-      >
-        <RouterLink :to="`/product/${item.slug}`">
-          <div class="aspect-square rounded-xl overflow-hidden bg-gray-100 mb-2.5">
-            <img :src="item.thumbnail_url" :alt="item.title" class="w-full h-full object-cover" />
+    <ul v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <li v-for="item in items" :key="item.wishlist_id" class="relative">
+        <ProductCard v-if="item.status === 'ACTIVE'" :product="item" />
+        <div v-else class="flex h-full flex-col overflow-hidden rounded-lg border border-line bg-surface-2">
+          <div class="aspect-square overflow-hidden bg-surface-3"><img :src="item.thumbnail_url" :alt="item.title" class="h-full w-full object-cover opacity-50 grayscale" loading="lazy" /></div>
+          <div class="flex flex-1 flex-col gap-1.5 p-3">
+            <OmBadge tone="neutral" class="w-fit">판매 중지</OmBadge>
+            <p class="line-clamp-2 text-sm text-ink-muted">{{ item.title }}</p>
           </div>
-          <span class="text-[10px] font-bold text-gray-400 uppercase">{{ item.brand }}</span>
-          <h2 class="text-xs font-bold text-gray-900 line-clamp-2 mt-0.5">{{ item.title }}</h2>
-        </RouterLink>
-        <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-          <span class="text-base font-black text-[#E60023]">{{ locale.formatPrice(item.lowest_sale_price) }}</span>
-          <button @click="removeWish(item.product_id)" class="text-xs text-gray-400 hover:text-red-600 font-bold cursor-pointer">
-            Remove ✕
-          </button>
         </div>
-      </div>
-    </div>
+        <p class="mt-1 px-1 text-2xs text-ink-subtle">{{ formatDate(item.wished_at) }} 저장</p>
+        <OmIconButton
+          :label="`${item.title} 찜 삭제`"
+          size="sm"
+          variant="outline"
+          class="absolute right-2 top-2 !bg-surface/90"
+          :loading="removing.has(item.product_id)"
+          @click="remove(item)"
+        ><X class="h-4 w-4" /></OmIconButton>
+      </li>
+    </ul>
   </div>
 </template>

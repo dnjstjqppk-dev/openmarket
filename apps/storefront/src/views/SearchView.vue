@@ -1,180 +1,136 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useCartStore } from '../stores/cart';
-import { API_BASE_URL } from '../config';
+// Search results (PHASE 2 redesign). Server: /products?q=&sort=&min_price=&max_price=&limit= (title, description,
+// category name and the synonym table). The server returns at most LIMIT rows, so when that many come back the
+// page says "상위 N개" instead of presenting it as the total.
+import { ref, watch, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { SearchX } from 'lucide-vue-next'
+import { OmButton, OmInput, OmTabs, OmSkeleton, OmEmptyState, OmErrorState, formatNumber } from '@olmoa/ui'
+import ProductCard from '../components/ProductCard.vue'
+import { API_BASE_URL } from '../config'
 
-const route = useRoute();
-const router = useRouter();
-const cartStore = useCartStore();
+const LIMIT = 200
+const route = useRoute()
+const router = useRouter()
 
-const query = ref((route.query.q as string) || '');
-const currentSort = ref((route.query.sort as string) || 'popular');
-const minPrice = ref((route.query.min_price as string) || '');
-const maxPrice = ref((route.query.max_price as string) || '');
-const products = ref<any[]>([]);
-const loading = ref(true);
+const sortTabs = [
+  { key: 'popular', label: '구매 많은 순' },
+  { key: 'newest', label: '최신 순' },
+  { key: 'rating', label: '평점 순' },
+  { key: 'price_asc', label: '낮은 가격' },
+  { key: 'price_desc', label: '높은 가격' }
+]
+const sortKeys = sortTabs.map((t) => t.key)
 
-async function fetchSearchResults() {
-  loading.value = true;
+const q = computed(() => String(route.query.q || '').trim())
+const sort = ref('popular')
+const minPrice = ref<string | number>('')
+const maxPrice = ref<string | number>('')
+const priceError = ref<string | null>(null)
+const products = ref<any[]>([])
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+
+function syncFromRoute() {
+  const s = String(route.query.sort || 'popular')
+  sort.value = sortKeys.includes(s) ? s : 'popular'
+  minPrice.value = String(route.query.min_price || '')
+  maxPrice.value = String(route.query.max_price || '')
+}
+
+let seq = 0
+async function load() {
+  const my = ++seq
+  loading.value = true
+  loadError.value = null
+  const params = new URLSearchParams({ sort: sort.value, limit: String(LIMIT) })
+  if (q.value) params.set('q', q.value)
+  if (route.query.min_price) params.set('min_price', String(route.query.min_price))
+  if (route.query.max_price) params.set('max_price', String(route.query.max_price))
   try {
-    const q = query.value.trim();
-    const sort = currentSort.value;
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    params.set('sort', sort);
-    if (minPrice.value) params.set('min_price', minPrice.value);
-    if (maxPrice.value) params.set('max_price', maxPrice.value);
-    const url = `${API_BASE_URL}/api/v1/products?${params.toString()}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.success && json.data) {
-      products.value = json.data;
-    } else {
-      products.value = [];
-    }
-  } catch (_) {
-    products.value = [];
+    const res = await fetch(`${API_BASE_URL}/api/v1/products?${params}`)
+    const json = await res.json().catch(() => null)
+    if (my !== seq) return
+    if (!res.ok || !json?.success) throw new Error(json?.error || `검색하지 못했습니다 (${res.status})`)
+    products.value = Array.isArray(json.data) ? json.data : []
+  } catch (e: any) {
+    if (my === seq) loadError.value = e?.message || '검색하지 못했습니다'
   } finally {
-    loading.value = false;
+    if (my === seq) loading.value = false
   }
 }
 
-function handleSearch() {
-  router.push({ path: '/search', query: { q: query.value, sort: currentSort.value, min_price: minPrice.value || undefined, max_price: maxPrice.value || undefined } });
+function push(extra: Record<string, string | undefined> = {}) {
+  router.push({
+    path: '/search',
+    query: {
+      q: q.value || undefined,
+      sort: sort.value !== 'popular' ? sort.value : undefined,
+      min_price: minPrice.value !== '' ? String(minPrice.value) : undefined,
+      max_price: maxPrice.value !== '' ? String(maxPrice.value) : undefined,
+      ...extra
+    }
+  })
 }
-
-function changeSort(sort: string) {
-  currentSort.value = sort;
-  handleSearch();
+function onSort(key: string) { sort.value = key; push() }
+function applyPrice() {
+  const min = minPrice.value === '' ? null : Number(minPrice.value)
+  const max = maxPrice.value === '' ? null : Number(maxPrice.value)
+  if ((min !== null && (!Number.isInteger(min) || min < 0)) || (max !== null && (!Number.isInteger(max) || max < 0))) {
+    priceError.value = '가격은 0 이상의 정수(원)로 입력해 주세요.'
+    return
+  }
+  if (min !== null && max !== null && min > max) { priceError.value = '최소 가격이 최대 가격보다 큽니다.'; return }
+  priceError.value = null
+  push()
 }
+function clearPrice() { minPrice.value = ''; maxPrice.value = ''; priceError.value = null; push() }
 
-watch(() => route.query, () => {
-  query.value = (route.query.q as string) || '';
-  currentSort.value = (route.query.sort as string) || 'popular';
-  minPrice.value = (route.query.min_price as string) || '';
-  maxPrice.value = (route.query.max_price as string) || '';
-  fetchSearchResults();
-});
+onMounted(() => { syncFromRoute(); load() })
+watch(() => route.fullPath, () => { if (route.path === '/search') { syncFromRoute(); load() } })
 
-onMounted(() => {
-  fetchSearchResults();
-});
+const capped = computed(() => products.value.length >= LIMIT)
+const hasPriceFilter = computed(() => !!(route.query.min_price || route.query.max_price))
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Search Bar & Stats Header -->
-    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-      <form @submit.prevent="handleSearch" class="flex gap-2">
-        <div class="relative flex-1">
-          <input 
-            v-model="query" 
-            placeholder="상품명, 카테고리, 브랜드 검색..." 
-            class="w-full bg-slate-50 border border-slate-300 rounded-2xl py-3 pl-11 pr-4 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
-          />
-          <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400"></i>
-        </div>
-        <button type="submit" class="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-2xl text-xs sm:text-sm transition shadow-md">
-          검색
-        </button>
+  <div class="mx-auto max-w-container px-4 py-6 sm:px-6">
+    <header class="mb-5">
+      <h1 class="text-2xl font-bold text-ink">
+        <template v-if="q">‘{{ q }}’ 검색 결과</template>
+        <template v-else>전체 상품</template>
+      </h1>
+      <p v-if="!loading && !loadError" class="mt-1 text-sm text-ink-muted">
+        {{ capped ? `상위 ${formatNumber(LIMIT)}개 표시` : `${formatNumber(products.length)}개 상품` }}
+        <span v-if="capped"> · 검색어나 가격 범위를 좁혀 보세요</span>
+      </p>
+    </header>
+
+    <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <OmTabs :model-value="sort" :tabs="sortTabs" variant="pill" @update:model-value="onSort" />
+      <form class="flex flex-wrap items-start gap-2" @submit.prevent="applyPrice">
+        <div class="w-28"><OmInput v-model="minPrice" type="number" size="sm" placeholder="최소 원" aria-label="최소 가격(원)" min="0" inputmode="numeric" /></div>
+        <span class="pt-1.5 text-ink-subtle">~</span>
+        <div class="w-28"><OmInput v-model="maxPrice" type="number" size="sm" placeholder="최대 원" aria-label="최대 가격(원)" min="0" inputmode="numeric" /></div>
+        <OmButton type="submit" size="sm" variant="outline">적용</OmButton>
+        <OmButton v-if="hasPriceFilter" size="sm" variant="ghost" @click="clearPrice">초기화</OmButton>
+        <p v-if="priceError" class="basis-full text-xs text-danger" role="alert">{{ priceError }}</p>
       </form>
-
-      <div class="flex items-center gap-2 text-xs">
-        <input v-model="minPrice" type="number" placeholder="최소 가격" class="border border-slate-300 rounded-xl px-3 py-2 w-28" />
-        <span class="text-slate-400">~</span>
-        <input v-model="maxPrice" type="number" placeholder="최대 가격" class="border border-slate-300 rounded-xl px-3 py-2 w-28" />
-        <button @click="handleSearch" class="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold">적용</button>
-      </div>
-
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-t border-slate-100 pt-3">
-        <div class="text-slate-600">
-          <span v-if="query">
-            '<strong>{{ query }}</strong>' 검색 결과: 총 <strong>{{ products.length }}</strong>개
-          </span>
-          <span v-else>
-            전체 상품 목록: 총 <strong>{{ products.length }}</strong>개
-          </span>
-        </div>
-        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          <button 
-            @click="changeSort('popular')"
-            :class="currentSort === 'popular' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-            class="px-3 py-1.5 rounded-lg text-[11px] transition"
-          >인기순</button>
-          <button 
-            @click="changeSort('price_asc')"
-            :class="currentSort === 'price_asc' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-            class="px-3 py-1.5 rounded-lg text-[11px] transition"
-          >낮은가격순</button>
-          <button 
-            @click="changeSort('price_desc')"
-            :class="currentSort === 'price_desc' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-            class="px-3 py-1.5 rounded-lg text-[11px] transition"
-          >높은가격순</button>
-          <button 
-            @click="changeSort('newest')"
-            :class="currentSort === 'newest' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-            class="px-3 py-1.5 rounded-lg text-[11px] transition"
-          >최신순</button>
-        </div>
-      </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="p-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-orange-500"></i>
-      <p class="text-xs font-bold">검색 결과를 집계하는 중입니다...</p>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else-if="products.length === 0" class="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-3">
-      <i class="fa-solid fa-box-open text-4xl text-slate-300"></i>
-      <h3 class="font-bold text-slate-700">일치하는 검색 결과가 없습니다.</h3>
-      <p class="text-xs text-slate-400">단어의 철자가 맞는지 확인하거나 다른 검색어를 입력해 보세요.</p>
-      <router-link to="/categories" class="inline-block mt-2 px-5 py-2.5 bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md">
-        전체 카테고리 둘러보기
-      </router-link>
-    </div>
-
-    <!-- Product Grid -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-      <div 
-        v-for="p in products" 
-        :key="p.id" 
-        class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition duration-300 flex flex-col group"
-      >
-        <router-link :to="'/product/' + p.id" class="aspect-square bg-slate-100 overflow-hidden relative block">
-          <img :src="p.thumbnail_url" :alt="p.title" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
-          <span class="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
-            OLMOA 특가
-          </span>
-        </router-link>
-        <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
-          <div>
-            <span class="text-[10px] font-bold text-slate-400 uppercase">{{ p.category_name }}</span>
-            <router-link :to="'/product/' + p.id" class="font-bold text-slate-900 text-xs line-clamp-2 mt-0.5 hover:text-orange-600 transition">
-              {{ p.title }}
-            </router-link>
-          </div>
-          <div class="space-y-1 pt-1 border-t border-slate-100">
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-sm sm:text-base font-black text-orange-600">₩{{ p.lowest_sale_price.toLocaleString() }}</span>
-              <span class="text-[10px] text-slate-400 line-through">₩{{ p.lowest_original_price.toLocaleString() }}</span>
-            </div>
-            <div class="text-[10px] text-slate-400">
-              판매 <strong class="text-slate-700">{{ p.total_sold_count.toLocaleString() }}</strong>개
-            </div>
-            <router-link 
-              :to="'/product/' + p.id"
-              class="w-full py-1.5 bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm"
-            >
-              <i class="fa-solid fa-sliders"></i>
-              <span>옵션 선택 / 구매</span>
-            </router-link>
-          </div>
-        </div>
-      </div>
+    <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
+    <OmErrorState v-else-if="loadError" :message="loadError" @retry="load" />
+    <OmEmptyState
+      v-else-if="!products.length"
+      :title="q ? `‘${q}’에 대한 상품이 없습니다` : '조건에 맞는 상품이 없습니다'"
+      :description="hasPriceFilter ? '가격 범위를 넓히거나 다른 검색어를 입력해 보세요.' : '철자를 확인하거나 더 일반적인 단어로 검색해 보세요.'"
+    >
+      <template #icon><SearchX class="h-8 w-8 text-ink-subtle" aria-hidden="true" /></template>
+      <OmButton v-if="hasPriceFilter" size="sm" variant="outline" @click="clearPrice">가격 조건 지우기</OmButton>
+      <OmButton to="/categories" size="sm" variant="ghost">카테고리 둘러보기</OmButton>
+    </OmEmptyState>
+    <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <ProductCard v-for="(p, i) in products" :key="p.id" :product="p" :eager="i < 5" />
     </div>
   </div>
 </template>

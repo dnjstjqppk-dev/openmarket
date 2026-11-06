@@ -1,77 +1,52 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { RouterLink } from 'vue-router'
-import { useLocaleStore } from '../stores/locale'
+// Best sellers (PHASE 2 redesign). Ranking = server sort "popular" (products.total_sold_count DESC): units
+// ordered, minus cancelled/expired/refunded-and-restocked units. The old header ("Real-Time Verified Sales
+// Leaderboard", "Ranked hourly by verified net non-cancelled order volume and buyer satisfaction") described a
+// ranking job that does not exist. Products without any order are not ranked.
+import { ref, computed, onMounted } from 'vue'
+import { OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton } from '@olmoa/ui'
+import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL } from '../config'
 
-const locale = useLocaleStore()
+const TOP = 30
 const products = ref<any[]>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 
-onMounted(async () => {
+async function load() {
+  loading.value = true
+  loadError.value = null
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/products`)
-    const json = await res.json()
-    if (json.success) products.value = json.data
-  } catch {} finally {
+    const res = await fetch(`${API_BASE_URL}/api/v1/products?sort=popular&limit=${TOP}`)
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `불러오지 못했습니다 (${res.status})`)
+    products.value = Array.isArray(json.data) ? json.data : []
+  } catch (e: any) {
+    loadError.value = e?.message || '불러오지 못했습니다'
+  } finally {
     loading.value = false
   }
-})
+}
+onMounted(load)
 
-const rankedProducts = computed(() =>
-  [...products.value].sort((a, b) => (b.total_sold_count || 0) - (a.total_sold_count || 0)).slice(0, 30)
-)
+const ranked = computed(() => products.value.filter((p) => Number(p.total_sold_count) > 0))
 </script>
 
 <template>
-  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-8">
-    <div class="bg-[#111111] text-white rounded-3xl p-6 sm:p-8 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <div class="text-xs font-black text-[#FFE600] uppercase tracking-wider mb-1">🏆 Real-Time Verified Sales Leaderboard</div>
-        <h1 class="text-3xl font-black">OLMOA TOP BEST SELLERS</h1>
-        <p class="text-xs text-gray-400 mt-1">Ranked hourly by verified net non-cancelled order volume and buyer satisfaction.</p>
-      </div>
-    </div>
+  <div class="mx-auto max-w-container px-4 py-6 sm:px-6">
+    <OmBreadcrumb :items="[{ label: '홈', to: '/' }, { label: '베스트' }]" />
+    <header class="mb-6 mt-3">
+      <h1 class="text-2xl font-bold text-ink">베스트</h1>
+      <p class="mt-1 text-sm text-ink-muted">주문 수량이 많은 순서입니다. 취소·만료·환불된 수량은 빠집니다. (최대 {{ TOP }}위)</p>
+    </header>
 
-    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-5 gap-4">
-      <div v-for="n in 10" :key="n" class="h-72 bg-white rounded-2xl animate-pulse"></div>
-    </div>
-
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-      <RouterLink
-        v-for="(product, idx) in rankedProducts"
-        :key="product.id"
-        :to="`/product/${product.slug}`"
-        class="group bg-white rounded-2xl overflow-hidden border border-gray-200 hover:border-[#FF5000] hover:shadow-xl transition-all flex flex-col relative"
-      >
-        <div
-          :class="[
-            'absolute top-2.5 left-2.5 z-10 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-md',
-            idx === 0 ? 'bg-[#FFE600] text-black' :
-            idx === 1 ? 'bg-gray-200 text-gray-900' :
-            idx === 2 ? 'bg-amber-700 text-white' : 'bg-black/80 text-white'
-          ]"
-        >
-          #{{ idx + 1 }}
-        </div>
-        <div class="aspect-square bg-gray-100 overflow-hidden">
-          <img :src="product.thumbnail_url" :alt="product.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-        </div>
-        <div class="p-3.5 flex-1 flex flex-col justify-between">
-          <div>
-            <span class="text-[10px] font-bold text-gray-400 uppercase">{{ product.brand }}</span>
-            <h2 class="text-xs font-bold text-gray-900 line-clamp-2 mt-0.5 mb-2 group-hover:text-[#FF5000]">{{ product.title }}</h2>
-          </div>
-          <div>
-            <div class="text-base font-black text-[#E60023]">{{ locale.formatPrice(product.lowest_sale_price) }}</div>
-            <div class="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-              <span v-if="product.review_count && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
-              <span v-else class="px-1 py-0.2 rounded bg-gray-100 text-gray-600 font-semibold text-[10px]">NEW</span>
-              <span class="font-bold text-gray-800">{{ (product.total_sold_count || 0).toLocaleString() }} sold</span>
-            </div>
-          </div>
-        </div>
-      </RouterLink>
-    </div>
+    <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
+    <OmErrorState v-else-if="loadError" :message="loadError" @retry="load" />
+    <OmEmptyState v-else-if="!ranked.length" title="아직 집계할 주문이 없습니다" description="주문이 생기면 주문 수량 순으로 표시됩니다.">
+      <OmButton to="/" variant="outline" size="sm">전체 상품 보기</OmButton>
+    </OmEmptyState>
+    <ol v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <li v-for="(p, i) in ranked" :key="p.id"><ProductCard :product="p" :rank="i + 1" :eager="i < 5" /></li>
+    </ol>
   </div>
 </template>

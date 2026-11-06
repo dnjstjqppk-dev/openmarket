@@ -308,9 +308,9 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       badge: '공식 파트너사 직발송'
     };
 
-    const videoUrl = prodId === 'prod_e_01'
-      ? 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'
-      : (product.video_url || null);
+    // Only a video the seller actually registered. (prod_e_01 used to get a hard-coded MDN stock clip of a
+    // flower, shown on a headphone product page as its "실물 영상".)
+    const videoUrl = product.video_url || null;
 
     const qualityScore = computeServerQualityScore(product);
 

@@ -4,11 +4,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Bell, ChevronDown, Heart, House, LayoutGrid, LogOut, Package, ShoppingBag, Ticket, User, Zap } from 'lucide-vue-next'
-import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, formatDateTime } from '@olmoa/ui'
+import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, formatDateTime } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
+import { useCatalogStore } from './stores/catalog'
 import { API_BASE_URL, PARTNER_CONSOLE_URL, authHeader } from './config'
 
 const cart = useCartStore()
@@ -17,11 +18,11 @@ const locale = useLocaleStore()
 const router = useRouter()
 const route = useRoute()
 
-// ---- categories (mega menu) -------------------------------------------------------------------------
-const allCategories = ref<any[]>([])
+// ---- categories (mega menu) — shared store, one /categories request per page session -------------------
+const catalog = useCatalogStore()
 const activeRoot = ref<any>(null)
-const rootCategories = computed(() => allCategories.value.filter((c) => Number(c.depth) === 0))
-const subCategories = computed(() => (activeRoot.value ? allCategories.value.filter((c) => c.parent_id === activeRoot.value.id) : []))
+const rootCategories = computed(() => catalog.roots)
+const subCategories = computed(() => (activeRoot.value ? catalog.childrenOf(activeRoot.value.id) : []))
 
 // ---- notifications ----------------------------------------------------------------------------------
 const notifications = ref<any[]>([])
@@ -106,13 +107,9 @@ const hideBottomNav = computed(() => route.path.startsWith('/product/') || route
 onMounted(async () => {
   fetchNotifications()
   fetch(`${API_BASE_URL}/api/v1/business-info`).then((r) => r.json()).then((j) => { biz.value = j && j.configured ? j.data : null }).catch(() => { biz.value = null }).finally(() => { bizLoaded.value = true })
-  try {
-    const json = await (await fetch(`${API_BASE_URL}/api/v1/categories`)).json()
-    if (json.success && Array.isArray(json.data)) {
-      allCategories.value = json.data
-      activeRoot.value = rootCategories.value[0] || null
-    }
-  } catch { /* the category bar still works; the menu just stays empty */ }
+  // On failure the category bar still works; the menu just stays empty.
+  await catalog.load()
+  activeRoot.value = rootCategories.value[0] || null
 })
 </script>
 
@@ -288,5 +285,6 @@ onMounted(async () => {
         <p v-else-if="bizLoaded" data-testid="business-info-missing" class="font-semibold text-warning">운영 사업자 정보가 등록되지 않았습니다. 사업자 정보 등록 전에는 주문이 접수되지 않습니다.</p>
       </template>
     </OmFooter>
+    <OmToast />
   </div>
 </template>

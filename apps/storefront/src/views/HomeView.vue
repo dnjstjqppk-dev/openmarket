@@ -1,382 +1,223 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+// Buyer home (PHASE 2 redesign on @olmoa/ui).
+// Data: /banners (operator-managed), /campaigns/lightning (a real running campaign only), /products, and the
+// shared category store. Nothing is filled in when an API returns nothing:
+//  - no banner -> a plain brand hero whose three benefits are server rules (auth.js WELCOME_CREDIT,
+//    temu-ops.js LATE_COMPENSATION_KRW, orders.js RETURN_WINDOW_DAYS)
+//  - no running campaign -> no deal section (previously the top-discount products were shown as "deals")
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useCartStore } from '../stores/cart'
+import { ChevronLeft, ChevronRight, Clock, Zap } from 'lucide-vue-next'
+import { OmButton, OmIconButton, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, discountRate } from '@olmoa/ui'
+import ProductCard from '../components/ProductCard.vue'
+import { useCatalogStore } from '../stores/catalog'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
 
-const cart = useCartStore()
+const catalog = useCatalogStore()
 const locale = useLocaleStore()
+
 const products = ref<any[]>([])
-const categories = ref<any[]>([])
-const lightningCampaign = ref<any>(null)
 const loading = ref(true)
-const activeCategorySlug = ref('ALL')
-const sortBy = ref<'popular' | 'price_asc' | 'price_desc' | 'discount'>('popular')
-
-const countdown = ref('')
-const campaignEndsAt = ref<number | null>(null)
+const loadError = ref<string | null>(null)
+const campaign = ref<any>(null)
+const deals = ref<any[]>([])
 const banners = ref<any[]>([])
-const currentBannerIdx = ref(0)
-let timer: any = null
-let bannerTimer: any = null
+const bannerIdx = ref(0)
 
-const nextBanner = () => {
-  if (banners.value.length > 0) {
-    currentBannerIdx.value = (currentBannerIdx.value + 1) % banners.value.length
-  }
+const activeRoot = ref<string>('ALL')
+const sortBy = ref<'popular' | 'discount' | 'price_asc' | 'price_desc'>('popular')
+const sortOptions = [
+  { value: 'popular', label: '구매 많은 순' },
+  { value: 'discount', label: '할인율 높은 순' },
+  { value: 'price_asc', label: '낮은 가격 순' },
+  { value: 'price_desc', label: '높은 가격 순' }
+]
+
+// ---- countdown: only for the running campaign's real ends_at ----------------------------------------
+const now = ref(Date.now())
+const endsAt = computed(() => {
+  const e = campaign.value?.ends_at
+  if (!e) return null
+  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(e) ? e : String(e).replace(' ', 'T') + 'Z')
+  return Number.isNaN(t) ? null : t
+})
+const countdown = computed(() => {
+  if (!endsAt.value) return ''
+  const s = Math.floor((endsAt.value - now.value) / 1000)
+  if (s <= 0) return ''
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  return [h, m, sec].map((n) => String(n).padStart(2, '0')).join(':')
+})
+
+let tick: ReturnType<typeof setInterval> | null = null
+let rotate: ReturnType<typeof setInterval> | null = null
+const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+function startRotation() {
+  if (rotate) clearInterval(rotate)
+  rotate = banners.value.length > 1 && !reducedMotion ? setInterval(() => step(1), 6000) : null
+}
+function step(d: number) {
+  const n = banners.value.length
+  if (n) bannerIdx.value = (bannerIdx.value + d + n) % n
+}
+function goBanner(i: number) { bannerIdx.value = i; startRotation() }
+
+async function getJson(path: string) {
+  const res = await fetch(`${API_BASE_URL}${path}`)
+  const json = await res.json().catch(() => null)
+  if (!res.ok || !json?.success) throw new Error(json?.error || `${path} (${res.status})`)
+  return json
 }
 
-const prevBanner = () => {
-  if (banners.value.length > 0) {
-    currentBannerIdx.value = (currentBannerIdx.value - 1 + banners.value.length) % banners.value.length
-  }
-}
-
-// Countdown only for a real running campaign (flash_sale_campaigns.ends_at). No synthetic timers.
-const updateCountdown = () => {
-  if (!campaignEndsAt.value) { countdown.value = ''; return }
-  const ms = campaignEndsAt.value - Date.now()
-  if (ms <= 0) { countdown.value = ''; return }
-  const t = Math.floor(ms / 1000)
-  const hr = Math.floor(t / 3600), min = Math.floor((t % 3600) / 60), sec = t % 60
-  countdown.value = `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
-onMounted(async () => {
-  updateCountdown()
-  timer = setInterval(updateCountdown, 1000)
-  bannerTimer = setInterval(nextBanner, 5000)
+async function load() {
+  loading.value = true
+  loadError.value = null
+  catalog.load()
+  // Optional sections fail quietly (they are simply not shown); the product list is the page's content.
+  getJson('/api/v1/banners').then((j) => { banners.value = Array.isArray(j.data) ? j.data : []; startRotation() }).catch(() => { banners.value = [] })
+  getJson('/api/v1/campaigns/lightning').then((j) => { campaign.value = j.data?.campaign || null; deals.value = (j.data?.deals || []).slice(0, 6) }).catch(() => { campaign.value = null; deals.value = [] })
   try {
-    const [prodRes, catRes, flashRes, bnrRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/products`),
-      fetch(`${API_BASE_URL}/api/v1/categories`),
-      fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`),
-      fetch(`${API_BASE_URL}/api/v1/banners`).catch(() => ({ json: async () => ({ success: false }) }))
-    ])
-    const prodJson = await prodRes.json()
-    const catJson = await catRes.json()
-    const flashJson = await flashRes.json()
-    const bnrJson = await bnrRes.json().catch(() => ({}))
-
-    if (prodJson.success) products.value = prodJson.data
-    if (catJson.success && Array.isArray(catJson.data)) {
-      categories.value = catJson.data.filter((c: any) => Number(c.depth) === 0)
-    }
-    if (flashJson.success) {
-      lightningCampaign.value = flashJson.data
-      const ends = flashJson.data?.campaign?.ends_at
-      campaignEndsAt.value = ends ? Date.parse(String(ends).replace(' ', 'T') + (String(ends).includes('Z') ? '' : 'Z')) : null
-      updateCountdown()
-    }
-    if (bnrJson?.success && Array.isArray(bnrJson.data) && bnrJson.data.length > 0) {
-      banners.value = bnrJson.data
-    }
-  } catch (e) {
-    console.error('Failed to fetch storefront data:', e)
+    const j = await getJson('/api/v1/products')
+    products.value = Array.isArray(j.data) ? j.data : []
+  } catch (e: any) {
+    loadError.value = e?.message || '상품을 불러오지 못했습니다'
   } finally {
     loading.value = false
   }
-})
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-  if (bannerTimer) clearInterval(bannerTimer)
-})
-
-const getDiscountPercent = (sale: number, orig: number) => {
-  if (!orig || orig <= sale) return 0
-  return Math.round(((orig - sale) / orig) * 100)
 }
 
-const filteredProducts = computed(() => {
-  let list = [...products.value]
-  if (activeCategorySlug.value !== 'ALL') {
-    list = list.filter(p =>
-      p.category_slug === activeCategorySlug.value ||
-      p.parent_category_slug === activeCategorySlug.value
-    )
-  }
-  if (sortBy.value === 'price_asc') {
-    list.sort((a, b) => a.lowest_sale_price - b.lowest_sale_price)
-  } else if (sortBy.value === 'price_desc') {
-    list.sort((a, b) => b.lowest_sale_price - a.lowest_sale_price)
-  } else if (sortBy.value === 'discount') {
-    list.sort((a, b) => getDiscountPercent(b.lowest_sale_price, b.lowest_original_price) - getDiscountPercent(a.lowest_sale_price, a.lowest_original_price))
-  } else {
-    list.sort((a, b) => (b.total_sold_count || 0) - (a.total_sold_count || 0))
-  }
-  return list
+onMounted(() => {
+  tick = setInterval(() => { now.value = Date.now() }, 1000)
+  load()
 })
+onUnmounted(() => { if (tick) clearInterval(tick); if (rotate) clearInterval(rotate) })
+watch(() => banners.value.length, () => { if (bannerIdx.value >= banners.value.length) bannerIdx.value = 0 })
 
-const flashDeals = computed(() => {
-  if (lightningCampaign.value?.deals?.length) {
-    return lightningCampaign.value.deals.slice(0, 5)
-  }
-  return [...products.value]
-    .sort((a, b) => getDiscountPercent(b.lowest_sale_price, b.lowest_original_price) - getDiscountPercent(a.lowest_sale_price, a.lowest_original_price))
-    .slice(0, 5)
+// ---- product list: client-side filter by root category (the list is the full active catalogue) --------
+const roots = computed(() => catalog.roots.filter((c) => Number(c.product_count) > 0))
+const rootTabs = computed(() => [{ slug: 'ALL', name: '전체', count: products.value.length }, ...roots.value.map((c) => ({ slug: c.slug, name: c.name, count: Number(c.product_count) }))])
+const visible = computed(() => {
+  let list = products.value
+  if (activeRoot.value !== 'ALL') list = list.filter((p) => p.category_slug === activeRoot.value || p.parent_category_slug === activeRoot.value)
+  const rate = (p: any) => discountRate(p.lowest_original_price, p.lowest_sale_price)
+  const sorted = [...list]
+  if (sortBy.value === 'price_asc') sorted.sort((a, b) => a.lowest_sale_price - b.lowest_sale_price)
+  else if (sortBy.value === 'price_desc') sorted.sort((a, b) => b.lowest_sale_price - a.lowest_sale_price)
+  else if (sortBy.value === 'discount') sorted.sort((a, b) => rate(b) - rate(a))
+  else sorted.sort((a, b) => (b.total_sold_count || 0) - (a.total_sold_count || 0))
+  return sorted
 })
+const activeRootName = computed(() => rootTabs.value.find((t) => t.slug === activeRoot.value)?.name || '전체')
 
-const quickAdd = (e: Event, product: any) => {
-  e.preventDefault()
-  e.stopPropagation()
-  cart.addItem({
-    product_id: product.id,
-    sku_id: product.default_sku_id || `${product.id}_sku_def`,
-    partner_id: product.partner_id || 'pt_001',
-    partner_name: product.partner_name || 'Olmoa Official Flagship',
-    title: product.title,
-    brand: product.brand,
-    option_Label: 'Standard Choice',
-    price: product.lowest_sale_price,
-    original_price: product.lowest_original_price,
-    quantity: 1,
-    thumbnail_url: product.thumbnail_url,
-    slug: product.slug
-  })
-}
+const banner = computed(() => banners.value[bannerIdx.value] || null)
+const benefits = [
+  { value: '10,000원', label: '신규 가입 적립금', to: '/register' },
+  { value: '5,300원', label: '배송 예정일 초과 시 적립', to: '/policy/shipping' },
+  { value: '7일', label: '배송 완료 후 반품 신청', to: '/legal/refund' }
+]
 </script>
 
 <template>
   <div class="pb-16">
-    <!-- Hero Promotional Banner Carousel (Dynamic D1 Data) -->
-    <section class="relative bg-gradient-to-r from-[#111111] via-[#FF5000] to-transparent text-white py-6 px-4 shadow-inner overflow-hidden">
-      <div class="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
-        <div class="max-w-2xl">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 text-xs font-extrabold uppercase tracking-wider mb-3 backdrop-blur-xs">
-            <span class="w-2 h-2 rounded-full bg-[#FFE600] animate-ping"></span>
-            {{ banners[currentBannerIdx]?.badge_text || 'Global Direct OpenMarket • 42 Root Categories Live' }}
-          </div>
-          <h1 class="text-3xl sm:text-5xl font-black tracking-tight leading-none mb-3">
-            {{ banners[currentBannerIdx]?.title || 'DIRECT FACTORY DEALS UP TO 70% OFF' }}
-          </h1>
-          <p class="text-white/90 text-sm sm:text-base font-medium mb-5">
-            {{ banners[currentBannerIdx]?.subtitle || '직영 상품과 검증된 입점 판매자 상품을 한 번에 결제하세요.' }}
-          </p>
-          <div class="flex flex-wrap items-center gap-3">
-            <RouterLink :to="banners[currentBannerIdx]?.link_url || '/channel/lightning-deals'" class="px-5 py-2.5 rounded-full bg-[#FFE600] text-black font-black text-xs sm:text-sm hover:bg-yellow-300 transition-colors shadow-md">
-              ⚡ 지금 특가 확인하기
-            </RouterLink>
-            <RouterLink to="/coupons" class="px-5 py-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm backdrop-blur-xs transition-colors">
-              🎟️ 10,000원 웰컴 크레딧
-            </RouterLink>
-          </div>
+    <!-- Hero ---------------------------------------------------------------------------------------- -->
+    <section class="mx-auto max-w-container px-4 pt-4 sm:px-6 sm:pt-6" aria-label="프로모션">
+      <div v-if="banner" class="relative overflow-hidden rounded-xl bg-secondary text-white">
+        <img :src="banner.image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-60" fetchpriority="high" />
+        <div class="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-transparent" aria-hidden="true" />
+        <div class="relative flex min-h-[220px] flex-col justify-end gap-3 p-6 sm:min-h-[300px] sm:p-10" aria-live="polite">
+          <span v-if="banner.badge_text" class="w-fit rounded-sm bg-white/15 px-2 py-0.5 text-2xs font-semibold tracking-wide backdrop-blur">{{ banner.badge_text }}</span>
+          <h1 class="max-w-xl text-2xl font-bold leading-tight sm:text-4xl">{{ banner.title }}</h1>
+          <p v-if="banner.subtitle" class="max-w-xl text-sm text-white/85 sm:text-md">{{ banner.subtitle }}</p>
+          <div><OmButton :to="banner.link_url" variant="primary" size="md">자세히 보기</OmButton></div>
         </div>
-
-        <div class="grid grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
-          <RouterLink to="/coupons" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-[#FFE600]">₩10,000</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">신규 가입 웰컴 적립금</div>
-          </RouterLink>
-          <RouterLink to="/policy/shipping" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-white">5,300원</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">배송 지연 시 보상 신청</div>
-          </RouterLink>
-          <RouterLink to="/policy/returns" class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3.5 text-center hover:bg-white/20 transition-colors">
-            <div class="text-2xl font-black text-[#FFE600]">7일</div>
-            <div class="text-[11px] text-white/90 font-medium mt-0.5">수령 후 반품 신청</div>
-          </RouterLink>
+        <div v-if="banners.length > 1" class="absolute bottom-4 right-4 flex items-center gap-2">
+          <span class="rounded-full bg-black/40 px-2.5 py-1 text-2xs tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
+          <OmIconButton label="이전 배너" size="sm" class="!bg-black/40 !text-white hover:!bg-black/60" @click="step(-1); startRotation()"><ChevronLeft class="h-4 w-4" /></OmIconButton>
+          <OmIconButton label="다음 배너" size="sm" class="!bg-black/40 !text-white hover:!bg-black/60" @click="step(1); startRotation()"><ChevronRight class="h-4 w-4" /></OmIconButton>
+        </div>
+        <div v-if="banners.length > 1" class="sr-only">
+          <button v-for="(b, i) in banners" :key="b.id" type="button" @click="goBanner(i)">{{ i + 1 }}번 배너: {{ b.title }}</button>
         </div>
       </div>
 
-      <!-- Banner Slide Indicator Controls -->
-      <div v-if="banners.length > 1" class="max-w-[1440px] mx-auto mt-4 flex items-center justify-between relative z-10 px-2">
-        <div class="flex items-center gap-1.5">
-          <button
-            v-for="(_, idx) in banners"
-            :key="idx"
-            @click="currentBannerIdx = idx"
-            :class="['h-1.5 rounded-full transition-all duration-300 cursor-pointer', currentBannerIdx === idx ? 'w-6 bg-[#FFE600]' : 'w-2 bg-white/40 hover:bg-white/70']"
-            :title="`Slide ${idx + 1}`"
-          />
+      <div v-else class="grid gap-6 rounded-xl border border-line bg-surface p-6 sm:p-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+        <div>
+          <p class="text-xs font-semibold text-primary">OLMOA</p>
+          <h1 class="mt-2 text-2xl font-bold leading-tight text-ink sm:text-3xl">직영 상품과 입점 판매자 상품을<br class="hidden sm:inline" /> 한 장바구니에서 결제하세요</h1>
+          <p class="mt-3 text-sm text-ink-muted">판매자마다 배송비와 무료배송 기준이 다르며, 장바구니에서 판매자별로 나누어 계산됩니다.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <OmButton to="/categories" variant="primary">카테고리 둘러보기</OmButton>
+            <OmButton to="/channel/best-sellers" variant="outline">베스트 상품</OmButton>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button @click="prevBanner" class="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center text-xs transition cursor-pointer" title="Previous Banner">‹</button>
-          <button @click="nextBanner" class="w-7 h-7 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center text-xs transition cursor-pointer" title="Next Banner">›</button>
-        </div>
+        <ul class="grid grid-cols-3 gap-2 sm:gap-3">
+          <li v-for="b in benefits" :key="b.label">
+            <RouterLink :to="b.to" class="flex h-full flex-col justify-between rounded-lg bg-surface-2 p-3 transition hover:bg-surface-3 sm:p-4">
+              <span class="text-lg font-bold text-ink sm:text-xl">{{ b.value }}</span>
+              <span class="mt-1 text-2xs text-ink-muted sm:text-xs">{{ b.label }}</span>
+            </RouterLink>
+          </li>
+        </ul>
       </div>
     </section>
 
-    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 mt-6 space-y-8">
-      <!-- Lightning Deals Row -->
-      <section v-if="!loading && flashDeals.length > 0" class="bg-white rounded-2xl p-5 shadow-xs border border-orange-200/80">
-        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1.5 text-[#E60023] font-black text-xl tracking-tight">
-              <svg class="w-6 h-6 fill-current" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
-              LIGHTNING DEALS
-            </div>
-            <span v-if="countdown" class="px-2.5 py-0.5 bg-red-50 text-[#E60023] font-extrabold text-xs rounded-full border border-red-200">
-              Ends in {{ countdown }}
+    <div class="mx-auto mt-8 max-w-container space-y-10 px-4 sm:px-6">
+      <!-- Lightning deals: only a real running campaign ---------------------------------------------- -->
+      <section v-if="campaign && deals.length" aria-labelledby="deals-title">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 id="deals-title" class="flex items-center gap-1.5 text-xl font-bold text-ink"><Zap class="h-5 w-5 text-accent" aria-hidden="true" />번개특가</h2>
+            <span v-if="countdown" class="inline-flex items-center gap-1 rounded-sm bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent tabular-nums">
+              <Clock class="h-3.5 w-3.5" aria-hidden="true" />{{ countdown }} 남음
             </span>
           </div>
-          <RouterLink to="/channel/lightning-deals" class="text-xs font-bold text-[#FF5000] hover:underline">
-            View All Flash Deals →
-          </RouterLink>
+          <RouterLink to="/channel/lightning-deals" class="text-sm font-medium text-ink-muted hover:text-ink">전체 보기</RouterLink>
         </div>
-
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <RouterLink
-            v-for="item in flashDeals"
-            :key="'flash-' + (item.product_id || item.id)"
-            :to="`/product/${item.slug}`"
-            class="group bg-orange-50/40 rounded-xl p-3 border border-orange-100 hover:border-[#FF5000] hover:shadow-md transition-all flex flex-col"
-          >
-            <div class="relative aspect-square rounded-lg overflow-hidden bg-white mb-2.5">
-              <img :src="item.thumbnail_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              <span class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded-md shadow-xs">
-                -{{ item.discount_rate || getDiscountPercent(item.deal_price || item.lowest_sale_price, item.lowest_original_price) }}%
-              </span>
-            </div>
-            <h3 class="text-xs font-semibold text-gray-800 line-clamp-1 mb-1 group-hover:text-[#FF5000]">{{ item.title }}</h3>
-            <div class="flex items-baseline gap-1.5 mt-auto">
-              <span class="text-base font-black text-[#E60023]">{{ locale.formatPrice(item.deal_price || item.lowest_sale_price) }}</span>
-              <span class="text-[11px] text-gray-400 line-through">{{ locale.formatPrice(item.lowest_original_price) }}</span>
-            </div>
-            <template v-if="item.allocated_stock > 0">
-              <div class="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                <div class="bg-gradient-to-r from-[#FF5000] to-[#E60023] h-full rounded-full" :style="{ width: `${item.sold_percent || 0}%` }"></div>
-              </div>
-              <span class="text-[10px] font-bold text-[#FF5000] mt-1">{{ Number(item.sold_quantity || 0).toLocaleString() }}개 판매</span>
-            </template>
-          </RouterLink>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <!-- No sold/remaining bars: flash_sale_items.sold_stock is never updated by orders (see LightningDealsView). -->
+          <ProductCard v-for="d in deals" :key="d.id" :product="d" />
         </div>
       </section>
 
-      <!-- Root Category Filter Bar & Sort Controls -->
-      <div class="sticky top-25 z-40 bg-[#F5F5F7]/95 backdrop-blur-md py-3 border-b border-gray-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div class="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 no-scrollbar">
+      <!-- Catalogue -------------------------------------------------------------------------------- -->
+      <section aria-labelledby="catalog-title">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h2 id="catalog-title" class="text-xl font-bold text-ink">{{ activeRoot === 'ALL' ? '지금 판매 중인 상품' : activeRootName }}</h2>
+          <div class="w-44"><OmSelect v-model="sortBy" :options="sortOptions" size="sm" aria-label="정렬" /></div>
+        </div>
+
+        <div v-if="rootTabs.length > 1" class="no-scrollbar -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="카테고리 필터">
           <button
-            @click="activeCategorySlug = 'ALL'"
-            :class="[
-              'px-4 py-2 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer',
-              activeCategorySlug === 'ALL'
-                ? 'bg-[#111111] text-white shadow-xs'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            ]"
+            v-for="t in rootTabs"
+            :key="t.slug"
+            type="button"
+            :aria-pressed="activeRoot === t.slug"
+            class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            :class="activeRoot === t.slug ? 'border-secondary bg-secondary text-secondary-on' : 'border-line bg-surface text-ink hover:border-line-strong'"
+            @click="activeRoot = t.slug"
           >
-            🔥 All Recommended ({{ products.length }})
+            {{ t.name }} <span class="tabular-nums" :class="activeRoot === t.slug ? 'text-secondary-on/70' : 'text-ink-subtle'">{{ t.count }}</span>
           </button>
-          <button
-            v-for="cat in categories.slice(0, 12)"
-            :key="cat.id"
-            @click="activeCategorySlug = cat.slug"
-            :class="[
-              'px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
-              activeCategorySlug === cat.slug
-                ? 'bg-[#FF5000] text-white shadow-xs'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-            ]"
-          >
-            {{ cat.name }}
-          </button>
-          <RouterLink
-            to="/categories"
-            class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-orange-50 text-[#FF5000] border border-orange-200 hover:bg-orange-100"
-          >
-            + All {{ categories.length }} Categories
-          </RouterLink>
+          <RouterLink to="/categories" class="shrink-0 rounded-full border border-dashed border-line-strong px-3.5 py-1.5 text-sm text-ink-muted hover:text-ink">전체 카테고리</RouterLink>
         </div>
 
-        <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
-          <span class="text-xs text-gray-500 font-medium">Sort by:</span>
-          <select
-            v-model="sortBy"
-            aria-label="Sort products by"
-            class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#FF5000]"
-          >
-            <option value="popular">Most Popular</option>
-            <option value="discount">Biggest Discount</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Loading Skeletons -->
-      <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div v-for="n in 10" :key="n" class="bg-white rounded-xl p-3 animate-pulse h-80 border border-gray-100">
-          <div class="w-full aspect-square bg-gray-200 rounded-lg mb-3"></div>
-          <div class="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
-          <div class="h-5 bg-gray-200 rounded w-1/2"></div>
-        </div>
-      </div>
-
-      <!-- High-Density Commercial Product Grid -->
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-        <RouterLink
-          v-for="product in filteredProducts"
-          :key="product.id"
-          :to="`/product/${product.slug}`"
-          class="group bg-white rounded-2xl overflow-hidden border border-slate-200/80 hover:border-[#FF5000] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col relative"
+        <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
+        <OmErrorState v-else-if="loadError" :message="loadError" :retrying="loading" @retry="load" />
+        <OmEmptyState
+          v-else-if="!visible.length"
+          :title="activeRoot === 'ALL' ? '판매 중인 상품이 없습니다' : `${activeRootName}에 판매 중인 상품이 없습니다`"
+          description="다른 카테고리를 선택하거나 검색해 보세요."
         >
-          <div class="relative aspect-square bg-gray-100 overflow-hidden">
-            <img
-              :src="product.thumbnail_url"
-              :alt="product.title"
-              loading="lazy"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-            <div
-              v-if="getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) > 0"
-              class="absolute top-2 left-2 bg-[#E60023] text-white text-[11px] font-black px-2 py-0.5 rounded-lg shadow-sm"
-            >
-              -{{ getDiscountPercent(product.lowest_sale_price, product.lowest_original_price) }}%
-            </div>
-            <div
-              v-if="(product.total_sold_count || 0) >= 300"
-              class="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-xs text-[#FFE600] text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1"
-            >
-              🔥 BEST SELLER
-            </div>
-          </div>
-
-          <div class="p-3.5 flex-1 flex flex-col justify-between">
-            <div>
-              <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                <span class="px-1.5 py-0.5 bg-orange-100 text-[#FF5000] text-[9px] font-black rounded uppercase tracking-tighter">CHOICE</span>
-                <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-1.5 py-0.2 rounded-full inline-flex items-center gap-0.5">🚀 무료배송</span>
-                <span class="text-[11px] font-bold text-slate-400 truncate">{{ product.brand }}</span>
-              </div>
-              <h2 class="text-xs sm:text-[13px] font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-[#FF5000] transition-colors mb-2">
-                {{ product.title }}
-              </h2>
-            </div>
-
-            <div>
-              <div class="flex items-baseline gap-1.5 flex-wrap">
-                <span class="text-base sm:text-lg font-black text-[#111111] tracking-tight">
-                  {{ locale.formatPrice(product.lowest_sale_price) }}
-                </span>
-                <span
-                  v-if="product.lowest_original_price > product.lowest_sale_price"
-                  class="text-[11px] text-gray-400 line-through"
-                >
-                  {{ locale.formatPrice(product.lowest_original_price) }}
-                </span>
-              </div>
-
-              <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                <div class="flex items-center gap-1 text-[11px] text-gray-500">
-                  <span v-if="product.review_count > 0 && product.avg_rating" class="text-[#FFB800] font-bold">★ {{ Number(product.avg_rating).toFixed(1) }}</span>
-                  <span v-if="product.review_count">({{ product.review_count }})</span>
-                  <span>•</span>
-                  <span v-if="product.total_sold_count > 0">{{ Number(product.total_sold_count).toLocaleString() }}개 판매</span>
-                </div>
-
-                <button
-                  @click="(e) => quickAdd(e, product)"
-                  class="w-7 h-7 rounded-full bg-orange-50 hover:bg-[#FF5000] text-[#FF5000] hover:text-white flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-                  title="Quick Add to Cart"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </RouterLink>
-      </div>
+          <OmButton v-if="activeRoot !== 'ALL'" variant="outline" size="sm" @click="activeRoot = 'ALL'">전체 상품 보기</OmButton>
+        </OmEmptyState>
+        <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+          <ProductCard v-for="(p, i) in visible" :key="p.id" :product="p" :eager="i < 5" />
+        </div>
+        <p v-if="!loading && !loadError && visible.length" class="mt-4 text-xs text-ink-subtle">
+          {{ visible.length.toLocaleString() }}개 상품 · 가격은 {{ locale.currency === 'KRW' ? '원화' : `${locale.currency} 환산 표시이며 결제는 원화` }} 기준
+        </p>
+      </section>
     </div>
   </div>
 </template>
