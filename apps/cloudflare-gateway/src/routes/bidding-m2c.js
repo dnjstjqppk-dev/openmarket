@@ -30,6 +30,19 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
     return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
+  // GET /api/v1/bidding/my-bids (Approved partner's own bids across campaigns)
+  if (p === '/api/v1/bidding/my-bids' && request.method === 'GET') {
+    const partner = await requireApprovedPartner(request, env);
+    const { results } = await env.DB.prepare(
+      `SELECT sb.*, bc.title AS campaign_title, bc.status AS campaign_status
+       FROM supplier_bids sb
+       JOIN bidding_campaigns bc ON bc.id = sb.campaign_id
+       WHERE sb.partner_id = ?
+       ORDER BY sb.created_at DESC`
+    ).bind(partner.partnerId).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
   // POST /api/v1/bidding/campaigns (Admin creates a reverse bidding campaign)
   if (p === '/api/v1/bidding/campaigns' && request.method === 'POST') {
     const admin = await requireAdmin(request, env);

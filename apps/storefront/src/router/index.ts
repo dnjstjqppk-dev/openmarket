@@ -19,6 +19,7 @@ const router = createRouter({
     { path: '/search', name: 'search', component: () => import('../views/SearchView.vue') },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
     { path: '/forgot-password', name: 'forgot-password', component: () => import('../views/ForgotPasswordView.vue') },
+    { path: '/verify-email', name: 'verify-email', component: () => import('../views/VerifyEmailView.vue') },
     { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue') },
     { path: '/channel/lightning-deals', name: 'lightning-deals', component: () => import('../views/LightningDealsView.vue') },
     { path: '/channel/best-sellers', name: 'best-sellers', component: () => import('../views/BestSellersView.vue') },
@@ -32,7 +33,8 @@ const router = createRouter({
     { path: '/legal/privacy', name: 'legal-privacy', component: () => import('../views/LegalPrivacyView.vue') },
     { path: '/payments/success', name: 'payment-success', component: () => import('../views/PaymentResultView.vue'), meta: { requiresAuth: true } },
     { path: '/payments/fail', name: 'payment-fail', component: () => import('../views/PaymentResultView.vue'), meta: { requiresAuth: true } },
-    { path: '/legal/refund', name: 'legal-refund', component: () => import('../views/LegalRefundView.vue') }
+    { path: '/legal/refund', name: 'legal-refund', component: () => import('../views/LegalRefundView.vue') },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') }
   ]
 })
 

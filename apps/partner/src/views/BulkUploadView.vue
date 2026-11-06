@@ -2,6 +2,9 @@
 import { ref } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
 
+// The one-click sample batch is a development aid: production sellers only see the CSV template.
+const isDev = (import.meta as any).env?.DEV === true
+
 const fileName = ref('')
 const parsedItems = ref<any[]>([])
 const uploading = ref(false)
@@ -74,7 +77,7 @@ const handleFileSelect = async (e: Event) => {
     const text = await file.text()
     parsedItems.value = parseCsvText(text)
     if (parsedItems.value.length === 0) {
-      errorMsg.value = 'No valid product rows found in CSV. Click "Load Sample Batch" to test.'
+      errorMsg.value = isDev ? 'No valid product rows found in CSV. Click "Load Sample Batch" to test.' : 'CSV에서 유효한 상품 행을 찾지 못했습니다. 템플릿 양식에 맞게 작성해 주세요.'
     }
   }
 }
@@ -118,7 +121,7 @@ const executeBulkUpload = async () => {
         <button @click="downloadSampleCsv" class="px-3.5 py-2 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-xs font-bold cursor-pointer">
           ⬇ Download CSV Template
         </button>
-        <button @click="loadSampleBatchDirectly" class="px-3.5 py-2 rounded-xl bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-black cursor-pointer">
+        <button v-if="isDev" @click="loadSampleBatchDirectly" class="px-3.5 py-2 rounded-xl bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-black cursor-pointer">
           ⚡ Load Sample 3-Product Batch
         </button>
       </div>

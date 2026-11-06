@@ -3,6 +3,7 @@
 
 import { buildCorsHeaders, errorResponse, json } from './lib/http.js';
 import { handleAuthRoutes } from './routes/auth.js';
+import { handleSocialAuthRoutes } from './routes/social-auth.js';
 import { handleCatalogRoutes } from './routes/catalog.js';
 import { handleOrderRoutes } from './routes/orders.js';
 import { handlePartnerRoutes } from './routes/partner.js';
@@ -25,6 +26,7 @@ import { handleMultiChannelRoutes } from './routes/multichannel.js';
 import { handleFinanceRoutes, reconcileIfDue } from './routes/finance.js';
 import { handleOnboardingRoutes } from './routes/onboarding.js';
 import { handleAdminSecurityRoutes } from './routes/admin-security.js';
+import { handleClientErrorRoutes } from './routes/client-errors.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 import { purgeExpiredPii } from './services/privacy.js';
 import { enforceRateLimit, classify } from './lib/ratelimit.js';
@@ -35,6 +37,7 @@ const SERVICE_VERSION = '2.0.0-v3-integrity';
 const ROUTERS = [
   handleAdminSecurityRoutes, // /auth/2fa/* and /admin/admin-users before the generic auth/admin routers
   handleAuthRoutes,
+  handleSocialAuthRoutes,
   handleOnboardingRoutes, // before partner/admin routers: '/api/v1/partner-applications' shares their prefixes
   handleBusinessRoutes,
   handlePaymentRoutes,
@@ -55,7 +58,8 @@ const ROUTERS = [
   handleOrderRoutes,
   handlePartnerRoutes,
   handleAdminRoutes,
-  handleIntegrationRoutes
+  handleIntegrationRoutes,
+  handleClientErrorRoutes
 ];
 
 async function health(env, corsHeaders) {

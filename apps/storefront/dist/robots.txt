@@ -1,8 +1,12 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /api/
+Disallow: /cart
 Disallow: /checkout
+Disallow: /orders
+Disallow: /profile
+Disallow: /addresses
+Disallow: /wishlist
+Disallow: /payments/
 
-Sitemap: https://olmoa.com/sitemap.xml
-
+# Product sitemap is served by the API gateway (moves to the apex domain after DNS cutover).
+Sitemap: https://olmoa-api.dnjstjqppk.workers.dev/sitemap.xml

@@ -7,6 +7,7 @@ import 'models/product.dart';
 import 'views/home_view.dart';
 import 'views/cart_view.dart';
 import 'views/orders_view.dart';
+import 'views/account_view.dart';
 
 void main() {
   runApp(const OlmoaCustomerApp());
@@ -72,6 +73,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
       HomeView(onAddToCart: _addToCart),
       CartView(items: _cartItems, onClearCart: _clearCart),
       const OrdersView(),
+      const AccountView(),
     ];
 
     return Scaffold(
@@ -104,6 +106,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFFFA541C),
         unselectedItemColor: Colors.grey.shade400,
         items: [
@@ -117,6 +120,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
             label: '장바구니',
           ),
           const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: '주문내역'),
+          const BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
         ],
       ),
     );

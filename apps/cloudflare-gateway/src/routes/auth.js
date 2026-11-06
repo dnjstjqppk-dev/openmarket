@@ -3,7 +3,8 @@
 
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from '../utils/crypto-auth.js';
 import { issueToken, requireAuth } from '../lib/auth.js';
-import { json, readJson, bad, unauthorized, conflict, str, HttpError } from '../lib/http.js';
+import { json, readJson, bad, unauthorized, conflict, str, HttpError, unavailable } from '../lib/http.js';
+import { emailConfigured, sendEmail, storefrontBaseUrl, resetPasswordMail, verifyEmailMail } from '../lib/email.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { grantCreditStatements, getActiveOperator } from '../lib/ledger.js';
 import { exportCustomerData, withdrawalBlockers, withdrawCustomer } from '../services/privacy.js';
@@ -182,19 +183,29 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const email = str(body.email, { field: '이메일', max: 254, required: true }).toLowerCase();
     const user = await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first();
     let devToken;
+    // NOTE: the answer below depends on provider configuration, not on whether the address exists (no enumeration).
     if (user) {
       const token = randomToken(32);
       await env.DB.prepare('INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)')
         .bind(newId('prt'), user.id, await sha256Hex(token), new Date(Date.now() + 30 * 60 * 1000).toISOString()).run();
-      // E-mail delivery provider is not integrated yet; the token is only exposed in local development.
+      // The raw token is only exposed in local development; production buyers get it by mail.
       if (env.ENVIRONMENT === 'development') devToken = token;
+      if (emailConfigured(env)) {
+        const mail = resetPasswordMail(env, `${storefrontBaseUrl(env)}/forgot-password?token=${token}`);
+        try {
+          await sendEmail(env, { to: email, subject: mail.subject, html: mail.html });
+        } catch {
+          throw unavailable('EMAIL_SEND_FAILED', '재설정 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+        // sent; unknown addresses get the identical answer below
+      }
     }
     // No mail provider is integrated, so nothing is sent: say so instead of "안내가 발송됩니다" (a buyer would
     // wait for a mail that never comes). Same answer for registered and unknown addresses (no enumeration).
     return json(corsHeaders, {
       success: true,
-      message: '현재 이메일 발송 기능이 연동되어 있지 않아 재설정 안내 메일을 보내지 못합니다. 고객센터로 문의해 주세요.',
-      email_delivery: 'NOT_INTEGRATED',
+      message: emailConfigured(env) ? '재설정 안내 메일을 발송했습니다. 메일함에서 30분 안에 링크를 열어 주세요.' : '현재 이메일 발송 기능이 연동되어 있지 않아 재설정 안내 메일을 보내지 못합니다. 고객센터로 문의해 주세요.',
+      email_delivery: emailConfigured(env) ? 'SENT' : 'NOT_INTEGRATED',
       ...(devToken ? { dev_reset_token: devToken } : {})
     });
   }
@@ -219,7 +230,17 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const token = randomToken(24);
     await env.DB.prepare('INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)')
       .bind(newId('evt'), me.userId, await sha256Hex(token), new Date(Date.now() + 24 * 3600 * 1000).toISOString()).run();
-    return json(corsHeaders, { success: true, message: '인증 메일 발송 요청이 접수되었습니다.', email_delivery: 'NOT_INTEGRATED', ...(env.ENVIRONMENT === 'development' ? { dev_verification_token: token } : {}) });
+    if (emailConfigured(env)) {
+      const account = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(me.userId).first();
+      const mail = verifyEmailMail(env, `${storefrontBaseUrl(env)}/verify-email?token=${token}`);
+      try {
+        await sendEmail(env, { to: account.email, subject: mail.subject, html: mail.html });
+      } catch {
+        throw unavailable('EMAIL_SEND_FAILED', '인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+      return json(corsHeaders, { success: true, message: '인증 메일을 발송했습니다. 메일함에서 24시간 안에 링크를 열어 주세요.', email_delivery: 'SENT' });
+    }
+    return json(corsHeaders, { success: true, message: '현재 이메일 발송 기능이 연동되어 있지 않아 인증 메일을 보내지 못합니다. 고객센터로 문의해 주세요.', email_delivery: 'NOT_INTEGRATED', ...(env.ENVIRONMENT === 'development' ? { dev_verification_token: token } : {}) });
   }
 
   if (p === '/api/v1/auth/verify-email' && request.method === 'POST') {

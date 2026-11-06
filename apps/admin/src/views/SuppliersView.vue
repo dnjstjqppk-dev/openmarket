@@ -18,49 +18,45 @@ const campaigns = ref<any[]>([])
 const activeCampaignId = ref('')
 const campaignBids = ref<any[]>([])
 const showNewCampaignModal = ref(false)
-const newCampaign = ref({
-  title: '2026 Q4 전략 카테고리 역경매 대량 소싱',
-  category_id: 'cat_e_audio',
-  target_wholesale_price: 28000,
-  target_quantity: 1000,
-  deadline_at: '2026-12-31 23:59:59',
-  notes: 'KC인증 완료 및 3일 내 출고 가능한 검증 공장 우선 배정'
-})
+const newCampaign = ref<any>({ title: '', category_id: '', ceiling_supply_price: null, min_moq: null, notes: '' })
 
 async function loadCampaigns() {
-  const r = await adminApi('/api/v1/admin/bidding/campaigns')
+  const r = await adminApi('/api/v1/bidding/campaigns?status=ALL')
   campaigns.value = r.data.data || []
 }
 
 async function createCampaign() {
-  const r = await adminApi('/api/v1/admin/bidding/campaigns', {
+  const r = await adminApi('/api/v1/bidding/campaigns', {
     method: 'POST',
     json: {
-      ...newCampaign.value,
-      target_wholesale_price: Number(newCampaign.value.target_wholesale_price),
-      target_quantity: Number(newCampaign.value.target_quantity)
+      title: newCampaign.value.title,
+      category_id: newCampaign.value.category_id,
+      ceiling_supply_price: Number(newCampaign.value.ceiling_supply_price),
+      min_moq: Number(newCampaign.value.min_moq),
+      target_spec: { notes: newCampaign.value.notes }
     }
   })
-  msg.value = r.ok ? '✓ M2C 역경매 캠페인이 개설되었습니다.' : (r.data.error || '캠페인 개설 실패')
+  msg.value = r.ok ? `✓ ${r.data.message || 'M2C 역경매 캠페인이 개설되었습니다.'}` : (r.data.error || '캠페인 개설 실패')
   if (r.ok) {
     showNewCampaignModal.value = false
+    newCampaign.value = { title: '', category_id: '', ceiling_supply_price: null, min_moq: null, notes: '' }
     loadCampaigns()
   }
 }
 
 async function viewBids(campaignId: string) {
   activeCampaignId.value = campaignId
-  const r = await adminApi(`/api/v1/admin/bidding/campaigns/${campaignId}/bids`)
-  campaignBids.value = r.data.data || []
+  const r = await adminApi(`/api/v1/bidding/campaigns/${campaignId}`)
+  campaignBids.value = r.data.data?.bids || []
 }
 
 async function awardBid(campaignId: string, bidId: string) {
-  if (!confirm('이 입찰을 최종 낙찰(Award)하고 전탁 독점 상품으로 등록하시겠습니까?')) return
+  if (!confirm('이 입찰을 최종 낙찰(Award)하시겠습니까? 캠페인은 완료 처리되고 나머지 입찰은 미선정됩니다.')) return
   const r = await adminApi(`/api/v1/admin/bidding/campaigns/${campaignId}/award`, {
     method: 'POST',
-    json: { bid_id: bidId }
+    json: { winning_bid_id: bidId }
   })
-  msg.value = r.ok ? '✓ 입찰이 성공적으로 낙찰되어 전탁 납품 상품이 생성되었습니다.' : (r.data.error || '낙찰 처리 실패')
+  msg.value = r.ok ? `✓ ${r.data.message || '낙찰 처리되었습니다.'}` : (r.data.error || '낙찰 처리 실패')
   if (r.ok) {
     loadCampaigns()
     viewBids(campaignId)
@@ -198,8 +194,8 @@ onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
               <span class="px-2 py-0.5 rounded font-mono text-[10px] bg-slate-100 font-bold">{{ c.status }}</span>
             </div>
             <div class="text-[11px] text-slate-500 flex gap-3">
-              <span>목표 도매가: <strong class="text-rose-600">{{ won(c.target_wholesale_price) }}</strong></span>
-              <span>목표 수량: <strong>{{ c.target_quantity }}개</strong></span>
+              <span>상한 공급가: <strong class="text-rose-600">{{ won(c.ceiling_supply_price) }}</strong></span>
+              <span>최소 MOQ: <strong>{{ c.min_moq }}개</strong></span>
             </div>
             <div class="text-[10px] text-indigo-600 font-bold">👉 클릭하여 입찰 제안서 {{ c.bid_count || 0 }}건 조회</div>
           </div>
@@ -221,16 +217,16 @@ onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
             <div v-for="b in campaignBids" :key="b.id" class="p-3 rounded-lg border border-slate-100 space-y-1.5 bg-slate-50">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-slate-900">{{ b.partner_name || b.partner_id }}</span>
-                <span :class="['px-2 py-0.5 rounded text-[10px] font-bold', b.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700']">
-                  {{ b.status === 'ACCEPTED' ? '★ 낙찰 완료' : b.status }}
+                <span :class="['px-2 py-0.5 rounded text-[10px] font-bold', b.status === 'WON' ? 'bg-emerald-100 text-emerald-800' : b.status === 'LOST' ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-800']">
+                  {{ b.status === 'WON' ? '★ 낙찰 완료' : b.status === 'LOST' ? '미선정' : b.status }}
                 </span>
               </div>
               <div class="flex justify-between text-[11px]">
-                <span>제시 도매가: <strong class="text-rose-600">{{ won(b.wholesale_supply_price) }}</strong></span>
-                <span>공급 가능: <strong>{{ b.supply_capacity }}개</strong> ({{ b.delivery_lead_days }}일 출고)</span>
+                <span>제시 공급가: <strong class="text-rose-600">{{ won(b.bid_supply_price) }}</strong></span>
+                <span>MOQ: <strong>{{ b.moq }}개</strong> ({{ b.production_lead_days }}일 리드타임)</span>
               </div>
               <div v-if="b.bid_notes" class="text-[10px] text-slate-500 italic">"{{ b.bid_notes }}"</div>
-              <div v-if="b.status === 'PENDING'" class="pt-1 flex justify-end">
+              <div v-if="b.status !== 'WON' && b.status !== 'LOST'" class="pt-1 flex justify-end">
                 <button
                   @click="awardBid(activeCampaignId, b.id)"
                   class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
@@ -251,21 +247,21 @@ onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
         <div class="space-y-3">
           <div>
             <label class="block font-bold text-slate-700 mb-1">캠페인 제목</label>
-            <input v-model="newCampaign.title" class="w-full h-9 px-3 rounded border border-slate-300" />
+            <input v-model="newCampaign.title" placeholder="예: Q4 무선이어폰 대량 소싱" class="w-full h-9 px-3 rounded border border-slate-300" />
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block font-bold text-slate-700 mb-1">카테고리 ID</label>
-              <input v-model="newCampaign.category_id" class="w-full h-9 px-3 rounded border border-slate-300" />
+              <input v-model="newCampaign.category_id" placeholder="예: cat_e_audio" class="w-full h-9 px-3 rounded border border-slate-300" />
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-1">목표 조달 수량</label>
-              <input v-model.number="newCampaign.target_quantity" type="number" class="w-full h-9 px-3 rounded border border-slate-300" />
+              <label class="block font-bold text-slate-700 mb-1">최소 MOQ</label>
+              <input v-model.number="newCampaign.min_moq" type="number" min="1" placeholder="예: 100" class="w-full h-9 px-3 rounded border border-slate-300" />
             </div>
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">MD 목표 도매 상한가 (KRW)</label>
-            <input v-model.number="newCampaign.target_wholesale_price" type="number" class="w-full h-9 px-3 rounded border border-slate-300 font-bold text-rose-600" />
+            <label class="block font-bold text-slate-700 mb-1">상한 공급가 (KRW)</label>
+            <input v-model.number="newCampaign.ceiling_supply_price" type="number" min="100" placeholder="예: 28000" class="w-full h-9 px-3 rounded border border-slate-300 font-bold text-rose-600" />
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">소싱 요건 및 품질 메모</label>

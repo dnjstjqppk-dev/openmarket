@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
+// Quick-fill presets are a development aid and hidden in production builds.
+const isDev = (import.meta as any).env?.DEV === true;
+
 interface Variant {
   variant_code: string;
   option_values: Record<string, string>;
@@ -408,8 +411,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Quick Fill Sample Presets -->
-        <div class="space-y-2">
+        <!-- Quick Fill Sample Presets (dev only) -->
+        <div v-if="isDev" class="space-y-2">
           <span class="text-xs font-semibold text-slate-600">빠른 테스트 샘플 URL 프리셋:</span>
           <div class="flex flex-wrap gap-2">
             <button

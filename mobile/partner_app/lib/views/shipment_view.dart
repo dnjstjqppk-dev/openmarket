@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import '../models/sub_order.dart';
 import '../services/partner_api_service.dart';
+import 'login_view.dart';
 
 class PartnerShipmentView extends StatefulWidget {
   const PartnerShipmentView({super.key});
@@ -16,21 +17,36 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
   final PartnerApiService _apiService = PartnerApiService();
   List<SubOrder> _orders = [];
   bool _isLoading = true;
+  bool _authReady = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadOrders();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await PartnerAuthSession.restore();
+    if (!mounted) return;
+    setState(() => _authReady = true);
+    if (PartnerAuthSession.isAuthenticated) _loadOrders();
   }
 
   Future<void> _loadOrders() async {
-    final list = await _apiService.fetchPartnerOrders();
-    if (mounted) {
-      setState(() {
-        _orders = list;
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final list = await _apiService.fetchPartnerOrders();
+      if (mounted) setState(() => _orders = list);
+    } on PartnerAuthRequiredException {
+      if (mounted) setState(() {});
+    } on PartnerApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
     }
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _dispatchOrder(SubOrder order) {
@@ -53,19 +69,26 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
             ElevatedButton(
               onPressed: () async {
                 final tracking = controller.text.trim();
-                if (tracking.isNotEmpty) {
-                  await _apiService.updateTracking(
-                    subOrderId: order.id,
-                    carrier: 'CJ대한통운',
-                    trackingNo: tracking,
-                  );
+                if (tracking.isEmpty) return;
+                final r = await _apiService.updateTracking(
+                  subOrderId: order.id,
+                  carrier: 'CJ대한통운',
+                  trackingNo: tracking,
+                );
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                if (r['ok'] == true) {
                   setState(() {
                     order.status = 'SHIPPED';
-                    order.trackingNumber = tracking;
+                    order.trackingNumber = (r['tracking_number'] ?? tracking).toString();
                   });
-                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('[${order.subOrderNo}] 출고 및 송장 등록 완료')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text((r['error'] ?? '출고 처리에 실패했습니다.').toString())),
                   );
                 }
               },
@@ -79,8 +102,33 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_authReady) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (!PartnerAuthSession.isAuthenticated) {
+      return PartnerLoginView(onSuccess: _init, reason: '출고 관리를 하려면 판매자 계정으로 로그인해 주세요.');
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loadOrders,
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_orders.isEmpty) {
+      return const Center(
+        child: Text('출고할 주문이 없습니다.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      );
     }
 
     return ListView.separated(

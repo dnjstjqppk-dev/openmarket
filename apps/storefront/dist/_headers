@@ -1,0 +1,10 @@
+# Cloudflare Workers static-asset headers (Vite copies public/ -> dist/ verbatim).
+# SPA shell is never cached; hashed /assets/* files are immutable.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://js.tosspayments.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://*.tosspayments.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'

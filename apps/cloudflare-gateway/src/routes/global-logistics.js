@@ -75,20 +75,34 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
       subOrder.status === 'SHIPPED' ? 'SHIPPED' : 'PREPARING'
     );
 
-    const carrierInfo = SUPPORTED_CARRIERS.find(c => c.code === subOrder.carrier_code || c.name === subOrder.carrier_code) || {
-      code: subOrder.carrier_code || 'CJ_GLOBAL',
-      name: subOrder.carrier_code || 'CJ대한통운 국제특송',
-      tracking_url: 'https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo='
-    };
+    // No carrier recorded -> no carrier (it used to default to "CJ대한통운 국제특송" with a CJ tracking link).
+    // A carrier name we do not know is shown as entered, without a tracking link.
+    const carrierInfo = subOrder.carrier_code
+      ? (SUPPORTED_CARRIERS.find(c => c.code === subOrder.carrier_code || c.name === subOrder.carrier_code)
+        || { code: subOrder.carrier_code, name: subOrder.carrier_code, tracking_url: null })
+      : null;
 
     // Only recorded events are shown. (A synthesized 7-stage timeline with invented timestamps,
     // flight numbers and customs events used to be returned here — removed as misleading to customers.)
     const timeline = logs || [];
 
     const currentStageMeta = MILESTONE_STAGES.find(m => m.stage === currentMilestone) || MILESTONE_STAGES[0];
+    // A stage is "completed" only when it happened: a carrier event was recorded for it, or the sub-order's own
+    // state proves it (paid -> preparing, shipped_at -> shipped, delivered -> delivered). The cross-border stages
+    // (export clearance, air/sea, import customs, domestic hand-over) need a recorded event — they used to be
+    // marked done for every delivered parcel, including purely domestic ones.
+    const logged = new Set((logs || []).map(l => l.stage_code));
+    const cancelled = ['CANCELLED', 'EXPIRED', 'PAYMENT_PENDING'].includes(subOrder.status);
+    const delivered = ['DELIVERED', 'PURCHASE_CONFIRMED', 'COMPLETED', 'RETURN_REQUESTED', 'RETURNED'].includes(subOrder.status) || Boolean(subOrder.delivered_at);
+    const proven = {
+      PREPARING: !cancelled,
+      SHIPPED: Boolean(subOrder.shipped_at) || delivered,
+      DELIVERED: delivered
+    };
     const milestones = MILESTONE_STAGES.map(m => ({
       ...m,
-      completed: m.order <= currentStageMeta.order,
+      completed: logged.has(m.stage) || Boolean(proven[m.stage]),
+      recorded: logged.has(m.stage),
       current: m.stage === currentMilestone
     }));
 
@@ -102,10 +116,10 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
         status: subOrder.status,
         milestone_status: currentMilestone,
         current_milestone: currentMilestone,
-        carrier: carrierInfo.name,
+        carrier: carrierInfo ? carrierInfo.name : null,
         carrier_info: carrierInfo,
         tracking_number: subOrder.tracking_number,
-        full_tracking_url: subOrder.tracking_number ? `${carrierInfo.tracking_url}${subOrder.tracking_number}` : null,
+        full_tracking_url: subOrder.tracking_number && carrierInfo && carrierInfo.tracking_url ? `${carrierInfo.tracking_url}${encodeURIComponent(subOrder.tracking_number)}` : null,
         pccc: subOrder.pccc ? subOrder.pccc.slice(0, 3) + '*********' + subOrder.pccc.slice(-1) : null,
         customs_clearance_no: subOrder.customs_clearance_no || null,
         flight_vessel_no: subOrder.flight_vessel_no || null,
@@ -125,10 +139,10 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     const body = await request.json().catch(() => ({}));
     const subOrderId = body.sub_order_id;
     const stageCode = String(body.milestone || body.stage_code || 'SHIPPED').toUpperCase();
-    const location = body.location || '글로벌 물류 허브';
+    const location = body.location || ''; // only what the carrier reported (no invented "글로벌 물류 허브")
     const description = body.description || '운송 상태가 갱신되었습니다.';
     const trackingNumber = body.tracking_number || null;
-    const carrierCode = body.carrier || body.carrier_code || 'CJ_GLOBAL';
+    const carrierCode = body.carrier || body.carrier_code || null; // falls back to the sub-order's own carrier below
     const customsClearanceNo = body.customs_clearance_no || null;
 
     if (!subOrderId) {
@@ -148,7 +162,7 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
       env.DB.prepare(
         `INSERT INTO milestone_tracking_logs (id, sub_order_id, carrier_code, tracking_number, stage_code, stage_name, location, description, occurred_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-      ).bind(logId, subOrder.id, carrierCode, trackingNumber || subOrder.tracking_number || '', stageCode, stageMeta.name, location, description)
+      ).bind(logId, subOrder.id, carrierCode || subOrder.carrier_code || '', trackingNumber || subOrder.tracking_number || '', stageCode, stageMeta.name, location, description)
     );
 
     // Update sub_order status

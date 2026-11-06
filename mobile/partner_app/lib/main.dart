@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'views/dashboard_view.dart';
 import 'views/shipment_view.dart';
+import 'views/account_view.dart';
 
 void main() {
   runApp(const OlmoaPartnerApp());
@@ -48,6 +49,7 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
     final views = [
       PartnerDashboardView(onNavigateToShipments: () => setState(() => _currentIndex = 1)),
       const PartnerShipmentView(),
+      const PartnerAccountView(),
     ];
 
     return Scaffold(
@@ -67,10 +69,12 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF4F46E5),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: '대시보드'),
           BottomNavigationBarItem(icon: Icon(Icons.local_shipping), label: '출고·배송'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
         ],
       ),
     );

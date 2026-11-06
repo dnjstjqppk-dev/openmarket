@@ -22,13 +22,13 @@ class ProductSku {
 
   factory ProductSku.fromJson(Map<String, dynamic> json) {
     return ProductSku(
-      id: json['id'] ?? '',
-      productId: json['product_id'] ?? '',
-      skuCode: json['sku_code'] ?? '',
-      optionCombinationJson: json['option_combination_json'] ?? '{}',
-      originalPrice: json['original_price'] ?? 0,
-      salePrice: json['sale_price'] ?? 0,
-      stockQuantity: json['stock_quantity'] ?? 0,
+      id: (json['id'] ?? '').toString(),
+      productId: (json['product_id'] ?? '').toString(),
+      skuCode: (json['sku_code'] ?? '').toString(),
+      optionCombinationJson: (json['option_combination_json'] ?? '{}').toString(),
+      originalPrice: Product._asInt(json['original_price']),
+      salePrice: Product._asInt(json['sale_price']),
+      stockQuantity: Product._asInt(json['stock_quantity']),
     );
   }
 }
@@ -43,6 +43,9 @@ class Product {
   final int totalSoldCount;
   final String categoryName;
   final String businessName;
+  // Cheapest in-stock variant from GET /api/v1/products (routes/catalog.js).
+  // The app never invents a SKU id: without this, the line cannot be ordered.
+  final String defaultSkuId;
 
   Product({
     required this.id,
@@ -54,52 +57,33 @@ class Product {
     required this.totalSoldCount,
     this.categoryName = '',
     this.businessName = '',
+    this.defaultSkuId = '',
   });
+
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v?.toString() ?? '') ?? 0;
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      thumbnailUrl: json['thumbnail_url'] ?? '',
-      descriptionHtml: json['description_html'] ?? '',
-      lowestOriginalPrice: json['lowest_original_price'] ?? 0,
-      lowestSalePrice: json['lowest_sale_price'] ?? 0,
-      totalSoldCount: json['total_sold_count'] ?? 0,
-      categoryName: json['category_name'] ?? '',
-      businessName: json['business_name'] ?? '',
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      thumbnailUrl: (json['thumbnail_url'] ?? '').toString(),
+      descriptionHtml: (json['description_html'] ?? '').toString(),
+      lowestOriginalPrice: _asInt(json['lowest_original_price']),
+      lowestSalePrice: _asInt(json['lowest_sale_price']),
+      totalSoldCount: _asInt(json['total_sold_count']),
+      categoryName: (json['category_name'] ?? '').toString(),
+      businessName: (json['business_name'] ?? '').toString(),
+      defaultSkuId: (json['default_sku_id'] ?? '').toString(),
     );
   }
 
   int get discountPercent {
     if (lowestOriginalPrice <= 0) return 0;
     return (((lowestOriginalPrice - lowestSalePrice) / lowestOriginalPrice) * 100).round();
-  }
-
-  static List<Product> fallbackCatalog() {
-    return [
-      Product(
-        id: 'prod_e_01',
-        title: '초경량 고속 무선충전 앤커 보조배터리 10000mAh',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1609081219090-a6d81d3085bf?w=400',
-        descriptionHtml: '<p>초고속 무선 충전을 지원하는 대용량 보조배터리</p>',
-        lowestOriginalPrice: 49000,
-        lowestSalePrice: 28900,
-        totalSoldCount: 1240,
-        categoryName: '가전/디지털',
-        businessName: '글로벌 테크 코리아',
-      ),
-      Product(
-        id: 'prod_e_02',
-        title: '노이즈 캔슬링 블루투스 5.3 무선 헤드셋',
-        thumbnailUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400',
-        descriptionHtml: '<p>풍부한 사운드와 강력한 노이즈 캔슬링</p>',
-        lowestOriginalPrice: 89000,
-        lowestSalePrice: 45000,
-        totalSoldCount: 850,
-        categoryName: '가전/디지털',
-        businessName: '사운드 마스터',
-      ),
-    ];
   }
 }
 

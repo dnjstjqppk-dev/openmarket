@@ -22,23 +22,25 @@ const defaultDescriptionTemplate = `<div class="product-detail-body space-y-4">
   <p>[판매자 작성] 사용·보관 시 주의사항을 적어 주세요.</p>
 </div>`
 
+// The form starts empty: every commercial fact (brand, prices, stock, image,
+// origin, package) must be entered by the seller. Nothing ships pre-filled.
 const newProd = ref({
   title: '',
-  brand: 'OLMOA DIRECT',
-  category_id: 'cat_e_audio',
-  original_price: 89000,
-  sale_price: 59000,
-  supply_price: 35000,
+  brand: '',
+  category_id: '',
+  original_price: null as number | null,
+  sale_price: null as number | null,
+  supply_price: null as number | null,
   custody_type: 'SEMI_MANAGED',
-  stock_quantity: 120,
-  hs_code: '6109.10',
-  country_origin: 'KR',
-  warehouse_location: 'INCHEON_FBO',
-  package_length_cm: 25,
-  package_width_cm: 20,
-  package_height_cm: 12,
-  package_weight_kg: 0.8,
-  thumbnail_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80',
+  stock_quantity: null as number | null,
+  hs_code: '',
+  country_origin: '',
+  warehouse_location: '',
+  package_length_cm: null as number | null,
+  package_width_cm: null as number | null,
+  package_height_cm: null as number | null,
+  package_weight_kg: null as number | null,
+  thumbnail_url: '',
   description_html: defaultDescriptionTemplate
 })
 
@@ -340,6 +342,7 @@ onMounted(loadProducts)
         <div>
           <label class="block font-bold text-gray-700 mb-1">HS Code (관세 품목분류코드)</label>
           <select v-model="newProd.hs_code" class="w-full h-9 px-2.5 rounded-lg border border-gray-300 bg-white font-mono">
+            <option value="" disabled>선택해 주세요</option>
             <option value="6109.10">6109.10 (면 티셔츠/의류)</option>
             <option value="8517.13">8517.13 (스마트폰/무선통신)</option>
             <option value="8518.30">8518.30 (헤드폰/이어폰)</option>
@@ -351,6 +354,7 @@ onMounted(loadProducts)
         <div>
           <label class="block font-bold text-gray-700 mb-1">원산지 / 제조국</label>
           <select v-model="newProd.country_origin" class="w-full h-9 px-2.5 rounded-lg border border-gray-300 bg-white">
+            <option value="" disabled>선택해 주세요</option>
             <option value="KR">🇰🇷 대한민국 (KR)</option>
             <option value="US">🇺🇸 미국 (US)</option>
             <option value="CN">🇨🇳 중국 (CN)</option>
@@ -362,6 +366,7 @@ onMounted(loadProducts)
         <div>
           <label class="block font-bold text-gray-700 mb-1">출고 물류 거점</label>
           <select v-model="newProd.warehouse_location" class="w-full h-9 px-2.5 rounded-lg border border-gray-300 bg-white">
+            <option value="" disabled>선택해 주세요</option>
             <option value="INCHEON_FBO">인천 자유무역 보세창고 (FBO)</option>
             <option value="DOMESTIC_3PL">국내 3PL 당일출고 센터</option>
             <option value="OVERSEAS_WEIHAI">중국 위해(Weihai) 글로벌 허브</option>
@@ -375,7 +380,8 @@ onMounted(loadProducts)
       <div class="p-4 rounded-xl bg-orange-50/60 border border-orange-200 text-xs space-y-2">
         <label class="block font-bold text-gray-800">대표 썸네일 이미지 (Cloudflare R2 스토리지 업로드)</label>
         <div class="flex items-center gap-4">
-          <img :src="newProd.thumbnail_url" class="w-16 h-16 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
+          <img v-if="newProd.thumbnail_url" :src="newProd.thumbnail_url" class="w-16 h-16 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
+          <div v-else class="w-16 h-16 rounded-xl bg-white border border-dashed border-gray-300 shrink-0 flex items-center justify-center text-gray-300 text-xl">🖼</div>
           <div class="space-y-1.5 flex-1">
             <input type="file" accept="image/*" @change="(e) => handleFileUpload(e, false)" class="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#FF5000] file:text-white file:cursor-pointer text-gray-600" />
             <div class="text-[11px] text-gray-500 font-mono truncate max-w-md">URL: {{ newProd.thumbnail_url }}</div>

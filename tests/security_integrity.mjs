@@ -1391,6 +1391,27 @@ await t.test('I62 PCCC check never claims a customs (Uni-Pass) match it did not 
   assert.equal(bad.json.verified, false);
 });
 
+await t.test('I63 tracking timeline marks only stages that happened; no invented carrier', async () => {
+  const c = await I.login('customer@example.com');
+  const pt = p2; // pt_002 owns I.mpSkus
+  const co = await I.checkout(c, [{ sku_id: I.mpSkus[0].id, quantity: 1 }]);
+  assert.ok(co.json.success, co.text);
+  const sub = I.one('SELECT id FROM sub_orders WHERE parent_order_id = ?', co.json.order_id);
+  // unpaid: nothing has happened, and there is no carrier
+  let tr = await I.call(`/api/v1/logistics/tracking/${sub.id}`, { token: c });
+  assert.equal(tr.status, 200, tr.text);
+  assert.equal(tr.json.data.carrier, null);
+  assert.equal(tr.json.data.full_tracking_url, null);
+  assert.deepEqual(tr.json.data.milestones.filter((m) => m.completed).map((m) => m.stage), []);
+  assert.equal((await I.pay(c, co.json)).status, 200);
+  await I.ship(pt, co.json.order_id);
+  I.db.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(sub.id);
+  tr = await I.call(`/api/v1/logistics/tracking/${sub.id}`, { token: c });
+  const done = tr.json.data.milestones.filter((m) => m.completed).map((m) => m.stage);
+  assert.deepEqual(done, ['PREPARING', 'SHIPPED', 'DELIVERED'], 'cross-border stages need a recorded event');
+  assert.ok(tr.json.data.carrier, 'the carrier the seller entered is shown');
+});
+
 await t.test('I31 full reconciliation passes after every scenario above (R01–R23)', async () => {
   const r = await I.call('/api/v1/admin/reconciliation', { token: ad });
   assert.equal(r.status, 200, r.text);

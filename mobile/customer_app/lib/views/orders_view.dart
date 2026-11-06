@@ -1,8 +1,11 @@
 // mobile/customer_app/lib/views/orders_view.dart
-// Customer Order History and Tracking Screen for Flutter App (Connected to Live D1 API)
+// Signed-in order history from GET /api/v1/orders (JWT). Logged-out users
+// see the login form; failures show an error with retry instead of an
+// empty list pretending there are no orders.
 
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'login_view.dart';
 
 class OrdersView extends StatefulWidget {
   const OrdersView({super.key});
@@ -12,21 +15,53 @@ class OrdersView extends StatefulWidget {
 }
 
 class _OrdersViewState extends State<OrdersView> {
-  late Future<List<Map<String, dynamic>>> _ordersFuture;
+  Future<List<Map<String, dynamic>>>? _ordersFuture;
+  bool _authReady = false;
 
   @override
   void initState() {
     super.initState();
-    _ordersFuture = ApiService.fetchOrders();
+    _init();
   }
+
+  Future<void> _init() async {
+    await AuthSession.restore();
+    if (!mounted) return;
+    setState(() {
+      _authReady = true;
+      if (AuthSession.isAuthenticated) _ordersFuture = ApiService.fetchOrders();
+    });
+  }
+
+  void _reload() => setState(() => _ordersFuture = ApiService.fetchOrders());
 
   @override
   Widget build(BuildContext context) {
+    if (!_authReady) return const Center(child: CircularProgressIndicator());
+    if (!AuthSession.isAuthenticated) {
+      return LoginView(onSuccess: _init, reason: '주문 내역을 보려면 로그인해 주세요.');
+    }
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _ordersFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          final err = snapshot.error;
+          if (err is AuthRequiredException) {
+            return LoginView(onSuccess: _init, reason: '로그인이 만료되었습니다. 다시 로그인해 주세요.');
+          }
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('${err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.'}', style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 12),
+                ElevatedButton(onPressed: _reload, child: const Text('다시 시도')),
+              ],
+            ),
+          );
         }
         final orders = snapshot.data ?? [];
         if (orders.isEmpty) {
@@ -40,10 +75,11 @@ class _OrdersViewState extends State<OrdersView> {
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final order = orders[index];
-            final orderId = (order['id'] ?? order['order_number'] ?? 'ORD').toString();
-            final status = (order['status'] ?? 'PAID').toString();
-            final amount = (order['total_amount'] ?? 0) as int;
+            final orderNo = (order['order_no'] ?? order['id'] ?? '').toString();
+            final status = (order['payment_status'] ?? order['status'] ?? '').toString();
+            final amount = order['total_pay_amount'] ?? order['total_amount'] ?? 0;
             final createdAt = (order['created_at'] ?? '').toString();
+            final cancelled = status == 'CANCELLED' || status == 'REFUNDED';
 
             return Card(
               elevation: 0,
@@ -59,17 +95,17 @@ class _OrdersViewState extends State<OrdersView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(orderId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                        Expanded(child: Text(orderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey))),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: status == 'CANCELLED' ? Colors.red.shade50 : Colors.orange.shade50,
+                            color: cancelled ? Colors.red.shade50 : Colors.orange.shade50,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             status,
                             style: TextStyle(
-                              color: status == 'CANCELLED' ? Colors.red.shade700 : const Color(0xFFFA541C),
+                              color: cancelled ? Colors.red.shade700 : const Color(0xFFFA541C),
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),

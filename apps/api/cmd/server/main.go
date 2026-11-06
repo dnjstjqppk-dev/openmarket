@@ -1,3 +1,10 @@
+// Command server is an offline Go reference server. It is NOT in the production
+// request path: all clients call the Cloudflare Workers gateway
+// (apps/cloudflare-gateway) backed by D1. The canonical Go domain packages
+// live in backend/ (see docs/TECH_STACK_AUDIT.md); the long-term fix is to
+// delete apps/api/internal/... and point this module at backend/ with a
+// `replace` directive (requires the Go toolchain to verify - kept as an
+// explicit follow-up, not done blind).
 package main
 
 import (
@@ -43,33 +50,22 @@ func main() {
 		})
 	})
 
-	// Categories
-	mux.HandleFunc("/api/v1/categories", func(w http.ResponseWriter, r *http.Request) {
+	// Retired demo endpoints: this server used to answer /api/v1/categories and
+	// /api/v1/products with hardcoded fake rows. Production traffic is served by
+	// the Cloudflare Workers gateway (apps/cloudflare-gateway) backed by D1, so
+	// these paths now answer 410 Gone instead of inventing catalogue data.
+	gone := func(w http.ResponseWriter, r *http.Request) {
 		enableCORS(w)
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
 		json.NewEncoder(w).Encode(map[string]any{
-			"total": 42,
-			"items": []map[string]string{
-				{"slug": "womens-clothing", "name": "여성의류"},
-				{"slug": "mens-clothing", "name": "남성의류"},
-				{"slug": "electronics", "name": "디지털/가전"},
-				{"slug": "home-kitchen", "name": "홈/주방"},
-				{"slug": "sports-outdoors", "name": "스포츠/레저"},
-			},
+			"success": false,
+			"code":    "GONE",
+			"error":   "이 데모 엔드포인트는 폐기되었습니다. 프로덕션 게이트웨이(apps/cloudflare-gateway)를 사용해 주세요.",
 		})
-	})
-
-	// Products
-	mux.HandleFunc("/api/v1/products", func(w http.ResponseWriter, r *http.Request) {
-		enableCORS(w)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"items": []map[string]any{
-				{"id": "prod_001", "brand": "Anker Official", "name": "초경량 액티브 노이즈캔슬링 무선 이어폰 Pro 3", "price": 49900, "stock": 500},
-				{"id": "prod_002", "brand": "Baseus Korea", "name": "울트라 슬림 65W GaN 고속 충전기 3포트 멀티허브", "price": 24500, "stock": 1200},
-			},
-		})
-	})
+	}
+	mux.HandleFunc("/api/v1/categories", gone)
+	mux.HandleFunc("/api/v1/products", gone)
 
 	// Checkout
 	mux.HandleFunc("/api/v1/orders/checkout", func(w http.ResponseWriter, r *http.Request) {

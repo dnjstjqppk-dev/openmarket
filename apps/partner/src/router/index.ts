@@ -13,6 +13,7 @@ import UrlImportView from '../views/UrlImportView.vue';
 import MultiChannelListingView from '../views/MultiChannelListingView.vue';
 import ApplyView from '../views/ApplyView.vue';
 import ApplicationView from '../views/ApplicationView.vue';
+import NotFoundView from '../views/NotFoundView.vue';
 import { getPartnerStatus } from '../config';
 
 const router = createRouter({
@@ -90,6 +91,11 @@ const router = createRouter({
       name: 'profile',
       component: ProfileManageView,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView
     }
   ]
 });

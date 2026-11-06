@@ -107,7 +107,11 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const searchParam = url.searchParams.get('q') || url.searchParams.get('search');
     const minPrice = url.searchParams.get('min_price');
     const maxPrice = url.searchParams.get('max_price');
-    const limitParam = parseInt(url.searchParams.get('limit') || '100', 10);
+    // Offset pagination. `limit` stays as a legacy alias of `per_page`; invalid values fall back to defaults.
+    const perPageRaw = Number.parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '100', 10);
+    const perPage = Math.min(200, Math.max(1, Number.isSafeInteger(perPageRaw) ? perPageRaw : 100));
+    const pageRaw = Number.parseInt(url.searchParams.get('page') || '1', 10);
+    const page = Math.max(1, Number.isSafeInteger(pageRaw) ? pageRaw : 1);
 
     let query = `
       SELECT p.*,
@@ -127,20 +131,24 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       WHERE p.status = 'ACTIVE'
     `;
     const binds = [];
+    let whereSql = "WHERE p.status = 'ACTIVE'"; // mirrored for the COUNT(*) query below
 
     if (catParam && catParam !== 'all') {
       const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(catParam, catParam).first();
       if (catRow) {
         query += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
+        whereSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
         binds.push(catRow.id, catRow.id);
       } else {
         query += ` AND (c.slug = ? OR p.category_id = ?)`;
+        whereSql += ` AND (c.slug = ? OR p.category_id = ?)`;
         binds.push(catParam, catParam);
       }
     }
 
     if (partnerParam) {
       query += ` AND p.partner_id = ?`;
+      whereSql += ` AND p.partner_id = ?`;
       binds.push(partnerParam);
     }
 
@@ -148,16 +156,19 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       const synRow = await env.DB.prepare('SELECT canonical_keyword FROM search_synonyms WHERE LOWER(term) = LOWER(?) LIMIT 1').bind(searchParam.trim()).first();
       const effectiveSearch = synRow ? synRow.canonical_keyword : searchParam.trim();
       query += ` AND (p.title LIKE ? OR p.description_html LIKE ? OR c.name LIKE ? OR p.title LIKE ?)`;
+      whereSql += ` AND (p.title LIKE ? OR p.description_html LIKE ? OR c.name LIKE ? OR p.title LIKE ?)`;
       binds.push(`%${searchParam}%`, `%${searchParam}%`, `%${searchParam}%`, `%${effectiveSearch}%`);
     }
 
     if (minPrice) {
       query += ` AND p.lowest_sale_price >= ?`;
-      binds.push(parseInt(minPrice, 10));
+      whereSql += ` AND p.lowest_sale_price >= ?`;
+      binds.push(Number.isSafeInteger(Number.parseInt(minPrice, 10)) ? Number.parseInt(minPrice, 10) : 0);
     }
     if (maxPrice) {
       query += ` AND p.lowest_sale_price <= ?`;
-      binds.push(parseInt(maxPrice, 10));
+      whereSql += ` AND p.lowest_sale_price <= ?`;
+      binds.push(Number.isSafeInteger(Number.parseInt(maxPrice, 10)) ? Number.parseInt(maxPrice, 10) : 100_000_000);
     }
 
     if (sortParam === 'price_asc') {
@@ -172,8 +183,9 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       query += ` ORDER BY p.total_sold_count DESC`;
     }
 
-    query += ` LIMIT ?`;
-    binds.push(Math.min(200, Math.max(1, limitParam)));
+    const total = await env.DB.prepare('SELECT COUNT(*) AS total FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN categories pc ON c.parent_id = pc.id LEFT JOIN partners pt ON p.partner_id = pt.id ' + whereSql).bind(...binds).first('total');
+    query += ` LIMIT ? OFFSET ?`;
+    binds.push(perPage, (page - 1) * perPage);
 
     let stmt = env.DB.prepare(query);
     if (binds.length > 0) {
@@ -186,6 +198,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       brand: 'OLMOA',
       count: results.length,
       filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam },
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
       data: results
     }), { headers: corsHeaders });
   }

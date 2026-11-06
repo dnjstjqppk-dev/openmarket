@@ -48,6 +48,30 @@ class _HomeViewState extends State<HomeView> {
       );
     }
 
+    // The catalog comes only from the server: an empty list means the load
+    // failed or nothing is on sale, so offer a retry instead of fake items.
+    if (_products.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 56, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            const Text('상품 목록을 불러오지 못했습니다.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                setState(() => _isLoading = true);
+                _loadProducts();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFA541C), foregroundColor: Colors.white),
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _loadProducts,
       color: const Color(0xFFFA541C),

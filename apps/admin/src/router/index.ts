@@ -16,6 +16,7 @@ import SupplierIntegrationView from '../views/SupplierIntegrationView.vue';
 import ReconciliationView from '../views/ReconciliationView.vue';
 import PartnerApplicationsView from '../views/PartnerApplicationsView.vue';
 import SecurityView from '../views/SecurityView.vue';
+import NotFoundView from '../views/NotFoundView.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView },
@@ -34,7 +35,8 @@ const routes = [
   { path: '/supplier-integrations', name: 'supplier-integrations', component: SupplierIntegrationView },
   { path: '/reconciliation', name: 'reconciliation', component: ReconciliationView },
   { path: '/partner-applications', name: 'partner-applications', component: PartnerApplicationsView },
-  { path: '/security', name: 'security', component: SecurityView }
+  { path: '/security', name: 'security', component: SecurityView },
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView }
 ];
 
 const router = createRouter({

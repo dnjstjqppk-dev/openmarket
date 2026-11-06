@@ -33,7 +33,7 @@ async function loadData() {
     const [cRes, bRes, nRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/bidding/campaigns`, { headers: getPartnerHeaders() }),
       fetch(`${API_BASE_URL}/api/v1/bidding/my-bids`, { headers: getPartnerHeaders() }).catch(() => null),
-      fetch(`${API_BASE_URL}/api/v1/bidding/negotiations`, { headers: getPartnerHeaders() }).catch(() => null)
+      fetch(`${API_BASE_URL}/api/v1/pricing/negotiations`, { headers: getPartnerHeaders() }).catch(() => null)
     ])
 
     const cJson = await cRes.json()
@@ -57,10 +57,10 @@ async function loadData() {
 
 function openBid(c: any) {
   selectedCampaign.value = c
-  bidWholesalePrice.value = c.target_wholesale_price || 25000
-  bidCapacity.value = c.target_quantity || 500
-  bidLeadDays.value = 3
-  bidNotes.value = '공장 직접 출고 보증, KC 인증 완료'
+  bidWholesalePrice.value = c.ceiling_supply_price
+  bidCapacity.value = c.min_moq
+  bidLeadDays.value = 7
+  bidNotes.value = ''
   showBidModal.value = true
 }
 
@@ -72,9 +72,9 @@ async function submitBid() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({
-        wholesale_supply_price: Number(bidWholesalePrice.value),
-        supply_capacity: Number(bidCapacity.value),
-        delivery_lead_days: Number(bidLeadDays.value),
+        bid_supply_price: Number(bidWholesalePrice.value),
+        moq: Number(bidCapacity.value),
+        production_lead_days: Number(bidLeadDays.value),
         bid_notes: bidNotes.value
       })
     })
@@ -99,19 +99,23 @@ async function respondNego(action: 'ACCEPT' | 'REJECT' | 'COUNTER', counter?: nu
   if (!selectedNego.value) return
   submittingNego.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/bidding/negotiations/${selectedNego.value.id}/respond`, {
+    // The server contract is accept/reject; a counter is delivered as a rejection carrying the
+    // counter price in the response notes, and the toast says exactly that.
+    const notes = action === 'COUNTER' && counter
+      ? `[역제안 희망가 ${Number(counter).toLocaleString()}원] ${negoNotes.value}`.trim()
+      : negoNotes.value
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/pricing/negotiations/${selectedNego.value.id}/respond`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({
-        action,
-        counter_price: counter,
-        notes: negoNotes.value
+        accept: action === 'ACCEPT',
+        partner_response_notes: notes
       })
     })
     const json = await res.json()
     if (res.ok && json.success) {
       showNegoModal.value = false
-      toast.value = `✓ MD 공급가 협상 ${action === 'ACCEPT' ? '수락' : action === 'COUNTER' ? '역제안' : '거절'} 완료`
+      toast.value = action === 'ACCEPT' ? `✓ ${json.message || 'MD 제안을 수락했습니다.'}` : action === 'COUNTER' ? '✓ 제안을 거절하고 역제안 메모를 전달했습니다.' : `✓ ${json.message || 'MD 제안을 거절했습니다.'}`
       setTimeout(() => { toast.value = '' }, 3500)
       await loadData()
     } else {
@@ -193,20 +197,20 @@ onMounted(loadData)
             </div>
             <div>
               <h3 class="text-sm font-black text-gray-900">{{ c.title }}</h3>
-              <p class="text-gray-500 text-[11px] mt-1">{{ c.notes || '품질 기준 충족 시 즉시 전탁 독점 SKU 배정' }}</p>
+              <p class="text-gray-500 text-[11px] mt-1">{{ c.category_name ? `카테고리: ${c.category_name}` : '품질 기준 충족 시 즉시 전탁 독점 SKU 배정' }}</p>
             </div>
             <div class="bg-slate-50 rounded-xl p-3 space-y-1.5 border border-slate-100">
               <div class="flex justify-between">
                 <span class="text-gray-500">MD 목표 도매가:</span>
-                <span class="font-black text-rose-600">{{ won(c.target_wholesale_price) }} 이하</span>
+                <span class="font-black text-rose-600">{{ won(c.ceiling_supply_price) }} 이하</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500">목표 조달 수량:</span>
-                <span class="font-bold text-gray-900">{{ Number(c.target_quantity || 0).toLocaleString() }}개</span>
+                <span class="font-bold text-gray-900">{{ Number(c.min_moq || 0).toLocaleString() }}개</span>
               </div>
               <div class="flex justify-between text-[11px]">
                 <span class="text-gray-400">마감 일시:</span>
-                <span class="text-gray-600 font-mono">{{ c.deadline_at || '상시 접수' }}</span>
+                <span class="text-gray-600 font-mono">{{ c.ends_at ? new Date(c.ends_at).toLocaleString() : '상시 접수' }}</span>
               </div>
             </div>
           </div>
@@ -238,18 +242,18 @@ onMounted(loadData)
           <tr v-for="b in myBids" :key="b.id" class="border-b last:border-b-0 hover:bg-slate-50 transition">
             <td class="py-3 px-4 font-mono font-bold text-gray-700">#{{ b.id }}</td>
             <td class="py-3 px-4 font-bold text-gray-900">{{ b.campaign_title || b.campaign_id }}</td>
-            <td class="py-3 px-4 text-right font-black text-[#FF5000]">{{ won(b.wholesale_supply_price) }}</td>
-            <td class="py-3 px-4 text-center font-bold">{{ Number(b.supply_capacity || 0).toLocaleString() }}개</td>
-            <td class="py-3 px-4 text-center">{{ b.delivery_lead_days || 3 }}일 내 출고</td>
+            <td class="py-3 px-4 text-right font-black text-[#FF5000]">{{ won(b.bid_supply_price) }}</td>
+            <td class="py-3 px-4 text-center font-bold">{{ Number(b.moq || 0).toLocaleString() }}개</td>
+            <td class="py-3 px-4 text-center">{{ b.production_lead_days || 7 }}일 내 출고</td>
             <td class="py-3 px-4 text-center">
               <span
                 :class="[
                   'px-2 py-0.5 rounded-full font-bold text-[10px]',
-                  b.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800' :
-                  b.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                  b.status === 'WON' ? 'bg-emerald-100 text-emerald-800' :
+                  b.status === 'LOST' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
                 ]"
               >
-                {{ b.status === 'ACCEPTED' ? '★ 낙찰 확정' : b.status === 'REJECTED' ? '미선정' : '검토 중' }}
+                {{ b.status === 'WON' ? '★ 낙찰 확정' : b.status === 'LOST' ? '미선정' : '검토 중' }}
               </span>
             </td>
           </tr>
@@ -272,10 +276,10 @@ onMounted(loadData)
             <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">{{ n.status }}</span>
           </div>
           <div class="text-gray-500 text-[11px]">
-            기존 도매가 <strong class="text-gray-900">{{ won(n.current_wholesale_price) }}</strong> → MD 제안가 <strong class="text-rose-600">{{ won(n.target_wholesale_price) }}</strong>
+            기존 판매가 <strong class="text-gray-900">{{ won(n.current_sale_price) }}</strong> → MD 제안가 <strong class="text-rose-600">{{ won(n.suggested_target_price) }}</strong>
           </div>
-          <div v-if="n.md_notes" class="text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg text-[11px] inline-block">
-            MD 코멘트: {{ n.md_notes }}
+          <div v-if="n.md_proposal_notes" class="text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg text-[11px] inline-block">
+            MD 코멘트: {{ n.md_proposal_notes }}
           </div>
         </div>
 
@@ -288,7 +292,7 @@ onMounted(loadData)
             제안 수락
           </button>
           <button
-            @click="selectedNego = n; showNegoModal = true; counterPrice = n.target_wholesale_price"
+            @click="selectedNego = n; showNegoModal = true; counterPrice = n.suggested_target_price"
             class="px-3.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-100 font-bold text-gray-700"
           >
             카운터 오퍼
@@ -313,7 +317,7 @@ onMounted(loadData)
 
         <div class="bg-orange-50 rounded-xl p-3 border border-orange-200">
           <div class="font-bold text-orange-900">{{ selectedCampaign?.title }}</div>
-          <div class="text-[11px] text-orange-700 mt-0.5">MD 목표가: {{ won(selectedCampaign?.target_wholesale_price) }} 이하</div>
+          <div class="text-[11px] text-orange-700 mt-0.5">MD 목표가: {{ won(selectedCampaign?.ceiling_supply_price) }} 이하</div>
         </div>
 
         <div class="space-y-3">
@@ -355,6 +359,7 @@ onMounted(loadData)
         <div>
           <label class="block font-bold text-gray-700 mb-1">사유 메모</label>
           <input v-model="negoNotes" placeholder="예: 원자재 상승으로 최소 27,000원 납품 가능" class="w-full h-10 px-3 rounded-xl border border-gray-300" />
+          <p class="mt-1 text-[11px] text-slate-500">역제안은 제안을 거절하면서 희망가를 MD에게 메모로 전달하는 방식입니다.</p>
         </div>
         <div class="flex gap-2">
           <button @click="showNegoModal = false" class="flex-1 py-2.5 rounded-xl border">취소</button>
