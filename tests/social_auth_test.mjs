@@ -4,6 +4,7 @@
 // fail-closed behavior, callback guards, and the oauth identity columns.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createGateway, createRunner } from './lib/harness.mjs';
 
 const t = createRunner('Social Auth (Kakao OAuth)');
@@ -64,6 +65,66 @@ await t.test('4. oauth identity is unique per provider subject', async () => {
       ).run(),
     /UNIQUE/
   );
+});
+
+const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+const VALID_STATE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+await t.test('5. start echoes a valid state to Kakao and rejects a malformed one', async () => {
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: KAKAO_ENV });
+  const ok = await g.call(`/api/v1/auth/social/kakao/start?state=${VALID_STATE}`);
+  assert.equal(ok.status, 302);
+  assert.ok((ok.headers.get('location') || '').includes(`state=${VALID_STATE}`), 'state round-trips to the provider');
+  for (const badState of ['abc', 'x'.repeat(300), '<script>alert(1)</script>', 'has space']) {
+    const r = await g.call(`/api/v1/auth/social/kakao/start?state=${encodeURIComponent(badState)}`);
+    assert.equal(r.status, 400, `malformed state rejected: ${badState.slice(0, 20)}`);
+    assert.equal(r.json.code, 'INVALID_STATE');
+  }
+});
+
+await t.test('6. denial bounce echoes the state back to the login page', async () => {
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: KAKAO_ENV });
+  const cb = await g.call(`/api/v1/auth/social/kakao/callback?error=access_denied&state=${VALID_STATE}`);
+  assert.equal(cb.status, 302);
+  const loc = cb.headers.get('location') || '';
+  assert.ok(loc.includes('social_error=OAUTH_DENIED'));
+  assert.ok(loc.includes(`state=${VALID_STATE}`), `state echoed on denial, got ${loc}`);
+});
+
+await t.test('7. one-time login code exchanges for a working JWT exactly once', async () => {
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: KAKAO_ENV });
+  const cols = g.db.prepare('PRAGMA table_info(social_login_codes)').all().map((c) => c.name);
+  assert.ok(cols.includes('code_hash'), 'd1_35 applied: social_login_codes');
+  const user = g.db.prepare("SELECT id FROM users WHERE is_active = 1 LIMIT 1").get();
+  assert.ok(user, 'seed user exists');
+  const code = 'f'.repeat(64);
+  g.db.prepare('INSERT INTO social_login_codes (id, user_id, code_hash, expires_at) VALUES (?, ?, ?, ?)')
+    .run('slc_test_1', user.id, sha256(code), new Date(Date.now() + 5 * 60 * 1000).toISOString());
+  const ex = await g.call('/api/v1/auth/social/kakao/exchange', { method: 'POST', body: { code } });
+  assert.equal(ex.status, 200);
+  assert.equal(ex.json.success, true);
+  assert.ok(typeof ex.json.token === 'string' && ex.json.token.length > 20, 'JWT issued');
+  assert.equal(ex.json.user.id, user.id);
+  const me = await g.call('/api/v1/auth/me', { token: ex.json.token });
+  assert.equal(me.status, 200, 'exchanged JWT authenticates');
+  assert.equal(me.json.data.user.id, user.id);
+  const replay = await g.call('/api/v1/auth/social/kakao/exchange', { method: 'POST', body: { code } });
+  assert.equal(replay.status, 400, 'code is single-use');
+  assert.equal(replay.json.code, 'INVALID_LOGIN_CODE');
+});
+
+await t.test('8. unknown and expired login codes are rejected without an oracle', async () => {
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: KAKAO_ENV });
+  const user = g.db.prepare("SELECT id FROM users WHERE is_active = 1 LIMIT 1").get();
+  g.db.prepare('INSERT INTO social_login_codes (id, user_id, code_hash, expires_at) VALUES (?, ?, ?, ?)')
+    .run('slc_test_expired', user.id, sha256('e'.repeat(64)), new Date(Date.now() - 60 * 1000).toISOString());
+  const unknown = await g.call('/api/v1/auth/social/kakao/exchange', { method: 'POST', body: { code: '0'.repeat(64) } });
+  assert.equal(unknown.status, 400);
+  assert.equal(unknown.json.code, 'INVALID_LOGIN_CODE');
+  const expired = await g.call('/api/v1/auth/social/kakao/exchange', { method: 'POST', body: { code: 'e'.repeat(64) } });
+  assert.equal(expired.status, 400);
+  assert.equal(expired.json.code, unknown.json.code);
+  assert.equal(expired.json.error, unknown.json.error, 'expired and unknown give the identical answer');
 });
 
 t.finish();

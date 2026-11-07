@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Buyer login (PHASE 2 redesign). Identity is the server-issued JWT only. `redirect` is honoured only for
-// same-site paths. Kakao login completes here: the gateway redirects back with ?social_token=<JWT> on
-// success or ?social_error=<CODE> on failure; without server credentials the start probe answers 501 and
-// the button reports it inline instead of navigating away.
+// same-site paths. Kakao login completes here: the gateway redirects back with ?social_code=<one-time>
+// (exchanged for the JWT over POST; the JWT itself never travels in a URL) or ?social_error=<CODE>,
+// each carrying the `state` this page generated (login CSRF check). Without server credentials the
+// start probe answers 501 and the button reports it inline instead of navigating away.
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { Eye, EyeOff } from 'lucide-vue-next'
@@ -57,8 +58,12 @@ async function handleLogin() {
 }
 
 function fillDevAccount() {
-  email.value = 'customer@example.com'
-  password.value = 'DevPass!2026#'
+  // Static DEV gate: the bundler folds `import.meta.env.DEV` to false in production and drops this
+  // branch, so the literals below never ship in the production bundle (a runtime v-if alone keeps them).
+  if (import.meta.env.DEV) {
+    email.value = 'customer@example.com'
+    password.value = 'DevPass!2026#'
+  }
 }
 
 const SOCIAL_ERRORS: Record<string, string> = {
@@ -72,19 +77,42 @@ const SOCIAL_ERRORS: Record<string, string> = {
 }
 const socialLoading = ref(false)
 
+const SOCIAL_STATE_KEY = 'olmoa_social_state'
+
+function newSocialState(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Strips every OAuth return parameter so codes, errors, and state never linger in the URL. */
+function cleanSocialQuery() {
+  const q = { ...route.query }
+  delete q.social_code
+  delete q.social_token
+  delete q.social_error
+  delete q.state
+  return q
+}
+
 async function startKakao() {
   if (socialLoading.value) return
   socialLoading.value = true
   error.value = ''
   try {
+    const state = newSocialState()
+    sessionStorage.setItem(SOCIAL_STATE_KEY, state)
+    const startUrl = `${API_BASE_URL}/api/v1/auth/social/kakao/start?state=${state}`
     // Probe first: an unconfigured server answers 501 JSON instead of a redirect.
-    const probe = await fetch(`${API_BASE_URL}/api/v1/auth/social/kakao/start`, { redirect: 'manual' })
+    const probe = await fetch(startUrl, { redirect: 'manual' })
     if (probe.type === 'opaqueredirect' || probe.status === 302) {
-      window.location.href = `${API_BASE_URL}/api/v1/auth/social/kakao/start`
+      window.location.href = startUrl
       return
     }
+    sessionStorage.removeItem(SOCIAL_STATE_KEY)
     error.value = '소셜 로그인은 아직 제공되지 않습니다.'
   } catch {
+    sessionStorage.removeItem(SOCIAL_STATE_KEY)
     error.value = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     socialLoading.value = false
@@ -93,22 +121,41 @@ async function startKakao() {
 
 async function consumeSocialReturn() {
   const err = typeof route.query.social_error === 'string' ? route.query.social_error : ''
-  if (err) {
-    error.value = SOCIAL_ERRORS[err] || '소셜 로그인에 실패했습니다.'
-    router.replace({ path: '/login', query: { ...route.query, social_error: undefined } })
+  const loginCode = typeof route.query.social_code === 'string' ? route.query.social_code : ''
+  if (!err && !loginCode) return
+  // Verify state before touching the code: a mismatch means this return was not caused by our request.
+  const expected = sessionStorage.getItem(SOCIAL_STATE_KEY)
+  sessionStorage.removeItem(SOCIAL_STATE_KEY)
+  const returned = typeof route.query.state === 'string' ? route.query.state : ''
+  const cleanQuery = cleanSocialQuery()
+  if (!expected || returned !== expected) {
+    router.replace({ path: '/login', query: cleanQuery })
+    error.value = '로그인 요청을 확인할 수 없습니다. 다시 시도해 주세요.'
     return
   }
-  const socialToken = typeof route.query.social_token === 'string' ? route.query.social_token : ''
-  if (!socialToken) return
+  if (err) {
+    router.replace({ path: '/login', query: cleanQuery })
+    error.value = SOCIAL_ERRORS[err] || '소셜 로그인에 실패했습니다.'
+    return
+  }
   socialLoading.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${socialToken}` } })
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/social/kakao/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: loginCode })
+    })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success || !json.data?.user) { error.value = '소셜 로그인에 실패했습니다.'; return }
-    const u = json.data.user
-    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email }, socialToken)
+    if (!res.ok || !json.success || !json.token || !json.user) {
+      router.replace({ path: '/login', query: cleanQuery })
+      error.value = json.error || '소셜 로그인에 실패했습니다.'
+      return
+    }
+    const u = json.user
+    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email }, json.token)
     router.replace(safeRedirect())
   } catch {
+    router.replace({ path: '/login', query: cleanQuery })
     error.value = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     socialLoading.value = false

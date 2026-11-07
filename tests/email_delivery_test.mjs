@@ -55,4 +55,18 @@ await t.test('3. reset + verify token round-trip still works end to end', async 
   assert.equal(reuse.status, 400, 'one-time token cannot be reused');
 });
 
+await t.test('4. /health readiness reports the real email delivery state', async () => {
+  const off = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: BASE_ENV });
+  const hOff = await off.call('/health');
+  assert.equal(hOff.status, 200);
+  assert.equal(hOff.json.readiness.email_delivery, 'NOT_INTEGRATED');
+  const on = await createGateway({
+    seedFiles: ['migrations/dev/seed_local_dev.sql'],
+    env: { ...BASE_ENV, RESEND_API_KEY: 're_test_key', EMAIL_FROM: 'noreply@olmoa.com' }
+  });
+  const hOn = await on.call('/health');
+  assert.equal(hOn.status, 200);
+  assert.equal(hOn.json.readiness.email_delivery, 'RESEND');
+});
+
 t.finish();

@@ -2,6 +2,7 @@
 // OLMOA Edge API Gateway (Cloudflare Worker + D1).
 
 import { buildCorsHeaders, errorResponse, json } from './lib/http.js';
+import { emailConfigured } from './lib/email.js';
 import { handleAuthRoutes } from './routes/auth.js';
 import { handleSocialAuthRoutes } from './routes/social-auth.js';
 import { handleCatalogRoutes } from './routes/catalog.js';
@@ -88,7 +89,7 @@ async function health(env, corsHeaders) {
       auth_configured: typeof env.JWT_SECRET === 'string' && env.JWT_SECRET.length >= 32,
       operator_entity_active: operatorConfigured,
       payment,
-      email_delivery: 'NOT_INTEGRATED',
+      email_delivery: emailConfigured(env) ? 'RESEND' : 'NOT_INTEGRATED',
       carrier_tracking_api: 'NOT_INTEGRATED',
       supplier_order_api: 'NOT_INTEGRATED'
     },

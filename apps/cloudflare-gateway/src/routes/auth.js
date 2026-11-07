@@ -22,7 +22,7 @@ export function validatePassword(pw) {
   if (classes < 3) throw bad('WEAK_PASSWORD', '비밀번호는 영문 대/소문자, 숫자, 특수문자 중 3종류 이상을 포함해야 합니다.');
 }
 
-function publicUser(u) {
+export function publicUser(u) {
   return { id: u.id, email: u.email, full_name: u.full_name, name: u.full_name, phone: u.phone, role: u.role, email_verified: u.email_verified };
 }
 

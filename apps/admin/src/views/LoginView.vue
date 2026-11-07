@@ -41,7 +41,9 @@ const handleAdminLogin = async () => {
     loading.value = false
   }
 }
-const fillDev = () => { email.value = 'admin@openmarket.com'; password.value = 'DevPass!2026#' }
+// Static DEV gate: the bundler folds `import.meta.env.DEV` to false in production and drops this
+// branch, so the literals below never ship in the production bundle (a runtime v-if alone keeps them).
+const fillDev = () => { if (import.meta.env.DEV) { email.value = 'admin@openmarket.com'; password.value = 'DevPass!2026#' } }
 </script>
 
 <template>
