@@ -14,9 +14,9 @@ const errorMsg = ref('')
 const rowErrors = ref<string[]>([])
 
 const sampleCsvContent = `title,brand,category_id,original_price,sale_price,stock_quantity,option_label,thumbnail_url
-"Ultra-Light Carbon Trekking Poles (Pair)",OLMOA OUTDOOR,cat_s_camp,89000,49000,150,"Black / 120cm",https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&q=80
-"Pro Ceramic Non-Stick Wok 30cm",OLMOA LIVING,cat_h_cook,75000,42000,200,"30cm Induction",https://images.unsplash.com/photo-1584990347449-a2d4c2c044c9?auto=format&fit=crop&w=600&q=80
-"Pure Centella Calming Ampoule 100ml",OLMOA BEAUTY,cat_b_skin,38000,19800,300,"100ml Jumbo",https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=600&q=80`
+"Ultra-Light Carbon Trekking Poles (Pair)",OLMOA OUTDOOR,cat_sports,89000,49000,150,"Black / 120cm",https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&q=80
+"Pro Ceramic Non-Stick Wok 30cm",OLMOA LIVING,cat_h_kitchen,75000,42000,200,"30cm Induction",https://images.unsplash.com/photo-1584990347449-a2d4c2c044c9?auto=format&fit=crop&w=600&q=80
+"Pure Centella Calming Ampoule 100ml",OLMOA BEAUTY,cat_beauty,38000,19800,300,"100ml Jumbo",https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=600&q=80`
 
 const downloadSampleCsv = () => {
   const blob = new Blob([sampleCsvContent], { type: 'text/csv;charset=utf-8;' })

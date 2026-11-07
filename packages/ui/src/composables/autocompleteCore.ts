@@ -17,6 +17,23 @@ export function normalizeQuery(q: string): string {
   return String(q || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
+/// Trending keywords from an empty-query autocomplete payload
+/// ({ trending_keywords: [{ keyword }...] }, max 10 by search_count server-side).
+/// Malformed payloads degrade to [] — the idle panel shows recents only.
+export function parseTrendingKeywords(payload: unknown, limit = 10): string[] {
+  const list = (payload as Record<string, unknown> | null)?.['trending_keywords']
+  if (!Array.isArray(list)) return []
+  const out: string[] = []
+  for (const e of list) {
+    const kw = typeof e === 'string' ? e : (e as Record<string, unknown> | null)?.['keyword']
+    if (typeof kw === 'string' && kw.trim() && !out.includes(kw)) {
+      out.push(kw)
+      if (out.length >= limit) break
+    }
+  }
+  return out
+}
+
 export function createAutocomplete(opts: {
   fetcher: AcFetcher
   onChange: (s: AcState) => void

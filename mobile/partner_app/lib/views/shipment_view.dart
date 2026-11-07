@@ -7,6 +7,17 @@ import '../services/partner_api_service.dart';
 import '../theme/app_theme.dart';
 import 'login_view.dart';
 
+/// Carrier list mirrors the web seller console (ShipmentView carrierOptions).
+/// Kept in sync by test/carrier_options_test.dart.
+const shipmentCarrierOptions = [
+  'CJ대한통운 국제특송',
+  'DHL Express',
+  'FedEx International',
+  '우체국 국제특송 (EMS)',
+  '차이냐오 글로벌 (Cainiao)',
+  '순풍 익스프레스 (SF Express)',
+];
+
 class PartnerShipmentView extends StatefulWidget {
   const PartnerShipmentView({super.key});
 
@@ -55,28 +66,45 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
       context: context,
       builder: (ctx) {
         final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('운송장 번호 입력'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'CJ대한통운 운송장 번호',
-              hintText: '숫자 11자리 입력',
+        String carrier = shipmentCarrierOptions.first;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('운송장 번호 입력'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: carrier,
+                  items: shipmentCarrierOptions
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setDialogState(() => carrier = v);
+                  },
+                  decoration: const InputDecoration(labelText: '택배사'),
+                ),
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: '운송장 번호',
+                    hintText: '송장번호 입력',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
             ),
-            keyboardType: TextInputType.number,
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-            ElevatedButton(
-              onPressed: () async {
-                final tracking = controller.text.trim();
-                if (tracking.isEmpty) return;
-                final r = await _apiService.updateTracking(
-                  subOrderId: order.id,
-                  carrier: 'CJ대한통운',
-                  trackingNo: tracking,
-                );
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+              ElevatedButton(
+                onPressed: () async {
+                  final tracking = controller.text.trim();
+                  if (tracking.isEmpty) return;
+                  final r = await _apiService.updateTracking(
+                    subOrderId: order.id,
+                    carrier: carrier,
+                    trackingNo: tracking,
+                  );
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
                 if (!mounted) return;
@@ -101,6 +129,7 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
               child: const Text('출고 완료'),
             ),
           ],
+          ),
         );
       },
     );

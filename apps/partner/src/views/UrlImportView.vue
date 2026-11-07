@@ -87,6 +87,19 @@ const urlInput = ref('');
 const bulkUrlsInput = ref('');
 const targetMargin = ref(25); // 25%
 const selectedCategory = ref('cat_e_audio');
+const categories = ref<any[]>([]);
+const loadCategories = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/categories`);
+    const json = await res.json().catch(() => null);
+    if (res.ok && json?.success && Array.isArray(json.data) && json.data.length) {
+      categories.value = json.data;
+      if (!categories.value.some((c: any) => c.id === selectedCategory.value)) {
+        selectedCategory.value = categories.value[0].id;
+      }
+    }
+  } catch { /* keep the fallback selection */ }
+};
 const htmlOverride = ref('');
 const isCustomHtml = ref(false);
 
@@ -331,7 +344,7 @@ async function handlePublish() {
       throw new Error(data.error || '카탈로그 등록에 실패했습니다.');
     }
 
-    successMsg.value = `🎉 상품이 카탈로그에 공식 판매 등록되었습니다! (상품 ID: ${data.product_id}, SKU: ${data.sku_count}개)`;
+    successMsg.value = `상품이 심사 대기(DRAFT)로 등록되었습니다. 운영자 승인 후 판매가 시작됩니다. (상품 ID: ${data.product_id}, SKU: ${data.sku_count}개)`;
     loadHistory();
   } catch (err: any) {
     errorMsg.value = err.message || '등록 중 오류가 발생했습니다.';
@@ -342,6 +355,7 @@ async function handlePublish() {
 
 onMounted(() => {
   loadHistory();
+  loadCategories();
 });
 </script>
 
@@ -484,12 +498,8 @@ onMounted(() => {
               v-model="selectedCategory"
               class="w-full py-2.5 px-3 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
             >
-              <option value="cat_e_audio">디지털/가전 &gt; 음향기기 (헤드폰/스피커)</option>
-              <option value="cat_f_men">패션의류 &gt; 남성의류</option>
-              <option value="cat_f_women">패션의류 &gt; 여성의류</option>
-              <option value="cat_f_shoes">신발 &gt; 스포츠/스니커즈</option>
-              <option value="cat_l_kitchen">생활/주방 &gt; 주방가전/청소</option>
-              <option value="cat_s_outdoor">스포츠/레저 &gt; 캠핑/아웃도어</option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-if="!categories.length" value="cat_e_audio">음향기기</option>
             </select>
             <p class="text-[11px] text-slate-500">수집된 상품이 카탈로그에 노출될 1차 상위 카테고리입니다.</p>
           </div>
@@ -778,10 +788,8 @@ https://demo-activewear.myshopify.com/products/sample"
               v-model="selectedCategory"
               class="w-full py-2 px-3 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
             >
-              <option value="cat_e_audio">디지털/가전 &gt; 음향기기</option>
-              <option value="cat_f_men">패션의류 &gt; 남성의류</option>
-              <option value="cat_f_women">패션의류 &gt; 여성의류</option>
-              <option value="cat_l_kitchen">생활/주방 &gt; 주방가전/청소</option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-if="!categories.length" value="cat_e_audio">음향기기</option>
             </select>
           </div>
         </div>

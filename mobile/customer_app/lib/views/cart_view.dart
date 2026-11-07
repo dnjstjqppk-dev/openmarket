@@ -1,11 +1,14 @@
 // mobile/customer_app/lib/views/cart_view.dart
 // Shopping cart + checkout. Checkout calls the real POST /api/v1/orders/checkout
 // with the signed-in JWT and only clears the cart when the server confirms.
+// A successful checkout opens the payment guide sheet: order number, amount,
+// the server's payment deadline, and the PC-web payment steps.
 
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/payment_guidance.dart';
 import 'login_view.dart';
 
 class CartView extends StatefulWidget {
@@ -75,6 +78,74 @@ class _CartViewState extends State<CartView> {
     );
   }
 
+  void _showPaymentGuide(Map<String, dynamic> result) {
+    final guidance = computePaymentGuidance(expiresAt: result['payment_expires_at']?.toString());
+    final orderNo = (result['order_no'] ?? '').toString();
+    final amount = result['total_pay_amount'];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(
+                    guidance.expired ? Icons.error_outline : Icons.check_circle_outline,
+                    color: guidance.expired ? OlmoaColors.ruby500 : Colors.green),
+                const SizedBox(width: 8),
+                Text(guidance.expired ? '결제 시간 만료' : '주문 접수 완료',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              ]),
+              const SizedBox(height: 16),
+              _guideRow('주문번호', orderNo.isEmpty ? '-' : orderNo),
+              _guideRow('결제 예정액', amount == null ? '-' : '₩$amount'),
+              _guideRow('결제 기한', guidance.deadlineText),
+              const SizedBox(height: 16),
+              const Text('결제 방법', style: TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              const Text(
+                  '1. PC 웹 스토어에 같은 계정으로 로그인\n2. 주문내역에서 이 주문의 [결제하기] 선택\n3. 기한 내 미결제 시 주문이 자동 취소됩니다.',
+                  style: TextStyle(fontSize: 13, height: 1.7)),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onClearCart();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('주문내역 보기',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _guideRow(String k, String v) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 90,
+              child: Text(k, style: const TextStyle(color: Colors.grey, fontSize: 13))),
+          Expanded(
+              child: Text(v,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+        ]),
+      );
+
   Future<void> _handleCheckout() async {
     if (widget.items.isEmpty || _isCheckingOut) return;
     if (_name.text.trim().isEmpty ||
@@ -102,15 +173,7 @@ class _CartViewState extends State<CartView> {
     setState(() => _isCheckingOut = false);
 
     if (result['success'] == true) {
-      final status = (result['payment_status'] ?? 'READY').toString();
-      final paid = status == 'PAID';
-      _showResult(
-        ok: true,
-        title: paid ? '주문 결제 완료' : '주문 접수 완료',
-        message: paid
-            ? '주문번호 [${result['order_no']}] 결제가 완료되었습니다.'
-            : '주문번호 [${result['order_no']}]가 접수되었습니다.\n결제 예정액: ₩${result['total_pay_amount']}\n모바일 결제는 준비 중이므로 PC 웹에서 결제를 완료해 주세요.',
-      );
+      _showPaymentGuide(result);
     } else if (result['code'] == 'UNAUTHENTICATED') {
       setState(() {});
     } else {

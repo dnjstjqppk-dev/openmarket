@@ -50,6 +50,7 @@ interface Order {
 
 const orders = ref<Order[]>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const actionMsg = ref('')
 const copyToast = ref('')
 const searchQuery = ref('')
@@ -82,17 +83,17 @@ const cancelReasons = [
 
 const loadOrders = async () => {
   loading.value = true
+  loadError.value = null
   try {
     const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/orders?customer_id=${encodeURIComponent(cid)}`, {
       headers: { ...authHeader() }
     })
-    const json = await res.json()
-    if (json.success && Array.isArray(json.data)) {
-      orders.value = json.data
-    }
-  } catch (e) {
-    console.error('Failed to load customer orders:', e)
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `주문 내역을 불러오지 못했습니다 (${res.status})`)
+    orders.value = Array.isArray(json.data) ? json.data : []
+  } catch (e: any) {
+    loadError.value = e?.message || '주문 내역을 불러오지 못했습니다'
   } finally {
     loading.value = false
   }
@@ -190,15 +191,29 @@ const confirmPurchase = async (orderId: string) => {
 }
 
 function openTracking(order: Order, item?: OrderItem) {
+  // Only registered carrier/tracking are shown; nothing is invented.
   trackingItem.value = {
     orderNo: order.order_no || order.id,
-    carrier: item?.carrier || 'CJ대한통운',
-    trackingNumber: item?.tracking_number || '68492019342',
+    carrier: item?.carrier || '',
+    trackingNumber: item?.tracking_number || '',
     productTitle: item?.product_title || '주문 상품',
     status: item?.status || order.payment_status
   }
   showTrackingModal.value = true
 }
+
+const trackingSteps = computed(() => {
+  const st = (trackingItem.value?.status || '').toUpperCase()
+  const shipped = ['SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(st)
+  const delivered = ['DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(st)
+  const preparing = shipped || ['PREPARING', 'PAID', 'PAYMENT_CONFIRMED'].includes(st)
+  return [
+    { label: '결제 완료 및 판매자 주문 접수', done: true },
+    { label: '상품 준비 중', done: preparing },
+    { label: '배송 중', done: shipped },
+    { label: '배송 완료', done: delivered }
+  ]
+})
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(() => {
@@ -364,6 +379,22 @@ onMounted(loadOrders)
     <!-- Loading Skeleton -->
     <div v-if="loading" class="space-y-4">
       <div v-for="n in 3" :key="n" class="h-44 bg-white rounded-2xl border border-gray-200 animate-pulse p-6"></div>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="loadError" class="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-xs">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-2xl">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 class="text-base font-black text-gray-900 mb-1">주문 내역을 불러오지 못했습니다</h3>
+      <p class="text-xs text-gray-500 mb-5">{{ loadError }}</p>
+      <button
+        @click="loadOrders"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-black shadow-md transition"
+      >
+        <i class="fa-solid fa-rotate"></i>
+        <span>다시 시도</span>
+      </button>
     </div>
 
     <!-- Empty State -->
@@ -641,7 +672,7 @@ onMounted(loadOrders)
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
           <div class="flex items-center gap-2 text-sky-700 font-black text-lg">
             <i class="fa-solid fa-truck-fast"></i>
-            <h3>실시간 배송 조회</h3>
+            <h3>배송 조회</h3>
           </div>
           <button @click="showTrackingModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
         </div>
@@ -649,8 +680,8 @@ onMounted(loadOrders)
         <div class="space-y-4 text-xs">
           <div class="p-3 bg-sky-50 rounded-2xl border border-sky-100 space-y-1">
             <div class="flex items-center justify-between font-mono font-bold text-sky-950">
-              <span>{{ trackingItem.carrier }}</span>
-              <div class="flex items-center gap-1.5">
+              <span>{{ trackingItem.carrier || '택배사 미정' }}</span>
+              <div v-if="trackingItem.trackingNumber" class="flex items-center gap-1.5">
                 <span>{{ trackingItem.trackingNumber }}</span>
                 <button
                   @click="copyText(trackingItem.trackingNumber)"
@@ -659,39 +690,19 @@ onMounted(loadOrders)
                   {{ copyToast === trackingItem.trackingNumber ? '✓ 복사완료' : '복사' }}
                 </button>
               </div>
+              <span v-else class="font-sans text-[11px] font-bold text-amber-700">송장 미등록</span>
             </div>
             <p class="text-slate-600 text-[11px] truncate">품목: {{ trackingItem.productTitle }}</p>
+            <p v-if="!trackingItem.trackingNumber" class="text-amber-700 text-[11px]">판매자가 송장을 등록하면 여기에 표시됩니다.</p>
+            <p v-else class="text-slate-500 text-[11px]">택배사 홈페이지에서 송장번호로 상세 위치를 조회할 수 있습니다.</p>
           </div>
 
-          <!-- Tracking Timeline Steps -->
+          <!-- Status Timeline (derived from the real sub-order status) -->
           <div class="space-y-3 py-2">
-            <div class="flex items-center gap-3">
-              <span class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs">✓</span>
-              <div>
-                <p class="font-bold text-gray-900">결제 완료 및 판매자 주문 접수</p>
-                <p class="text-[10px] text-gray-400">D1 실시간 원장 트랜잭션 동기화 완료</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs">✓</span>
-              <div>
-                <p class="font-bold text-gray-900">물류센터 상품 검수 및 패킹 완료</p>
-                <p class="text-[10px] text-gray-400">OLMOA 직발송 안전 패킹</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs animate-pulse">🚚</span>
-              <div>
-                <p class="font-bold text-sky-700">택배사 집하 및 간선 수송 중</p>
-                <p class="text-[10px] text-gray-500">{{ trackingItem.carrier }} 허브 터미널 입고</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3 opacity-60">
-              <span class="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs">○</span>
-              <div>
-                <p class="font-bold text-gray-700">고객 배송지 도착 예정</p>
-                <p class="text-[10px] text-gray-400">영업일 기준 1~2일 내 문 앞 배송</p>
-              </div>
+            <div v-for="(step, i) in trackingSteps" :key="i" class="flex items-center gap-3" :class="{ 'opacity-60': !step.done }">
+              <span v-if="step.done" class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs">✓</span>
+              <span v-else class="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs">○</span>
+              <p class="font-bold" :class="step.done ? 'text-gray-900' : 'text-gray-500'">{{ step.label }}</p>
             </div>
           </div>
         </div>

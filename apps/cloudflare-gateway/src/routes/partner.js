@@ -18,13 +18,13 @@ function optionSummary(json) {
   }
 }
 
-function priceFields(body, fallback = {}) {
+export function priceFields(body, fallback = {}) {
   const sale = intParam(body.sale_price ?? body.price ?? body.lowest_sale_price ?? fallback.sale, { min: 100, max: 100_000_000, field: '판매가' });
   const orig = intParam(body.original_price ?? body.lowest_original_price ?? fallback.orig ?? sale, { min: sale, max: 100_000_000, field: '정상가' });
   return { sale, orig };
 }
 
-async function resolveCategory(env, body, fallback) {
+export async function resolveCategory(env, body, fallback) {
   const ref = body.category_slug || body.category_id || fallback;
   if (!ref) throw bad('CATEGORY_REQUIRED', '카테고리를 지정해 주세요.');
   const cat = await env.DB.prepare('SELECT id FROM categories WHERE (slug = ? OR id = ?) AND is_active = 1').bind(ref, ref).first();
@@ -110,6 +110,10 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const { sale, orig } = priceFields(b);
     const stock = intParam(b.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: '재고' });
     const catId = await resolveCategory(env, b);
+    const custody = b.custody_type !== undefined ? str(b.custody_type, { max: 20 }) : 'SEMI_MANAGED';
+    if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
+    const supply = b.supply_price !== undefined && b.supply_price !== null ? intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' }) : null;
+    const brand = str(b.brand, { max: 100 }) || null;
     const thumb = str(b.thumbnail_url, { field: '대표 이미지', max: 500, required: true });
     if (!/^https:\/\//.test(thumb) && !thumb.startsWith('/api/v1/storage/file/')) throw bad('INVALID_IMAGE_URL', '이미지는 https URL 또는 업로드 파일이어야 합니다.');
     const prodId = newId('prod');
@@ -123,10 +127,12 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status,
-             hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)`
+             hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location,
+             custody_type, supply_price, brand)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(prodId, partnerId, catId, title, thumb, str(b.description_html, { max: 200000 }) || `<p>${title}</p>`, orig, sale,
-          str(b.hs_code, { max: 12 }) || null, str(b.country_origin, { max: 2 }).toUpperCase() || 'KR', pkg[0], pkg[1], pkg[2], pkg[3], volWeight, str(b.warehouse_location, { max: 50 }) || null),
+          str(b.hs_code, { max: 12 }) || null, str(b.country_origin, { max: 2 }).toUpperCase() || 'KR', pkg[0], pkg[1], pkg[2], pkg[3], volWeight, str(b.warehouse_location, { max: 50 }) || null,
+          custody, supply, brand),
         env.DB.prepare(
           `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?)`
@@ -214,18 +220,23 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig });
     }
     const title = b.title !== undefined ? str(b.title, { field: '상품명', max: 200, required: true }) : product.title;
+    const custody = b.custody_type !== undefined ? str(b.custody_type, { max: 20 }) : product.custody_type;
+    if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
+    const supply = b.supply_price !== undefined ? (b.supply_price === null ? null : intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' })) : product.supply_price;
+    const brand = b.brand !== undefined ? (str(b.brand, { max: 100 }) || null) : product.brand;
     const descChanged = b.description_html !== undefined && b.description_html !== product.description_html;
     const contentChanged = descChanged || title !== product.title || (b.thumbnail_url && b.thumbnail_url !== product.thumbnail_url);
     const catId = b.category_id || b.category_slug ? await resolveCategory(env, b) : product.category_id;
     await env.DB.batch([
       env.DB.prepare(
         `UPDATE products SET title = ?, description_html = ?, thumbnail_url = ?, category_id = ?, lowest_original_price = ?, lowest_sale_price = ?,
-           hs_code = ?, country_origin = ?, review_status = CASE WHEN ? = 1 AND review_status = 'APPROVED' THEN 'PENDING' ELSE review_status END,
+           hs_code = ?, country_origin = ?, custody_type = ?, supply_price = ?, brand = ?,
+           review_status = CASE WHEN ? = 1 AND review_status = 'APPROVED' THEN 'PENDING' ELSE review_status END,
            status = CASE WHEN ? = 1 AND status = 'ACTIVE' THEN 'DRAFT' ELSE status END, updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND partner_id = ?`
       ).bind(title, b.description_html !== undefined ? str(b.description_html, { max: 200000 }) : product.description_html,
         b.thumbnail_url || product.thumbnail_url, catId, orig, sale, b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
-        contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
+        custody, supply, brand, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
       env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
     ]);
     return json(corsHeaders, {

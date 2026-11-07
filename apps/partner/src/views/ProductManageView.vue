@@ -46,6 +46,15 @@ const newProd = ref({
 
 const editingProd = ref<any>(null)
 
+const categories = ref<any[]>([])
+const loadCategories = async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.success && Array.isArray(json.data)) categories.value = json.data
+  } catch (e) { console.error(e) }
+}
+
 const handleFileUpload = async (event: Event, isEdit = false) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
@@ -59,9 +68,15 @@ const handleFileUpload = async (event: Event, isEdit = false) => {
 
     const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
       method: 'POST',
+      headers: getPartnerHeaders(),
       body: formData
     })
     const json = await res.json()
+    if (!res.ok || !json.success || !json.data?.public_url) {
+      toast.value = `이미지 업로드 실패 — ${json.error || '다시 시도해 주세요.'}`
+      setTimeout(() => { toast.value = '' }, 4000)
+      return
+    }
     if (json.success && json.data?.public_url) {
       if (isEdit && editingProd.value) {
         editingProd.value.thumbnail_url = json.data.public_url
@@ -91,9 +106,15 @@ const handleDetailImageUpload = async (event: Event, isEdit = false) => {
 
     const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
       method: 'POST',
+      headers: getPartnerHeaders(),
       body: formData
     })
     const json = await res.json()
+    if (!res.ok || !json.success || !json.data?.public_url) {
+      toast.value = `상세 이미지 업로드 실패 — ${json.error || '다시 시도해 주세요.'}`
+      setTimeout(() => { toast.value = '' }, 4000)
+      return
+    }
     if (json.success && json.data?.public_url) {
       const imgTag = `\n<div class="my-4 text-center"><img src="${json.data.public_url}" alt="상품 상세 이미지" class="w-full max-w-2xl mx-auto rounded-xl shadow-sm border border-gray-100" /></div>\n`
       if (isEdit && editingProd.value) {
@@ -169,6 +190,10 @@ const saveProductChanges = async (p: any) => {
 const createNewProduct = async () => {
   if (!newProd.value.title.trim()) {
     alert('상품명을 입력해 주세요.')
+    return
+  }
+  if (!newProd.value.category_id) {
+    alert('카테고리를 선택해 주세요.')
     return
   }
   try {
@@ -252,7 +277,7 @@ const computeQualityScore = (p: any) => {
   return Math.min(100, score)
 }
 
-onMounted(loadProducts)
+onMounted(() => { loadProducts(); loadCategories() })
 </script>
 
 <template>
@@ -315,6 +340,13 @@ onMounted(loadProducts)
         <div>
           <label class="block font-bold text-gray-700 mb-1">브랜드 (Brand)</label>
           <input v-model="newProd.brand" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-1">카테고리 *</label>
+          <select v-model="newProd.category_id" class="w-full h-9 px-2.5 rounded-lg border border-gray-300 bg-white">
+            <option value="" disabled>선택해 주세요</option>
+            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
         </div>
         <div>
           <label class="block font-bold text-gray-700 mb-1">입점 운영 모델 (Custody Model)</label>
@@ -532,6 +564,7 @@ onMounted(loadProducts)
             <th class="py-3.5 px-5 font-bold">원산지 / HS코드</th>
             <th class="py-3.5 px-5 font-bold">물류거점 / 부피중량</th>
             <th class="py-3.5 px-5 font-bold text-center">품질점수</th>
+            <th class="py-3.5 px-5 font-bold">승인 상태</th>
             <th class="py-3.5 px-5 font-bold">판매가 (KRW)</th>
             <th class="py-3.5 px-5 font-bold">재고 (SKU)</th>
             <th class="py-3.5 px-5 font-bold text-center">상세페이지 &amp; 관리</th>
@@ -565,6 +598,10 @@ onMounted(loadProducts)
               <span class="px-2 py-0.5 rounded font-black text-[11px] inline-block" :class="(p.quality_score ?? computeQualityScore(p)) >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">
                 ★ {{ p.quality_score ?? computeQualityScore(p) }}점
               </span>
+            </td>
+            <td class="py-3 px-5">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black" :class="p.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'">{{ p.status || '-' }}</span>
+              <span class="ml-1 px-2 py-0.5 rounded-full text-[10px] font-black" :class="p.review_status === 'APPROVED' ? 'bg-blue-50 text-blue-700' : p.review_status === 'REJECTED' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'">{{ p.review_status || '-' }}</span>
             </td>
             <td class="py-3 px-5">
               <input v-model.number="p.editPrice" type="number" class="w-28 h-8 px-2.5 rounded border border-gray-300 font-bold text-gray-900 focus:border-[#FF5000]" />

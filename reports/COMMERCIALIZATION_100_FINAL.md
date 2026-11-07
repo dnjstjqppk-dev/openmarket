@@ -270,3 +270,20 @@ P0 통과·전수검사·보고서 완료 후 진행. 지금 단계에서는 비
 3. `matrix.csv` WARN 2행(`/orders/:id`, `/payments/success`)은 에러 상태 의도 표출인지 확인.
 4. Flutter: `flutter test` 골든 4종 + 실기기에서 홈·장바구니·주문·태블릿 레일 캡처 후 대조.
 5. 결과는 본 보고서 §2 표에 일자·서명과 함께 기록.
+
+### 부록 D. 상용화 standby 후속 파동 (본 보고서 이후, 사업자등록 전)
+
+- P0 파동 13건 전수: OrdersView 실송장 추적, OrderDetailView·ShipmentView 정직 카피,
+  SupportView·FAQ SLA 제거, 클레임 승인 `orders.refund` 권한 분리, 번개특가·결제결과·
+  크롤러 SSRF·정산 마스킹은 기해결 검증, 전수감사 오인용 3건 정정.
+- Lane D 관리자 운영 완결: 클레임 테이블 승인/반려, 주문 전액환불,
+  입점사 정산계좌 실명확인·변경승인/반려, `GET /admin/orders` 품목 동봉.
+- Lane E 채널·임포트·FX: 환율 단일원천(`lib/fx.js` + 운영자 테이블),
+  임포트 카테고리 실목록화, 벌크 템플릿 실ID화, 배너 기본링크 실라우트화.
+- P1 파동: 주문·지갑·고객센터 에러상태+재시도, 지갑 허위 5,000원 잔액 제거,
+  CI에 Node 풀체인·타입체크·Flutter 잡 추가, 파트너앱 택배사 선택,
+  크롤러 E2E publish 201 기대치 정합.
+- 테스트: `test:claims` 3/3 · `test:fx` 4/4 · `admin_ops` 4/4 · `channel_import` 3/3 ·
+  `error_states` 3/3 · 파트너앱 `flutter test` 1/1, 전수 `npm test` 녹색(최종 검증 시점).
+- 변경 뷰 재캡처 필요: 스토어 주문·주문상세·지갑·고객센터, 관리자 주문·원장·입점사,
+  파트너 URL임포트·출고, 파트너앱 출고 다이얼로그.

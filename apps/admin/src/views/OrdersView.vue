@@ -14,11 +14,14 @@ interface AdminOrder {
   customs_duty_type?: string;
   payment_status: string;
   created_at: string;
+  sub_orders?: any[];
 }
 
 const orders = ref<AdminOrder[]>([]);
 const loading = ref(true);
 const statusFilter = ref('ALL');
+const actionMsg = ref('');
+const refunding = ref<string | null>(null);
 
 async function loadOrders() {
   loading.value = true;
@@ -33,6 +36,42 @@ async function loadOrders() {
   } catch (_) {
   } finally {
     loading.value = false;
+  }
+}
+
+function refundableLines(o: AdminOrder) {
+  const lines: { order_item_id: string; quantity: number }[] = [];
+  for (const s of o.sub_orders || []) {
+    for (const it of s.items || []) {
+      const left = Number(it.quantity || 0) - Number(it.refunded_quantity || 0);
+      if (left > 0) lines.push({ order_item_id: it.id, quantity: left });
+    }
+  }
+  return lines;
+}
+
+async function fullRefund(o: AdminOrder) {
+  const lines = refundableLines(o);
+  if (!lines.length) return;
+  const reason = window.prompt(`주문 ${o.order_no || o.id} 전액 환불 사유를 입력하세요 (필수, 환불 원장에 기록됩니다)`, '')?.trim();
+  if (!reason) return;
+  if (!window.confirm(`${lines.length}개 품목 전량을 원결제수단/적립금으로 환불합니다. 계속할까요?`)) return;
+  refunding.value = o.id;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/orders/${o.id}/refund`, {
+      method: 'POST',
+      headers: { ...getAdminHeaders(), 'X-Idempotency-Key': `admfr-${o.id}-${Date.now()}` },
+      body: JSON.stringify({ lines, reason })
+    });
+    const json = await res.json().catch(() => ({}));
+    actionMsg.value = res.ok && json.success
+      ? `✓ 전액 환불 접수 (환불ID ${json.data?.refund?.id || '-'})`
+      : `⚠ ${json.error || '환불 실패'}`;
+    await loadOrders();
+  } catch (_) {
+    actionMsg.value = '⚠ 환불 요청 중 네트워크 오류';
+  } finally {
+    refunding.value = null;
   }
 }
 
@@ -68,6 +107,10 @@ onMounted(loadOrders);
       </div>
     </div>
 
+    <div v-if="actionMsg" class="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold">
+      {{ actionMsg }}
+    </div>
+
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
       <i class="fa-solid fa-spinner fa-spin mr-2"></i>주문 목록을 불러오는 중...
     </div>
@@ -82,6 +125,7 @@ onMounted(loadOrders);
             <th class="p-3">결제금액 (통화)</th>
             <th class="p-3">상태</th>
             <th class="p-3">주문일시</th>
+            <th class="p-3 text-right">환불 조치</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -112,6 +156,16 @@ onMounted(loadOrders);
               </span>
             </td>
             <td class="p-3 text-slate-400">{{ new Date(o.created_at).toLocaleString() }}</td>
+            <td class="p-3 text-right">
+              <button
+                v-if="['PAID', 'PARTIAL_REFUNDED'].includes(o.payment_status) && refundableLines(o).length"
+                @click="fullRefund(o)"
+                :disabled="refunding === o.id"
+                class="px-2.5 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold disabled:opacity-50 cursor-pointer"
+              >
+                {{ refunding === o.id ? '처리 중...' : '전액 환불' }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>

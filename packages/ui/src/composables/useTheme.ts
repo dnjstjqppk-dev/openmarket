@@ -5,6 +5,11 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 const KEY = 'olmoa_theme'
 const mode = ref<ThemeMode>('system')
 
+/// Header toggle order: explicit light, explicit dark, then OS-driven system.
+export function nextThemeMode(m: ThemeMode): ThemeMode {
+  return m === 'light' ? 'dark' : m === 'dark' ? 'system' : 'light'
+}
+
 function apply(m: ThemeMode) {
   const root = document.documentElement
   if (m === 'system') root.removeAttribute('data-theme')

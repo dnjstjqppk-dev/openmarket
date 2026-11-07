@@ -1,86 +1,100 @@
+# Storefront paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/catalog.js, orders.js, features.js,
+# services/orders.js). Retired 2026-11-07: GET /api/v1/home/sdui and
+# GET /api/v1/flash-sales/stream never had a gateway route behind them
+# (no handler, no client usage); the live campaign feed is
+# GET /api/v1/campaigns/lightning below.
 paths:
-  /api/v1/home/sdui:
-    get:
-      summary: Fetch Server-Driven UI home layout with hydrated data
-      tags: [Storefront]
-      security: []
-      parameters:
-        - name: platform
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [WEB, MOBILE]
-      responses:
-        '200':
-          description: Hydrated SDUI blocks
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [layout_version, blocks]
-                properties:
-                  layout_version:
-                    type: integer
-                  blocks:
-                    type: array
-                    items:
-                      $ref: '../schemas/common.yaml#/components/schemas/SduiBlock'
-
-  /api/v1/flash-sales/stream:
-    get:
-      summary: Real-time SSE stream for flash sale countdown and stock updates
-      tags: [Storefront]
-      security: []
-      responses:
-        '200':
-          description: SSE text/event-stream payload
-          content:
-            text/event-stream:
-              schema:
-                type: string
-
   /api/v1/products:
     get:
-      summary: Cursor-paginated product feed for virtual infinite scroll
+      summary: Offset-paginated ACTIVE product feed with catalog joins
       tags: [Storefront]
       security: []
       parameters:
-        - name: cursor
+        - name: category
           in: query
           schema:
             type: string
-        - name: limit
+          description: Category slug or id ('all' disables the filter). Matches the category and its direct children.
+        - name: partner_id
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [popular, price_asc, price_desc, newest, rating]
+            default: popular
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Title/description/category LIKE search (alias: search). A search_synonyms row rewrites the fourth match arm.
+        - name: min_price
           in: query
           schema:
             type: integer
-            minimum: 10
-            maximum: 100
-            default: 30
-        - name: category_id
+            minimum: 0
+        - name: max_price
           in: query
           schema:
-            type: string
-            format: uuid
+            type: integer
+            minimum: 0
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Invalid values fall back to 1, never 500.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+          description: Legacy alias 'limit' is accepted. Clamped to 1..200.
       responses:
         '200':
-          description: Paginated product list
+          description: Product rows with brand, category and rating joins
           content:
             application/json:
               schema:
                 type: object
-                required: [items, page_meta]
+                required: [success, count, filters, pagination, data]
                 properties:
-                  items:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  filters:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                        nullable: true
+                      partner_id:
+                        type: string
+                        nullable: true
+                      sort:
+                        type: string
+                      search:
+                        type: string
+                        nullable: true
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
+                  data:
                     type: array
                     items:
                       $ref: '../schemas/common.yaml#/components/schemas/ProductSummary'
-                  page_meta:
-                    $ref: '../schemas/common.yaml#/components/schemas/CursorPageMeta'
 
   /api/v1/products/{id}:
     get:
-      summary: Get product details and full SKU option matrix
+      summary: Product detail with SKUs, option attributes and buy-box summary
       tags: [Storefront]
       security: []
       parameters:
@@ -89,29 +103,96 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
+          description: Opaque product id (prod_*), not a UUID.
       responses:
         '200':
-          description: Product detail with SKUs
+          description: Product row with SKUs and merchandising blocks
           content:
             application/json:
               schema:
                 type: object
-                required: [product, description_html, skus]
+                required: [success, data]
                 properties:
-                  product:
-                    $ref: '../schemas/common.yaml#/components/schemas/ProductSummary'
-                  description_html:
+                  success:
+                    type: boolean
+                  brand:
                     type: string
-                  skus:
-                    type: array
-                    items:
-                      $ref: '../schemas/common.yaml#/components/schemas/SkuItem'
+                  data:
+                    type: object
+                    required: [id, title, skus, attributes, buy_box, volume_discounts]
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      video_url:
+                        type: string
+                        nullable: true
+                        description: Only a video the seller actually registered, else null.
+                      quality_score:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      avg_rating:
+                        type: number
+                        nullable: true
+                      review_count:
+                        type: integer
+                      qna_count:
+                        type: integer
+                      skus:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '../schemas/common.yaml#/components/schemas/SkuItem'
+                            - type: object
+                              properties:
+                                option_values_json:
+                                  type: string
+                                options:
+                                  type: object
+                      attributes:
+                        type: array
+                        items:
+                          type: object
+                          required: [name, values]
+                          properties:
+                            name:
+                              type: string
+                            values:
+                              type: array
+                              items:
+                                type: string
+                      buy_box:
+                        type: object
+                        description: Single-supplier direct offer summary.
+                      volume_discounts:
+                        type: array
+                        items:
+                          type: object
+                          required: [min_quantity, discount_rate_pct, label]
+                          properties:
+                            min_quantity:
+                              type: integer
+                            discount_rate_pct:
+                              type: integer
+                            label:
+                              type: string
+        '404':
+          description: Unknown product id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/orders/checkout:
     post:
-      summary: Create parent order and split sub-orders per partner atomically
+      summary: Create a READY order with 30-minute stock/coupon/credit reservation
       tags: [Storefront]
+      description: >
+        Customer JWT required. POST /api/v1/orders is an alias with the identical
+        contract. Server prices from product_skus (client totals are ignored).
+        Fails 503 OPERATOR_NOT_CONFIGURED when no operating entity is active.
       parameters:
         - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -120,59 +201,175 @@ paths:
           application/json:
             schema:
               type: object
-              required: [items, recipient_name, recipient_phone, shipping_address, payment_method]
+              required: [items, recipient_name, recipient_phone, shipping_address_line1, shipping_postal_code]
               properties:
                 items:
                   type: array
                   minItems: 1
+                  maxItems: 50
                   items:
                     type: object
                     required: [sku_id, quantity]
                     properties:
                       sku_id:
                         type: string
-                        format: uuid
                       quantity:
                         type: integer
                         minimum: 1
-                        maximum: 99
-                      flash_sale_item_id:
+                        maximum: 999
+                      product_id:
                         type: string
-                        format: uuid
-                        nullable: true
+                        description: Optional cross-check; SKU_PRODUCT_MISMATCH when it disagrees with the SKU.
                 recipient_name:
                   type: string
-                  minLength: 2
-                  maxLength: 80
+                  maxLength: 50
                 recipient_phone:
                   type: string
-                  minLength: 8
                   maxLength: 20
+                  description: Must match ^[0-9+\-\s()]{9,20}$.
+                shipping_address_line1:
+                  type: string
+                  maxLength: 200
+                shipping_address_line2:
+                  type: string
+                  maxLength: 200
+                shipping_postal_code:
+                  type: string
+                  description: 5-digit postal code.
+                shipping_memo:
+                  type: string
+                  maxLength: 200
                 shipping_address:
+                  type: object
+                  description: Nested alternative to the flat recipient/address fields.
+                pccc:
                   type: string
-                  minLength: 5
-                  maxLength: 300
-                payment_method:
+                  description: Personal customs code, ^P\d{12}$ when present. Format-checked only.
+                user_coupon_id:
                   type: string
-                  enum: [CARD, KAKAOPAY, TOSSPAY, STRIPE]
+                coupon_code:
+                  type: string
+                use_credit_amount:
+                  type: integer
+                  minimum: 0
+                  description: Alias use_credits is accepted.
+                idempotency_key:
+                  type: string
+                  description: Body fallback for X-Idempotency-Key.
       responses:
         '201':
-          description: Split order created and stock reserved
+          description: Order created (200 with idempotent_replay=true on key replay)
           content:
             application/json:
               schema:
                 type: object
-                required: [order_id, sub_order_ids, total_pay_amount]
+                required: [success, order_id, order_no, total_pay_amount, data]
                 properties:
+                  success:
+                    type: boolean
                   order_id:
                     type: string
-                    format: uuid
-                  sub_order_ids:
-                    type: array
-                    items:
-                      type: string
-                      format: uuid
+                  order_no:
+                    type: string
+                  payment_status:
+                    type: string
+                  status:
+                    type: string
+                  total_goods_amount:
+                    type: integer
+                  total_shipping_amount:
+                    type: integer
+                  volume_discount_amount:
+                    type: integer
+                  coupon_discount_amount:
+                    type: integer
+                  credit_used_amount:
+                    type: integer
+                  total_discount_amount:
+                    type: integer
                   total_pay_amount:
                     type: integer
-                    format: int64
+                  payment_expires_at:
+                    type: string
+                  currency:
+                    type: string
+                    example: KRW
+                  sub_orders_created:
+                    type: integer
+                  idempotent_replay:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: CART_EMPTY, SKU_REQUIRED, INVALID_QUANTITY, INVALID_PHONE, INVALID_POSTAL_CODE, INVALID_PCCC, INVALID_SKU, INVALID_IDEMPOTENCY_KEY
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: STOCK_INSUFFICIENT, PRODUCT_NOT_ON_SALE, DIRECT_SKU_NOT_SOURCEABLE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '503':
+          description: OPERATOR_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
+  /api/v1/campaigns/lightning:
+    get:
+      summary: Currently running lightning-deal campaign with real charged prices
+      tags: [Storefront]
+      security: []
+      description: >
+        Returns the single campaign whose ACTIVE window contains now, or
+        campaign=null with empty items. deal_price always equals the SKU price
+        checkout charges; there is no separate deal-price engine.
+      responses:
+        '200':
+          description: Campaign and mapped deals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, campaign, items, data]
+                properties:
+                  success:
+                    type: boolean
+                  campaign:
+                    type: object
+                    nullable: true
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [deal_price, sold_quantity, discount_rate, sold_percent, remaining_stock]
+                      properties:
+                        deal_price:
+                          type: integer
+                        sold_quantity:
+                          type: integer
+                        discount_rate:
+                          type: integer
+                        sold_percent:
+                          type: integer
+                        remaining_stock:
+                          type: integer
+                  data:
+                    type: object
+                    required: [campaign, deals, items]
+                    properties:
+                      campaign:
+                        type: object
+                        nullable: true
+                      deals:
+                        type: array
+                        items:
+                          type: object
+                      items:
+                        type: array
+                        items:
+                          type: object

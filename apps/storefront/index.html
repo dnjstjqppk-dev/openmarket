@@ -1,6 +1,10 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="light">
+<html lang="ko">
   <head>
+    <script>
+    /* Apply the saved theme before first paint (see useTheme in @olmoa/ui). */
+    try { var m = localStorage.getItem('olmoa_theme'); if (m === 'light' || m === 'dark') document.documentElement.setAttribute('data-theme', m) } catch (e) {}
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OLMOA (올모아) - 내가 찾는 모든 것, 여기. | Global Marketplace</title>
@@ -10,6 +14,8 @@
     <meta name="description" content="글로벌 종합 쇼핑몰 올모아(OLMOA). 전 세계 인기 상품, 패션, 전자, 라이프스타일을 가장 합리적인 가격과 무료배송으로 만나보세요. Everything You Seek. All Here." />
     <meta name="keywords" content="OLMOA, 올모아, 글로벌 쇼핑몰, 오픈마켓, 해외직구, 최저가 쇼핑, Temu, e-commerce" />
     <link rel="canonical" href="https://olmoa.com/" />
+    <!-- Single-URL app (locale switches in-app, no /ko/ /en/ URLs), so only x-default is valid here. -->
+    <link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />

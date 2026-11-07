@@ -1,4 +1,5 @@
 import { authenticate } from '../lib/auth.js';
+import { krwPerUnit, krwPerUnitMap } from '../lib/fx.js';
 import { logPiiView } from '../services/privacy.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
@@ -137,8 +138,8 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     const shippingFeeKrw = Math.max(0, parseInt(body.shipping_fee_krw || body.total_shipping_amount || 0, 10));
     const countryOrigin = String(body.country_origin || 'OTHER').toUpperCase();
 
-    // Standard KRW -> USD conversion rate
-    const usdRate = 1380.0;
+    // KRW per USD from the single-source FX helper (operator table, else reference).
+    const usdRate = (await krwPerUnit(env, 'USD')).rate;
     const totalOrderKrw = totalGoodsKrw + shippingFeeKrw;
     const totalOrderUsd = Math.round((totalOrderKrw / usdRate) * 100) / 100;
 
@@ -185,13 +186,7 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     const from = String(body.from || 'KRW').toUpperCase();
     const to = String(body.to || 'USD').toUpperCase();
 
-    const fxTable = {
-      KRW: 1.0,
-      USD: 1380.0,
-      JPY: 9.0,
-      EUR: 1490.0,
-      CNY: 192.0
-    };
+    const fxTable = await krwPerUnitMap(env);
 
     const fromInKrw = from === 'KRW' ? amount : amount * (fxTable[from] || 1);
     const converted = to === 'KRW' ? fromInKrw : fromInKrw / (fxTable[to] || 1);
@@ -272,21 +267,11 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     let usdRate = order.fx_rate || 0;
     let fxSource = 'Order Checkout FX Rate';
     if (!usdRate || usdRate <= 0) {
-      try {
-        const fxRow = await env.DB.prepare(
-          "SELECT rate, inverse_rate, updated_at FROM exchange_rates WHERE base_currency = 'KRW' AND target_currency = 'USD' LIMIT 1"
-        ).first();
-        if (fxRow && fxRow.inverse_rate) {
-          usdRate = Number(fxRow.inverse_rate);
-          fxSource = `OLMOA Dynamic FX Engine (${fxRow.updated_at || 'Live'})`;
-        } else {
-          usdRate = 1380.0;
-          fxSource = 'OLMOA Internal Treasury Reference Rate';
-        }
-      } catch (_) {
-        usdRate = 1380.0;
-        fxSource = 'OLMOA Internal Treasury Reference Rate';
-      }
+      const live = await krwPerUnit(env, 'USD');
+      usdRate = live.rate;
+      fxSource = live.source === 'OPERATOR_TABLE'
+        ? `OLMOA Dynamic FX Engine (${live.updated_at || 'Live'})`
+        : 'OLMOA Internal Treasury Reference Rate';
     }
 
     const totalKrw = order.total_pay_amount || 0;

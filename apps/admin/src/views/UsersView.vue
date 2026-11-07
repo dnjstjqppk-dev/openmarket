@@ -33,6 +33,45 @@ async function loadUsers() {
   }
 }
 
+const resetTarget = ref<AdminUser | null>(null);
+const resetPw = ref('');
+const resetPw2 = ref('');
+const resetBusy = ref(false);
+const resetError = ref('');
+const resetDone = ref(false);
+
+function openReset(u: AdminUser) {
+  resetTarget.value = u;
+  resetPw.value = '';
+  resetPw2.value = '';
+  resetError.value = '';
+  resetDone.value = false;
+}
+
+async function submitReset() {
+  if (!resetTarget.value || resetBusy.value) return;
+  if (resetPw.value !== resetPw2.value) {
+    resetError.value = '새 비밀번호가 일치하지 않습니다.';
+    return;
+  }
+  resetBusy.value = true;
+  resetError.value = '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/users/${resetTarget.value.id}/reset-password`, {
+      method: 'POST',
+      headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: resetPw.value })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `재설정 실패 (${res.status})`);
+    resetDone.value = true;
+  } catch (e: any) {
+    resetError.value = e?.message || '재설정에 실패했습니다.';
+  } finally {
+    resetBusy.value = false;
+  }
+}
+
 const filteredUsers = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
   if (!q) return users.value;
@@ -76,6 +115,7 @@ onMounted(loadUsers);
             <th class="p-3">권한</th>
             <th class="p-3">주문 수</th>
             <th class="p-3">가입일</th>
+            <th class="p-3">조치</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -89,11 +129,37 @@ onMounted(loadUsers);
             </td>
             <td class="p-3 font-bold text-slate-900">{{ u.order_count || 0 }}</td>
             <td class="p-3 text-slate-400">{{ new Date(u.created_at).toLocaleString() }}</td>
+            <td class="p-3">
+              <button v-if="u.role !== 'ROLE_ADMIN'" @click="openReset(u)" class="text-indigo-600 font-bold hover:underline">비밀번호 재설정</button>
+              <span v-else class="text-slate-300">보안 절차</span>
+            </td>
           </tr>
         </tbody>
       </table>
       <div v-if="filteredUsers.length === 0" class="p-8 text-center text-slate-400">
         조건에 맞는 회원이 없습니다.
+      </div>
+    </div>
+  </div>
+    <div v-if="resetTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="resetTarget = null">
+      <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <h3 class="text-sm font-bold text-slate-900">비밀번호 재설정</h3>
+        <p class="mt-1 text-xs text-slate-500">{{ resetTarget.email }} · 모든 세션 로그아웃 + 잠금 해제</p>
+        <div v-if="!resetDone" class="mt-4 space-y-2">
+          <input v-model="resetPw" type="password" autocomplete="new-password" placeholder="새 비밀번호 (10자+, 3종류 조합)" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
+          <input v-model="resetPw2" type="password" autocomplete="new-password" placeholder="새 비밀번호 확인" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
+          <p v-if="resetError" class="text-xs font-bold text-red-600">{{ resetError }}</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="resetTarget = null" class="rounded-lg border px-3 py-1.5 text-xs font-bold text-slate-600">취소</button>
+            <button @click="submitReset" :disabled="resetBusy" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{{ resetBusy ? '처리 중...' : '재설정' }}</button>
+          </div>
+        </div>
+        <div v-else class="mt-4">
+          <p class="text-xs font-bold text-emerald-700">재설정되었습니다. 새 비밀번호를 안전한 경로로 전달하고, 로그인 후 변경을 안내해 주세요.</p>
+          <div class="flex justify-end pt-3">
+            <button @click="resetTarget = null" class="rounded-lg border px-3 py-1.5 text-xs font-bold text-slate-600">닫기</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

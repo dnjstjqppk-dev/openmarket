@@ -45,10 +45,16 @@ const approveSettlement = async (_settlementId: string) => {
 }
 
 const resolveClaim = async (claimId: string, status: string) => {
+  let body: any = { decision: 'APPROVE' }
+  if (status === 'REJECTED') {
+    const notes = window.prompt('거절 사유를 입력하세요 (필수, 감사 로그에 기록됩니다)', '')?.trim()
+    if (!notes) return
+    body = { decision: 'REJECT', notes }
+  }
   const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claimId}`, {
     method: 'PUT',
     headers: getAdminHeaders(),
-    body: JSON.stringify(status === 'REJECTED' ? { decision: 'REJECT', notes: prompt('거절 사유') || '' } : { decision: 'APPROVE' })
+    body: JSON.stringify(body)
   })
   const json = await res.json()
   actionMsg.value = json.success ? `✓ 클레임 ${claimId} 처리 완료 (${json.status})` : `⚠ ${json.error || '처리 실패'}`
@@ -127,17 +133,27 @@ onMounted(loadLedgers)
             <tr v-for="cl in claims" :key="cl.id">
               <td class="py-3 px-5 font-mono font-bold">{{ cl.id }}</td>
               <td class="py-3 px-5 font-mono">{{ cl.order_id }}</td>
-              <td class="py-3 px-5 font-black text-indigo-600">{{ cl.type }}</td>
+              <td class="py-3 px-5 font-black text-indigo-600">{{ cl.claim_type }}</td>
               <td class="py-3 px-5 text-gray-600">{{ cl.reason }}</td>
               <td class="py-3 px-5 font-bold">₩{{ Number(cl.refund_amount || 0).toLocaleString() }}</td>
               <td class="py-3 px-5 flex items-center gap-2">
                 <span class="px-2 py-0.5 rounded bg-gray-100 font-bold">{{ cl.status }}</span>
                 <button
-                  v-if="cl.status === 'REQUESTED'"
+                  v-if="cl.status === 'REQUESTED' && cl.claim_type === 'RETURN'"
                   @click="resolveClaim(cl.id, 'APPROVED')"
                   class="px-2.5 py-1 rounded bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
                 >
                   Approve Refund
+                </button>
+                <span v-else-if="cl.status === 'REQUESTED' && cl.claim_type === 'EXCHANGE'" class="text-[10px] text-gray-400 font-bold">
+                  판매자 승인·재출고 건
+                </span>
+                <button
+                  v-if="cl.status === 'REQUESTED'"
+                  @click="resolveClaim(cl.id, 'REJECTED')"
+                  class="px-2.5 py-1 rounded bg-white border border-red-300 text-red-600 text-[11px] font-bold cursor-pointer"
+                >
+                  Reject
                 </button>
               </td>
             </tr>

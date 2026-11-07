@@ -2,7 +2,7 @@
 // Runs on Node ≥ 23 (TypeScript type stripping).   node tests/ui/autocomplete_core.test.mjs
 import assert from 'node:assert/strict'
 import { createRunner } from '../lib/harness.mjs'
-import { createAutocomplete, normalizeQuery } from '../../packages/ui/src/composables/autocompleteCore.ts'
+import { createAutocomplete, normalizeQuery, parseTrendingKeywords } from '../../packages/ui/src/composables/autocompleteCore.ts'
 
 const t = createRunner('Autocomplete core')
 
@@ -87,6 +87,20 @@ await t.test('A06 errors are surfaced (not shown as "no results") and retry work
 await t.test('A07 normalisation: NFC, whitespace, case', async () => {
   assert.equal(normalizeQuery('  Ａ  b\tC '), 'ａ b c'.replace('ａ', 'Ａ'.normalize('NFC').toLowerCase()))
   assert.equal(normalizeQuery('한ㄱ'), '한ㄱ')
+})
+
+await t.test('A08 trending: keyword rows extracted, deduped, capped at 10', async () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({ keyword: `kw${i % 11}`, search_count: 100 - i }))
+  const out = parseTrendingKeywords({ trending_keywords: rows })
+  assert.equal(out.length, 10)
+  assert.equal(out[0], 'kw0')
+  assert.deepEqual(parseTrendingKeywords({ trending_keywords: ['a', { keyword: 'b' }, 'a', '', null] }), ['a', 'b'])
+})
+
+await t.test('A09 trending: malformed payloads degrade to an empty list', async () => {
+  assert.deepEqual(parseTrendingKeywords(null), [])
+  assert.deepEqual(parseTrendingKeywords({}), [])
+  assert.deepEqual(parseTrendingKeywords({ trending_keywords: 'nope' }), [])
 })
 
 t.finish()

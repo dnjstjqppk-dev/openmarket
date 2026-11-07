@@ -1,14 +1,11 @@
 // apps/cloudflare-gateway/src/services/pricing/global-pricing-engine.js
 // Comprehensive Global Pricing, Currency, Logistics, Duty, Channel Commission, and Margin Engine.
 
-export const FX_RATES_TO_KRW = {
-  KRW: 1.0,
-  USD: 1380.0,
-  CNY: 192.5,
-  JPY: 9.15,
-  EUR: 1495.0,
-  SGD: 1045.0
-};
+import { FALLBACK_KRW_PER_UNIT } from '../../lib/fx.js';
+
+// Kept export: alias of the single-source reference map. Request handlers with
+// DB access inject live operator-table rates via the fxRatesToKrw parameter.
+export const FX_RATES_TO_KRW = FALLBACK_KRW_PER_UNIT;
 
 export const CHANNEL_COMMISSIONS_BPS = {
   OLMOA_MAIN: 0,             // 0% (Direct)
@@ -29,10 +26,11 @@ export function calculateGlobalPrice({
   isCrossborder = false,
   originCountry = 'CN',
   minMarginKrw = 3000,
-  roundingUnit = 100
+  roundingUnit = 100,
+  fxRatesToKrw = FX_RATES_TO_KRW
 }) {
   // 1. Currency Conversion to KRW
-  const fx = FX_RATES_TO_KRW[currency.toUpperCase()] || 1.0;
+  const fx = fxRatesToKrw[currency.toUpperCase()] || 1.0;
   const fxBuffer = 1.02; // 2% currency fluctuation hedge buffer
   const supplyCostKrw = Math.round(Number(wholesaleCost || 0) * fx * fxBuffer);
 
@@ -49,7 +47,7 @@ export function calculateGlobalPrice({
   // 3. Customs Duty & VAT (Crossborder de minimis check: $150 threshold, US $200)
   let customsDutyKrw = 0;
   let vatKrw = 0;
-  const totalDutiableUsd = (supplyCostKrw + internationalShippingKrw) / (FX_RATES_TO_KRW.USD * fxBuffer);
+  const totalDutiableUsd = (supplyCostKrw + internationalShippingKrw) / ((fxRatesToKrw.USD || 1.0) * fxBuffer);
   const deMinimisLimitUsd = originCountry.toUpperCase() === 'US' ? 200 : 150;
 
   if (isCrossborder && totalDutiableUsd > deMinimisLimitUsd) {

@@ -1,5 +1,5 @@
 import { authenticate, requireMachineSecret } from '../lib/auth.js';
-import { unauthorized, forbidden } from '../lib/http.js';
+import { unauthorized, forbidden, readJson, bad, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 // apps/cloudflare-gateway/src/routes/global-logistics.js
 // OLMOA Global OpenMarket Logistics Engine: International Carriers, 7-Stage Milestone Tracking & Webhook
@@ -136,14 +136,20 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
   // 3. Carrier Milestone Webhook Ingestion (/api/v1/logistics/milestone-webhook)
   if (url.pathname === '/api/v1/logistics/milestone-webhook' && request.method === 'POST') {
     requireMachineSecret(request, env, 'CARRIER_WEBHOOK_SECRET', 'X-Carrier-Webhook-Secret');
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const subOrderId = body.sub_order_id;
-    const stageCode = String(body.milestone || body.stage_code || 'SHIPPED').toUpperCase();
-    const location = body.location || ''; // only what the carrier reported (no invented "글로벌 물류 허브")
-    const description = body.description || '운송 상태가 갱신되었습니다.';
-    const trackingNumber = body.tracking_number || null;
-    const carrierCode = body.carrier || body.carrier_code || null; // falls back to the sub-order's own carrier below
-    const customsClearanceNo = body.customs_clearance_no || null;
+    const rawStage = body.milestone ?? body.stage_code;
+    if (rawStage === undefined || rawStage === null || String(rawStage).trim() === '') {
+      throw bad('STAGE_REQUIRED', '마일스톤 단계 코드는 필수입니다.');
+    }
+    const stageCode = String(rawStage).toUpperCase();
+    const stageMeta = MILESTONE_STAGES.find((m) => m.stage === stageCode);
+    if (!stageMeta) throw bad('UNKNOWN_STAGE', '알 수 없는 마일스톤 단계 코드입니다.');
+    const location = str(body.location, { max: 200 }); // only what the carrier reported (no invented "글로벌 물류 허브")
+    const description = str(body.description, { max: 500 }) || '운송 상태가 갱신되었습니다.';
+    const trackingNumber = str(body.tracking_number, { max: 40 }) || null;
+    const carrierCode = str(body.carrier ?? body.carrier_code, { max: 40 }) || null; // falls back to the sub-order's own carrier below
+    const customsClearanceNo = str(body.customs_clearance_no, { max: 40 }) || null;
 
     if (!subOrderId) {
       return new Response(JSON.stringify({ error: 'Missing sub_order_id' }), { status: 400, headers: corsHeaders });
@@ -155,7 +161,6 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     }
 
     const logId = newId('trk');
-    const stageMeta = MILESTONE_STAGES.find(m => m.stage === stageCode) || { stage: stageCode, name: stageCode };
 
     const batch = [];
     batch.push(

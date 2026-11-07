@@ -1,119 +1,276 @@
+# Admin paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/admin.js, finance.js). Every route requires
+# a ROLE_ADMIN JWT; mutations write admin_audit_log.
+# Retired 2026-11-07: PUT /api/v1/admin/sdui/layouts never had a route behind it.
+# POST /api/v1/admin/settlements/execute never existed; per-settlement approval
+# itself is retired (POST /api/v1/admin/settlements/{id}/approve answers
+# 410 USE_PAYOUT_ENGINE) — seller payouts go through POST
+# /api/v1/admin/finance/payouts below.
 paths:
   /api/v1/admin/partners/{id}/verify:
-    patch:
-      summary: Approve or reject partner onboarding verification
+    put:
+      summary: Approve, reject or suspend a partner with risk tiering
       tags: [Admin]
+      description: >
+        POST is accepted as an alias of PUT. KYB applicants (applied_at set,
+        kyc_status not APPROVED) cannot be approved here: 409
+        USE_APPLICATION_REVIEW directs to the document review endpoint.
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
-            format: uuid
+          description: Partner id.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [status, commission_rate]
+              required: [status]
               properties:
                 status:
                   type: string
-                  enum: [APPROVED, REJECTED, SUSPENDED]
-                commission_rate:
-                  type: number
-                  format: double
-                  minimum: 0.0
-                  maximum: 50.0
-                reject_reason:
+                  enum: [APPROVED, REJECTED, SUSPENDED, PENDING]
+                risk_tier:
                   type: string
-                  maxLength: 500
+                  enum: [TIER_1_NORMAL, TIER_2_WATCH, TIER_3_HIGH_RISK]
+                  default: TIER_1_NORMAL
+                rolling_reserve_pct:
+                  type: number
+                  description: 0..50 with at most 2 decimals. Defaults to 10/5/0 by risk tier.
+                rolling_reserve_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  default: 90
+                kyc_notes:
+                  type: string
+                  maxLength: 2000
       responses:
         '200':
-          description: Partner status updated
+          description: Partner status updated and audited
           content:
             application/json:
               schema:
                 type: object
-                required: [partner_id, status, updated_at]
+                required: [success, partner_id, status, risk_tier, rolling_reserve_pct, rolling_reserve_days, data]
                 properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
                   partner_id:
                     type: string
-                    format: uuid
                   status:
                     type: string
-                  updated_at:
+                  risk_tier:
                     type: string
-                    format: date-time
-
-  /api/v1/admin/sdui/layouts:
-    put:
-      summary: Publish new Server-Driven UI home layout for Web and Mobile
-      tags: [Admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [target_platform, blocks]
-              properties:
-                target_platform:
-                  type: string
-                  enum: [WEB, MOBILE, ALL]
-                blocks:
-                  type: array
-                  minItems: 1
-                  items:
-                    $ref: '../schemas/common.yaml#/components/schemas/SduiBlock'
-      responses:
-        '200':
-          description: Layout published
+                  rolling_reserve_pct:
+                    type: number
+                  rolling_reserve_days:
+                    type: integer
+                  kyc_notes:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+        '400':
+          description: INVALID_STATUS, INVALID_RISK_TIER, INVALID_RESERVE_PCT, INVALID_RESERVE_DAYS
           content:
             application/json:
               schema:
-                type: object
-                required: [layout_id, version]
-                properties:
-                  layout_id:
-                    type: string
-                    format: uuid
-                  version:
-                    type: integer
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown partner id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: USE_APPLICATION_REVIEW
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
-  /api/v1/admin/settlements/execute:
+  /api/v1/admin/users/{id}/reset-password:
     post:
-      summary: Execute escrow release and double-entry ledger settlement for confirmed orders
+      summary: Operator password reset (supported recovery while mail is unintegrated)
       tags: [Admin]
+      description: >
+        P2R-01: sets a policy-checked password, revokes every session
+        (token_version+1), clears lockout, and writes USER_PASSWORD_RESET to the
+        audit log. ROLE_ADMIN targets are refused (operator recovery stays a
+        break-glass DB procedure). The password never echoes back.
       parameters:
-        - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User id.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [period_start, period_end]
+              required: [new_password]
               properties:
-                period_start:
+                new_password:
                   type: string
-                  format: date
-                period_end:
-                  type: string
-                  format: date
+                  minLength: 10
+                  maxLength: 128
+                  description: 3 of 4 classes (lower/upper/digit/symbol).
       responses:
         '200':
-          description: Settlement batch executed
+          description: Password reset and audited
           content:
             application/json:
               schema:
                 type: object
-                required: [processed_partners_count, total_payout_amount]
+                required: [success, message]
                 properties:
-                  processed_partners_count:
-                    type: integer
-                  total_payout_amount:
-                    type: integer
-                    format: int64
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: WEAK_PASSWORD
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Non-admin caller, or a ROLE_ADMIN reset target
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown user id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
+  /api/v1/admin/finance/payouts:
+    get:
+      summary: Payout history plus per-seller payable previews
+      tags: [Admin]
+      responses:
+        '200':
+          description: Payouts (latest 200) and pending payable previews
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [payouts, pending]
+                    properties:
+                      payouts:
+                        type: array
+                        items:
+                          type: object
+                      pending:
+                        type: array
+                        items:
+                          type: object
+                          required: [partner_id, amount]
+                          properties:
+                            partner_id:
+                              type: string
+                            business_name:
+                              type: string
+                            settlements:
+                              type: integer
+                            carried_adjustments:
+                              type: integer
+                            gross_amount:
+                              type: integer
+                            reserve_to_hold:
+                              type: integer
+                            reserve_to_release:
+                              type: integer
+                            amount:
+                              type: integer
+                            reserve_outstanding:
+                              type: integer
+                            next_reserve_release:
+                              type: string
+                              nullable: true
+    post:
+      summary: Create an APPROVED seller payout from eligible settlements
+      tags: [Admin]
+      description: >
+        One payout covers ONE operating entity; other_entities_pending flags
+        sellers with payable balances under another entity. The payout is a
+        ledger + approval record only — the operator transfers money manually at
+        a bank and then records the reference with POST
+        /api/v1/admin/finance/payouts/{id}/transferred. A batch assertion aborts
+        the commit when a concurrent refund/cancel drifted the preview.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partner_id]
+              properties:
+                partner_id:
+                  type: string
+      responses:
+        '201':
+          description: Payout approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [payout_id, amount, settlement_count, bank_transfer]
+                    properties:
+                      payout_id:
+                        type: string
+                      amount:
+                        type: integer
+                      gross_amount:
+                        type: integer
+                      reserve_held:
+                        type: integer
+                      reserve_released:
+                        type: integer
+                      reserve_release_days:
+                        type: integer
+                        nullable: true
+                      operator_entity_id:
+                        type: string
+                      other_entities_pending:
+                        type: boolean
+                      settlement_count:
+                        type: integer
+                      bank_transfer:
+                        type: string
+        '404':
+          description: Unknown partner id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: PAYOUT_ACCOUNT_UNVERIFIED, NOTHING_TO_PAY, NEGATIVE_BALANCE_CARRIED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'

@@ -546,7 +546,7 @@ onMounted(() => {
             <textarea
               v-model="bulkTrackingInput"
               rows="5"
-              placeholder="68492019342&#10;68492019343&#10;..."
+              placeholder="예: 123456789012&#10;(한 줄에 송장번호 하나씩)"
               class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
             ></textarea>
             <p class="text-[11px] text-slate-400 mt-1">
@@ -604,7 +604,7 @@ onMounted(() => {
               <p class="font-bold text-slate-900 text-sm mt-0.5">{{ packingSlipOrder.recipient_name }}</p>
               <p class="font-mono text-slate-600">{{ packingSlipOrder.recipient_phone }}</p>
               <p v-if="(packingSlipOrder as any).pccc" class="text-blue-600 font-mono font-bold mt-1 text-[11px]">
-                통관부호: {{ (packingSlipOrder as any).pccc }} (관세청 검증)
+                통관부호: {{ (packingSlipOrder as any).pccc }} (형식 확인)
               </p>
             </div>
             <div>

@@ -3,8 +3,8 @@
 // Everything shown here comes from an API or the user's own state; no badges, counts or claims are invented.
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Bell, ChevronDown, Heart, House, LayoutGrid, LogOut, Package, ShoppingBag, Ticket, User, Zap } from 'lucide-vue-next'
-import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, formatDateTime } from '@olmoa/ui'
+import { Bell, ChevronDown, Heart, House, LayoutGrid, LogOut, Monitor, Moon, Package, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
+import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
@@ -106,6 +106,21 @@ function runRecent(term: string, close: () => void) {
   close()
   router.push({ path: '/search', query: { q: term } })
 }
+// ---- trending searches (server top-10 by search_count, empty-query autocomplete) --
+const trendingSearches = ref<string[]>([])
+async function fetchTrending() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/search/autocomplete?q=`)
+    if (!res.ok) return
+    trendingSearches.value = parseTrendingKeywords(await res.json())
+  } catch { /* idle panel simply shows recents only */ }
+}
+function runTrending(term: string, close: () => void) {
+  rememberSearch(term)
+  logSearch(term)
+  close()
+  router.push({ path: '/search', query: { q: term } })
+}
 
 // ---- business disclosure (전자상거래법 제10조) ----------------------------------------------------------
 // Operator legal disclosure — shared store (password reset also shows the CS contact from it).
@@ -114,6 +129,11 @@ const biz = computed(() => business.info)
 const bizLoaded = computed(() => business.loaded)
 
 function logout() { auth.logout(); router.push('/') }
+
+// ---- theme (light / dark / system, persisted per browser) -----------------------
+const { mode: themeMode, set: setTheme } = useTheme()
+const themeLabel = computed(() => themeMode.value === 'light' ? '밝게' : themeMode.value === 'dark' ? '어둡게' : '시스템')
+function cycleTheme() { setTheme(nextThemeMode(themeMode.value)) }
 
 const categoryNav = computed<NavItem[]>(() => [
   { to: '/channel/lightning-deals', label: '번개특가', icon: Zap },
@@ -139,6 +159,7 @@ const hideBottomNav = computed(() => route.path.startsWith('/product/') || route
 
 onMounted(async () => {
   fetchNotifications()
+  fetchTrending()
   business.load()
   // On failure the category bar still works; the menu just stays empty.
   await catalog.load()
@@ -237,11 +258,27 @@ onMounted(async () => {
                 </li>
               </ul>
             </div>
+            <div v-if="trendingSearches.length" class="px-3 py-2">
+              <p class="pb-1 pt-2 text-2xs font-bold uppercase tracking-wider text-ink-subtle">인기 검색어</p>
+              <ol>
+                <li v-for="(term, i) in trendingSearches" :key="term">
+                  <button type="button" class="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-2" @click="runTrending(term, close)">
+                    <span class="w-4 shrink-0 text-center text-xs font-bold om-num" :class="i < 3 ? 'text-primary' : 'text-ink-subtle'">{{ i + 1 }}</span>
+                    <span class="truncate">{{ term }}</span>
+                  </button>
+                </li>
+              </ol>
+            </div>
           </template>
         </OmSearchBar>
       </div>
 
       <template #end>
+        <OmIconButton :label="`테마: ${themeLabel}`" title="테마 변경 (밝게/어둡게/시스템)" @click="cycleTheme">
+          <Sun v-if="themeMode === 'light'" :size="20" />
+          <Moon v-else-if="themeMode === 'dark'" :size="20" />
+          <Monitor v-else :size="20" />
+        </OmIconButton>
         <div class="hidden items-center gap-1 sm:flex">
           <template v-if="auth.isAuthenticated">
             <OmPopover placement="bottom-end" width="w-80" role="dialog">

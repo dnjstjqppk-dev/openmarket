@@ -2,7 +2,10 @@
 // Operator console API. Requires an authenticated ROLE_ADMIN user; every mutation writes admin_audit_log.
 
 import { requireAdmin } from '../lib/auth.js';
-import { readJson, json, bad, conflict, notFound, str } from '../lib/http.js';
+import { hasPermission } from '../lib/admin-policy.js';
+import { readJson, json, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { hashPassword } from '../utils/crypto-auth.js';
+import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
@@ -70,6 +73,25 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
+  // P2R-01: operator password reset — the supported recovery path while no mail
+  // provider is integrated. Sets a policy-checked password, revokes every
+  // session, clears lockout, and audits. Operator accounts are excluded (their
+  // recovery stays a break-glass DB procedure); the password never echoes back.
+  const resetMatch = url.pathname.match(/^\/api\/v1\/admin\/users\/([^\/]+)\/reset-password$/);
+  if (resetMatch && request.method === 'POST') {
+    const body = await readJson(request);
+    const target = await env.DB.prepare('SELECT id, email, role FROM users WHERE id = ?').bind(resetMatch[1]).first();
+    if (!target) throw notFound('사용자를 찾을 수 없습니다.');
+    if (target.role === 'ROLE_ADMIN') throw forbidden('운영자 계정은 보안 절차로 초기화하세요.');
+    validatePassword(body.new_password);
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP, token_version = token_version + 1, failed_login_count = 0, locked_until = NULL WHERE id = ?')
+        .bind(await hashPassword(body.new_password), target.id),
+      audit('USER_PASSWORD_RESET', 'user', target.id, { email: target.email }, null)
+    ]);
+    return json(corsHeaders, { success: true, message: '비밀번호가 재설정되었습니다. 새 비밀번호를 안전한 경로로 전달하고, 로그인 후 변경을 안내해 주세요.' });
+  }
+
   // O10: 개인정보 접속기록 조회 (who viewed / exported / destroyed personal data).
   if (url.pathname === '/api/v1/admin/privacy/access-log' && request.method === 'GET') {
     const actor = url.searchParams.get('actor_user_id');
@@ -98,7 +120,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   // 3. Admin Verify Partner (Approve / Reject / Risk Tiering / Rolling Reserve)
   if (url.pathname.startsWith('/api/v1/admin/partners/') && url.pathname.endsWith('/verify') && (request.method === 'PUT' || request.method === 'POST')) {
     const partnerId = url.pathname.split('/')[5];
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     if (!['APPROVED', 'REJECTED', 'SUSPENDED', 'PENDING'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
     const status = body.status;
     const beforePartner = await env.DB.prepare('SELECT id, status, kyc_status, applied_at, risk_tier, rolling_reserve_pct, rolling_reserve_days FROM partners WHERE id = ?').bind(partnerId).first();
@@ -149,7 +171,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   // 5. Admin Update Product Status (Approve / Suspend / Delete)
   if (url.pathname.startsWith('/api/v1/admin/products/') && url.pathname.endsWith('/status') && (request.method === 'PUT' || request.method === 'PATCH')) {
     const prodId = url.pathname.split('/')[5];
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     if (!['ACTIVE', 'HIDDEN', 'DELETED'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
     const status = body.status;
     const beforeProd = await env.DB.prepare('SELECT id, status, review_status FROM products WHERE id = ?').bind(prodId).first();
@@ -218,6 +240,10 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       const { results: subs } = await env.DB.prepare(
         'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
       ).bind(ord.id).all();
+      for (const s of subs) {
+        const { results: items } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(s.id).all();
+        s.items = items;
+      }
       ord.sub_orders = subs;
     }
     await logPiiView(env, admin, 'admin.orders', 'order', orders.map((o) => o.id), 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
@@ -269,6 +295,8 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       return json(corsHeaders, { success: true, claim_id: clmId, status: 'REJECTED' });
     }
     if (claim.claim_type !== 'RETURN') throw conflict('UNSUPPORTED', '반품(RETURN) 클레임만 환불 승인할 수 있습니다.');
+    // Approve moves money via refundOrder — require the refund privilege, not just orders.manage.
+    if (!hasPermission(admin.adminRole, 'orders.refund')) throw forbidden('환불 승인 권한이 없습니다. (필요 권한: orders.refund)');
     const r = await refundOrder(env, admin, claim.order_id, {
       lines: JSON.parse(claim.items_json || '[]'), shippingSubOrderIds: [], subOrderId: claim.sub_order_id, claimId: clmId, reasonCode: 'RETURN',
       restock: body.restock !== false && body.returnless !== true, idemKey: `claim:${clmId}`, subStatusOnFull: 'RETURNED', orderStatusOnFull: 'REFUNDED'
@@ -289,20 +317,23 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/admin/banners' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const bannerId = newId('bnr');
     const title = (body.title || '신규 프로모션').trim();
     const subtitle = (body.subtitle || '').trim();
     const badgeText = (body.badge_text || 'SPECIAL').trim();
     const imageUrl = (body.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200').trim();
-    const linkUrl = (body.link_url || '/deals').trim();
+    const linkUrl = (body.link_url || '/channel/lightning-deals').trim();
     const bgGradient = (body.bg_gradient || 'from-orange-500 to-red-600').trim();
     const displayOrder = parseInt(body.display_order ?? 0, 10);
     const isActive = body.is_active === false || body.is_active === 0 ? 0 : 1;
 
-    await env.DB.prepare(
-      'INSERT INTO banners (id, title, subtitle, badge_text, image_url, link_url, bg_gradient, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(bannerId, title, subtitle, badgeText, imageUrl, linkUrl, bgGradient, displayOrder, isActive).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        'INSERT INTO banners (id, title, subtitle, badge_text, image_url, link_url, bg_gradient, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(bannerId, title, subtitle, badgeText, imageUrl, linkUrl, bgGradient, displayOrder, isActive),
+      audit('BANNER_CREATE', 'banner', bannerId, null, { title })
+    ]);
 
     const created = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bannerId).first();
     return new Response(JSON.stringify({ success: true, message: '프로모션 배너가 등록되었습니다.', data: created }), { status: 201, headers: corsHeaders });
@@ -312,7 +343,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (adminBannerMatch) {
     const bnrId = adminBannerMatch[1];
     if (request.method === 'PUT' || request.method === 'PATCH') {
-      const body = await request.json().catch(() => ({}));
+      const body = await readJson(request);
       const existing = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bnrId).first();
       if (!existing) {
         return new Response(JSON.stringify({ error: 'Banner not found' }), { status: 404, headers: corsHeaders });
@@ -325,15 +356,23 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       const bgGradient = body.bg_gradient ? body.bg_gradient.trim() : existing.bg_gradient;
       const linkUrl = body.link_url ? body.link_url.trim() : existing.link_url;
 
-      await env.DB.prepare(
-        'UPDATE banners SET title = ?, subtitle = ?, badge_text = ?, bg_gradient = ?, link_url = ?, display_order = ?, is_active = ? WHERE id = ?'
-      ).bind(title, subtitle, badgeText, bgGradient, linkUrl, displayOrder, isActive, bnrId).run();
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE banners SET title = ?, subtitle = ?, badge_text = ?, bg_gradient = ?, link_url = ?, display_order = ?, is_active = ? WHERE id = ?'
+        ).bind(title, subtitle, badgeText, bgGradient, linkUrl, displayOrder, isActive, bnrId),
+        audit('BANNER_UPDATE', 'banner', bnrId, { title: existing.title, is_active: existing.is_active }, { title, is_active: isActive })
+      ]);
 
       const updated = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bnrId).first();
       return new Response(JSON.stringify({ success: true, message: '배너가 수정되었습니다.', data: updated }), { headers: corsHeaders });
     }
     if (request.method === 'DELETE') {
-      await env.DB.prepare('DELETE FROM banners WHERE id = ?').bind(bnrId).run();
+      const doomed = await env.DB.prepare('SELECT id, title FROM banners WHERE id = ?').bind(bnrId).first();
+      if (!doomed) throw notFound('배너를 찾을 수 없습니다.');
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM banners WHERE id = ?').bind(bnrId),
+        audit('BANNER_DELETE', 'banner', bnrId, { title: doomed.title }, null)
+      ]);
       return new Response(JSON.stringify({ success: true, message: '배너가 삭제되었습니다.' }), { headers: corsHeaders });
     }
   }
@@ -350,7 +389,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/admin/notifications' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const target = body.target || 'ALL';
     const title = (body.title || '올모아 공지사항').trim();
     const message = (body.message || '').trim();
@@ -376,12 +415,13 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       ).bind(notiId, uid, title, message, type, actionUrl);
     });
 
+    const broadcastAudit = audit('NOTIFICATION_BROADCAST', 'notification',
+      targetUserIds.length > 0 ? `${targetUserIds[0]}+${targetUserIds.length - 1}-more` : 'broadcast',
+      null, { target, count: targetUserIds.length, title });
     if (stmts.length > 0) {
-      if (env.DB.batch) {
-        await env.DB.batch(stmts);
-      } else {
-        for (const s of stmts) await s.run();
-      }
+      await env.DB.batch([...stmts, broadcastAudit]);
+    } else {
+      await broadcastAudit.run();
     }
 
     return new Response(JSON.stringify({
@@ -398,7 +438,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/admin/coupons' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const code = (body.code || '').trim().toUpperCase();
     const title = (body.title || '').trim();
     if (!code || !title) {
@@ -407,17 +447,20 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const id = newId('cpn');
     const dv = Number(body.discount_value);
     if (!Number.isSafeInteger(dv) || dv <= 0 || (body.discount_type === 'PERCENT' && dv > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
-    await env.DB.prepare(
-      `INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, max_discount_amount, expires_at, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
-    ).bind(
-      id, code, title,
-      body.discount_type === 'PERCENT' ? 'PERCENT' : 'FIXED_AMOUNT',
-      Number(body.discount_value || 0),
-      Number(body.min_order_amount || 0),
-      body.max_discount_amount ? Number(body.max_discount_amount) : null,
-      body.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,10)
-    ).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, max_discount_amount, expires_at, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+      ).bind(
+        id, code, title,
+        body.discount_type === 'PERCENT' ? 'PERCENT' : 'FIXED_AMOUNT',
+        Number(body.discount_value || 0),
+        Number(body.min_order_amount || 0),
+        body.max_discount_amount ? Number(body.max_discount_amount) : null,
+        body.expires_at || new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,10)
+      ),
+      audit('COUPON_CREATE', 'coupon', id, null, { code, title })
+    ]);
     return new Response(JSON.stringify({ success: true, message: '쿠폰이 생성되었습니다.', data: { id, code, title } }), { status: 201, headers: corsHeaders });
   }
 
@@ -437,7 +480,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/admin/categories' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const name = (body.name || '').trim();
     const slug = (body.slug || name.toLowerCase().replace(/\s+/g, '-')).trim();
     if (!name) {
@@ -446,9 +489,12 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const id = body.id || newId('cat');
     const parentId = body.parent_id || null;
     const depth = parentId ? 1 : 0;
-    await env.DB.prepare(
-      'INSERT INTO categories (id, parent_id, name, slug, depth, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
-    ).bind(id, parentId, name, slug, depth, Number(body.sort_order || 0)).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        'INSERT INTO categories (id, parent_id, name, slug, depth, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+      ).bind(id, parentId, name, slug, depth, Number(body.sort_order || 0)),
+      audit('CATEGORY_CREATE', 'category', id, null, { slug })
+    ]);
     return new Response(JSON.stringify({ success: true, message: '카테고리가 생성되었습니다.', data: { id, name, slug } }), { status: 201, headers: corsHeaders });
   }
 

@@ -1,47 +1,16 @@
+# Partner paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/partner.js). Every route requires a
+# ROLE_PARTNER JWT bound to a partner; routes below the approval gate additionally
+# require partner status APPROVED (else 403 PARTNER_NOT_APPROVED).
+# Retired 2026-11-07: POST /api/v1/partner/media/presigned-url never existed —
+# uploads go through POST /api/v1/storage/upload (storage.yaml); product image
+# URLs must be https:// or /api/v1/storage/file/. PATCH
+# /api/v1/partner/sub-orders/{id}/shipment never existed — the live route is
+# PUT|POST /api/v1/partner/orders/{id}/shipment below.
 paths:
-  /api/v1/partner/media/presigned-url:
-    post:
-      summary: Issue S3/R2 Presigned PUT URL for direct media upload
-      tags: [Partner]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [file_name, content_type, file_size_bytes]
-              properties:
-                file_name:
-                  type: string
-                  maxLength: 255
-                content_type:
-                  type: string
-                  enum: [image/jpeg, image/png, image/webp, video/mp4]
-                file_size_bytes:
-                  type: integer
-                  minimum: 1
-                  maximum: 52428800
-      responses:
-        '200':
-          description: Presigned URL issued
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [upload_url, public_file_url, expires_in_seconds]
-                properties:
-                  upload_url:
-                    type: string
-                    format: uri
-                  public_file_url:
-                    type: string
-                    format: uri
-                  expires_in_seconds:
-                    type: integer
-
   /api/v1/partner/products:
     post:
-      summary: Register product with Cartesian product SKU matrix
+      summary: Register a product as DRAFT/PENDING with its first SKU
       tags: [Partner]
       requestBody:
         required: true
@@ -49,116 +18,262 @@ paths:
           application/json:
             schema:
               type: object
-              required: [category_id, title, thumbnail_url, description_html, skus]
+              required: [title, sale_price, category_slug, thumbnail_url]
               properties:
-                category_id:
-                  type: string
-                  format: uuid
                 title:
                   type: string
-                  minLength: 2
                   maxLength: 200
+                sale_price:
+                  type: integer
+                  minimum: 100
+                  maximum: 100000000
+                  description: Aliases price and lowest_sale_price are accepted.
+                original_price:
+                  type: integer
+                  description: Defaults to sale_price; must be >= sale_price.
+                stock_quantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                  default: 0
+                category_slug:
+                  type: string
+                  description: Active category slug or id (alias category_id).
                 thumbnail_url:
                   type: string
-                  format: uri
+                  maxLength: 500
+                  description: https:// URL or /api/v1/storage/file/ upload path.
                 description_html:
                   type: string
-                skus:
-                  type: array
-                  minItems: 1
-                  items:
-                    $ref: '../schemas/common.yaml#/components/schemas/SkuItem'
+                  maxLength: 200000
+                sku_code:
+                  type: string
+                  maxLength: 60
+                  description: Auto-generated when omitted; must be unique.
+                option_combination_json:
+                  description: Option map as object or JSON string. Defaults to {"옵션":"기본"}.
+                hs_code:
+                  type: string
+                  maxLength: 12
+                country_origin:
+                  type: string
+                  maxLength: 2
+                  default: KR
+                package_length_cm:
+                  type: number
+                package_width_cm:
+                  type: number
+                package_height_cm:
+                  type: number
+                package_weight_kg:
+                  type: number
+                warehouse_location:
+                  type: string
+                  maxLength: 50
+                custody_type:
+                  type: string
+                  enum: [FULL_MANAGED, SEMI_MANAGED]
+                  default: SEMI_MANAGED
+                supply_price:
+                  type: integer
+                  minimum: 0
+                  maximum: 100000000
+                  description: Factory supply price (FULL_MANAGED); null when absent.
+                brand:
+                  type: string
+                  maxLength: 100
       responses:
         '201':
-          description: Product and SKUs created
+          description: Product created for operator review
           content:
             application/json:
               schema:
                 type: object
-                required: [product_id, created_sku_count]
+                required: [success, product_id, sku_id, sku_code, status, review_status, data]
                 properties:
+                  success:
+                    type: boolean
                   product_id:
                     type: string
-                    format: uuid
-                  created_sku_count:
-                    type: integer
+                  sku_id:
+                    type: string
+                  sku_code:
+                    type: string
+                  status:
+                    type: string
+                    example: DRAFT
+                  review_status:
+                    type: string
+                    example: PENDING
+                  data:
+                    type: object
+                  message:
+                    type: string
+        '400':
+          description: CATEGORY_REQUIRED, INVALID_CATEGORY, INVALID_IMAGE_URL, INVALID_OPTIONS
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: SKU_CODE_TAKEN
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/partner/products/bulk:
     post:
-      summary: Bulk insert validated products from Web Worker CSV/XLSX parser
+      summary: Bulk-register up to 200 products, all-or-nothing
       tags: [Partner]
+      description: >
+        Any invalid row aborts the whole batch with 400 BULK_VALIDATION_FAILED
+        and nothing is written. Same field contract per row as single registration.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [products]
+              required: [items]
               properties:
-                products:
+                items:
                   type: array
                   minItems: 1
-                  maxItems: 500
+                  maxItems: 200
                   items:
                     type: object
-                    required: [category_id, title, thumbnail_url, sku_code, original_price, sale_price, stock_quantity]
+                    required: [title, sale_price]
                     properties:
-                      category_id:
-                        type: string
-                        format: uuid
                       title:
+                        type: string
+                        maxLength: 200
+                      sale_price:
+                        type: integer
+                        minimum: 100
+                        maximum: 100000000
+                      original_price:
+                        type: integer
+                      stock_quantity:
+                        type: integer
+                        minimum: 0
+                        maximum: 1000000
+                      category_slug:
+                        type: string
+                      category_id:
                         type: string
                       thumbnail_url:
                         type: string
-                        format: uri
+                        maxLength: 500
                       sku_code:
                         type: string
-                      original_price:
-                        type: integer
-                        format: int64
-                      sale_price:
-                        type: integer
-                        format: int64
-                      stock_quantity:
-                        type: integer
+                        maxLength: 60
+                      option_json:
+                        type: string
       responses:
         '201':
-          description: Bulk registration completed
+          description: All rows registered as DRAFT/PENDING
           content:
             application/json:
               schema:
                 type: object
-                required: [inserted_count]
+                required: [success, inserted_count, products, data]
                 properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
                   inserted_count:
                     type: integer
+                  imported_count:
+                    type: integer
+                  products:
+                    type: array
+                    items:
+                      type: object
+                      required: [row, product_id, sku_id, sku_code, title]
+                      properties:
+                        row:
+                          type: integer
+                        product_id:
+                          type: string
+                        sku_id:
+                          type: string
+                        sku_code:
+                          type: string
+                        title:
+                          type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                  data:
+                    type: object
+                  message:
+                    type: string
+        '400':
+          description: EMPTY or BULK_VALIDATION_FAILED with per-row errors
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, code, error, errors]
+                properties:
+                  success:
+                    type: boolean
+                  code:
+                    type: string
+                  error:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      required: [row, error]
+                      properties:
+                        row:
+                          type: integer
+                        error:
+                          type: string
+        '409':
+          description: SKU_CODE_TAKEN (duplicate code aborts the batch)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
-  /api/v1/partner/sub-orders/{id}/shipment:
-    patch:
-      summary: Input carrier and tracking number for a partner sub-order
+  /api/v1/partner/orders/{id}/shipment:
+    put:
+      summary: Register the carrier waybill for one sub-order (ships it)
       tags: [Partner]
+      description: >
+        POST is accepted as an alias of PUT. Only the seller's own sub-orders in
+        PAYMENT_CONFIRMED or PREPARING transition to SHIPPED; anything else is
+        409 NOT_SHIPPABLE. A bulk variant exists at
+        PUT|POST /api/v1/partner/orders/bulk-shipment.
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
-            format: uuid
+          description: Sub-order id.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [carrier_code, tracking_number]
+              required: [tracking_number]
               properties:
-                carrier_code:
+                carrier:
                   type: string
-                  enum: [CJ_LOGISTICS, HANJIN, LOTTE, POST_OFFICE, DHL, FEDEX]
+                  maxLength: 40
+                  default: CJ대한통운
+                  description: Alias carrier_code is accepted. Free text, no enum.
                 tracking_number:
                   type: string
-                  minLength: 8
-                  maxLength: 40
+                  description: Must match ^[A-Za-z0-9-]{6,40}$.
       responses:
         '200':
           description: Sub-order transitioned to SHIPPED
@@ -166,62 +281,155 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [sub_order_id, status, shipped_at]
+                required: [success, sub_order_id, carrier, tracking_number, status]
                 properties:
+                  success:
+                    type: boolean
                   sub_order_id:
                     type: string
-                    format: uuid
+                  carrier:
+                    type: string
+                  tracking_number:
+                    type: string
                   status:
                     type: string
-                  shipped_at:
-                    type: string
-                    format: date-time
+                    example: SHIPPED
+        '400':
+          description: INVALID_TRACKING
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: NOT_SHIPPABLE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
-  /api/v1/partner/settlements:
-    get:
-      summary: List partner settlement statements and ledger breakdown
+  /api/v1/partner/orders/bulk-shipment:
+    post:
+      summary: Register waybills for up to 500 sub-orders, per-row results
       tags: [Partner]
-      parameters:
-        - name: cursor
-          in: query
-          schema:
-            type: string
+      description: >
+        PUT is accepted as an alias of POST. Unlike product bulk upload this is
+        NOT atomic: each row ships or fails independently and the response lists
+        per-row outcomes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipments]
+              properties:
+                shipments:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [sub_order_id, tracking_number]
+                    properties:
+                      sub_order_id:
+                        type: string
+                      carrier:
+                        type: string
+                        maxLength: 40
+                      carrier_code:
+                        type: string
+                        maxLength: 40
+                      tracking_number:
+                        type: string
       responses:
         '200':
-          description: Settlement list
+          description: Per-row ship outcomes
           content:
             application/json:
               schema:
                 type: object
-                required: [items, page_meta]
+                required: [success, updated_count, failed_count, results]
                 properties:
-                  items:
+                  success:
+                    type: boolean
+                    description: True only when every row shipped.
+                  updated_count:
+                    type: integer
+                  failed_count:
+                    type: integer
+                  results:
                     type: array
                     items:
                       type: object
-                      required: [settlement_id, period_start, period_end, gross_sales_amount, commission_amount, net_payout_amount, status]
+                      required: [sub_order_id, ok]
                       properties:
-                        settlement_id:
+                        sub_order_id:
                           type: string
-                          format: uuid
-                        period_start:
+                        ok:
+                          type: boolean
+                        error:
                           type: string
-                          format: date
-                        period_end:
-                          type: string
-                          format: date
-                        gross_sales_amount:
-                          type: integer
-                          format: int64
-                        commission_amount:
-                          type: integer
-                          format: int64
-                        net_payout_amount:
-                          type: integer
-                          format: int64
-                        status:
-                          type: string
-                          enum: [PENDING, APPROVED, PAID, HELD]
-                  page_meta:
-                    $ref: '../schemas/common.yaml#/components/schemas/CursorPageMeta'
+        '400':
+          description: EMPTY
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
+  /api/v1/partner/settlements:
+    get:
+      summary: Settlement rows, payout summary and payout history for the seller
+      tags: [Partner]
+      description: Unpaginated full list (HOLD rows excluded, newest first).
+      responses:
+        '200':
+          description: Settlements with summary and payouts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, summary, count, settlements, payouts, data]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  business_name:
+                    type: string
+                  summary:
+                    type: object
+                    required: [gross_sales, total_commission, adjustments, net_payout, pending_amount, eligible_amount, paid_amount]
+                    properties:
+                      gross_sales:
+                        type: integer
+                      total_commission:
+                        type: integer
+                      adjustments:
+                        type: integer
+                      net_payout:
+                        type: integer
+                      pending_amount:
+                        type: integer
+                      eligible_amount:
+                        type: integer
+                      paid_amount:
+                        type: integer
+                      reserve_outstanding:
+                        type: integer
+                      next_reserve_release:
+                        type: string
+                        nullable: true
+                      rolling_reserve_pct:
+                        type: number
+                  count:
+                    type: integer
+                  settlements:
+                    type: array
+                    items:
+                      type: object
+                  payouts:
+                    type: array
+                    items:
+                      type: object
+                  data:
+                    type: object

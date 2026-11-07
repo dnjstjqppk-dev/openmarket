@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
+import '../models/product_detail.dart';
+import '../models/search.dart';
 
 /// Server-issued JWT session. The gateway derives identity ONLY from the
 /// Bearer token (lib/auth.js) — header identities such as X-Customer-Id are
@@ -171,6 +173,48 @@ class ApiService {
 
   static Future<List<Product>> fetchProductsStatic({String? categorySlug, String? query}) =>
       getProducts(categorySlug: categorySlug, query: query);
+
+  /// Keyword/category/product suggestions (chosung + synonyms, server-side).
+  /// Empty query returns trending keywords + recommended categories.
+  static Future<AutocompleteResult> getAutocomplete(String query) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/search/autocomplete').replace(queryParameters: {'q': query});
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return parseAutocompleteResponse(_decode(res.body), query: query);
+      return parseAutocompleteResponse(const {}, query: query);
+    } catch (_) {
+      return parseAutocompleteResponse(const {}, query: query);
+    }
+  }
+
+  /// Fire-and-forget trending input, same as the web search bar.
+  static Future<void> logSearch(String keyword) async {
+    final kw = keyword.trim();
+    if (kw.isEmpty) return;
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/search/log');
+      await http
+          .post(uri, headers: const {'Content-Type': 'application/json'}, body: jsonEncode({'keyword': kw}))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
+  static Future<ProductDetail> getProductDetail(String productId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/products/$productId');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = _decode(res.body)['data'];
+        if (data is Map) return parseProductDetail(Map<String, dynamic>.from(data));
+      }
+      if (res.statusCode == 404) throw ApiException('상품을 찾을 수 없습니다.');
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '상품 정보를 불러오지 못했습니다.');
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 상품 정보를 불러오지 못했습니다.');
+    }
+  }
 
   /// Server catalog only. On failure returns [] so the view shows a retry
   /// state — a local fake catalog is never presented as real products.

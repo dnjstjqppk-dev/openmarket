@@ -38,6 +38,13 @@ const exportSettlementCsv = () => {
   URL.revokeObjectURL(url)
 }
 
+const settlementLabel = (status: string) =>
+  status === 'PAID_OUT' ? '지급 완료' :
+  status === 'ELIGIBLE_FOR_PAYOUT' ? '지급 대기' :
+  status === 'PENDING' ? '정산 대기' :
+  status === 'HOLD' ? '보류' :
+  status === 'CANCELLED' ? '취소' : (status || '-')
+
 onMounted(loadSettlements)
 </script>
 
@@ -100,16 +107,18 @@ onMounted(loadSettlements)
             <td class="py-3.5 px-5 font-bold">₩{{ Number(s.gross_amount || 0).toLocaleString() }}</td>
             <td class="py-3.5 px-5 text-red-600 font-semibold">-₩{{ Number(s.commission_amount || 0).toLocaleString() }} ({{ s.commission_rate }}%)</td>
             <td class="py-3.5 px-5 text-gray-600">+₩{{ Number(s.shipping_fee || 0).toLocaleString() }}</td>
-            <td class="py-3.5 px-5 font-black text-emerald-600 text-sm">₩{{ Number(s.net_payout_amount || 0).toLocaleString() }}</td>
+            <td class="py-3.5 px-5 font-black text-emerald-600 text-sm">₩{{ Number((s.effective_net_payout ?? s.net_payout_amount) || 0).toLocaleString() }}</td>
             <td class="py-3.5 px-5">
               <span
                 :class="[
                   'px-2.5 py-0.5 rounded-full text-[11px] font-black',
-                  s.settlement_status === 'PAID' ? 'bg-emerald-50 text-emerald-700' :
+                  s.settlement_status === 'PAID_OUT' ? 'bg-emerald-50 text-emerald-700' :
+                  s.settlement_status === 'ELIGIBLE_FOR_PAYOUT' ? 'bg-blue-50 text-blue-700' :
+                  s.settlement_status === 'HOLD' ? 'bg-gray-100 text-gray-500' :
                   s.settlement_status === 'CANCELLED' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
                 ]"
               >
-                {{ s.settlement_status }}
+                {{ settlementLabel(s.settlement_status) }}
               </span>
             </td>
           </tr>

@@ -9,6 +9,7 @@ import 'views/home_view.dart';
 import 'views/cart_view.dart';
 import 'views/orders_view.dart';
 import 'views/account_view.dart';
+import 'views/search_view.dart';
 import 'widgets/responsive.dart';
 
 void main() {
@@ -60,6 +61,12 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
     });
   }
 
+  void _openSearch() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SearchView(onAddToCart: _addToCart)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final views = [
@@ -107,6 +114,13 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: '검색',
+            onPressed: _openSearch,
+          ),
+        ],
       ),
       body: views[_currentIndex],
       currentIndex: _currentIndex,

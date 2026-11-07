@@ -142,9 +142,10 @@ onMounted(loadProfile);
             <label class="block font-bold text-slate-700 mb-1">상호명 (스토어명)</label>
             <input
               v-model="profile.business_name"
-              required
-              class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+              disabled
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 text-slate-400"
             />
+            <p class="mt-1 text-[11px] text-slate-400">상호 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.</p>
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">사업자등록번호</label>

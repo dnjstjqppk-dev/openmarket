@@ -15,6 +15,7 @@ import {
 } from '@olmoa/ui'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
+import ProductCard from '../components/ProductCard.vue'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
@@ -64,11 +65,25 @@ async function load() {
     // A single SKU is the only case where nothing has to be chosen.
     if (skus.value.length === 1) selection.value = { ...(skus.value[0].options || {}) }
     loadSideData(json.data.id)
+    loadRelated(json.data.id, json.data.category_slug)
   } catch (e: any) {
     if (my === seq) loadError.value = e?.message || '상품을 불러오지 못했습니다'
   } finally {
     if (my === seq) loading.value = false
   }
+}
+// ---- related: same-category best sellers (popular = units ordered), self excluded ----
+const related = ref<any[]>([])
+async function loadRelated(id: string, categorySlug: string | null) {
+  related.value = []
+  if (!categorySlug) return
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(categorySlug)}&per_page=9&sort=popular`)
+    const j = await res.json().catch(() => null)
+    if (product.value?.id !== id) return
+    if (!res.ok || !j?.success || !Array.isArray(j.data)) return
+    related.value = j.data.filter((p: any) => p.id !== id).slice(0, 8)
+  } catch { /* section stays hidden */ }
 }
 function loadSideData(id: string) {
   fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(id)}/urgency-stats`).then((r) => r.json())
@@ -357,6 +372,17 @@ watch(() => route.params.slug, load, { immediate: true })
             </section>
           </div>
         </div>
+      </section>
+
+      <!-- related (same category, ordered by units sold) ------------------------------------------------ -->
+      <section v-if="related.length" class="mt-12" aria-labelledby="related-heading">
+        <div class="mb-4 flex items-baseline justify-between">
+          <h2 id="related-heading" class="text-lg font-bold">같은 카테고리 인기 상품</h2>
+          <RouterLink v-if="product.category_slug" :to="`/category/${product.category_slug}`" class="text-sm font-medium text-primary hover:underline">전체 보기</RouterLink>
+        </div>
+        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <li v-for="p in related" :key="p.id"><ProductCard :product="p" /></li>
+        </ul>
       </section>
 
       <!-- mobile purchase bar --------------------------------------------------------------------------- -->

@@ -117,6 +117,7 @@ export async function exportCustomerData(env, principal, request) {
     questions: await all('SELECT product_id, question, answer, created_at FROM product_qna WHERE user_id = ?'),
     support_inquiries: await all('SELECT category, subject, content, answer, status, created_at FROM support_inquiries WHERE user_id = ?'),
     wishlist: await all('SELECT product_id, created_at FROM wishlists WHERE user_id = ?'),
+    consents: await all('SELECT consent_type, consented, terms_version, created_at FROM user_consents WHERE user_id = ? ORDER BY created_at, rowid'),
     retention_policy: {
       orders_days_after_withdrawal: retentionDays(env, 'PII_ORDER_RETENTION_DAYS', DEFAULT_ORDER_RETENTION_DAYS),
       inquiries_days_after_withdrawal: retentionDays(env, 'PII_INQUIRY_RETENTION_DAYS', DEFAULT_INQUIRY_RETENTION_DAYS)

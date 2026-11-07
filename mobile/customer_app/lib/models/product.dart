@@ -85,5 +85,18 @@ class Product {
     if (lowestOriginalPrice <= 0) return 0;
     return (((lowestOriginalPrice - lowestSalePrice) / lowestOriginalPrice) * 100).round();
   }
-}
 
+  /// Rebinds the orderable variant (e.g. the SKU chosen on the detail screen).
+  Product copyWith({String? defaultSkuId}) => Product(
+        id: id,
+        title: title,
+        thumbnailUrl: thumbnailUrl,
+        descriptionHtml: descriptionHtml,
+        lowestOriginalPrice: lowestOriginalPrice,
+        lowestSalePrice: lowestSalePrice,
+        totalSoldCount: totalSoldCount,
+        categoryName: categoryName,
+        businessName: businessName,
+        defaultSkuId: defaultSkuId ?? this.defaultSkuId,
+      );
+}

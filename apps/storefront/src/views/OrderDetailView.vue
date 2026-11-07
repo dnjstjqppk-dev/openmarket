@@ -419,14 +419,14 @@ onMounted(loadOrderDetail)
             </div>
             <div class="flex justify-between">
               <span class="text-gray-400">연락처:</span>
-              <span class="font-mono text-gray-900">{{ order.recipient_phone || '010-8282-5959' }}</span>
+              <span class="font-mono text-gray-900">{{ order.recipient_phone || '-' }}</span>
             </div>
             <div class="pt-1">
               <span class="text-gray-400 block mb-0.5">배송 주소:</span>
               <div class="font-medium text-gray-900 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                <span class="font-mono font-bold text-[#FF5000]">[{{ order.shipping_postal_code || '06236' }}]</span>
-                {{ order.shipping_address_line1 || '서울특별시 강남구 테헤란로 427' }}
-                {{ order.shipping_address_line2 || '1502호 (올모아 타워)' }}
+                <span class="font-mono font-bold text-[#FF5000]">[{{ order.shipping_postal_code || '-' }}]</span>
+                {{ order.shipping_address_line1 || '-' }}
+                {{ order.shipping_address_line2 || '' }}
               </div>
             </div>
             <div v-if="order.shipping_memo" class="pt-1 text-[11px] text-gray-500">
@@ -435,7 +435,7 @@ onMounted(loadOrderDetail)
             <div v-if="order.pccc" class="flex justify-between items-center pt-2 mt-1 border-t border-gray-100 text-[11px]">
               <span class="text-gray-500 font-bold">개인통관고유부호 (PCCC):</span>
               <span class="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                {{ order.pccc }} (관세청 검증)
+                {{ order.pccc }} (형식 확인)
               </span>
             </div>
             <div v-if="order.customs_duty_type" class="flex justify-between items-center text-[11px]">
@@ -462,7 +462,7 @@ onMounted(loadOrderDetail)
             </div>
             <div class="flex justify-between">
               <span>배송비</span>
-              <span class="font-bold text-[#00A862]">0원 (올모아 무료직배송)</span>
+              <span class="font-bold text-gray-900">{{ locale.formatPrice(order.total_shipping_amount ?? 0) }}</span>
             </div>
             <div v-if="order.total_discount_amount && order.total_discount_amount > 0" class="flex justify-between text-[#FF5000]">
               <span>할인 및 적립금 적용</span>

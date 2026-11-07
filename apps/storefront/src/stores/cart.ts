@@ -1,5 +1,7 @@
 // apps/storefront/src/stores/cart.ts
 // Buyer cart (browser-local). Lines are real SKUs; the server re-prices and re-checks stock at quote/checkout.
+// P2R-05 resolved 2026-11-07: no server cart before launch (single storefront, no cross-device
+// demand yet); revisit device sync post-launch. Do not build cart_items until then.
 //  - selection: every line is selected by default; only selected lines go to checkout ("선택 상품 주문").
 //    The unselected set is persisted so a reload keeps the buyer's choice.
 //  - after payment only the lines that were in that order are removed (markPending / completeCheckout),

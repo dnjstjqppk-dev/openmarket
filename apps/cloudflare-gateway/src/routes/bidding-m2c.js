@@ -150,6 +150,14 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
     const b = await readJson(request);
     const bidId = str(b.winning_bid_id, { field: '낙찰 비드 ID', required: true });
 
+    const camp = await env.DB.prepare('SELECT id, status, winning_bid_id FROM bidding_campaigns WHERE id = ?').bind(campId).first();
+    if (!camp) throw notFound('해당 비딩 캠페인을 찾을 수 없습니다.');
+    if (camp.status === 'AWARDED') {
+      if (camp.winning_bid_id === bidId) {
+        return json(corsHeaders, { success: true, message: '이미 낙찰 처리된 캠페인입니다.', idempotent_replay: true });
+      }
+      throw conflict('ALREADY_AWARDED', '이미 낙찰된 캠페인입니다. 낙찰 변경은 취소 후 재입찰로 진행해 주세요.');
+    }
     const bid = await env.DB.prepare('SELECT * FROM supplier_bids WHERE id = ? AND campaign_id = ?').bind(bidId, campId).first();
     if (!bid) throw notFound('해당 입찰 내역을 찾을 수 없습니다.');
 
@@ -266,13 +274,26 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
   if (p === '/api/v1/admin/logistics/consolidate' && request.method === 'POST') {
     await requireAdmin(request, env);
     const b = await readJson(request);
-    const subOrderIds = Array.isArray(b.sub_order_ids) ? b.sub_order_ids : [];
+    const subOrderIds = [...new Set((Array.isArray(b.sub_order_ids) ? b.sub_order_ids : []).map(String).filter(Boolean))];
     const trackingNo = str(b.consolidated_tracking_number, { field: '통합 송장번호', max: 50, required: true });
-    const hubId = str(b.hub_id, { max: 50 }) || 'HUB_INCHEON_CROSSBORDER';
+    if (!/^[A-Za-z0-9-]{6,40}$/.test(trackingNo)) throw bad('INVALID_TRACKING', '통합 송장번호 형식이 올바르지 않습니다.');
+    const hubId = str(b.hub_id, { field: '허브 ID', max: 50, required: true });
 
     if (subOrderIds.length < 2) {
       throw bad('INSUFFICIENT_SUB_ORDERS', '합배송 처리는 최소 2개 이상의 판매자 주문이 필요합니다.');
     }
+    if (subOrderIds.length > 200) {
+      throw bad('BATCH_LIMIT_EXCEEDED', '한 번에 최대 200개까지 합배송 지정 가능합니다.');
+    }
+
+    const rows = await env.DB.prepare(
+      `SELECT id, status FROM sub_orders WHERE id IN (${subOrderIds.map(() => '?').join(',')})`
+    ).bind(...subOrderIds).all();
+    const found = new Map(rows.results.map((r) => [r.id, r.status]));
+    const missing = subOrderIds.filter((id) => !found.has(id));
+    if (missing.length > 0) throw notFound(`존재하지 않는 판매자 주문입니다: ${missing.slice(0, 5).join(', ')}`);
+    const locked = subOrderIds.filter((id) => !['PAYMENT_CONFIRMED', 'PREPARING'].includes(found.get(id)));
+    if (locked.length > 0) throw conflict('NOT_CONSOLIDATABLE', `출고 전(PAYMENT_CONFIRMED/PREPARING) 주문만 합배송 지정 가능합니다: ${locked.slice(0, 5).join(', ')}`);
 
     const batch = subOrderIds.map((soId) =>
       env.DB.prepare(

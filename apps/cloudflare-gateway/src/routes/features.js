@@ -63,8 +63,8 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 2. Search Logging
   if (url.pathname === '/api/v1/search/log' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const kw = (body.keyword || '').trim();
+    const body = await readJson(request);
+    const kw = str(body.keyword, { max: 100 }).trim();
     if (kw) {
       await env.DB.prepare(
         `INSERT INTO search_keywords (id, keyword, normalized_keyword, search_count)
@@ -301,7 +301,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       { category: '판매가 인하 보상', q: '구매 후 가격이 내리면 보상받을 수 있나요?', a: '결제 후 30일 이내 올모아 판매가가 인하된 경우 주문 상세에서 1회 신청할 수 있으며, 실제 인하 차액이 적립금으로 지급됩니다.' },
       { category: '반품/환불', q: '반품은 어떻게 하나요?', a: '상품 수령 후 7일 이내 주문 상세에서 반품을 신청할 수 있습니다. 판매자가 회수·확인하면 결제 금액은 원결제수단으로, 사용한 적립금은 적립금으로 환불됩니다. 단순 변심 반품은 반품 배송비가 부과될 수 있습니다.' },
       { category: '결제', q: '결제 대금은 언제 판매자에게 지급되나요?', a: '입점 판매자의 판매대금은 구매확정(또는 배송완료 후 7일 자동 확정) 이후 정산되며, 정산 후 환불이 발생하면 다음 정산에서 차감됩니다.' },
-      { category: '파트너입점', q: '올모아 글로벌 셀러로 입점하려면 어떻게 해야 하나요?', a: '상단 [셀러 입점] 메뉴를 통해 사업자등록증 및 정산 계좌를 제출하시면 운영 관리자 심사(평균 24시간 이내) 완료 즉시 전용 파트너 센터에서 상품 등록 및 대량 CSV 업로드가 가능합니다.' }
+      { category: '파트너입점', q: '올모아 글로벌 셀러로 입점하려면 어떻게 해야 하나요?', a: '상단 [셀러 입점] 메뉴를 통해 사업자등록증 및 정산 계좌를 제출하시면 운영 관리자 심사 완료 후 전용 파트너 센터에서 상품 등록 및 대량 CSV 업로드가 가능합니다.' }
     ];
     return new Response(JSON.stringify({ success: true, data: faqs }), { headers: corsHeaders });
   }

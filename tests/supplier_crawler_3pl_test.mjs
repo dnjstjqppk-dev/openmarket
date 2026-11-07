@@ -335,7 +335,7 @@ await t.test('7. Dynamic Feature Flags Enforcement & End-to-End Control', async 
     token: ptToken,
     body: { category_id: 'cat_e_audio', sale_price: 52000, wholesale_cost: 40000 }
   });
-  assert.equal(pubRes.status, 200);
+  assert.equal(pubRes.status, 201);
   const newProdId = pubRes.json.product_id;
 
   const landedSku = g.db.prepare('SELECT id, wholesale_supply_price FROM product_skus WHERE product_id = ?').get(newProdId);

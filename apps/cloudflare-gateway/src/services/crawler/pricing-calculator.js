@@ -1,13 +1,10 @@
 // apps/cloudflare-gateway/src/services/crawler/pricing-calculator.js
 // Applies pricing rules, profit margins, currency FX, and rounding units.
 
-const DEFAULT_FX_RATES = {
-  KRW: 1.0,
-  USD: 1380.0,
-  CNY: 195.0,
-  JPY: 9.2,
-  EUR: 1490.0
-};
+import { FALLBACK_KRW_PER_UNIT } from '../../lib/fx.js';
+
+// Single-sourced default: live callers inject the operator table via the fxRates param.
+const DEFAULT_FX_RATES = FALLBACK_KRW_PER_UNIT;
 
 export function convertToKrw(amount, currency = 'KRW', fxRates = DEFAULT_FX_RATES) {
   const c = String(currency || 'KRW').toUpperCase();

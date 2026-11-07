@@ -10,19 +10,25 @@ const category = ref('DELIVERY')
 const subject = ref('')
 const message = ref('')
 const submitMsg = ref('')
+const loadError = ref<string | null>(null)
 
 const loadSupport = async () => {
   const cid = auth.user?.id || ''
+  loadError.value = null
   try {
     const [fRes, iRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/support/faq`),
       fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     ])
-    const fJson = await fRes.json()
-    const iJson = await iRes.json()
-    if (fJson.success) faqs.value = fJson.data || []
-    if (iJson.success) inquiries.value = iJson.data || []
-  } catch {}
+    const fJson = await fRes.json().catch(() => null)
+    const iJson = await iRes.json().catch(() => null)
+    if (!fRes.ok || !fJson?.success) throw new Error(fJson?.error || 'FAQ를 불러오지 못했습니다')
+    if (!iRes.ok || !iJson?.success) throw new Error(iJson?.error || '문의 내역을 불러오지 못했습니다')
+    faqs.value = fJson.data || []
+    inquiries.value = iJson.data || []
+  } catch (e: any) {
+    loadError.value = e?.message || '고객센터 정보를 불러오지 못했습니다'
+  }
 }
 
 const submitInquiry = async () => {
@@ -38,12 +44,14 @@ const submitInquiry = async () => {
       message: message.value.trim()
     })
   })
-  const json = await res.json()
-  if (json.success) {
+  const json: any = await res.json().catch(() => null)
+  if (res.ok && json?.success) {
     subject.value = ''
     message.value = ''
-    submitMsg.value = `✓ 1:1 Inquiry (${json.data.id}) registered! Our concierge team responds within 2 hours.`
+    submitMsg.value = `✓ 1:1 Inquiry (${json.data.id}) registered! Our support team will review it and reply here.`
     await loadSupport()
+  } else {
+    submitMsg.value = `⚠️ ${json?.error || '문의 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'}`
   }
 }
 
@@ -53,7 +61,7 @@ onMounted(loadSupport)
 <template>
   <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 space-y-8">
     <div>
-      <span class="text-xs font-extrabold text-[#FF5000] uppercase">24/7 Buyer Protection & Concierge</span>
+      <span class="text-xs font-extrabold text-[#FF5000] uppercase">Buyer Protection & 1:1 Support</span>
       <h1 class="text-2xl sm:text-3xl font-black text-gray-900 mt-1">Customer Support & 1:1 Inquiry Center</h1>
     </div>
 
@@ -77,8 +85,8 @@ onMounted(loadSupport)
           <label class="block font-bold text-gray-700 mb-1">Inquiry Topic</label>
           <select v-model="category" class="w-full h-10 px-3 rounded-lg border border-gray-300 font-bold">
             <option value="DELIVERY">Shipping & On-Time Guarantee</option>
-            <option value="PRICE_MATCH">30-Day Price-Match Adjustment</option>
-            <option value="RETURN">90-Day Free Return / Refund</option>
+            <option value="PRICE_MATCH">30-Day Price-Drop Credit</option>
+            <option value="RETURN">Return / Refund (within 7 days of delivery)</option>
             <option value="PARTNER">Partner Store / Bulk Purchase</option>
           </select>
         </div>
@@ -98,7 +106,11 @@ onMounted(loadSupport)
 
       <div class="lg:col-span-6 bg-white rounded-2xl p-6 border border-gray-200/80">
         <h2 class="text-base font-black text-gray-900 mb-4">My 1:1 Tickets ({{ inquiries.length }})</h2>
-        <div v-if="inquiries.length === 0" class="text-xs text-gray-400 py-8 text-center">No support tickets submitted yet.</div>
+        <div v-if="loadError" class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
+          {{ loadError }}
+          <button @click="loadSupport" class="block mx-auto mt-2 px-4 py-1.5 rounded-full bg-gray-900 text-white font-bold">다시 시도</button>
+        </div>
+        <div v-else-if="inquiries.length === 0" class="text-xs text-gray-400 py-8 text-center">No support tickets submitted yet.</div>
         <div v-else class="space-y-3">
           <div v-for="inq in inquiries" :key="inq.id" class="p-4 rounded-xl border border-gray-200 text-xs">
             <div class="flex items-center justify-between mb-1">

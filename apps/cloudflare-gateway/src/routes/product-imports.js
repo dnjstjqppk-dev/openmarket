@@ -5,7 +5,8 @@ import { crawlAndExtractProduct } from '../services/crawler/crawler-service.js';
 import { enhanceProductWithAi } from '../services/crawler/ai-translator.js';
 import { assertFeatureEnabled, isFeatureEnabled } from '../services/feature-flags.js';
 import { requireAuth, requireApprovedPartner, requireAdmin } from '../lib/auth.js';
-import { json, readJson, bad, notFound } from '../lib/http.js';
+import { json, readJson, bad, conflict, notFound, str, intParam } from '../lib/http.js';
+import { priceFields, resolveCategory } from './partner.js';
 import { newId } from '../lib/ids.js';
 
 export async function handleProductImportRoutes(request, url, env, corsHeaders) {
@@ -190,28 +191,41 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     let preview = {};
     try { preview = JSON.parse(job.preview_data_json || '{}'); } catch {}
 
-    // Allow user overrides or fallback to preview data
-    const title = String(body.title || preview.product?.title || '수집 등록 상품').trim();
-    const brand = String(body.brand || preview.product?.brand || 'GLB IMPORT').trim();
-    const categoryId = String(body.category_id || 'cat_e_audio').trim();
-    const salePrice = Number(body.sale_price || preview.pricing?.calculated_sale_price || 19900);
-    const originalPrice = Number(body.original_price || preview.pricing?.calculated_original_price || Math.round(salePrice * 1.35));
-    const wholesaleCost = Number(body.wholesale_cost || preview.pricing?.wholesale_cost_krw || Math.round(salePrice * 0.7));
-    const thumbUrl = String(body.thumbnail_url || preview.product?.thumbnail_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e').trim();
-    const descHtml = String(body.description_html || preview.product?.description_html || '<p>공식 공급업체 직출고 검증 정품 상품입니다.</p>');
+    // Same contract as seller registration: validated fields, operator review.
+    // No invented prices, categories, thumbnails or "verified genuine" copy.
+    const merged = {
+      title: body.title ?? preview.product?.title,
+      sale_price: body.sale_price ?? preview.pricing?.calculated_sale_price,
+      original_price: body.original_price ?? preview.pricing?.calculated_original_price,
+      category_id: body.category_id,
+      category_slug: body.category_slug,
+      thumbnail_url: body.thumbnail_url ?? preview.product?.thumbnail_url,
+      description_html: body.description_html ?? preview.product?.description_html
+    };
+    const title = str(merged.title, { field: '상품명', max: 200, required: true });
+    const { sale: salePrice, orig: originalPrice } = priceFields(merged);
+    const categoryId = await resolveCategory(env, merged);
+    const thumbUrl = str(merged.thumbnail_url, { field: '대표 이미지', max: 500, required: true });
+    if (!/^https:\/\//.test(thumbUrl) && !thumbUrl.startsWith('/api/v1/storage/file/')) throw bad('INVALID_IMAGE_URL', '이미지는 https URL 또는 업로드 파일이어야 합니다.');
+    const descHtml = str(merged.description_html, { max: 200000 }) || `<p>${title}</p>`;
+    const brand = str(body.brand ?? preview.product?.brand, { max: 100 }) || 'GLB IMPORT';
+    const wholesaleCost = intParam(body.wholesale_cost ?? preview.pricing?.wholesale_cost_krw ?? Math.round(salePrice * 0.7), { min: 0, max: 100_000_000, field: '공급원가' });
 
     const prodId = newId('prod');
-    const variants = Array.isArray(body.variants) && body.variants.length > 0 ? body.variants : (preview.variants || []);
+    let variants = Array.isArray(body.variants) && body.variants.length > 0 ? body.variants : (preview.variants || []);
+    if (variants.length === 0) {
+      variants = [{ option_values: { 옵션: '기본' }, price: salePrice, original_price: originalPrice, stock_quantity: 0 }];
+    }
 
     const stmts = [];
 
-    // 1. Insert into products
+    // 1. Insert into products (DRAFT/PENDING: an operator reviews before sale)
     stmts.push(env.DB.prepare(`
       INSERT INTO products (
         id, partner_id, category_id, title, thumbnail_url,
         description_html, lowest_sale_price, lowest_original_price,
         status, review_status, supply_model, target_margin_bps, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'APPROVED', 'FULLY_MANAGED', 2000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', 'FULLY_MANAGED', 2000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `).bind(
       prodId, caller.partner.id, categoryId, title, thumbUrl, descHtml, salePrice, originalPrice
     ));
@@ -227,23 +241,23 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       spId, job.source_url, job.domain, job.supplier_id || null, title, brand, job.extracted_data_json || '{}'
     ));
 
-    // 3. Insert SKUs
+    // 3. Insert SKUs (validated; stock defaults to 0, never invented)
     for (let idx = 0; idx < variants.length; idx++) {
-      const v = variants[idx];
+      const v = variants[idx] || {};
       const skuId = newId('sku');
-      const skuCode = v.variant_code || `${prodId}_SKU_${idx + 1}`;
-      const vPrice = Number(v.price || salePrice);
-      const vOriginal = Number(v.original_price || originalPrice);
-      const vStock = Number(v.stock_quantity || 100);
+      const skuCode = str(v.variant_code, { max: 60 }) || `${prodId}_SKU_${idx + 1}`;
+      const vPrice = intParam(v.price ?? salePrice, { min: 0, max: 100_000_000, field: '옵션 판매가' });
+      const vOriginal = intParam(v.original_price ?? originalPrice, { min: vPrice, max: 100_000_000, field: '옵션 정상가' });
+      const vStock = intParam(v.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: '옵션 재고' });
       const optJson = JSON.stringify(v.option_values || { Option: v.option_summary || 'Standard' });
 
       stmts.push(env.DB.prepare(`
         INSERT INTO product_skus (
           id, product_id, sku_code, option_combination_json, original_price, sale_price,
           wholesale_supply_price, stock_quantity, safety_stock, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5, 'IN_STOCK', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `).bind(
-        skuId, prodId, skuCode, optJson, vOriginal, vPrice, wholesaleCost, vStock
+        skuId, prodId, skuCode, optJson, vOriginal, vPrice, wholesaleCost, vStock, vStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'
       ));
 
       // 4. Connect supplier_sku_mappings if supplier exists
@@ -272,14 +286,21 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       WHERE import_job_id = ?
     `).bind(prodId, job.id));
 
-    await env.DB.batch(stmts);
+    try {
+      await env.DB.batch(stmts);
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw conflict('SKU_CODE_TAKEN', '이미 사용 중인 SKU 코드입니다.');
+      throw e;
+    }
 
     return json(corsHeaders, {
       success: true,
       product_id: prodId,
       sku_count: variants.length,
-      message: '상품이 카탈로그에 공식 판매 등록되었습니다.'
-    });
+      status: 'DRAFT',
+      review_status: 'PENDING',
+      message: '수집 상품이 등록되었습니다. 운영자 심사 승인 후 판매가 시작됩니다.'
+    }, 201);
   }
 
   // 6. Bulk URL Crawl Batch (POST /api/v1/imports/bulk)

@@ -7,21 +7,27 @@ import { API_BASE_URL, authHeader } from '../config'
 const auth = useAuthStore()
 const locale = useLocaleStore()
 const coupons = ref<any[]>([])
-const creditData = ref<any>({ balance: 5000, history: [] })
+const creditData = ref<any>({ balance: null, history: [] })
 const claimMsg = ref('')
+const loadError = ref<string | null>(null)
 
 const loadWallet = async () => {
   const cid = auth.user?.id || ''
+  loadError.value = null
   try {
     const [cRes, crRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`),
       fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     ])
-    const cJson = await cRes.json()
-    const crJson = await crRes.json()
-    if (cJson.success) coupons.value = cJson.data || []
-    if (crJson.success) creditData.value = crJson.data || { balance: 5000, history: [] }
-  } catch {}
+    const cJson = await cRes.json().catch(() => null)
+    const crJson = await crRes.json().catch(() => null)
+    if (!cRes.ok || !cJson?.success) throw new Error(cJson?.error || '쿠폰 목록을 불러오지 못했습니다')
+    if (!crRes.ok || !crJson?.success) throw new Error(crJson?.error || '적립금 잔액을 불러오지 못했습니다')
+    coupons.value = cJson.data || []
+    creditData.value = crJson.data || { balance: 0, history: [] }
+  } catch (e: any) {
+    loadError.value = e?.message || '지갑 정보를 불러오지 못했습니다'
+  }
 }
 
 const claimCoupon = async (couponId: string) => {
@@ -31,10 +37,12 @@ const claimCoupon = async (couponId: string) => {
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({ customer_id: cid, coupon_id: couponId })
   })
-  const json = await res.json()
-  if (json.success) {
+  const json = await res.json().catch(() => null)
+  if (res.ok && json?.success) {
     claimMsg.value = '🎉 Coupon claimed to your account! Ready to apply at Checkout.'
     await loadWallet()
+  } else {
+    claimMsg.value = `⚠️ ${json?.error || '쿠폰 받기에 실패했습니다.'}`
   }
 }
 
@@ -51,12 +59,17 @@ onMounted(loadWallet)
       </div>
       <div class="bg-white/10 rounded-2xl p-4 border border-white/15 text-right shrink-0">
         <div class="text-[11px] text-gray-300">Available Olmoa Credit Balance</div>
-        <div class="text-3xl font-black text-[#FFE600]">{{ locale.formatPrice(creditData.balance || 0) }}</div>
+        <div class="text-3xl font-black text-[#FFE600]">{{ creditData.balance == null ? '-' : locale.formatPrice(creditData.balance) }}</div>
       </div>
     </div>
 
     <div v-if="claimMsg" class="p-4 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-[#00A862]">
       {{ claimMsg }}
+    </div>
+
+    <div v-if="loadError" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 flex items-center justify-between gap-3">
+      <span>{{ loadError }}</span>
+      <button @click="loadWallet" class="shrink-0 px-4 py-2 rounded-full bg-gray-900 text-white hover:bg-[#FF5000] transition">다시 시도</button>
     </div>
 
     <!-- Active Coupons -->

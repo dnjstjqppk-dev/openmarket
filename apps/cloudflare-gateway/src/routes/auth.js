@@ -96,9 +96,18 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const userId = newId('usr');
     const hash = await hashPassword(body.password);
     const operator = await getActiveOperator(env);
+    const termsVersion = str(body.terms_version, { max: 40 }) || null;
     const st = [
       env.DB.prepare(`INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active) VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`)
-        .bind(userId, email, hash, fullName, phone)
+        .bind(userId, email, hash, fullName, phone),
+      // P2R-03: the required consents are history rows, stored atomically with the account.
+      ...['TERMS_OF_SERVICE', 'PRIVACY_POLICY'].map((ct) =>
+        env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, 1, ?)')
+          .bind(newId('cns'), userId, ct, termsVersion)),
+      ...(typeof body.agree_marketing === 'boolean'
+        ? [env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, ?, ?)')
+            .bind(newId('cns'), userId, 'MARKETING', body.agree_marketing ? 1 : 0, termsVersion)]
+        : [])
     ];
     if (operator) {
       st.push(...grantCreditStatements(env, { userId, amount: WELCOME_CREDIT, reason: '신규 가입 웰컴 적립금', referenceId: `welcome:${userId}`, entityId: operator.id, txnType: 'WELCOME_CREDIT' }));
@@ -123,8 +132,12 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       'SELECT COUNT(*) AS c FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?'
     ).bind(me.userId, sqlNow()).first('c');
     const wish = await env.DB.prepare('SELECT COUNT(*) AS c FROM wishlists WHERE user_id = ?').bind(me.userId).first('c');
+    const { results: consents } = await env.DB.prepare(
+      `SELECT consent_type, consented, terms_version, created_at AS consented_at FROM user_consents WHERE user_id = ?
+       AND rowid IN (SELECT MAX(rowid) FROM user_consents WHERE user_id = ? GROUP BY consent_type) ORDER BY consent_type`
+    ).bind(me.userId, me.userId).all();
     const adminInfo = user.role === 'ROLE_ADMIN' ? { admin: { role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at), mfa_setup_required: !user.totp_enabled_at && twoFactorRequired(env) } } : {};
-    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish, ...adminInfo } });
+    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish, consents, ...adminInfo } });
   }
 
   if (p === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {
@@ -143,6 +156,11 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }
     await env.DB.prepare('UPDATE users SET full_name = ?, phone = ?, password_hash = ?, token_version = ?, password_changed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE password_changed_at END, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(fullName, phone, hash, tokenVersion, body.new_password !== undefined ? 1 : 0, me.userId).run();
+    // P2R-03: marketing opt-in/out appends a history row; latest row per type is current.
+    if (typeof body.agree_marketing === 'boolean') {
+      await env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, ?, ?)')
+        .bind(newId('cns'), me.userId, 'MARKETING', body.agree_marketing ? 1 : 0, str(body.terms_version, { max: 40 }) || null).run();
+    }
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     const token = tokenVersion !== Number(user.token_version || 0) ? await issueToken(env, updated, me.partner, { mfa: me.mfa }) : undefined;
     return json(corsHeaders, { success: true, message: '회원 정보가 수정되었습니다.', data: { user: publicUser(updated), token } });

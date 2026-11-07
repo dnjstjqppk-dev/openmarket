@@ -30,6 +30,60 @@ jobs:
           cd apps/api
           go test -v ./...
 
+  test-node-chain:
+    name: Node Gateway, UI & Contract Chain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint gateway entry
+        run: npm run lint
+
+      - name: Typecheck all frontends
+        run: npm run typecheck
+
+      - name: Run full Node test chain (ends with Go suites)
+        run: npm test
+
+  test-flutter:
+    name: Flutter Customer & Partner Apps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Analyze and test customer app
+        run: |
+          cd mobile/customer_app
+          flutter analyze
+          flutter test
+
+      - name: Analyze and test partner app
+        run: |
+          cd mobile/partner_app
+          flutter analyze
+          flutter test
+
   verify-cloudflare-apps:
     name: Build & Verify Cloudflare Apps
     runs-on: ubuntu-latest
@@ -69,3 +123,40 @@ jobs:
         run: |
           cd apps/cloudflare-gateway
           npx wrangler deploy --dry-run
+
+  lcp-budget:
+    name: LCP Budget (8 routes x desktop/mobile, 2500ms)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build previews against the local API
+        run: |
+          for app in storefront admin partner; do
+            (cd apps/$app && VITE_API_BASE_URL=http://127.0.0.1:8787 npx vite build --outDir dist-local)
+          done
+
+      - name: Start local API (in-memory D1 + dev seed)
+        run: |
+          node scripts/local-api-server.mjs 8787 > /tmp/local-api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8787/health && break; sleep 2; done
+          curl -sf http://127.0.0.1:8787/health
+
+      - name: Probe LCP budget (exit 1 when over)
+        run: API_URL=http://127.0.0.1:8787 DIST=dist-local node tests/browser/lcp_probe.mjs reports/lcp.json
+
+      - name: Upload LCP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcp-report
+          path: reports/lcp.json

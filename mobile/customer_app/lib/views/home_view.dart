@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/responsive.dart';
+import 'product_detail_view.dart';
 
 class HomeView extends StatefulWidget {
   final Function(Product) onAddToCart;
@@ -147,7 +148,13 @@ class _HomeViewState extends State<HomeView> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final p = _products[index];
-                      return Card(
+                      return InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailView(productId: p.id, onAddToCart: widget.onAddToCart),
+                          ),
+                        ),
+                        child: Card(
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -254,6 +261,7 @@ class _HomeViewState extends State<HomeView> {
                               ),
                             ),
                           ],
+                        ),
                         ),
                       );
                     },

@@ -337,8 +337,18 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, data: { payouts: results, pending } });
   }
 
+  function payoutPayload(p) {
+    return { payout_id: p.id, amount: p.amount, gross_amount: p.gross_amount, reserve_held: p.reserve_held, reserve_released: p.reserve_released, reserve_release_days: p.reserve_release_days ?? null, operator_entity_id: p.operator_entity_id, other_entities_pending: Boolean(p.other_entities_pending), settlement_count: p.settlement_count, bank_transfer: 'MANUAL — 은행 이체 후 /transferred 로 이체 참조번호를 기록하세요.' };
+  }
+
   if (p === '/api/v1/admin/finance/payouts' && request.method === 'POST') {
     const b = await readJson(request);
+    const idemKey = request.headers.get('X-Idempotency-Key') || b.idempotency_key || null;
+    if (idemKey && !/^[A-Za-z0-9_.:-]{8,100}$/.test(idemKey)) throw bad('INVALID_IDEMPOTENCY_KEY', '멱등성 키 형식이 올바르지 않습니다.');
+    if (idemKey) {
+      const prior = await env.DB.prepare('SELECT * FROM payouts WHERE idempotency_key = ?').bind(idemKey).first();
+      if (prior) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(prior) });
+    }
     const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(String(b.partner_id || '')).first();
     if (!partner) throw notFound('입점사를 찾을 수 없습니다.');
     if (!Number(partner.payout_account_verified)) throw conflict('PAYOUT_ACCOUNT_UNVERIFIED', '정산 계좌 실명 확인이 완료되지 않았습니다.');
@@ -348,9 +358,10 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     const payoutId = newId('pay');
     const entityId = pv.entity;
     const ids = pv.settlements.map((s) => s.id);
+    const releaseDays = pv.held ? pv.reserveDays : null;
     const st = [
-      env.DB.prepare('INSERT INTO payouts (id, partner_id, operator_entity_id, amount, gross_amount, reserve_held, reserve_released, settlement_count, adjustment_count, status, approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(payoutId, partner.id, entityId, pv.amount, pv.gross, pv.held, pv.released, ids.length, pv.carried.length, 'APPROVED', admin.userId)
+      env.DB.prepare('INSERT INTO payouts (id, partner_id, operator_entity_id, amount, gross_amount, reserve_held, reserve_released, settlement_count, adjustment_count, status, approved_by, idempotency_key, reserve_release_days, other_entities_pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(payoutId, partner.id, entityId, pv.amount, pv.gross, pv.held, pv.released, ids.length, pv.carried.length, 'APPROVED', admin.userId, idemKey, releaseDays, pv.other_entities_pending ? 1 : 0)
     ];
     if (pv.held > 0) {
       st.push(env.DB.prepare(`INSERT INTO payout_reserve_holds (id, partner_id, operator_entity_id, held_by_payout_id, amount, reserve_bps, release_after)
@@ -377,8 +388,18 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
       { account: ACCOUNTS.BANK, credit: pv.amount, partner_id: partner.id, memo: payoutId }
     ] }));
     st.push(auditStatement(env, admin, { action: 'PAYOUT_APPROVE', targetType: 'partner', targetId: partner.id, after: { payoutId, amount: pv.amount, gross: pv.gross, reserveHeld: pv.held, reserveReleased: pv.released, settlements: ids }, request }));
-    await runBatch(env, st);
-    return json(corsHeaders, { success: true, data: { payout_id: payoutId, amount: pv.amount, gross_amount: pv.gross, reserve_held: pv.held, reserve_released: pv.released, reserve_release_days: pv.held ? pv.reserveDays : null, operator_entity_id: entityId, other_entities_pending: pv.other_entities_pending, settlement_count: ids.length, bank_transfer: 'MANUAL — 은행 이체 후 /transferred 로 이체 참조번호를 기록하세요.' } }, 201);
+    try {
+      await runBatch(env, st);
+    } catch (e) {
+      // Lost a same-key race: the winner's row is the answer, not an error.
+      if (idemKey && String(e.message).includes('idempotency_key')) {
+        const winner = await env.DB.prepare('SELECT * FROM payouts WHERE idempotency_key = ?').bind(idemKey).first();
+        if (winner) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(winner) });
+      }
+      throw e;
+    }
+    const created = await env.DB.prepare('SELECT * FROM payouts WHERE id = ?').bind(payoutId).first();
+    return json(corsHeaders, { success: true, data: payoutPayload(created) }, 201);
   }
 
   const trM = p.match(/^\/api\/v1\/admin\/finance\/payouts\/([^/]+)\/transferred$/);

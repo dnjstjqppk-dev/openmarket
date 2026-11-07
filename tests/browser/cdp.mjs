@@ -30,8 +30,10 @@ export async function launchBrowser({ port = 9333 } = {}) {
   const exe = CANDIDATES.find((p) => fs.existsSync(p));
   if (!exe) throw new Error('No Chrome/Edge executable found (set CHROME_PATH)');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'olmoa-cdp-'));
+  // GitHub Actions runs as root: Chrome refuses to start without --no-sandbox there.
+  const ciFlags = process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] : [];
   const proc = spawn(exe, [`--remote-debugging-port=${port}`, '--headless=new', `--user-data-dir=${profile}`, '--no-first-run',
-    '--no-default-browser-check', '--disable-extensions', '--lang=ko-KR', 'about:blank'], { stdio: 'ignore' });
+    '--no-default-browser-check', '--disable-extensions', '--lang=ko-KR', ...ciFlags, 'about:blank'], { stdio: 'ignore' });
   for (let i = 0; i < 100; i++) {
     try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch { /* starting */ }
     await sleep(100);

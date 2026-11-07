@@ -9,6 +9,7 @@
 // Sellers act only on their own products / channel orders. Credentials are sealed (AES-GCM) at rest.
 
 import { requireApprovedPartner } from '../lib/auth.js';
+import { krwPerUnitMap } from '../lib/fx.js';
 import { json, readJson, bad, notFound, conflict, HttpError, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { sealSecret, openSecret } from '../lib/totp.js';
@@ -139,7 +140,8 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
       isCrossborder: Boolean(body.is_crossborder),
       originCountry: body.origin_country || 'CN',
       minMarginKrw: body.min_margin_krw ?? 3000,
-      roundingUnit: body.rounding_unit || 100
+      roundingUnit: body.rounding_unit || 100,
+      fxRatesToKrw: await krwPerUnitMap(env)
     });
     return json(corsHeaders, { success: true, data: result });
   }

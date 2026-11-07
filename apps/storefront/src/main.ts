@@ -6,11 +6,23 @@ import router from './router';
 import App from './App.vue';
 import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
+import { i18n } from './i18n';
+import { useTheme } from '@olmoa/ui';
+
+useTheme().init();
+
+// PWA: offline-capable shell. Production only — a worker would fight Vite HMR in dev.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 
 const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
 app.use(router);
+app.use(i18n);
 
 // Session expiry / revocation: any 401 from our API ends the local session and sends the user to login.
 const nativeFetch = window.fetch.bind(window);

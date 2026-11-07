@@ -1,52 +1,59 @@
 openapi: 3.0.3
 info:
-  title: Temu-Scale Open Market Platform API
-  version: 1.0.0
-  description: SSOT API specification for User Web (Nuxt 3), Partner/Admin Web (Vue 3), Mobile (Flutter), and Go Backend.
+  title: OLMOA OpenMarket API
+  version: 2.0.0-v3-integrity
+  description: Contract for the Cloudflare Workers gateway (apps/cloudflare-gateway),
+    the Vue 3 storefront/admin/partner apps, and the Flutter mobile apps.
+    Reconciled against the implementation 2026-11-07; every path below is
+    covered by tests/openapi_reconciliation_test.mjs.
 servers:
-  - url: http://localhost:8080
-    description: Local Go API Server
+  - url: https://olmoa-api.dnjstjqppk.workers.dev
+    description: Production Workers gateway
+  - url: http://localhost:8787
+    description: Local wrangler dev gateway
 
 security:
   - BearerAuth: []
 
 paths:
-  /api/v1/home/sdui:
-    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1home~1sdui'
-  /api/v1/flash-sales/stream:
-    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1flash-sales~1stream'
   /api/v1/products:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products'
   /api/v1/products/{id}:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}'
   /api/v1/orders/checkout:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1orders~1checkout'
+  /api/v1/campaigns/lightning:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1campaigns~1lightning'
   /api/v1/search/autocomplete:
     $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1autocomplete'
   /api/v1/search/log:
     $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1log'
 
-  /api/v1/partner/media/presigned-url:
-    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1media~1presigned-url'
   /api/v1/partner/products:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products'
   /api/v1/partner/products/bulk:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1bulk'
-  /api/v1/partner/sub-orders/{id}/shipment:
-    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1sub-orders~1{id}~1shipment'
+  /api/v1/partner/orders/{id}/shipment:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1{id}~1shipment'
+  /api/v1/partner/orders/bulk-shipment:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1bulk-shipment'
   /api/v1/partner/settlements:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1settlements'
 
+  /api/v1/storage/upload:
+    $ref: './paths/storage.yaml#/paths/~1api~1v1~1storage~1upload'
+
   /api/v1/admin/partners/{id}/verify:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1verify'
-  /api/v1/admin/sdui/layouts:
-    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1sdui~1layouts'
-  /api/v1/admin/settlements/execute:
-    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1settlements~1execute'
+  /api/v1/admin/users/{id}/reset-password:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1users~1{id}~1reset-password'
+  /api/v1/admin/finance/payouts:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1finance~1payouts'
 
 components:
   securitySchemes:
     BearerAuth:
       type: http
-      scheme: bearer
+      scheme: Bearer [REDACTED]
       bearerFormat: JWT
+      description: Gateway JWT (role ROLE_CUSTOMER, ROLE_PARTNER or ROLE_ADMIN).
