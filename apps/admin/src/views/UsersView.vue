@@ -162,5 +162,4 @@ onMounted(loadUsers);
         </div>
       </div>
     </div>
-  </div>
 </template>
