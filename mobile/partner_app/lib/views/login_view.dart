@@ -3,12 +3,14 @@
 
 import 'package:flutter/material.dart';
 import '../services/partner_api_service.dart';
+import '../theme/app_theme.dart';
 
 class PartnerLoginView extends StatefulWidget {
   final VoidCallback onSuccess;
   final String reason;
 
-  const PartnerLoginView({super.key, required this.onSuccess, this.reason = '판매자 계정으로 로그인해 주세요.'});
+  const PartnerLoginView(
+      {super.key, required this.onSuccess, this.reason = '판매자 계정으로 로그인해 주세요.'});
 
   @override
   State<PartnerLoginView> createState() => _PartnerLoginViewState();
@@ -33,7 +35,8 @@ class _PartnerLoginViewState extends State<PartnerLoginView> {
       _busy = true;
       _error = null;
     });
-    final r = await PartnerAuthSession.login(email: _email.text, password: _password.text);
+    final r = await PartnerAuthSession.login(
+        email: _email.text, password: _password.text);
     if (!mounted) return;
     setState(() => _busy = false);
     if (r['success'] == true) {
@@ -52,29 +55,38 @@ class _PartnerLoginViewState extends State<PartnerLoginView> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.storefront, size: 48, color: Color(0xFF4F46E5)),
+            const Icon(Icons.storefront,
+                size: 48, color: OlmoaColors.lagoon600),
             const SizedBox(height: 12),
-            const Text('판매자 로그인', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            const Text('판매자 로그인',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            Text(widget.reason, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            Text(widget.reason,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             const SizedBox(height: 20),
             TextField(
               controller: _email,
-              decoration: const InputDecoration(labelText: '이메일', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: '이메일', border: OutlineInputBorder()),
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _password,
-              decoration: const InputDecoration(labelText: '비밀번호', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: '비밀번호', border: OutlineInputBorder()),
               obscureText: true,
               autofillHints: const [AutofillHints.password],
               onSubmitted: (_) => _submit(),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              Text(_error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
             ],
             const SizedBox(height: 16),
             SizedBox(
@@ -82,13 +94,18 @@ class _PartnerLoginViewState extends State<PartnerLoginView> {
               child: ElevatedButton(
                 onPressed: _busy ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _busy
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('로그인', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('로그인',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],

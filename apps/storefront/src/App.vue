@@ -68,14 +68,43 @@ function logSearch(keyword: string) {
   fetch(`${API_BASE_URL}/api/v1/search/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword }) }).catch(() => {})
 }
 function onSearchSelect(it: AcItem) {
-  if (it.type === 'keyword') logSearch(it.label)
+  if (it.type === 'keyword') { rememberSearch(it.label); logSearch(it.label) }
   if (it.to) router.push(it.to)
 }
 function onSearchSubmit(q: string) {
   const kw = q.trim()
   if (!kw) return
+  rememberSearch(kw)
   logSearch(kw)
   router.push({ path: '/search', query: { q: kw } })
+}
+// ---- recent searches (local device only, max 8) ---------------------------------------------------
+const RECENT_KEY = 'olmoa_recent_searches'
+const recentSearches = ref<string[]>([])
+try {
+  const raw: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+  if (Array.isArray(raw)) recentSearches.value = raw.filter((s): s is string => typeof s === 'string').slice(0, 8)
+} catch { /* corrupted storage: start empty */ }
+function persistRecent() {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentSearches.value)) } catch { /* storage unavailable */ }
+}
+function rememberSearch(kw: string) {
+  const k = kw.trim()
+  if (!k) return
+  recentSearches.value = [k, ...recentSearches.value.filter((s) => s !== k)].slice(0, 8)
+  persistRecent()
+}
+function removeRecent(kw: string) {
+  recentSearches.value = recentSearches.value.filter((s) => s !== kw)
+  persistRecent()
+}
+function clearRecent() {
+  recentSearches.value = []
+  persistRecent()
+}
+function runRecent(term: string, close: () => void) {
+  close()
+  router.push({ path: '/search', query: { q: term } })
 }
 
 // ---- business disclosure (전자상거래법 제10조) ----------------------------------------------------------
@@ -194,7 +223,22 @@ onMounted(async () => {
       </template>
 
       <div class="mx-auto w-full max-w-2xl">
-        <OmSearchBar :fetcher="searchFetcher" placeholder="상품, 브랜드, 카테고리 검색" label="상품 검색" empty-text="검색 결과가 없습니다." @select="onSearchSelect" @submit="onSearchSubmit" />
+        <OmSearchBar :fetcher="searchFetcher" placeholder="상품, 브랜드, 카테고리 검색" label="상품 검색" empty-text="검색 결과가 없습니다." @select="onSearchSelect" @submit="onSearchSubmit">
+          <template #idle="{ close }">
+            <div v-if="recentSearches.length" class="px-3 py-2">
+              <div class="flex items-center justify-between pb-1 pt-2">
+                <p class="text-2xs font-bold uppercase tracking-wider text-ink-subtle">최근 검색어</p>
+                <button type="button" class="text-2xs text-ink-muted underline hover:text-ink" @click="clearRecent">전체 삭제</button>
+              </div>
+              <ul class="flex flex-wrap gap-1.5 pb-2">
+                <li v-for="term in recentSearches" :key="term" class="flex items-center gap-0.5 rounded-full border border-line bg-surface-2 py-1 pl-3 pr-1.5 text-xs">
+                  <button type="button" class="hover:underline" @click="runRecent(term, close)">{{ term }}</button>
+                  <button type="button" class="flex h-5 w-5 items-center justify-center rounded-full text-ink-muted hover:bg-surface-3" :aria-label="`${term} 삭제`" @click="removeRecent(term)">×</button>
+                </li>
+              </ul>
+            </div>
+          </template>
+        </OmSearchBar>
       </div>
 
       <template #end>

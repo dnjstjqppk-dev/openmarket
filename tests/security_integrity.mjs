@@ -973,15 +973,19 @@ await t.test('I45 TOTP 2FA: RFC 6238 vector, enrolment revokes old sessions, cod
   const stored = A.one("SELECT totp_pending_enc FROM users WHERE email = 'ops@olmoa.test'").totp_pending_enc;
   assert.ok(stored.startsWith('v1:') && !stored.includes(secret), 'secret is encrypted at rest');
   assert.equal((await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: '123456' === (await totpAt(secret, currentStep())) ? '654321' : '123456' } })).json.code, 'OTP_INVALID');
-  const en = await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: await totpAt(secret, currentStep()) } });
+  // Pin the enrolment step: recomputing currentStep() later would mint a FRESH code if the
+  // 30 s boundary passes mid-test, turning the replay assertion below into a real login (flake).
+  const enrolStep = currentStep();
+  const enrolCode = await totpAt(secret, enrolStep);
+  const en = await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: enrolCode } });
   assert.equal(en.status, 200, en.text);
   assert.equal(en.json.data.recovery_codes.length, 10);
   assert.equal((await A.call('/api/v1/admin/products', { token: tok })).status, 401, 'pre-2FA session revoked');
   assert.equal((await A.call('/api/v1/admin/products', { token: en.json.data.token })).status, 200);
 
   assert.equal((await opLogin('ops@olmoa.test')).json.code, 'OTP_REQUIRED');
-  assert.equal((await opLogin('ops@olmoa.test', { otp: await totpAt(secret, currentStep()) })).json.code, 'OTP_INVALID', 'the code used for enrolment cannot be replayed');
-  const next = await totpAt(secret, currentStep() + 1);
+  assert.equal((await opLogin('ops@olmoa.test', { otp: enrolCode })).json.code, 'OTP_INVALID', 'the code used for enrolment cannot be replayed');
+  const next = await totpAt(secret, enrolStep + 1);
   const ok = await opLogin('ops@olmoa.test', { otp: next });
   assert.equal(ok.status, 200, ok.text);
   assert.equal(ok.json.mfa_enabled, true);

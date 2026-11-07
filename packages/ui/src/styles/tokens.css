@@ -49,7 +49,7 @@
   --om-surface-3: var(--om-stone-100);
   --om-text: var(--om-stone-900);
   --om-text-muted: var(--om-stone-500);
-  --om-text-subtle: var(--om-stone-400);
+  --om-text-subtle: var(--om-stone-500); /* 4.71:1 on white — subtle carries real info (dates, counts) so it meets 4.5 */
   --om-text-inverse: var(--om-stone-0);
   --om-border: var(--om-stone-200);
   --om-border-strong: var(--om-stone-300);
@@ -136,7 +136,7 @@
   --om-surface-3: 40 44 46;
   --om-text: 236 237 235;
   --om-text-muted: 160 163 160;
-  --om-text-subtle: 118 121 118;
+  --om-text-subtle: 137 140 137; /* 5.20:1 on surface — see light note */
   --om-text-inverse: 23 23 22;
   --om-border: 52 56 58;
   --om-border-strong: 74 79 81;
@@ -169,7 +169,7 @@
     --om-surface-3: 40 44 46;
     --om-text: 236 237 235;
     --om-text-muted: 160 163 160;
-    --om-text-subtle: 118 121 118;
+    --om-text-subtle: 137 140 137; /* 5.20:1 on surface — see light note */
     --om-text-inverse: 23 23 22;
     --om-border: 52 56 58;
     --om-border-strong: 74 79 81;

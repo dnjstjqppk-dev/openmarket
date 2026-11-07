@@ -21,6 +21,10 @@ paths:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}'
   /api/v1/orders/checkout:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1orders~1checkout'
+  /api/v1/search/autocomplete:
+    $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1autocomplete'
+  /api/v1/search/log:
+    $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1log'
 
   /api/v1/partner/media/presigned-url:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1media~1presigned-url'

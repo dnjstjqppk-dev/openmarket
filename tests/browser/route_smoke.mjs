@@ -7,10 +7,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { launchBrowser } from './cdp.mjs';
+import { launchBrowser, VIEWPORTS } from './cdp.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '../..');
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'reports/v4/phase2/smoke'));
+// VPS selects the viewport matrix, e.g. VPS=desktop,desktop1280,tablet_landscape,tablet_portrait,mobile,mobile360.
+// WIDTH_SUFFIX=1 names files [View]_[viewport]_[width].png per the commercialization spec.
+const VPS = (process.env.VPS || 'desktop,mobile').split(',').map((s) => s.trim()).filter((s) => VIEWPORTS[s]);
+if (!VPS.length) { console.error('no valid viewports in VPS (known: ' + Object.keys(VIEWPORTS).join(',') + ')'); process.exit(2); }
+const WIDTH_SUFFIX = process.env.WIDTH_SUFFIX === '1';
 const API = process.env.API_URL || 'https://olmoa-api.dnjstjqppk.workers.dev';
 // Local gateway (.dev.vars) only allows http://localhost:5173-5175, so a local run must use those origins:
 //   API_URL=http://127.0.0.1:8787 HOST=localhost PORTS=5173,5174,5175 DIST=dist-local node tests/browser/route_smoke.mjs
@@ -79,29 +84,34 @@ try {
       if (ONLY && !ONLY.test(`${a.app}:${s.url}`)) continue;
       const url = `${a.base}${fill(s.url, a.app)}`;
       const row = { app: a.app, route: s.url, view: s.view, url };
-      for (const vp of ['desktop', 'mobile']) {
+      for (const vp of VPS) {
         await page.viewport(vp);
         page.console = []; page.network = [];
         await page.goto(url);
         await page.idle(900);
         const info = await page.eval(`({ path: location.pathname, len: (document.querySelector('#app')?.innerText || '').trim().length, title: document.title })`);
         const overflow = await page.hasHorizontalOverflow();
-        const file = path.join(OUT, a.app, `${s.view}_${vp}.png`);
+        const base = WIDTH_SUFFIX ? `${s.view}_${vp}_${VIEWPORTS[vp].width}` : `${s.view}_${vp}`;
+        const file = path.join(OUT, a.app, `${base}.png`);
         await page.screenshot(file);
         row[vp] = {
           final_path: info.path,
           rendered: info.len > 20,
           redirected_to_login: info.path.endsWith('/login') && !s.url.endsWith('/login'),
-          horizontal_overflow: vp === 'mobile' ? overflow : false,
+          width: VIEWPORTS[vp].width,
+          horizontal_overflow: overflow,
           console_errors: page.console.map((c) => String(c.text).slice(0, 160)),
           http_errors: page.network.filter((n) => !String(n.url).includes('/favicon')).map((n) => `${n.status} ${String(n.url).replace(API, 'API').slice(0, 120)}`),
           screenshot: path.relative(ROOT, file).replace(/\\/g, '/')
         };
       }
-      const d = row.desktop; const m = row.mobile;
-      row.verdict = !d.rendered || !m.rendered ? 'FAIL_BLANK' : LOGIN && (d.redirected_to_login || m.redirected_to_login) ? 'FAIL_AUTH' : d.console_errors.length || m.console_errors.length ? 'WARN_CONSOLE' : m.horizontal_overflow ? 'WARN_OVERFLOW' : 'PASS';
+      const cells = VPS.map((vp) => row[vp]);
+      const primary = cells[0];
+      const overflows = VPS.filter((vp) => row[vp].horizontal_overflow).map((vp) => `${vp}@${row[vp].width}`);
+      const consoles = cells.reduce((n, c) => n + c.console_errors.length, 0);
+      row.verdict = cells.some((c) => !c.rendered) ? 'FAIL_BLANK' : LOGIN && cells.some((c) => c.redirected_to_login) ? 'FAIL_AUTH' : consoles ? 'WARN_CONSOLE' : overflows.length ? 'WARN_OVERFLOW' : 'PASS';
       results.push(row);
-      console.log(`${row.verdict.padEnd(13)} ${a.app.padEnd(10)} ${s.url.padEnd(26)} → ${d.final_path}${d.console_errors.length ? ` console:${d.console_errors.length}` : ''}${m.horizontal_overflow ? ' overflow@390' : ''}`);
+      console.log(`${row.verdict.padEnd(13)} ${a.app.padEnd(10)} ${s.url.padEnd(26)} → ${primary.final_path}${consoles ? ` console:${consoles}` : ''}${overflows.length ? ' overflow:' + overflows.join(',') : ''}`);
     }
   }
 } finally {

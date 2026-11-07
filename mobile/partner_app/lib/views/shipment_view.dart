@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import '../models/sub_order.dart';
 import '../services/partner_api_service.dart';
+import '../theme/app_theme.dart';
 import 'login_view.dart';
 
 class PartnerShipmentView extends StatefulWidget {
@@ -65,7 +66,8 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
             keyboardType: TextInputType.number,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
             ElevatedButton(
               onPressed: () async {
                 final tracking = controller.text.trim();
@@ -81,14 +83,18 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                 if (r['ok'] == true) {
                   setState(() {
                     order.status = 'SHIPPED';
-                    order.trackingNumber = (r['tracking_number'] ?? tracking).toString();
+                    order.trackingNumber =
+                        (r['tracking_number'] ?? tracking).toString();
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('[${order.subOrderNo}] 출고 및 송장 등록 완료')),
+                    SnackBar(
+                        content: Text('[${order.subOrderNo}] 출고 및 송장 등록 완료')),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text((r['error'] ?? '출고 처리에 실패했습니다.').toString())),
+                    SnackBar(
+                        content:
+                            Text((r['error'] ?? '출고 처리에 실패했습니다.').toString())),
                   );
                 }
               },
@@ -102,12 +108,13 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_authReady) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (!_authReady) return const Center(child: CircularProgressIndicator());
     if (!PartnerAuthSession.isAuthenticated) {
-      return PartnerLoginView(onSuccess: _init, reason: '출고 관리를 하려면 판매자 계정으로 로그인해 주세요.');
+      return PartnerLoginView(
+          onSuccess: _init, reason: '출고 관리를 하려면 판매자 계정으로 로그인해 주세요.');
     }
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+      return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
       return Center(
@@ -118,7 +125,6 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _loadOrders,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
               child: const Text('다시 시도'),
             ),
           ],
@@ -127,7 +133,8 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
     }
     if (_orders.isEmpty) {
       return const Center(
-        child: Text('출고할 주문이 없습니다.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        child: Text('출고할 주문이 없습니다.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
       );
     }
 
@@ -152,17 +159,26 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(order.subOrderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+                    Text(order.subOrderNo,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.blueGrey)),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: isShipped ? Colors.blue.shade50 : Colors.amber.shade50,
+                        color: isShipped
+                            ? OlmoaColors.infoSoft
+                            : OlmoaColors.warningSoft,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         isShipped ? '배송중' : '결제확인(미출고)',
                         style: TextStyle(
-                          color: isShipped ? Colors.blue.shade700 : Colors.amber.shade800,
+                          color: isShipped
+                              ? OlmoaColors.info
+                              : OlmoaColors.warning,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -171,22 +187,32 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text(order.productTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(order.productTitle,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14)),
                 const SizedBox(height: 4),
-                Text('수량: ${order.quantity}개 / 결제액: ₩${order.totalAmount.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                    '수량: ${order.quantity}개 / 결제액: ₩${order.totalAmount.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
+                    style:
+                        TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                 const Divider(height: 20),
                 Align(
                   alignment: Alignment.centerRight,
                   child: isShipped
-                      ? Text('운송장: ${order.trackingNumber}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo, fontSize: 12))
+                      ? Text('운송장: ${order.trackingNumber}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: OlmoaColors.lagoon700,
+                              fontSize: 12))
                       : ElevatedButton(
                           onPressed: () => _dispatchOrder(order),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4F46E5),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
-                          child: const Text('운송장 입력 및 출고', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text('운송장 입력 및 출고',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                 ),
               ],
@@ -197,4 +223,3 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
     );
   }
 }
-

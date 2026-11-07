@@ -1,0 +1,55 @@
+{
+  "generated": "2026-11-07T08:41:48.968Z",
+  "api": "http://127.0.0.1:8787",
+  "budget_ms": 2500,
+  "rows": [
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/",
+      "desktop": 884,
+      "mobile": 344
+    },
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/categories",
+      "desktop": 140,
+      "mobile": 68
+    },
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/category/womens-clothing",
+      "desktop": 164,
+      "mobile": 156
+    },
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/product/prod_001",
+      "desktop": 180,
+      "mobile": 136
+    },
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/search?q=%EA%B0%80%EB%B0%A9",
+      "desktop": 112,
+      "mobile": 464
+    },
+    {
+      "app": "storefront",
+      "url": "http://127.0.0.1:4183/cart",
+      "desktop": 172,
+      "mobile": 216
+    },
+    {
+      "app": "admin",
+      "url": "http://127.0.0.1:4184/login",
+      "desktop": 172,
+      "mobile": 72
+    },
+    {
+      "app": "partner",
+      "url": "http://127.0.0.1:4185/login",
+      "desktop": 112,
+      "mobile": 64
+    }
+  ]
+}

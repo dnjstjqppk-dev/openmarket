@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/partner_api_service.dart';
+import '../theme/app_theme.dart';
 import 'login_view.dart';
 
 class PartnerAccountView extends StatefulWidget {
@@ -24,25 +25,29 @@ class _PartnerAccountViewState extends State<PartnerAccountView> {
 
   Future<void> _refresh() async {
     await PartnerAuthSession.restore();
-    if (mounted) setState(() {
-      _ready = true;
-      _loggedIn = PartnerAuthSession.isAuthenticated;
-    });
+    if (mounted)
+      setState(() {
+        _ready = true;
+        _loggedIn = PartnerAuthSession.isAuthenticated;
+      });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (!_ready) return const Center(child: CircularProgressIndicator());
     if (!_loggedIn) return PartnerLoginView(onSuccess: _refresh);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.store, size: 72, color: Color(0xFF4F46E5)),
+          const Icon(Icons.store, size: 72, color: OlmoaColors.lagoon600),
           const SizedBox(height: 12),
-          Text('${PartnerAuthSession.businessName ?? '판매자'}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Text('${PartnerAuthSession.businessName ?? '판매자'}',
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text('출고·배송 관리가 가능합니다.', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          Text('출고·배송 관리가 가능합니다.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
           const SizedBox(height: 24),
           OutlinedButton(
             onPressed: () async {

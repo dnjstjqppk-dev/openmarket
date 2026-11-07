@@ -3,9 +3,11 @@
 // Official Brand: OLMOA Partner (올모아 판매자 센터)
 
 import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
 import 'views/dashboard_view.dart';
 import 'views/shipment_view.dart';
 import 'views/account_view.dart';
+import 'widgets/responsive.dart';
 
 void main() {
   runApp(const OlmoaPartnerApp());
@@ -19,16 +21,8 @@ class OlmoaPartnerApp extends StatelessWidget {
     return MaterialApp(
       title: 'OLMOA Partner',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E1B4B),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-      ),
+      theme: buildOlmoaLightTheme(),
+      darkTheme: buildOlmoaDarkTheme(),
       home: const OlmoaPartnerMainScreen(),
     );
   }
@@ -47,36 +41,47 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
   @override
   Widget build(BuildContext context) {
     final views = [
-      PartnerDashboardView(onNavigateToShipments: () => setState(() => _currentIndex = 1)),
+      PartnerDashboardView(
+          onNavigateToShipments: () => setState(() => _currentIndex = 1)),
       const PartnerShipmentView(),
       const PartnerAccountView(),
     ];
 
-    return Scaffold(
+    return AdaptiveScaffold(
       appBar: AppBar(
+        backgroundColor: OlmoaColors.lagoon900,
+        foregroundColor: Colors.white,
         title: const Row(
           children: [
-            Icon(Icons.storefront, color: Color(0xFFFA541C)),
+            Icon(Icons.storefront, color: OlmoaColors.amber400),
             SizedBox(width: 8),
             Text(
               'OLMOA Partner',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.white),
             ),
           ],
         ),
       ),
       body: views[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF4F46E5),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: '대시보드'),
-          BottomNavigationBarItem(icon: Icon(Icons.local_shipping), label: '출고·배송'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-        ],
-      ),
+      currentIndex: _currentIndex,
+      onDestinationSelected: (index) => setState(() => _currentIndex = index),
+      destinations: const [
+        NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: '대시보드'),
+        NavigationDestination(
+            icon: Icon(Icons.local_shipping_outlined),
+            selectedIcon: Icon(Icons.local_shipping),
+            label: '출고·배송'),
+        NavigationDestination(
+            icon: Icon(Icons.person_outlined),
+            selectedIcon: Icon(Icons.person),
+            label: '내 정보'),
+      ],
     );
   }
 }

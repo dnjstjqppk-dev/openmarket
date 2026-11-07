@@ -60,6 +60,8 @@ export { useOverlay } from './composables/useOverlay'
 export { createAutocomplete, normalizeQuery } from './composables/autocompleteCore'
 export type { AcItem, AcGroup, AcFetcher, AcState } from './composables/autocompleteCore'
 export { useTheme } from './composables/useTheme'
+export { useBreakpoint, BREAKPOINTS, BREAKPOINT_ORDER, breakpointOf, deviceOf, matches, matchesDevice } from './composables/useBreakpoint'
+export type { BreakpointKey, DeviceClass, BreakpointState } from './composables/useBreakpoint'
 export { formatKrw, formatNumber, formatDate, formatDateTime, discountRate } from './format'
 
 const all: Record<string, any> = {

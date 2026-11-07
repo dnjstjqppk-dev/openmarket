@@ -24,7 +24,7 @@
     "test:social": "node tests/social_auth_test.mjs",
     "test:bidding": "node tests/bidding_contract_test.mjs",
     "test:e2e": "node tests/full_platform_e2e.mjs",
-    "test": "node scripts/gen-dev-seed.mjs && npm run test:migrations && npm run test:security && npm run test:commercial && npm run test:crawler && npm run test:multichannel && npm run test:products && npm run test:client-errors && npm run test:email && npm run test:social && npm run test:bidding && npm run test:e2e && npm run test:go",
+    "test": "node scripts/gen-dev-seed.mjs && npm run test:migrations && npm run test:security && npm run test:commercial && npm run test:crawler && npm run test:multichannel && npm run test:products && npm run test:client-errors && npm run test:email && npm run test:social && npm run test:bidding && npm run test:ui && npm run test:e2e && npm run test:go",
     "lint": "node --check apps/cloudflare-gateway/src/index.js",
     "deploy": "npm run deploy:all",
     "deploy:all": "npm run build && npx wrangler deploy --config apps/cloudflare-gateway/wrangler.jsonc && npx wrangler deploy --config apps/storefront/wrangler.jsonc && npx wrangler deploy --config apps/admin/wrangler.jsonc && npx wrangler deploy --config apps/partner/wrangler.jsonc && npx wrangler deploy",
@@ -41,7 +41,7 @@
     "test:runtime": "node tests/runtime/v3_1_smoke.mjs",
     "test:migrations": "node tests/migration_fk_rehearsal.mjs",
     "typecheck": "npm run typecheck --workspace=packages/ui && npm run typecheck --workspace=apps/storefront && npm run typecheck --workspace=apps/admin && npm run typecheck --workspace=apps/partner",
-    "test:ui": "node tests/ui/autocomplete_core.test.mjs"
+    "test:ui": "node tests/ui/autocomplete_core.test.mjs && node tests/ui/breakpoints.test.mjs"
   },
   "keywords": [
     "olmoa",

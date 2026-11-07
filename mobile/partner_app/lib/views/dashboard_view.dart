@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/partner_api_service.dart';
+import '../theme/app_theme.dart';
 import 'login_view.dart';
 
 class PartnerDashboardView extends StatefulWidget {
@@ -53,11 +54,12 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_authReady) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (!_authReady) return const Center(child: CircularProgressIndicator());
     if (!PartnerAuthSession.isAuthenticated) {
-      return PartnerLoginView(onSuccess: _init, reason: '운영 현황을 보려면 판매자 계정으로 로그인해 주세요.');
+      return PartnerLoginView(
+          onSuccess: _init, reason: '운영 현황을 보려면 판매자 계정으로 로그인해 주세요.');
     }
-    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+    if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
         child: Column(
@@ -67,7 +69,6 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _load,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5), foregroundColor: Colors.white),
               child: const Text('다시 시도'),
             ),
           ],
@@ -81,16 +82,23 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFF312E81), Color(0xFF4F46E5)]),
+            gradient: const LinearGradient(
+                colors: [OlmoaColors.lagoon900, OlmoaColors.lagoon500]),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text((m['business_name'] ?? PartnerAuthSession.businessName ?? '').toString(),
+              Text(
+                  (m['business_name'] ?? PartnerAuthSession.businessName ?? '')
+                      .toString(),
                   style: const TextStyle(color: Colors.white70, fontSize: 12)),
               const SizedBox(height: 6),
-              const Text('판매자 운영 현황', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text('판매자 운영 현황',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -105,7 +113,8 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _statItem('등록 상품', '${m['products_count'] ?? 0}개'),
-                  _statItem('정산 예정', '₩${m['settlement_expected_amount'] ?? 0}'),
+                  _statItem(
+                      '정산 예정', '₩${m['settlement_expected_amount'] ?? 0}'),
                   _statItem('미답변 Q&A', '${m['waiting_qna_count'] ?? 0}건'),
                 ],
               ),
@@ -113,19 +122,26 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
           ),
         ),
         const SizedBox(height: 20),
-        const Text('빠른 작업', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+        const Text('빠른 작업',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87)),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: widget.onNavigateToShipments,
-                icon: const Icon(Icons.local_shipping, color: Color(0xFF4F46E5)),
-                label: const Text('운송장 등록', style: TextStyle(color: Color(0xFF4F46E5))),
+                icon: const Icon(Icons.local_shipping,
+                    color: OlmoaColors.lagoon600),
+                label: const Text('운송장 등록',
+                    style: TextStyle(color: OlmoaColors.lagoon700)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: Color(0xFF4F46E5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: OlmoaColors.lagoon600),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -136,11 +152,10 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
                 icon: const Icon(Icons.account_balance_wallet),
                 label: const Text('출고·배송'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -154,9 +169,14 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        Text(label,
+            style: const TextStyle(color: Colors.white60, fontSize: 11)),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900)),
       ],
     );
   }

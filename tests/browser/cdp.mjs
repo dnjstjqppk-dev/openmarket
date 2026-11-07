@@ -16,8 +16,12 @@ const CANDIDATES = [
 
 export const VIEWPORTS = {
   desktop: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
+  desktop1280: { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false },
+  tablet_landscape: { width: 1024, height: 768, deviceScaleFactor: 1, mobile: true },
   tablet: { width: 820, height: 1180, deviceScaleFactor: 1, mobile: true },
-  mobile: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }
+  tablet_portrait: { width: 768, height: 1024, deviceScaleFactor: 1, mobile: true },
+  mobile: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+  mobile360: { width: 360, height: 740, deviceScaleFactor: 2, mobile: true }
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

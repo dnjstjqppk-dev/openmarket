@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import 'login_view.dart';
 
 class OrdersView extends StatefulWidget {
@@ -50,13 +51,16 @@ class _OrdersViewState extends State<OrdersView> {
         if (snapshot.hasError) {
           final err = snapshot.error;
           if (err is AuthRequiredException) {
-            return LoginView(onSuccess: _init, reason: '로그인이 만료되었습니다. 다시 로그인해 주세요.');
+            return LoginView(
+                onSuccess: _init, reason: '로그인이 만료되었습니다. 다시 로그인해 주세요.');
           }
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.'}', style: const TextStyle(fontSize: 13)),
+                Text(
+                    '${err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.'}',
+                    style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 12),
                 ElevatedButton(onPressed: _reload, child: const Text('다시 시도')),
               ],
@@ -66,7 +70,8 @@ class _OrdersViewState extends State<OrdersView> {
         final orders = snapshot.data ?? [];
         if (orders.isEmpty) {
           return const Center(
-            child: Text('주문 내역이 없습니다.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            child: Text('주문 내역이 없습니다.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           );
         }
         return ListView.separated(
@@ -76,8 +81,10 @@ class _OrdersViewState extends State<OrdersView> {
           itemBuilder: (context, index) {
             final order = orders[index];
             final orderNo = (order['order_no'] ?? order['id'] ?? '').toString();
-            final status = (order['payment_status'] ?? order['status'] ?? '').toString();
-            final amount = order['total_pay_amount'] ?? order['total_amount'] ?? 0;
+            final status =
+                (order['payment_status'] ?? order['status'] ?? '').toString();
+            final amount =
+                order['total_pay_amount'] ?? order['total_amount'] ?? 0;
             final createdAt = (order['created_at'] ?? '').toString();
             final cancelled = status == 'CANCELLED' || status == 'REFUNDED';
 
@@ -95,17 +102,27 @@ class _OrdersViewState extends State<OrdersView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text(orderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey))),
+                        Expanded(
+                            child: Text(orderNo,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.blueGrey))),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: cancelled ? Colors.red.shade50 : Colors.orange.shade50,
+                            color: cancelled
+                                ? OlmoaColors.dangerSoft
+                                : OlmoaColors.lagoon50,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             status,
                             style: TextStyle(
-                              color: cancelled ? Colors.red.shade700 : const Color(0xFFFA541C),
+                              color: cancelled
+                                  ? OlmoaColors.danger
+                                  : OlmoaColors.lagoon700,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -114,9 +131,13 @@ class _OrdersViewState extends State<OrdersView> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Text('결제금액: ₩$amount', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                    Text('결제금액: ₩$amount',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 15)),
                     const Divider(height: 20),
-                    Text('주문일시: $createdAt', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                    Text('주문일시: $createdAt',
+                        style: const TextStyle(
+                            color: OlmoaColors.stone500, fontSize: 11)),
                   ],
                 ),
               ),

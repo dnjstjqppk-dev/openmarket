@@ -54,6 +54,18 @@ function onKey(e: KeyboardEvent) {
   } else if (e.key === 'Tab') { open.value = false }
 }
 function choose(it: AcItem) { open.value = false; active.value = -1; emit('select', it) }
+// First-match highlight of the settled query inside a label (plain spans, never v-html).
+function highlightParts(label: string): { text: string; hit: boolean }[] {
+  const q = st.value.settledQuery.trim().toLowerCase()
+  if (!q) return [{ text: label, hit: false }]
+  const idx = label.toLowerCase().indexOf(q)
+  if (idx < 0) return [{ text: label, hit: false }]
+  const parts: { text: string; hit: boolean }[] = []
+  if (idx > 0) parts.push({ text: label.slice(0, idx), hit: false })
+  parts.push({ text: label.slice(idx, idx + q.length), hit: true })
+  if (idx + q.length < label.length) parts.push({ text: label.slice(idx + q.length), hit: false })
+  return parts
+}
 function clear() { model.value = ''; ac?.clear(); inputEl.value?.focus() }
 const indexOf = (it: AcItem) => flat.value.indexOf(it)
 defineExpose({ focus: () => inputEl.value?.focus(), close: () => { open.value = false } })
@@ -118,7 +130,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), close: () => { open.value = 
             >
               <img v-if="it.image" :src="it.image" alt="" class="h-9 w-9 shrink-0 rounded-sm border border-line object-cover" loading="lazy" />
               <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm text-ink">{{ it.label }}</span>
+                <span class="block truncate text-sm text-ink"><template v-for="(part, pi) in highlightParts(it.label)" :key="pi"><mark v-if="part.hit" class="bg-transparent font-bold text-primary">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
                 <span v-if="it.sub" class="block truncate text-xs text-ink-muted">{{ it.sub }}</span>
               </span>
             </li>

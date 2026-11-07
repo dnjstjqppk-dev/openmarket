@@ -4,10 +4,12 @@
 
 import 'package:flutter/material.dart';
 import 'models/product.dart';
+import 'theme/app_theme.dart';
 import 'views/home_view.dart';
 import 'views/cart_view.dart';
 import 'views/orders_view.dart';
 import 'views/account_view.dart';
+import 'widgets/responsive.dart';
 
 void main() {
   runApp(const OlmoaCustomerApp());
@@ -21,16 +23,8 @@ class OlmoaCustomerApp extends StatelessWidget {
     return MaterialApp(
       title: 'OLMOA',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFA541C)),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          elevation: 0,
-        ),
-      ),
+      theme: buildOlmoaLightTheme(),
+      darkTheme: buildOlmoaDarkTheme(),
       home: const OlmoaMainScreen(),
     );
   }
@@ -55,7 +49,6 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
       SnackBar(
         content: Text('[${p.title}] 장바구니에 담겼습니다.'),
         duration: const Duration(seconds: 1),
-        backgroundColor: const Color(0xFFFA541C),
       ),
     );
   }
@@ -76,53 +69,75 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
       const AccountView(),
     ];
 
-    return Scaffold(
+    return AdaptiveScaffold(
       appBar: AppBar(
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFFA541C),
+                color: Theme.of(context).colorScheme.primary,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 20),
+              child: const Icon(Icons.shopping_bag_outlined,
+                  color: Colors.white, size: 20),
             ),
             const SizedBox(width: 8),
             const Text(
               'OLMOA',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: -0.5, color: Color(0xFF1E293B)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  letterSpacing: -0.5),
             ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12)),
-              child: const Text('올모아 글로벌', style: TextStyle(color: Color(0xFFFA541C), fontSize: 10, fontWeight: FontWeight.bold)),
+              decoration: BoxDecoration(
+                color: OlmoaColors.lagoon50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                '올모아 글로벌',
+                style: TextStyle(
+                    color: OlmoaColors.lagoon700,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
       ),
       body: views[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFFFA541C),
-        unselectedItemColor: Colors.grey.shade400,
-        items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(
-            icon: Badge(
-              isLabelVisible: _cartItems.isNotEmpty,
-              label: Text(_cartItems.length.toString()),
-              child: const Icon(Icons.shopping_cart),
-            ),
-            label: '장바구니',
+      currentIndex: _currentIndex,
+      onDestinationSelected: (index) => setState(() => _currentIndex = index),
+      destinations: [
+        const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: '홈'),
+        NavigationDestination(
+          icon: Badge(
+            isLabelVisible: _cartItems.isNotEmpty,
+            label: Text(_cartItems.length.toString()),
+            child: const Icon(Icons.shopping_cart_outlined),
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: '주문내역'),
-          const BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-        ],
-      ),
+          selectedIcon: Badge(
+            isLabelVisible: _cartItems.isNotEmpty,
+            label: Text(_cartItems.length.toString()),
+            child: const Icon(Icons.shopping_cart),
+          ),
+          label: '장바구니',
+        ),
+        const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: '주문내역'),
+        const NavigationDestination(
+            icon: Icon(Icons.person_outlined),
+            selectedIcon: Icon(Icons.person),
+            label: '내 정보'),
+      ],
     );
   }
 }

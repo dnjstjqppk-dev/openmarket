@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import 'login_view.dart';
 
 class CartView extends StatefulWidget {
@@ -54,7 +55,8 @@ class _CartViewState extends State<CartView> {
     return widget.items.fold(0, (sum, item) => sum + item.lowestSalePrice);
   }
 
-  void _showResult({required bool ok, required String title, required String message}) {
+  void _showResult(
+      {required bool ok, required String title, required String message}) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -75,8 +77,14 @@ class _CartViewState extends State<CartView> {
 
   Future<void> _handleCheckout() async {
     if (widget.items.isEmpty || _isCheckingOut) return;
-    if (_name.text.trim().isEmpty || _phone.text.trim().isEmpty || _zip.text.trim().isEmpty || _addr1.text.trim().isEmpty) {
-      _showResult(ok: false, title: '배송지 입력 필요', message: '수령인, 연락처, 우편번호, 주소는 필수 입력 항목입니다.');
+    if (_name.text.trim().isEmpty ||
+        _phone.text.trim().isEmpty ||
+        _zip.text.trim().isEmpty ||
+        _addr1.text.trim().isEmpty) {
+      _showResult(
+          ok: false,
+          title: '배송지 입력 필요',
+          message: '수령인, 연락처, 우편번호, 주소는 필수 입력 항목입니다.');
       return;
     }
 
@@ -106,26 +114,32 @@ class _CartViewState extends State<CartView> {
     } else if (result['code'] == 'UNAUTHENTICATED') {
       setState(() {});
     } else {
-      _showResult(ok: false, title: '주문 실패', message: (result['error'] ?? '주문을 생성하지 못했습니다.').toString());
+      _showResult(
+          ok: false,
+          title: '주문 실패',
+          message: (result['error'] ?? '주문을 생성하지 못했습니다.').toString());
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_authReady) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFFA541C)));
+      return const Center(child: CircularProgressIndicator());
     }
     if (!AuthSession.isAuthenticated) {
-      return LoginView(onSuccess: () => setState(() {}), reason: '주문하기 전에 로그인해 주세요.');
+      return LoginView(
+          onSuccess: () => setState(() {}), reason: '주문하기 전에 로그인해 주세요.');
     }
     if (widget.items.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey.shade300),
+            Icon(Icons.shopping_cart_outlined,
+                size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
-            const Text('장바구니가 비어 있습니다.', style: TextStyle(color: Colors.grey, fontSize: 14)),
+            const Text('장바구니가 비어 있습니다.',
+                style: TextStyle(color: Colors.grey, fontSize: 14)),
           ],
         ),
       );
@@ -152,7 +166,8 @@ class _CartViewState extends State<CartView> {
                               width: 70,
                               height: 70,
                               color: Colors.grey.shade100,
-                              child: const Icon(Icons.shopping_bag, color: Colors.grey),
+                              child: const Icon(Icons.shopping_bag,
+                                  color: Colors.grey),
                             ),
                           ),
                         ),
@@ -161,11 +176,19 @@ class _CartViewState extends State<CartView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              Text(p.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold)),
                               const SizedBox(height: 6),
                               Text(
                                 '₩${p.lowestSalePrice}',
-                                style: const TextStyle(color: Color(0xFFFA541C), fontWeight: FontWeight.bold, fontSize: 14),
+                                style: const TextStyle(
+                                    color: OlmoaColors.ruby500,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14),
                               ),
                             ],
                           ),
@@ -174,19 +197,42 @@ class _CartViewState extends State<CartView> {
                     ),
                   )),
               const Divider(height: 24),
-              const Text('배송지', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              const Text('배송지',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
               const SizedBox(height: 12),
-              TextField(controller: _name, decoration: const InputDecoration(labelText: '수령인 *', border: OutlineInputBorder())),
+              TextField(
+                  controller: _name,
+                  decoration: const InputDecoration(
+                      labelText: '수령인 *', border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              TextField(controller: _phone, decoration: const InputDecoration(labelText: '연락처 *', hintText: '010-0000-0000', border: OutlineInputBorder()), keyboardType: TextInputType.phone),
+              TextField(
+                  controller: _phone,
+                  decoration: const InputDecoration(
+                      labelText: '연락처 *',
+                      hintText: '010-0000-0000',
+                      border: OutlineInputBorder()),
+                  keyboardType: TextInputType.phone),
               const SizedBox(height: 10),
-              TextField(controller: _zip, decoration: const InputDecoration(labelText: '우편번호 *', border: OutlineInputBorder()), keyboardType: TextInputType.number),
+              TextField(
+                  controller: _zip,
+                  decoration: const InputDecoration(
+                      labelText: '우편번호 *', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number),
               const SizedBox(height: 10),
-              TextField(controller: _addr1, decoration: const InputDecoration(labelText: '주소 *', border: OutlineInputBorder())),
+              TextField(
+                  controller: _addr1,
+                  decoration: const InputDecoration(
+                      labelText: '주소 *', border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              TextField(controller: _addr2, decoration: const InputDecoration(labelText: '상세주소', border: OutlineInputBorder())),
+              TextField(
+                  controller: _addr2,
+                  decoration: const InputDecoration(
+                      labelText: '상세주소', border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              TextField(controller: _memo, decoration: const InputDecoration(labelText: '배송 메모', border: OutlineInputBorder())),
+              TextField(
+                  controller: _memo,
+                  decoration: const InputDecoration(
+                      labelText: '배송 메모', border: OutlineInputBorder())),
               const SizedBox(height: 8),
             ],
           ),
@@ -195,7 +241,12 @@ class _CartViewState extends State<CartView> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4))
+            ],
           ),
           child: SafeArea(
             child: Column(
@@ -203,10 +254,15 @@ class _CartViewState extends State<CartView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('총 결제 예정 금액', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('총 결제 예정 금액',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     Text(
                       '₩$totalAmount',
-                      style: const TextStyle(color: Color(0xFFFA541C), fontWeight: FontWeight.w900, fontSize: 18),
+                      style: const TextStyle(
+                          color: OlmoaColors.ruby500,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18),
                     ),
                   ],
                 ),
@@ -217,14 +273,15 @@ class _CartViewState extends State<CartView> {
                   child: ElevatedButton(
                     onPressed: _isCheckingOut ? null : _handleCheckout,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFA541C),
-                      foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isCheckingOut
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text('주문하기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        : const Text('주문하기',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
                   ),
                 ),
               ],

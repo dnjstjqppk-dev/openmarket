@@ -1,0 +1,130 @@
+# Search & autocomplete paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/features.js). The mission prompt names this
+# endpoint /v1/search/suggest; the shipped contract is /api/v1/search/autocomplete
+# and clients (OmSearchBar + autocompleteCore) already use it — do not rename.
+paths:
+  /api/v1/search/autocomplete:
+    get:
+      summary: Keyword, category and product suggestions (chosung + synonyms)
+      tags: [Search]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: Raw query. Empty = trending keywords + recommended root categories.
+      responses:
+        '200':
+          description: Suggestions grouped by keywords, categories and products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, suggestions, categories, products]
+                properties:
+                  success:
+                    type: boolean
+                  query:
+                    type: string
+                  resolved_synonym:
+                    type: string
+                    nullable: true
+                    description: Canonical keyword when a search_synonyms row matched, else null.
+                  suggestions:
+                    type: array
+                    maxItems: 8
+                    items:
+                      type: object
+                      required: [keyword]
+                      properties:
+                        keyword:
+                          type: string
+                        category_name:
+                          type: string
+                          nullable: true
+                        category_slug:
+                          type: string
+                          nullable: true
+                        product_hit_count:
+                          type: integer
+                        search_count:
+                          type: integer
+                  categories:
+                    type: array
+                    maxItems: 4
+                    items:
+                      type: object
+                      required: [id, name, slug]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        depth:
+                          type: integer
+                  products:
+                    type: array
+                    maxItems: 5
+                    items:
+                      type: object
+                      required: [id, title]
+                      properties:
+                        id:
+                          type: string
+                        slug:
+                          type: string
+                        title:
+                          type: string
+                        thumbnail_url:
+                          type: string
+                          nullable: true
+                        lowest_sale_price:
+                          type: integer
+                        lowest_original_price:
+                          type: integer
+                          nullable: true
+                        total_sold_count:
+                          type: integer
+                  trending_keywords:
+                    type: array
+                    description: Present only when q is empty (top 10 by search_count).
+                    items:
+                      type: object
+                  recommended_categories:
+                    type: array
+                    description: Present only when q is empty (first 8 root categories).
+                    items:
+                      type: object
+
+  /api/v1/search/log:
+    post:
+      summary: Record a submitted search keyword (trending ranking input)
+      tags: [Search]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword:
+                  type: string
+                  maxLength: 100
+                  description: Empty or missing keyword is a no-op that still returns success.
+      responses:
+        '200':
+          description: Keyword upserted into search_keywords (or no-op on empty keyword)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
