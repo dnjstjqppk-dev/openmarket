@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
 
 const settlements = ref<any[]>([])
+// T-N01: payouts and adjustments come from /partner/settlements directly.
+const payouts = ref<any[]>([])
 const summary = ref<any>({ gross_sales: 0, total_commission: 0, net_payout: 0, paid_amount: 0, pending_amount: 0 })
 const loading = ref(true)
 const loadError = ref('')
@@ -23,6 +25,7 @@ const loadSettlements = async () => {
       throw new Error(json.error || '정산 내역을 불러오지 못했습니다.')
     }
     settlements.value = json.data.settlements || []
+    payouts.value = json.data.payouts || []
     summary.value = json.data.summary || summary.value
   } catch (e: any) {
     loadError.value = e?.message || '정산 내역을 불러오지 못했습니다. 다시 시도해 주세요.'
@@ -60,6 +63,12 @@ const settlementLabel = (status: string) =>
   status === 'ELIGIBLE_FOR_PAYOUT' ? '지급 대기' :
   status === 'PENDING' ? '정산 대기' :
   status === 'HOLD' ? '보류' :
+  status === 'CANCELLED' ? '취소' : (status || '-')
+
+const payoutLabel = (status: string) =>
+  status === 'TRANSFERRED' ? '송금 완료' :
+  status === 'APPROVED' ? '승인됨' :
+  status === 'PENDING' ? '지급 대기' :
   status === 'CANCELLED' ? '취소' : (status || '-')
 
 const loadTaxInvoices = async () => {
@@ -157,6 +166,7 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
               <th class="py-3.5 px-5 font-bold">총 매출</th>
               <th class="py-3.5 px-5 font-bold">수수료</th>
               <th class="py-3.5 px-5 font-bold">배송비</th>
+              <th class="py-3.5 px-5 font-bold">차감/조정</th>
               <th class="py-3.5 px-5 font-bold">실지급액</th>
               <th class="py-3.5 px-5 font-bold">정산 상태</th>
             </tr>
@@ -168,6 +178,7 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
               <td class="py-3.5 px-5 font-bold">₩{{ Number(s.gross_amount || 0).toLocaleString() }}</td>
               <td class="py-3.5 px-5 text-red-600 font-semibold">-₩{{ Number(s.commission_amount || 0).toLocaleString() }} ({{ s.commission_rate }}%)</td>
               <td class="py-3.5 px-5 text-gray-600">+₩{{ Number(s.shipping_fee || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5 font-semibold" :class="Number(s.adjustment_total || 0) < 0 ? 'text-red-600' : 'text-gray-600'">{{ Number(s.adjustment_total || 0) < 0 ? '−' : '+' }}₩{{ Number(Math.abs(s.adjustment_total || 0)).toLocaleString() }}</td>
               <td class="py-3.5 px-5 font-black text-emerald-600 text-sm">₩{{ Number((s.effective_net_payout ?? s.net_payout_amount) || 0).toLocaleString() }}</td>
               <td class="py-3.5 px-5">
                 <span
@@ -182,6 +193,43 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
                   {{ settlementLabel(s.settlement_status) }}
                 </span>
               </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- T-N01: seller payouts (bank transfers by the operator) -->
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+        <div class="px-5 pt-4 pb-2">
+          <h3 class="text-sm font-black text-gray-900">정산 지급 내역</h3>
+          <p class="text-[11px] text-gray-500">운영자가 승인·송금한 정산 지급 건입니다. 송금 참조번호는 실제 이체 완료 후 표시됩니다.</p>
+        </div>
+        <div v-if="payouts.length === 0" class="p-8 text-center text-xs text-gray-400">아직 지급된 정산이 없습니다.</div>
+        <table v-else class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
+              <th class="py-3.5 px-5 font-bold">지급 ID</th>
+              <th class="py-3.5 px-5 font-bold">실지급액</th>
+              <th class="py-3.5 px-5 font-bold">정산 합계(조정 포함)</th>
+              <th class="py-3.5 px-5 font-bold">리저브 보류/해제</th>
+              <th class="py-3.5 px-5 font-bold">상태</th>
+              <th class="py-3.5 px-5 font-bold">송금 참조</th>
+              <th class="py-3.5 px-5 font-bold">지급일</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="p in payouts" :key="p.id" class="hover:bg-gray-50">
+              <td class="py-3.5 px-5 font-mono font-bold text-gray-900">{{ p.id }}</td>
+              <td class="py-3.5 px-5 font-black text-emerald-600">₩{{ Number(p.amount || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5 text-gray-600">₩{{ Number(p.gross_amount || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5 text-gray-600">−₩{{ Number(p.reserve_held || 0).toLocaleString() }} / +₩{{ Number(p.reserve_released || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5">
+                <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-black', p.status === 'TRANSFERRED' ? 'bg-emerald-50 text-emerald-700' : p.status === 'CANCELLED' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700']">
+                  {{ payoutLabel(p.status) }}
+                </span>
+              </td>
+              <td class="py-3.5 px-5 font-mono text-gray-600">{{ p.bank_transfer_ref || '-' }}</td>
+              <td class="py-3.5 px-5 text-gray-600">{{ p.created_at ? String(p.created_at).slice(0, 10) : '-' }}</td>
             </tr>
           </tbody>
         </table>

@@ -35,6 +35,22 @@ const shipments = ref<SubOrder[]>([]);
 const loading = ref(true);
 const isSaving = ref<string | null>(null);
 const copyToast = ref<string | null>(null);
+// T03: load/save failures are shown, never mistaken for "no shipments".
+const loadError = ref('');
+const toast = ref('');
+const toastTone = ref<'ok' | 'err'>('ok');
+const bulkError = ref('');
+function say(msg: string, tone: 'ok' | 'err' = 'ok') {
+  toast.value = msg;
+  toastTone.value = tone;
+  setTimeout(() => { toast.value = ''; }, 5000);
+}
+// T04: DELIVERED is its own terminal state (was mislabeled as 출고 대기/결제확인).
+function statusMeta(status: string) {
+  if (status === 'DELIVERED') return { label: '배송 완료', cls: 'bg-emerald-100 text-emerald-800' };
+  if (status === 'SHIPPED') return { label: '출고 완료', cls: 'bg-sky-100 text-sky-800' };
+  return { label: '출고 대기', cls: 'bg-amber-100 text-amber-800' };
+}
 const activeFilter = ref<'ALL' | 'PENDING' | 'SHIPPED'>('ALL');
 const searchQuery = ref('');
 const selectedIds = ref<string[]>([]);
@@ -103,22 +119,26 @@ function toggleSelectAll() {
 
 async function loadShipments() {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await fetch(`${API_BASE}/api/v1/partner/orders`, {
       headers: getPartnerHeaders()
     });
-    const json = await res.json();
-    if (json.success && json.data) {
-      shipments.value = json.data;
-    }
-  } catch (_) {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `목록 조회 실패 (${res.status})`);
+    shipments.value = json.data || [];
+  } catch (e: any) {
+    loadError.value = e?.message || '발송 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
   } finally {
     loading.value = false;
   }
 }
 
 async function saveTracking(order: SubOrder) {
-  if (!order.tracking_number || !order.tracking_number.trim()) return;
+  const tracking = (order.tracking_number || '').trim();
+  // T02: tracking is required; nothing auto-generated, no carrier invented.
+  if (!tracking) { say('송장번호를 입력해 주세요.', 'err'); return; }
+  if (!order.carrier_code) { say('택배사를 선택해 주세요.', 'err'); return; }
   isSaving.value = order.id;
 
   try {
@@ -126,15 +146,17 @@ async function saveTracking(order: SubOrder) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({
-        carrier: order.carrier_code || 'CJ대한통운',
-        tracking_number: order.tracking_number.trim()
+        carrier: order.carrier_code,
+        tracking_number: tracking
       })
     });
-    if (res.ok) {
-      order.status = 'SHIPPED';
-      selectedIds.value = selectedIds.value.filter(id => id !== order.id);
-    }
-  } catch (_) {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) throw new Error(json.error || `출고 등록 실패 (${res.status})`);
+    order.status = 'SHIPPED';
+    selectedIds.value = selectedIds.value.filter(id => id !== order.id);
+    say(`[${order.sub_order_no || order.order_no}] 출고 등록되었습니다.`);
+  } catch (e: any) {
+    say(e?.message || '출고 등록에 실패했습니다.', 'err');
   } finally {
     isSaving.value = null;
   }
@@ -142,32 +164,46 @@ async function saveTracking(order: SubOrder) {
 
 async function executeBulkShipment() {
   if (selectedIds.value.length === 0) return;
+  bulkError.value = '';
+  // T02: one real tracking number per selected order — no auto-generation.
+  const lines = bulkTrackingInput.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length !== selectedIds.value.length) {
+    bulkError.value = `선택한 ${selectedIds.value.length}건과 같은 수의 송장번호(${lines.length}개 입력됨)를 입력해 주세요. 비워 두면 출고되지 않습니다.`;
+    return;
+  }
+  if (!bulkCarrier.value) {
+    bulkError.value = '택배사를 선택해 주세요.';
+    return;
+  }
   isBulkSaving.value = true;
 
   try {
-    const lines = bulkTrackingInput.value.split('\n').map(l => l.trim()).filter(Boolean);
-    const shipmentsPayload = selectedIds.value.map((id, index) => {
-      const tracking = lines[index] || `68${Date.now().toString().slice(-8)}${index}`;
-      return {
-        sub_order_id: id,
-        carrier: bulkCarrier.value,
-        tracking_number: tracking
-      };
-    });
+    const shipmentsPayload = selectedIds.value.map((id, index) => ({
+      sub_order_id: id,
+      carrier: bulkCarrier.value,
+      tracking_number: lines[index]
+    }));
 
     const res = await fetch(`${API_BASE}/api/v1/partner/orders/bulk-shipment`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({ shipments: shipmentsPayload })
     });
-
-    if (res.ok) {
-      showBulkModal.value = false;
-      selectedIds.value = [];
-      bulkTrackingInput.value = '';
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) throw new Error(json.error || `일괄 출고 실패 (${res.status})`);
+    const failed = (json.results || []).filter((r: any) => !r.ok);
+    if (failed.length > 0) {
+      bulkError.value = `${failed.length}건 실패: ${failed.map((r: any) => `${r.sub_order_id}(${r.error || '오류'})`).join(', ')}`;
       await loadShipments();
+      return;
     }
-  } catch (_) {
+    showBulkModal.value = false;
+    selectedIds.value = [];
+    bulkTrackingInput.value = '';
+    await loadShipments();
+    say(`일괄 출고 ${json.updated_count ?? lines.length}건이 등록되었습니다.`);
+  } catch (e: any) {
+    bulkError.value = e?.message || '일괄 출고에 실패했습니다.';
   } finally {
     isBulkSaving.value = false;
   }
@@ -261,6 +297,9 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- T03: action feedback toast -->
+    <div v-if="toast" role="status" class="p-3 rounded-xl text-xs font-bold" :class="toastTone === 'err' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'">{{ toast }}</div>
+
     <!-- Filter Tabs & Instant Search -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
       <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -317,6 +356,13 @@ onMounted(() => {
       <p class="text-xs font-bold">주문 및 발송 대기 목록을 불러오는 중입니다...</p>
     </div>
 
+    <!-- T03: load errors are explicit, with retry -->
+    <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200">
+      <div class="text-3xl mb-2">⚠️</div>
+      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <button @click="loadShipments" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
+    </div>
+
     <!-- Empty State -->
     <div v-else-if="filteredShipments.length === 0" class="bg-white rounded-2xl p-12 text-center border border-slate-200">
       <i class="fa-solid fa-truck text-4xl text-slate-300 mb-2"></i>
@@ -346,9 +392,9 @@ onMounted(() => {
             </div>
             <span
               class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
-              :class="s.status === 'SHIPPED' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'"
+              :class="statusMeta(s.status).cls"
             >
-              {{ s.status === 'SHIPPED' ? '● 출고 완료' : '○ 출고 대기' }}
+              {{ statusMeta(s.status).label }}
             </span>
           </div>
 
@@ -372,7 +418,7 @@ onMounted(() => {
               </div>
             </div>
             <p class="text-slate-600 text-[11px]">
-              [{{ s.shipping_postal_code || '00000' }}] {{ s.shipping_address_line1 }} {{ s.shipping_address_line2 || '' }}
+              [{{ s.shipping_postal_code || '우편번호 미기재' }}] {{ s.shipping_address_line1 }} {{ s.shipping_address_line2 || '' }}
             </p>
             <p v-if="s.shipping_memo" class="text-[10px] text-indigo-700 font-semibold">
               요청사항: {{ s.shipping_memo }}
@@ -462,7 +508,7 @@ onMounted(() => {
               </td>
               <td class="py-3 px-3 text-slate-600 max-w-xs">
                 <div class="flex items-center gap-1.5">
-                  <span class="truncate">[{{ s.shipping_postal_code || '00000' }}] {{ s.shipping_address_line1 }} {{ s.shipping_address_line2 || '' }}</span>
+                  <span class="truncate">[{{ s.shipping_postal_code || '우편번호 미기재' }}] {{ s.shipping_address_line1 }} {{ s.shipping_address_line2 || '' }}</span>
                   <button
                     @click="copyAddress(s)"
                     title="주소 복사"
@@ -497,9 +543,9 @@ onMounted(() => {
               <td class="py-3 px-3">
                 <span
                   class="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
-                  :class="s.status === 'SHIPPED' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'"
+                  :class="statusMeta(s.status).cls"
                 >
-                  {{ s.status === 'SHIPPED' ? '출고완료' : '결제확인' }}
+                  {{ statusMeta(s.status).label }}
                 </span>
               </td>
               <td class="py-3 px-3 text-right">
@@ -541,8 +587,9 @@ onMounted(() => {
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">
-              운송장 번호 입력 (한 줄에 하나씩 또는 비워두면 자동 발번)
+              운송장 번호 입력 (선택 {{ selectedIds.length }}건과 같은 수, 한 줄에 하나씩)
             </label>
+            <div v-if="bulkError" role="alert" class="mb-2 p-2.5 rounded-lg bg-red-50 text-red-700 font-bold text-[11px]">{{ bulkError }}</div>
             <textarea
               v-model="bulkTrackingInput"
               rows="5"
@@ -550,7 +597,7 @@ onMounted(() => {
               class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
             ></textarea>
             <p class="text-[11px] text-slate-400 mt-1">
-              * 입력하지 않은 주문은 시스템 일련번호로 자동 출고 등록됩니다.
+              * 실제 택배사 운송장 번호를 입력해야 합니다. 수가 맞지 않으면 출고되지 않습니다.
             </p>
           </div>
         </div>
@@ -610,7 +657,7 @@ onMounted(() => {
             <div>
               <p class="font-bold text-slate-500 text-[10px] uppercase">배송지 주소</p>
               <p class="text-slate-800 mt-0.5">
-                [{{ packingSlipOrder.shipping_postal_code || '00000' }}] {{ packingSlipOrder.shipping_address_line1 }} {{ packingSlipOrder.shipping_address_line2 || '' }}
+                [{{ packingSlipOrder.shipping_postal_code || '우편번호 미기재' }}] {{ packingSlipOrder.shipping_address_line1 }} {{ packingSlipOrder.shipping_address_line2 || '' }}
               </p>
               <p v-if="packingSlipOrder.shipping_memo" class="text-indigo-600 font-semibold mt-1">
                 요청사항: {{ packingSlipOrder.shipping_memo }}

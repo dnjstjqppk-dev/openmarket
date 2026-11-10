@@ -227,7 +227,10 @@ await t.test('P0-02 UI copy matches the approval-gated, capped policy', async ()
   const checkout = fs.readFileSync('apps/storefront/src/views/CheckoutView.vue', 'utf8');
   assert.ok(checkout.includes('20%까지'), 'checkout states the credit cap');
   const partner = fs.readFileSync('apps/cloudflare-gateway/src/routes/partner.js', 'utf8');
-  assert.equal(partner.split('price_updated_at = CURRENT_TIMESTAMP').length - 1, 2, 'both price PUTs stamp the 24h clock');
+  // T06: each price PUT stamps in scoped-SKU form (WHERE id) and bulk form
+  // (WHERE product_id), so the 24h P0-01 clock is preserved per SKU.
+  assert.equal(partner.split('price_updated_at = CURRENT_TIMESTAMP').length - 1, 4, 'both price PUTs stamp the 24h clock in scoped and bulk form');
+  assert.ok(partner.includes('price_updated_at = CURRENT_TIMESTAMP WHERE id = ?'), 'scoped SKU update stamps only that SKU');
   const bidding = fs.readFileSync('apps/cloudflare-gateway/src/routes/bidding-m2c.js', 'utf8');
   assert.ok(bidding.includes('price_updated_at = CURRENT_TIMESTAMP'), 'bidding award stamps the 24h clock');
 });

@@ -134,7 +134,7 @@ await t.test('S14 seller cannot ship another seller\'s sub-order', async () => {
   const o = (await S.checkout(cust, [{ sku_id: S.mpSkus[0].id, quantity: 1 }])).json;
   await S.pay(cust, o);
   const sub = S.one('SELECT id FROM sub_orders WHERE parent_order_id = ?', o.order_id);
-  const r = await S.call(`/api/v1/partner/orders/${sub.id}/shipment`, { method: 'PUT', token: pt1, body: { tracking_number: 'TRK12345678' } });
+  const r = await S.call(`/api/v1/partner/orders/${sub.id}/shipment`, { method: 'PUT', token: pt1, body: { carrier: 'CJ대한통운', tracking_number: 'TRK12345678' } });
   assert.equal(r.status, 409);
   assert.equal(S.one('SELECT status FROM sub_orders WHERE id = ?', sub.id).status, 'PAYMENT_CONFIRMED');
 });
@@ -338,7 +338,7 @@ await t.test('I12 partial cancel of one seller in a mixed order refunds exactly 
 });
 await t.test('I13 seller cannot ship a cancelled sub-order', async () => {
   const mp = I.one("SELECT id FROM sub_orders WHERE parent_order_id = ? AND sales_model = 'MARKETPLACE'", mixed.order_id);
-  assert.equal((await I.call(`/api/v1/partner/orders/${mp.id}/shipment`, { method: 'PUT', token: p2, body: { tracking_number: 'TRK99998888' } })).status, 409);
+  assert.equal((await I.call(`/api/v1/partner/orders/${mp.id}/shipment`, { method: 'PUT', token: p2, body: { carrier: 'CJ대한통운', tracking_number: 'TRK99998888' } })).status, 409);
 });
 await t.test('I14 purchase confirm only after delivery; reward credited once', async () => {
   const o = (await I.checkout(c1, [{ sku_id: m0.id, quantity: 1 }])).json;

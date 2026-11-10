@@ -99,9 +99,13 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (csEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(csEmail)) throw bad('INVALID_EMAIL', '고객센터 이메일 형식이 올바르지 않습니다.');
     if (b.representative_name && b.representative_name !== partner.representative_name) throw conflict('REPRESENTATIVE_LOCKED', '대표자명 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.');
     if (b.mail_order_reg_number && b.mail_order_reg_number !== partner.mail_order_reg_number) throw conflict('MAIL_ORDER_LOCKED', '통신판매업 신고번호 변경은 재심사가 필요합니다. 고객센터로 요청해 주세요.');
+    // T10: unknown cycle values are a 400, never a silent keep of the old value.
+    if (b.settlement_cycle !== undefined && !['WEEKLY', 'BIWEEKLY', 'MONTHLY'].includes(b.settlement_cycle)) {
+      throw bad('INVALID_CYCLE', '정산 주기는 WEEKLY, BIWEEKLY, MONTHLY 중 하나여야 합니다.');
+    }
     const st = [env.DB.prepare(
       `UPDATE partners SET settlement_cycle = ?, return_shipping_address = ?, customer_service_phone = ?, business_address = ?, cs_email = ?, base_shipping_fee = ?, free_shipping_threshold = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).bind(['WEEKLY', 'BIWEEKLY', 'MONTHLY'].includes(b.settlement_cycle) ? b.settlement_cycle : partner.settlement_cycle,
+    ).bind(b.settlement_cycle !== undefined ? b.settlement_cycle : partner.settlement_cycle,
       b.return_shipping_address !== undefined ? str(b.return_shipping_address, { max: 200 }) : partner.return_shipping_address,
       b.customer_service_phone !== undefined ? str(b.customer_service_phone, { max: 30 }) : partner.customer_service_phone, businessAddr, csEmail, fee, threshold, partnerId)];
     if (b.return_shipping_fee !== undefined) {
@@ -261,11 +265,28 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (!product) throw notFound('상품을 찾을 수 없거나 권한이 없습니다.');
     const { sale, orig } = priceFields(b, { sale: product.lowest_sale_price, orig: product.lowest_original_price });
     if (prodM[2] === 'price') {
+      // T06: with sku_id only that SKU moves (and only its price clock); the
+      // product floor is recomputed as the MIN over SKUs. Without sku_id the
+      // call is an explicit all-SKU bulk set.
+      if (b.sku_id) {
+        const sku = await env.DB.prepare(
+          `SELECT s.id, s.sale_price, s.original_price FROM product_skus s JOIN products p ON p.id = s.product_id
+           WHERE s.id = ? AND s.product_id = ? AND p.partner_id = ?`
+        ).bind(b.sku_id, product.id, partnerId).first();
+        if (!sku) throw notFound('옵션을 찾을 수 없거나 권한이 없습니다.');
+        const scoped = priceFields(b, { sale: sku.sale_price, orig: sku.original_price });
+        await env.DB.batch([
+          env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(scoped.sale, scoped.orig, sku.id),
+          env.DB.prepare(`UPDATE products SET lowest_sale_price = (SELECT MIN(sale_price) FROM product_skus WHERE product_id = ?),
+            lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id)
+        ]);
+        return json(corsHeaders, { success: true, product_id: product.id, sku_id: sku.id, sale_price: scoped.sale, original_price: scoped.orig, scope: 'SKU' });
+      }
       await env.DB.batch([
         env.DB.prepare('UPDATE products SET lowest_sale_price = ?, lowest_original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(sale, orig, product.id),
         env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
       ]);
-      return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig });
+      return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig, scope: 'ALL_SKUS' });
     }
     const title = b.title !== undefined ? str(b.title, { field: '상품명', max: 200, required: true }) : product.title;
     const custody = b.custody_type !== undefined ? str(b.custody_type, { max: 20 }) : product.custody_type;
@@ -281,6 +302,22 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const legalChanged = noticeUpd !== product.notice_info_json || kcUpd !== product.kc_certified || kcNumUpd !== product.kc_cert_number;
     const contentChanged = descChanged || title !== product.title || (b.thumbnail_url && b.thumbnail_url !== product.thumbnail_url) || legalChanged;
     const catId = b.category_id || b.category_slug ? await resolveCategory(env, b) : product.category_id;
+    // T06: sku_id scopes the price part to one SKU (floor recomputed as MIN after).
+    let scopedSku = null;
+    if (b.sku_id) {
+      scopedSku = await env.DB.prepare(
+        `SELECT s.id FROM product_skus s JOIN products p ON p.id = s.product_id
+         WHERE s.id = ? AND s.product_id = ? AND p.partner_id = ?`
+      ).bind(b.sku_id, product.id, partnerId).first();
+      if (!scopedSku) throw notFound('옵션을 찾을 수 없거나 권한이 없습니다.');
+    }
+    const skuStmts = scopedSku ? [
+      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(sale, orig, scopedSku.id),
+      env.DB.prepare(`UPDATE products SET lowest_sale_price = (SELECT MIN(sale_price) FROM product_skus WHERE product_id = ?),
+        lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id)
+    ] : [
+      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+    ];
     await env.DB.batch([
       env.DB.prepare(
         `UPDATE products SET title = ?, description_html = ?, thumbnail_url = ?, category_id = ?, lowest_original_price = ?, lowest_sale_price = ?,
@@ -292,7 +329,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       ).bind(title, b.description_html !== undefined ? sanitizeHtml(str(b.description_html, { max: 200000 })) : product.description_html,
         b.thumbnail_url || product.thumbnail_url, catId, orig, sale, b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
         custody, supply, brand, noticeUpd, kcUpd, kcNumUpd, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
-        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+      ...skuStmts
     ]);
     return json(corsHeaders, {
       success: true, message: contentChanged ? '상세 내용이 변경되어 재심사 후 노출됩니다.' : '상품 정보가 수정되었습니다.',
@@ -335,7 +372,9 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const results = [];
     for (const s of list) {
       try {
-        const ok = await ship(String(s.sub_order_id || ''), str(s.carrier || s.carrier_code, { max: 40 }) || 'CJ대한통운', String(s.tracking_number || '').trim());
+        const itemCarrier = str(s.carrier || s.carrier_code, { max: 40 });
+        if (!itemCarrier) throw bad('CARRIER_REQUIRED', '택배사를 선택해 주세요.');
+        const ok = await ship(String(s.sub_order_id || ''), itemCarrier, String(s.tracking_number || '').trim());
         results.push({ sub_order_id: s.sub_order_id, ok, error: ok ? undefined : '출고 가능한 상태가 아니거나 본인 주문이 아닙니다.' });
       } catch (e) {
         results.push({ sub_order_id: s.sub_order_id, ok: false, error: e.message });
@@ -348,7 +387,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   const shipM = p.match(/^\/api\/v1\/partner\/orders\/([^/]+)\/shipment$/);
   if (shipM && (request.method === 'PUT' || request.method === 'POST')) {
     const b = await readJson(request);
-    const carrier = str(b.carrier || b.carrier_code, { max: 40 }) || 'CJ대한통운';
+    // T02: no invented carrier — the seller must pick the real one.
+    const carrier = str(b.carrier || b.carrier_code, { field: '택배사', max: 40, required: true });
     const tracking = String(b.tracking_number || '').trim();
     const ok = await ship(shipM[1], carrier, tracking);
     if (!ok) throw conflict('NOT_SHIPPABLE', '결제 완료(출고 대기) 상태의 본인 주문만 출고 처리할 수 있습니다.');

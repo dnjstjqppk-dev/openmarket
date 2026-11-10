@@ -167,6 +167,94 @@ async function handleVerify(credId: string) {
   }
 }
 
+async function openDeployModal() {
+  errorMsg.value = '';
+  successMsg.value = '';
+  deploySelected.value = [];
+  deploySalePrice.value = null;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/partner/products`, { headers: getPartnerHeaders() });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '상품 목록 조회에 실패했습니다.');
+    const seen = new Set<string>();
+    deployProducts.value = (data.data || []).filter((p: any) => {
+      if (!p.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    }).map((p: any) => ({ id: p.id, title: p.title }));
+    deployChannelId.value = channels.value[0]?.id || '';
+    showDeployModal.value = true;
+  } catch (err: any) {
+    errorMsg.value = err.message || '상품 목록 조회 중 오류 발생';
+  }
+}
+
+async function handleDeploy() {
+  if (deploySelected.value.length === 0) {
+    errorMsg.value = '배포할 상품을 1개 이상 선택해 주세요.';
+    return;
+  }
+  if (!deployChannelId.value) {
+    errorMsg.value = '배포할 판매채널을 선택해 주세요.';
+    return;
+  }
+  if (!deployBrand.value.trim() || !deployDeliveryCompany.value.trim() || !deployCategoryId.value.trim()) {
+    errorMsg.value = '브랜드, 배송 택배사, 채널 카테고리는 필수 입력입니다.';
+    return;
+  }
+  isDeploying.value = true;
+  errorMsg.value = '';
+  const ok: string[] = [];
+  const failed: string[] = [];
+  let saw501 = false;
+  let sawSim = false;
+  try {
+    for (const pid of deploySelected.value) {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/channels/listings/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
+          body: JSON.stringify({
+            sales_channel_id: deployChannelId.value,
+            product_id: pid,
+            ...(deploySalePrice.value ? { sale_price: Number(deploySalePrice.value) } : {}),
+            brand: deployBrand.value.trim(),
+            delivery_company: deployDeliveryCompany.value.trim(),
+            external_category_id: deployCategoryId.value.trim(),
+            delivery_fee_type: deployFeeType.value,
+            ...(deployFee.value !== null ? { delivery_fee: Number(deployFee.value) } : {}),
+            ...(deployThreshold.value !== null ? { free_shipping_threshold: Number(deployThreshold.value) } : {})
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 501) {
+          saw501 = true;
+          failed.push(`${pid}: ${data.error || '외부 API 미연동'}`);
+          continue;
+        }
+        if (!res.ok || (data.simulated === false && data.success === false)) throw new Error(data.error || data.message || `배포 실패 (${res.status})`);
+        if (data.simulated) sawSim = true;
+        ok.push(pid);
+      } catch (err: any) {
+        failed.push(`${pid}: ${err.message || '배포 실패'}`);
+      }
+    }
+    if (failed.length === 0) {
+      successMsg.value = sawSim
+        ? `시뮬레이션으로 ${ok.length}건 기록되었습니다. 외부 API 연동 전에는 실제 채널에 등록되지 않습니다.`
+        : `${ok.length}건이 채널에 배포되었습니다.`;
+      showDeployModal.value = false;
+    } else {
+      errorMsg.value = saw501 && ok.length === 0
+        ? `외부 채널 API가 아직 연동되지 않아 배포할 수 없습니다: ${failed.join('; ')}`
+        : `${ok.length}건 성공, ${failed.length}건 실패: ${failed.join('; ')}`;
+    }
+    loadData();
+  } finally {
+    isDeploying.value = false;
+  }
+}
+
 async function handleSyncOrders(channelId: string) {
   try {
     const res = await fetch(`${API_BASE}/api/v1/channels/orders/sync`, {
@@ -198,6 +286,22 @@ const carriers = ref<{ code: string; name: string }[]>([]);
 const fulfillCarrierCode = ref('');
 const fulfillTrackingNumber = ref('');
 const isFulfilling = ref(false);
+
+// T14: deploy-to-channel modal state (multi-product deploy).
+const showDeployModal = ref(false);
+const deployProducts = ref<{ id: string; title: string }[]>([]);
+const deploySelected = ref<string[]>([]);
+const deployChannelId = ref('');
+const deploySalePrice = ref<number | null>(null);
+const deployBrand = ref('');
+const deployDeliveryCompany = ref('');
+const deployCategoryId = ref('');
+const deployFeeType = ref('CHARGE');
+const deployFee = ref<number | null>(null);
+const deployThreshold = ref<number | null>(null);
+const isDeploying = ref(false);
+const hasCredentialFor = (platformName: string) =>
+  credentials.value.some((c) => c.platform_name === platformName);
 
 async function openDispatchModal(orderId: string) {
   dispatchOrderId.value = orderId;
@@ -426,7 +530,8 @@ onMounted(() => {
             >
               <i class="fa-solid fa-rotate"></i> 주문 수집 실행
             </button>
-            <span class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-1 rounded">연동 대기중</span>
+            <span v-if="hasCredentialFor(c.platform_name)" class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-1 rounded">API 키 등록됨</span>
+            <span v-else class="text-xs bg-slate-100 text-slate-500 font-semibold px-2 py-1 rounded">API 키 미등록</span>
           </div>
         </div>
       </div>
@@ -439,6 +544,13 @@ onMounted(() => {
           <h2 class="text-base font-bold text-slate-900">외부 오픈마켓 등록 상품 내역</h2>
           <p class="text-xs text-slate-500">네이버/쿠팡/아마존 등으로 배포된 리스팅 상태를 조회합니다.</p>
         </div>
+        <button
+          @click="openDeployModal"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
+        >
+          <i class="fa-solid fa-share-nodes"></i>
+          <span>새 상품 배포</span>
+        </button>
       </div>
 
       <div class="overflow-x-auto">
@@ -455,7 +567,7 @@ onMounted(() => {
           <tbody class="divide-y divide-slate-100">
             <tr v-if="listings.length === 0">
               <td colspan="5" class="px-3 py-8 text-center text-slate-400">
-                아직 외부 오픈마켓에 등록된 상품이 없습니다. 상품 관리 메뉴에서 "외부 채널 배포"를 실행해 보세요.
+                아직 외부 오픈마켓에 등록된 상품이 없습니다. 위 "새 상품 배포" 버튼으로 배포해 보세요.
               </td>
             </tr>
             <tr v-for="l in listings" :key="l.id" class="hover:bg-slate-50">
@@ -731,6 +843,79 @@ onMounted(() => {
         <div class="flex justify-end gap-2 pt-2 border-t">
           <button @click="showFulfillModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
           <button @click="handleFulfill" :disabled="isFulfilling" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isFulfilling ? '전송 중...' : '송장 전송' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- T14: deploy-to-channel modal (multi-product) -->
+    <div v-if="showDeployModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="font-bold text-slate-900">외부 채널 상품 배포 (다건 가능)</h3>
+          <button @click="showDeployModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">배포 채널</label>
+          <select v-model="deployChannelId" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+            <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.channel_name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">배포 상품 ({{ deploySelected.length }}개 선택)</label>
+          <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+            <label v-for="p in deployProducts" :key="p.id" class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50">
+              <input type="checkbox" :value="p.id" v-model="deploySelected" class="rounded accent-indigo-600" />
+              <span class="font-medium text-slate-800 truncate">{{ p.title }}</span>
+            </label>
+            <p v-if="deployProducts.length === 0" class="px-3 py-4 text-center text-slate-400 text-xs">배포 가능한 상품이 없습니다.</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">채널 판매가 (선택)</label>
+            <input v-model.number="deploySalePrice" type="number" min="100" step="10" placeholder="미입력 시 올모아 판매가"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">브랜드 (필수)</label>
+            <input v-model="deployBrand" type="text" maxlength="100" placeholder="예: 자사 브랜드"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">배송 택배사 코드 (필수)</label>
+            <input v-model="deployDeliveryCompany" type="text" maxlength="20" placeholder="예: CJGLS"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">채널 카테고리 ID (필수)</label>
+            <input v-model="deployCategoryId" type="text" maxlength="20" placeholder="채널 카테고리 번호"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">배송비 유형</label>
+            <select v-model="deployFeeType" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white">
+              <option value="CHARGE">유료 배송</option>
+              <option value="FREE">무료 배송</option>
+              <option value="CONDITIONAL_FREE">조건부 무료</option>
+            </select>
+          </div>
+          <div v-if="deployFeeType !== 'FREE'">
+            <label class="block text-xs font-bold text-slate-700 mb-1">배송비 (원)</label>
+            <input v-model.number="deployFee" type="number" min="0" step="100" placeholder="예: 3000"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+          </div>
+          <div v-if="deployFeeType === 'CONDITIONAL_FREE'">
+            <label class="block text-xs font-bold text-slate-700 mb-1">무료배송 기준금액 (원)</label>
+            <input v-model.number="deployThreshold" type="number" min="1" step="1000" placeholder="예: 30000"
+              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400">외부 채널 API가 연동되지 않은 플랫폼은 명확한 안내와 함께 배포가 거부됩니다. 연동 전 배포분은 시뮬레이션으로만 기록됩니다.</p>
+        <div class="flex justify-end gap-2 pt-2 border-t">
+          <button @click="showDeployModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleDeploy" :disabled="isDeploying || deploySelected.length === 0" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDeploying ? '배포 중...' : `배포 실행 (${deploySelected.length}건)` }}</button>
         </div>
       </div>
     </div>

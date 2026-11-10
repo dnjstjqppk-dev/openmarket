@@ -49,6 +49,9 @@ const loadedBank = ref({ bank_code: '', bank_account_number: '', bank_account_ho
 const loading = ref(true);
 const isSaving = ref(false);
 const toastMsg = ref('');
+const toastErr = ref(false);
+// T11: a failed load blocks the form (defaults must never overwrite the server).
+const loadError = ref('');
 
 const bankList = [
   { code: '004', name: 'KB국민은행' },
@@ -63,17 +66,19 @@ const bankList = [
 
 async function loadProfile() {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await fetch(`${API_BASE}/api/v1/partner/profile`, {
       headers: getPartnerHeaders()
     });
-    const json = await res.json();
-    if (json.success && json.data) {
-      profile.value = json.data;
-      loadedBank.value = { bank_code: json.data.bank_code, bank_account_number: json.data.bank_account_number, bank_account_holder: json.data.bank_account_holder };
-    }
-  } catch (e) {
-    console.error('Failed to load partner profile:', e);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `설정 조회 실패 (${res.status})`);
+    profile.value = json.data;
+    // T10: legacy underscore value reads as the canonical enum.
+    if ((profile.value.settlement_cycle as string) === 'BI_WEEKLY') profile.value.settlement_cycle = 'BIWEEKLY';
+    loadedBank.value = { bank_code: json.data.bank_code, bank_account_number: json.data.bank_account_number, bank_account_holder: json.data.bank_account_holder };
+  } catch (e: any) {
+    loadError.value = e?.message || '판매자 설정을 불러오지 못했습니다. 다시 시도해 주세요.';
   } finally {
     loading.value = false;
   }
@@ -101,14 +106,15 @@ async function saveProfile() {
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify(settingsPayload())
     });
-    const json = await res.json();
-    if (json.success) {
-      toastMsg.value = `✓ ${json.message || '설정이 저장되었습니다.'}`;
-      await loadProfile();
-      setTimeout(() => { toastMsg.value = ''; }, 3500);
-    }
-  } catch (e) {
-    console.error(e);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `저장 실패 (${res.status})`);
+    toastErr.value = false;
+    toastMsg.value = `✓ ${json.message || '설정이 저장되었습니다.'}`;
+    await loadProfile();
+    setTimeout(() => { toastMsg.value = ''; }, 3500);
+  } catch (e: any) {
+    toastErr.value = true;
+    toastMsg.value = `저장 실패 — ${e?.message || '네트워크 오류'}`;
   } finally {
     isSaving.value = false;
   }
@@ -128,14 +134,21 @@ onMounted(loadProfile);
       </p>
     </div>
 
-    <div v-if="toastMsg" class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 flex items-center gap-2 shadow-xs">
-      <i class="fa-solid fa-circle-check"></i>
+    <div v-if="toastMsg" role="status" class="p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-xs" :class="toastErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'">
+      <i class="fa-solid" :class="toastErr ? 'fa-circle-exclamation' : 'fa-circle-check'"></i>
       <span>{{ toastMsg }}</span>
     </div>
 
     <div v-if="loading" class="p-16 text-center text-slate-400">
       <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-500"></i>
       <p class="text-xs font-bold">판매자 설정을 불러오는 중입니다...</p>
+    </div>
+
+    <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200">
+      <div class="text-3xl mb-2">⚠️</div>
+      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <p class="text-xs text-slate-400 mt-1">불러오지 못한 상태에서는 저장할 수 없습니다.</p>
+      <button @click="loadProfile" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
     </div>
 
     <form v-else @submit.prevent="saveProfile" class="space-y-6">
@@ -256,7 +269,7 @@ onMounted(loadProfile);
               class="w-full sm:w-64 border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
             >
               <option value="WEEKLY">주간 정산 (매주 수요일 지급)</option>
-              <option value="BI_WEEKLY">격주 정산 (1일/15일 지급)</option>
+              <option value="BIWEEKLY">격주 정산 (1일/15일 지급)</option>
               <option value="MONTHLY">월간 정산 (매월 10일 익월 지급)</option>
             </select>
             <p class="text-[11px] text-slate-400 mt-1">* 구매확정된 주문 금액에서 플랫폼 수수료 차감 후 자동 이체됩니다.</p>

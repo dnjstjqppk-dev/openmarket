@@ -164,7 +164,7 @@ await t.test('16 carriers list, owner tracking, signed carrier milestone webhook
   const c = await g.call('/api/v1/orders/checkout', { method: 'POST', token: cust, body: { ...ADDR, items: [{ sku_id: mpSku.id, quantity: 1 }] } });
   await g.call('/api/v1/payments/confirm', { method: 'POST', token: cust, body: { order_id: c.json.order_id, payment_key: 'sandbox_e2e_trk00001', amount: c.json.total_pay_amount } });
   const sub = one('SELECT id FROM sub_orders WHERE parent_order_id = ?', c.json.order_id);
-  await g.call(`/api/v1/partner/orders/${sub.id}/shipment`, { method: 'PUT', token: pt2, body: { tracking_number: 'TRK55556666' } });
+  await g.call(`/api/v1/partner/orders/${sub.id}/shipment`, { method: 'PUT', token: pt2, body: { carrier: 'CJ대한통운', tracking_number: 'TRK55556666' } });
   assert.equal((await g.call(`/api/v1/logistics/tracking/${sub.id}`, { token: cust })).status, 200);
   const done = one("SELECT id FROM sub_orders WHERE parent_order_id = ? AND sales_model = 'MARKETPLACE'", order.order_id);
   const late = await g.call('/api/v1/logistics/milestone-webhook', { method: 'POST', headers: { 'X-Carrier-Webhook-Secret': env.CARRIER_WEBHOOK_SECRET }, body: { sub_order_id: done.id, milestone: 'IN_TRANSIT_AIR' } });

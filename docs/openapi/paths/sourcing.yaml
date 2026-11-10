@@ -78,11 +78,42 @@ paths:
         '403':
           description: Partner not approved
 
+  /api/v1/imports/{id}:
+    get:
+      summary: T15. Read one import job with its crawl preview
+      tags: [Sourcing]
+      description: Approved-partner route. Returns the job row plus the parsed preview so a bulk/history row can be loaded into the editor and published.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job row with preview
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved
+        '404':
+          description: Unknown import job id
+
   /api/v1/imports/{id}/ai-enhance:
     post:
       summary: AI-localize an import job preview into Korean
       tags: [Sourcing]
-      description: Approved-partner route gated by the ai_translation feature flag. Translates the job preview title/summary (VERTEX_AI when a key is configured, else the RULE_BASED_LOCALIZER), stores an ai_product_enhancements row, and rewrites the job preview.
+      description: Approved-partner route gated by the ai_translation feature flag. Translates the job preview title with the RULE_BASED_LOCALIZER dictionary; the external-AI step is not wired, so live_external_api_status is always SKIPPED and the seller writes the description. Stores an ai_product_enhancements row and rewrites the job preview.
       parameters:
         - name: id
           in: path

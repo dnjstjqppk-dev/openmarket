@@ -242,11 +242,11 @@ onMounted(async () => {
               <td class="py-3 px-4 font-medium text-slate-800">{{ order.recipient_name }}</td>
               <td class="py-3 px-4 font-semibold text-slate-900">₩{{ order.total_amount.toLocaleString() }}</td>
               <td class="py-3 px-4">
-                <span 
+                <span
                   class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                  :class="order.status === 'SHIPPED' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'"
+                  :class="order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : order.status === 'SHIPPED' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'"
                 >
-                  {{ order.status === 'SHIPPED' ? '출고완료' : '결제확인' }}
+                  {{ order.status === 'DELIVERED' ? '배송 완료' : order.status === 'SHIPPED' ? '출고 완료' : '출고 대기' }}
                 </span>
               </td>
               <td class="py-3 px-4 text-right">

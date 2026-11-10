@@ -356,8 +356,8 @@ await t.test('NEW-16 /health exposes the applied schema version', async () => {
   const g = await boot();
   const r = await g.call('/health');
   assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.schemaVersion, 'd1_45_tax_invoice_periods_and_schema_tracking.sql');
-  assert.ok(Number(r.json.migrationsApplied) >= 46);
+  assert.equal(r.json.schemaVersion, 'd1_46_settlement_cycle_normalization.sql');
+  assert.ok(Number(r.json.migrationsApplied) >= 47);
   assert.equal(g.one("SELECT COUNT(*) AS c FROM schema_migrations WHERE version = 'd1_42_legal_compliance_fields.sql'").c, 1);
 });
 

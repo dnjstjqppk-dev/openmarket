@@ -26,33 +26,34 @@ const negoNotes = ref('')
 const submittingNego = ref(false)
 
 const won = (n: number) => `${Number(n || 0).toLocaleString('ko-KR')}원`
+// T13: per-source load failures are shown with retry (not an empty tab).
+const loadErrors = ref<string[]>([])
 
 async function loadData() {
   loading.value = true
-  try {
-    const [cRes, bRes, nRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/bidding/campaigns`, { headers: getPartnerHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/bidding/my-bids`, { headers: getPartnerHeaders() }).catch(() => null),
-      fetch(`${API_BASE_URL}/api/v1/pricing/negotiations`, { headers: getPartnerHeaders() }).catch(() => null)
-    ])
-
-    const cJson = await cRes.json()
-    if (cJson.success) campaigns.value = cJson.data || []
-
-    if (bRes && bRes.ok) {
-      const bJson = await bRes.json()
-      if (bJson.success) myBids.value = bJson.data || []
+  loadErrors.value = []
+  const failures: string[] = []
+  const get = async (label: string, url: string) => {
+    try {
+      const res = await fetch(url, { headers: getPartnerHeaders() })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.success === false) throw new Error(json.error || `HTTP ${res.status}`)
+      return json.data || []
+    } catch (e: any) {
+      failures.push(`${label}: ${e?.message || '불러오기 실패'}`)
+      return null
     }
-
-    if (nRes && nRes.ok) {
-      const nJson = await nRes.json()
-      if (nJson.success) negotiations.value = nJson.data || []
-    }
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
   }
+  const [c, b, n] = await Promise.all([
+    get('캠페인', `${API_BASE_URL}/api/v1/bidding/campaigns`),
+    get('내 입찰', `${API_BASE_URL}/api/v1/bidding/my-bids`),
+    get('MD 네고', `${API_BASE_URL}/api/v1/pricing/negotiations`)
+  ])
+  if (c !== null) campaigns.value = c
+  if (b !== null) myBids.value = b
+  if (n !== null) negotiations.value = n
+  loadErrors.value = failures
+  loading.value = false
 }
 
 function openBid(c: any) {
@@ -173,6 +174,14 @@ onMounted(loadData)
 
     <div v-if="loading" class="p-12 text-center text-gray-400 font-bold animate-pulse">
       데이터를 불러오는 중입니다...
+    </div>
+
+    <div v-if="!loading && loadErrors.length" role="alert" class="p-4 rounded-xl bg-red-50 border border-red-200 text-xs">
+      <p class="font-bold text-red-700">일부 데이터를 불러오지 못했습니다.</p>
+      <ul class="mt-1 list-disc list-inside text-red-600">
+        <li v-for="(f, i) in loadErrors" :key="i">{{ f }}</li>
+      </ul>
+      <button @click="loadData" class="mt-2 px-3 py-1.5 rounded-lg bg-slate-900 text-white font-bold cursor-pointer">다시 불러오기</button>
     </div>
 
     <!-- Tab 1: Campaigns List -->

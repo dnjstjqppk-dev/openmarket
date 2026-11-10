@@ -99,6 +99,20 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     });
   }
 
+  // 2b. T15: single import job with its preview (GET /api/v1/imports/:id).
+  // Powers per-row "불러오기" so bulk/history jobs are not dead ends.
+  const jobDetailM = p.match(/^\/api\/v1\/imports\/([^/]+)$/);
+  if (jobDetailM && request.method === 'GET') {
+    const caller = await requireApprovedPartner(request, env);
+    const job = await env.DB.prepare(
+      'SELECT * FROM product_import_jobs WHERE id = ? AND partner_id = ?'
+    ).bind(jobDetailM[1], caller.partner.id).first();
+    if (!job) throw notFound('수집 작업을 찾을 수 없습니다.');
+    let preview = {};
+    try { preview = JSON.parse(job.preview_data_json || job.extracted_data_json || '{}'); } catch { preview = {}; }
+    return json(corsHeaders, { success: true, data: { ...job, preview } });
+  }
+
   // 3. AI Localization & Enhancement (POST /api/v1/imports/:id/ai-enhance)
   const aiM = p.match(/^\/api\/v1\/imports\/([^/]+)\/ai-enhance$/);
   if (aiM && request.method === 'POST') {

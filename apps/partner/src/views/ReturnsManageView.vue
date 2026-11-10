@@ -38,6 +38,8 @@ const loading = ref(true);
 const selectedTab = ref<'ALL' | 'REQUESTED' | 'APPROVED' | 'REFUNDED' | 'REJECTED'>('ALL');
 const searchQuery = ref('');
 const toast = ref('');
+// T13: load failures are explicit with retry (never an empty list).
+const loadError = ref('');
 
 // Action Modal
 const activeModal = ref(false);
@@ -47,20 +49,20 @@ const sellerNote = ref('');
 const processing = ref(false);
 const faultChoice = ref<'' | 'CUSTOMER' | 'SELLER'>('');
 const returnless = ref(false);
-const reship = ref({ carrier: 'CJ대한통운', tracking_number: '', return_received: true });
+const reship = ref({ carrier: '', tracking_number: '', return_received: true });
 
 const loadReturns = async () => {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await fetch(`${API_BASE}/api/v1/partner/returns`, {
       headers: getPartnerHeaders()
     });
-    const json = await res.json();
-    if (json.success && Array.isArray(json.data)) {
-      returns.value = json.data;
-    }
-  } catch (e) {
-    console.error('Failed to load partner returns:', e);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `반품 조회 실패 (${res.status})`);
+    returns.value = Array.isArray(json.data) ? json.data : [];
+  } catch (e: any) {
+    loadError.value = e?.message || '반품 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
   } finally {
     loading.value = false;
   }
@@ -95,7 +97,7 @@ const openStatusModal = (item: ReturnItem, status: 'APPROVED' | 'REJECTED' | 'RE
   sellerNote.value = '';
   faultChoice.value = '';
   returnless.value = false;
-  reship.value = { carrier: 'CJ대한통운', tracking_number: '', return_received: true };
+  reship.value = { carrier: '', tracking_number: '', return_received: true };
   activeModal.value = true;
 };
 // Changing the customer's reason to "customer fault" requires a written reason (the buyer can dispute it).
@@ -266,6 +268,12 @@ onMounted(() => {
         반품 및 클레임 내역을 불러오는 중...
       </div>
 
+      <div v-else-if="loadError" class="p-12 text-center">
+        <div class="text-3xl mb-2">⚠️</div>
+        <p class="font-bold text-red-700 text-xs">{{ loadError }}</p>
+        <button @click="loadReturns" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
+      </div>
+
       <div v-else-if="filteredReturns.length === 0" class="p-12 text-center text-xs text-gray-500">
         <div class="text-3xl mb-2">📦</div>
         <p class="font-bold text-gray-700">해당 조건의 반품·클레임 내역이 없습니다.</p>
@@ -397,7 +405,7 @@ onMounted(() => {
         </div>
 
         <div v-if="targetStatus === 'RESHIP'" class="grid grid-cols-2 gap-2 text-xs">
-          <label class="block"><span class="font-bold text-gray-700">택배사</span><input v-model="reship.carrier" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300" /></label>
+          <label class="block"><span class="font-bold text-gray-700">택배사 (필수)</span><input v-model="reship.carrier" placeholder="예: CJ대한통운" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300" /></label>
           <label class="block"><span class="font-bold text-gray-700">교환품 송장번호</span><input v-model="reship.tracking_number" class="mt-1 w-full h-9 px-2 rounded-lg border border-gray-300 font-mono" /></label>
           <label class="col-span-2 flex items-center gap-2"><input v-model="reship.return_received" type="checkbox" /> 고객이 보낸 원래 상품을 회수했습니다 (재고 복원)</label>
         </div>
@@ -421,7 +429,7 @@ onMounted(() => {
           </button>
           <button
             @click="confirmStatusUpdate"
-            :disabled="processing || ((targetStatus === 'REJECTED' || needsFaultNote) && !sellerNote.trim()) || (targetStatus === 'RESHIP' && !reship.tracking_number.trim())"
+            :disabled="processing || ((targetStatus === 'REJECTED' || needsFaultNote) && !sellerNote.trim()) || (targetStatus === 'RESHIP' && (!reship.tracking_number.trim() || !reship.carrier.trim()))"
             class="px-5 py-2 rounded-xl bg-[#FF5000] hover:bg-[#e04700] text-white font-black text-xs shadow-md disabled:opacity-50"
           >
             {{ processing ? '처리 중...' : '확인 및 적용' }}

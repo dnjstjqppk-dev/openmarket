@@ -64,6 +64,7 @@ interface AiEnhancement {
   bullets: string[];
   provider: string;
   live_external_api_status: string;
+  note: string;
 }
 
 interface BulkResultItem {
@@ -109,8 +110,10 @@ const isLoading = ref(false);
 const isBulkLoading = ref(false);
 const isPublishing = ref(false);
 const isAiEnhancing = ref(false);
+const isRecalling = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
+const historyError = ref('');
 
 // Extracted data
 const result = ref<CrawlResult | null>(null);
@@ -178,16 +181,48 @@ function applySample(sample: typeof samples[0]) {
 }
 
 async function loadHistory() {
+  historyError.value = '';
   try {
     const res = await fetch(`${API_BASE}/api/v1/imports/jobs`, {
       headers: getPartnerHeaders()
     });
-    if (res.ok) {
-      const data = await res.json();
-      jobsHistory.value = data.data || [];
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '수집 이력을 불러오지 못했습니다.');
     }
-  } catch (err) {
-    console.error('Failed to load import jobs history:', err);
+    jobsHistory.value = data.data || [];
+  } catch (err: any) {
+    jobsHistory.value = [];
+    historyError.value = err.message || '수집 이력을 불러오는 중 오류가 발생했습니다.';
+  }
+}
+
+// P1-T15: recall a past analyzed job into the single-item editor so it can
+// be re-edited and published — publishing is no longer limited to a job
+// that was just crawled in this session.
+async function loadJobIntoEditor(jobId: string) {
+  if (isRecalling.value) return;
+  isRecalling.value = true;
+  errorMsg.value = '';
+  successMsg.value = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/imports/${jobId}`, {
+      headers: getPartnerHeaders()
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '수집 결과를 불러오지 못했습니다.');
+    }
+    const preview = data.data?.preview || {};
+    result.value = { job_id: jobId, ...preview } as CrawlResult;
+    editedTitle.value = preview?.product?.title || '';
+    editedSalePrice.value = preview?.pricing?.calculated_sale_price || null;
+    aiInfo.value = null;
+    successMsg.value = `✓ 이전 수집 결과 불러옴 (품질 점수: ${preview?.quality_score ?? '-'}점) — 검수 후 상품 등록을 진행하세요.`;
+  } catch (err: any) {
+    errorMsg.value = err.message || '수집 결과를 불러오는 중 오류가 발생했습니다.';
+  } finally {
+    isRecalling.value = false;
   }
 }
 
@@ -259,7 +294,9 @@ async function handleAiEnhance() {
     if (data.data.enhanced_summary && result.value.product) {
       result.value.product.description_html = data.data.enhanced_summary;
     }
-    successMsg.value = `✨ AI 한국어 번역 및 마케팅 가공 완료! (${data.data.provider})`;
+    // NEW-02 honesty: only dictionary translation is performed; external
+    // GenAI rewriting is not used — never claim "AI 마케팅 가공 완료".
+    successMsg.value = `✔️ 타이틀 사전식 번역 완료 (${data.data.provider}) · 외부 AI 가공 상태: ${data.data.live_external_api_status} — ${data.data.note || '상세설명은 원문 그대로, 판매자 직접 입력 필요'}`;
   } catch (err: any) {
     errorMsg.value = err.message || 'AI 가공 처리 중 오류가 발생했습니다.';
   } finally {
@@ -885,6 +922,12 @@ https://demo-activewear.myshopify.com/products/sample"
         </button>
       </div>
 
+      <div v-if="historyError" class="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-xs font-medium flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ historyError }}</span>
+        <button @click="loadHistory" class="ml-auto font-bold underline hover:text-rose-900 cursor-pointer">다시 시도</button>
+      </div>
+
       <div class="overflow-x-auto">
         <table class="w-full text-xs text-left">
           <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -895,11 +938,12 @@ https://demo-activewear.myshopify.com/products/sample"
               <th class="px-3 py-2.5 text-center">진행 상태</th>
               <th class="px-3 py-2.5">등록 상품명</th>
               <th class="px-3 py-2.5 text-right">수집 일시</th>
+              <th class="px-3 py-2.5 text-center">작업</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-if="jobsHistory.length === 0">
-              <td colspan="6" class="px-3 py-8 text-center text-slate-400">
+              <td colspan="7" class="px-3 py-8 text-center text-slate-400">
                 아직 수집된 상품 이력이 없습니다. 상단에서 URL을 입력해 첫 상품을 수집해 보세요.
               </td>
             </tr>
@@ -937,6 +981,19 @@ https://demo-activewear.myshopify.com/products/sample"
               </td>
               <td class="px-3 py-2.5 text-right text-slate-400 text-[11px]">
                 {{ job.created_at ? new Date(job.created_at).toLocaleDateString() : '-' }}
+              </td>
+              <td class="px-3 py-2.5 text-center font-sans">
+                <span v-if="job.status === 'PUBLISHED'" class="text-emerald-600 font-bold">등록됨</span>
+                <span v-else-if="job.status === 'FAILED'" class="text-rose-500 font-bold">실패</span>
+                <span v-else-if="job.status === 'PENDING'" class="text-slate-400">수집 중</span>
+                <button
+                  v-else
+                  @click="loadJobIntoEditor(job.id)"
+                  :disabled="isRecalling"
+                  class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {{ isRecalling ? '불러오는 중…' : '불러오기' }}
+                </button>
               </td>
             </tr>
           </tbody>

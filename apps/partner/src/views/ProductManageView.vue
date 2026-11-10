@@ -197,9 +197,10 @@ const saveProductChanges = async (p: any) => {
     return res.ok && json.success !== false ? null : (json.error || `요청 실패 (${res.status})`)
   }
   try {
+    // T06: row edits carry the row's sku_id so only that SKU moves.
     const [priceErr, stockErr] = await Promise.all([
-      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/price`, { sale_price: Number(p.editPrice), original_price: Number(p.lowest_original_price) }),
-      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/stock`, { stock_quantity: Number(p.editStock) })
+      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/price`, { sku_id: p.sku_id, sale_price: Number(p.editPrice), original_price: Number(p.lowest_original_price) }),
+      send(`${API_BASE_URL}/api/v1/partner/products/${p.id}/stock`, { sku_id: p.sku_id, stock_quantity: Number(p.editStock) })
     ])
     toast.value = !priceErr && !stockErr
       ? `✓ "${p.title}" 가격(₩${Number(p.editPrice).toLocaleString()}) 및 재고(${p.editStock}) 저장됨`

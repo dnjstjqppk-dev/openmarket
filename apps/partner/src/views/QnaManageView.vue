@@ -22,6 +22,9 @@ const answeringId = ref<string | null>(null);
 const answerText = ref('');
 const isSubmitting = ref(false);
 const toastMsg = ref('');
+const toastErr = ref(false);
+// T12: load failures are explicit with retry (never an empty list).
+const loadError = ref('');
 
 const filteredList = computed(() => {
   if (activeTab.value === 'WAITING') {
@@ -38,16 +41,16 @@ const answeredCount = computed(() => qnaList.value.filter(q => q.status === 'ANS
 
 async function loadQnA() {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await fetch(`${API_BASE}/api/v1/partner/qna`, {
       headers: getPartnerHeaders()
     });
-    const json = await res.json();
-    if (json.success && Array.isArray(json.data)) {
-      qnaList.value = json.data;
-    }
-  } catch (e) {
-    console.error('Failed to load QnA list:', e);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `Q&A 조회 실패 (${res.status})`);
+    qnaList.value = Array.isArray(json.data) ? json.data : [];
+  } catch (e: any) {
+    loadError.value = e?.message || 'Q&A 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
   } finally {
     loading.value = false;
   }
@@ -68,16 +71,17 @@ async function submitAnswer(qnaId: string) {
       headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
       body: JSON.stringify({ answer: answerText.value.trim() })
     });
-    const json = await res.json();
-    if (json.success) {
-      toastMsg.value = '✓ 답변이 등록되어 상품 상세 페이지에 즉시 노출됩니다.';
-      answeringId.value = null;
-      answerText.value = '';
-      await loadQnA();
-      setTimeout(() => { toastMsg.value = ''; }, 3000);
-    }
-  } catch (e) {
-    console.error(e);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) throw new Error(json.error || `답변 등록 실패 (${res.status})`);
+    toastErr.value = false;
+    toastMsg.value = '✓ 답변이 등록되어 상품 상세 페이지에 즉시 노출됩니다.';
+    answeringId.value = null;
+    answerText.value = '';
+    await loadQnA();
+    setTimeout(() => { toastMsg.value = ''; }, 3000);
+  } catch (e: any) {
+    toastErr.value = true;
+    toastMsg.value = `답변 등록 실패 — ${e?.message || '네트워크 오류'}`;
   } finally {
     isSubmitting.value = false;
   }
@@ -133,14 +137,20 @@ onMounted(loadQnA);
       </div>
     </div>
 
-    <div v-if="toastMsg" class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 flex items-center gap-2 shadow-xs">
-      <i class="fa-solid fa-circle-check"></i>
+    <div v-if="toastMsg" role="status" class="p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-xs" :class="toastErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'">
+      <i class="fa-solid" :class="toastErr ? 'fa-circle-exclamation' : 'fa-circle-check'"></i>
       <span>{{ toastMsg }}</span>
     </div>
 
     <div v-if="loading" class="p-16 text-center text-slate-400">
       <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-500"></i>
       <p class="text-xs font-bold">고객 Q&A 문의 내역을 불러오는 중입니다...</p>
+    </div>
+
+    <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200 shadow-xs">
+      <div class="text-3xl mb-2">⚠️</div>
+      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <button @click="loadQnA" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
     </div>
 
     <div v-else-if="filteredList.length === 0" class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs">
