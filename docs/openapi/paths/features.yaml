@@ -205,6 +205,91 @@ paths:
           description: product_id required
         '401':
           description: Missing or expired JWT (UNAUTHENTICATED)
+  /api/v1/cart:
+    get:
+      summary: My cart lines with live SKU prices
+      tags: [Features]
+      description: Customer route (P1-M05). Returns sku_id + quantity lines joined with live sale price, stock and product title/thumbnail. Prices are never stored — the checkout re-prices everything.
+      responses:
+        '200':
+          description: Cart lines with live product data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sku_id:
+                          type: string
+                        quantity:
+                          type: integer
+                        product_id:
+                          type: string
+                        sale_price:
+                          type: integer
+                        stock_quantity:
+                          type: integer
+                        title:
+                          type: string
+                        thumbnail_url:
+                          type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    put:
+      summary: Replace my cart lines (server sync)
+      tags: [Features]
+      description: Customer route (P1-M05). Replace semantics — the full line set overwrites the stored cart. Unknown SKUs fail the whole write with 400 INVALID_SKU (nothing is stored), so the client can show exactly which line failed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [sku_id, quantity]
+                    properties:
+                      sku_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 99
+      responses:
+        '200':
+          description: Stored line set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          description: ITEMS_REQUIRED, SKU_REQUIRED, INVALID_QUANTITY, INVALID_SKU or CART_TOO_LARGE
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
 
   /api/v1/support/faq:
     get:

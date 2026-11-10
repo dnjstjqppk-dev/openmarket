@@ -16,6 +16,13 @@ const shipmentCarrierOptions = [
   '우체국 국제특송 (EMS)',
   '차이냐오 글로벌 (Cainiao)',
   '순풍 익스프레스 (SF Express)',
+  '한진 국제특송',
+  'CJ대한통운',
+  '우체국택배',
+  '한진택배',
+  '롯데택배',
+  '로젠택배',
+  '경동택배',
 ];
 
 class PartnerShipmentView extends StatefulWidget {

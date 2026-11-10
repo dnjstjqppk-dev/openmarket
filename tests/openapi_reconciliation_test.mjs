@@ -126,6 +126,8 @@ const EXPECTED = [
   ['/api/v1/credits', 'GET', 401],
   ['/api/v1/wishlist', 'GET', 401],
   ['/api/v1/wishlist', 'POST', 401],
+  ['/api/v1/cart', 'GET', 401],
+  ['/api/v1/cart', 'PUT', 401],
   ['/api/v1/support/faq', 'GET', 200],
   ['/api/v1/support/inquiries', 'GET', 401],
   ['/api/v1/support/inquiries', 'POST', 401],

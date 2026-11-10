@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import '../models/product.dart';
+import '../models/search.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/responsive.dart';
@@ -21,6 +22,8 @@ class _HomeViewState extends State<HomeView> {
   final ApiService _apiService = ApiService();
   List<Product> _products = [];
   List<Map<String, dynamic>> _banners = [];
+  List<AutocompleteCategory> _categories = [];
+  String? _categorySlug;
   bool _isLoading = true;
 
   @override
@@ -31,16 +34,27 @@ class _HomeViewState extends State<HomeView> {
 
   Future<void> _loadProducts() async {
     final results = await Future.wait([
-      _apiService.fetchProducts(),
+      _apiService.fetchProducts(categorySlug: _categorySlug),
       _apiService.fetchBanners(),
+      // P1-M01: the server's recommended_categories drive the filter chips.
+      ApiService.getAutocomplete(''),
     ]);
     if (mounted) {
       setState(() {
         _products = results[0] as List<Product>;
         _banners = results[1] as List<Map<String, dynamic>>;
+        _categories = (results[2] as AutocompleteResult).categories;
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _selectCategory(String? slug) async {
+    setState(() {
+      _categorySlug = slug;
+      _isLoading = true;
+    });
+    await _loadProducts();
   }
 
   @override
@@ -99,7 +113,7 @@ class _HomeViewState extends State<HomeView> {
                           _banners.isNotEmpty &&
                                   _banners[0]['badge_text'] != null
                               ? _banners[0]['badge_text']
-                              : 'GLOBAL MEGA SALE',
+                              : 'OLMOA',
                           style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 11,
@@ -109,7 +123,7 @@ class _HomeViewState extends State<HomeView> {
                         Text(
                           _banners.isNotEmpty && _banners[0]['title'] != null
                               ? _banners[0]['title']
-                              : '최대 90% 할인 직구 특가',
+                              : '오늘의 추천 상품',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -119,7 +133,7 @@ class _HomeViewState extends State<HomeView> {
                         Text(
                           _banners.isNotEmpty && _banners[0]['subtitle'] != null
                               ? _banners[0]['subtitle']
-                              : '전 상품 무료배송 & 최저가 보장제',
+                              : '기획전 소식을 준비하고 있습니다',
                           style: const TextStyle(
                               color: Colors.white, fontSize: 12),
                         ),
@@ -131,6 +145,40 @@ class _HomeViewState extends State<HomeView> {
               ),
             ),
           ),
+
+          // P1-M01: server-driven category filter chips.
+          if (_categories.isNotEmpty)
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    ChoiceChip(
+                      label: const Text('전체'),
+                      selected: _categorySlug == null,
+                      onSelected: (_) {
+                        if (_categorySlug != null) _selectCategory(null);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    for (final c in _categories) ...[
+                      ChoiceChip(
+                        label: Text(c.name),
+                        selected: _categorySlug == c.slug,
+                        onSelected: (_) {
+                          if (_categorySlug != c.slug) _selectCategory(c.slug);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          if (_categories.isNotEmpty)
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
           // Product Grid: 2 columns on phones, 3 on tablets, 4 on desktop widths.
           SliverPadding(

@@ -3,6 +3,7 @@
 // Official Brand: OLMOA (올모아) | Slogan: 내가 찾는 모든 것, 여기.
 
 import 'package:flutter/material.dart';
+import 'models/cart_line.dart';
 import 'models/product.dart';
 import 'theme/app_theme.dart';
 import 'views/home_view.dart';
@@ -40,11 +41,28 @@ class OlmoaMainScreen extends StatefulWidget {
 
 class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
   int _currentIndex = 0;
-  final List<Product> _cartItems = [];
+  final List<CartLine> _cartLines = [];
+
+  int get _cartCount => _cartLines.fold(0, (sum, l) => sum + l.quantity);
 
   void _addToCart(Product p) {
     setState(() {
-      _cartItems.add(p);
+      // Same orderable variant adds up; lines without a server SKU id stay
+      // separate so they can never merge into an orderable line by accident.
+      final key = p.defaultSkuId.isNotEmpty ? p.defaultSkuId : 'noid:${p.id}';
+      CartLine? hit;
+      for (final l in _cartLines) {
+        final lk = l.skuId.isNotEmpty ? l.skuId : 'noid:${l.product.id}';
+        if (lk == key) {
+          hit = l;
+          break;
+        }
+      }
+      if (hit == null) {
+        _cartLines.add(CartLine(product: p));
+      } else if (hit.quantity < 99) {
+        hit.quantity += 1;
+      }
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -54,9 +72,40 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
     );
   }
 
+  void _updateQty(CartLine line, int delta) {
+    setState(() {
+      final i = _cartLines.indexWhere((l) => identical(l, line));
+      if (i < 0) return;
+      _cartLines[i].quantity += delta;
+      if (_cartLines[i].quantity < 1) {
+        _cartLines.removeAt(i);
+      } else if (_cartLines[i].quantity > 99) {
+        _cartLines[i].quantity = 99;
+      }
+    });
+  }
+
+  void _removeLine(CartLine line) {
+    setState(() {
+      _cartLines.removeWhere((l) => identical(l, line));
+    });
+  }
+
+  /// P1-M05: adopt server cart lines that are not already local (local
+  /// quantities win on overlap — the user just edited them here).
+  void _mergeServerLines(List<CartLine> server) {
+    setState(() {
+      final local = _cartLines.map((l) => l.skuId).where((s) => s.isNotEmpty).toSet();
+      for (final s in server) {
+        if (s.skuId.isEmpty || local.contains(s.skuId)) continue;
+        _cartLines.add(s);
+      }
+    });
+  }
+
   void _clearCart() {
     setState(() {
-      _cartItems.clear();
+      _cartLines.clear();
       _currentIndex = 2; // Jump to orders view
     });
   }
@@ -71,7 +120,13 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
   Widget build(BuildContext context) {
     final views = [
       HomeView(onAddToCart: _addToCart),
-      CartView(items: _cartItems, onClearCart: _clearCart),
+      CartView(
+        lines: _cartLines,
+        onUpdateQty: _updateQty,
+        onRemoveLine: _removeLine,
+        onMergeServerLines: _mergeServerLines,
+        onClearCart: _clearCart,
+      ),
       const OrdersView(),
       const AccountView(),
     ];
@@ -132,13 +187,13 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
             label: '홈'),
         NavigationDestination(
           icon: Badge(
-            isLabelVisible: _cartItems.isNotEmpty,
-            label: Text(_cartItems.length.toString()),
+            isLabelVisible: _cartLines.isNotEmpty,
+            label: Text(_cartCount.toString()),
             child: const Icon(Icons.shopping_cart_outlined),
           ),
           selectedIcon: Badge(
-            isLabelVisible: _cartItems.isNotEmpty,
-            label: Text(_cartItems.length.toString()),
+            isLabelVisible: _cartLines.isNotEmpty,
+            label: Text(_cartCount.toString()),
             child: const Icon(Icons.shopping_cart),
           ),
           label: '장바구니',

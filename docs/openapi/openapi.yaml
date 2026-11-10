@@ -273,6 +273,8 @@ paths:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1credits'
   /api/v1/wishlist:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1wishlist'
+  /api/v1/cart:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1cart'
   /api/v1/support/faq:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1support~1faq'
   /api/v1/support/inquiries:

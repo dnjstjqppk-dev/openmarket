@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sub_order.dart';
+import 'token_store.dart';
 
 /// Server-issued JWT session for an approved seller. The gateway derives
 /// identity ONLY from the Bearer token (lib/auth.js) — X-Partner-Id headers
@@ -13,6 +14,8 @@ class PartnerAuthSession {
   static String? _token;
   static String? _businessName;
   static bool _restored = false;
+  // NEW-22: JWTs live in the OS keychain. Tests inject MemoryTokenStore.
+  static TokenStore tokenStore = SecureTokenStore();
 
   static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   static String? get businessName => _businessName;
@@ -26,8 +29,20 @@ class PartnerAuthSession {
     if (_restored) return;
     _restored = true;
     try {
+      _token = await tokenStore.read(_kToken);
       final prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString(_kToken);
+      // One-way migration: a token left in plaintext prefs by an older
+      // build moves into the keychain and is wiped from prefs.
+      final legacy = prefs.getString(_kToken);
+      if (_token == null && legacy != null && legacy.isNotEmpty) {
+        _token = legacy;
+        try {
+          await tokenStore.write(_kToken, legacy);
+          await prefs.remove(_kToken);
+        } catch (_) {}
+      } else if (legacy != null) {
+        try { await prefs.remove(_kToken); } catch (_) {}
+      }
       _businessName = prefs.getString(_kBusiness);
     } catch (_) {}
   }
@@ -51,8 +66,11 @@ class PartnerAuthSession {
         final partner = body['partner'];
         _businessName = (partner is Map ? partner['business_name'] : null)?.toString() ?? '판매자';
         try {
+          await tokenStore.write(_kToken, _token!);
+        } catch (_) {}
+        try {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_kToken, _token!);
+          await prefs.remove(_kToken); // never leave the JWT in plaintext
           await prefs.setString(_kBusiness, _businessName!);
         } catch (_) {}
         return {'success': true, 'business_name': _businessName};
@@ -69,6 +87,9 @@ class PartnerAuthSession {
   static Future<void> logout() async {
     _token = null;
     _businessName = null;
+    try {
+      await tokenStore.delete(_kToken);
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kToken);

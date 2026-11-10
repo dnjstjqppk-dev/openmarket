@@ -25,18 +25,20 @@ class _AccountViewState extends State<AccountView> {
 
   Future<void> _refresh() async {
     await AuthSession.restore();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _ready = true;
         _loggedIn = AuthSession.isAuthenticated;
       });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_ready) return const Center(child: CircularProgressIndicator());
-    if (!_loggedIn)
+    if (!_loggedIn) {
       return LoginView(onSuccess: _refresh, reason: 'OLMOA 계정으로 로그인해 주세요.');
+    }
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

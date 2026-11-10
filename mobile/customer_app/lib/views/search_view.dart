@@ -27,6 +27,7 @@ class _SearchViewState extends State<SearchView> {
   int _seq = 0;
   AutocompleteResult? _suggest;
   bool _suggestLoading = false;
+  String? _suggestError;
   List<Product>? _results;
   bool _resultsLoading = false;
   String? _resultsError;
@@ -47,13 +48,25 @@ class _SearchViewState extends State<SearchView> {
 
   Future<void> _fetchSuggest(String q) async {
     final mySeq = ++_seq;
-    setState(() => _suggestLoading = true);
-    final r = await ApiService.getAutocomplete(q);
-    if (!mounted || mySeq != _seq) return;
     setState(() {
-      _suggest = r;
-      _suggestLoading = false;
+      _suggestLoading = true;
+      _suggestError = null;
     });
+    try {
+      final r = await ApiService.getAutocompleteStrict(q);
+      if (!mounted || mySeq != _seq) return;
+      setState(() {
+        _suggest = r;
+        _suggestLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || mySeq != _seq) return;
+      setState(() {
+        _suggest = null;
+        _suggestLoading = false;
+        _suggestError = e.toString();
+      });
+    }
   }
 
   void _onQueryChanged(String q) {
@@ -75,7 +88,7 @@ class _SearchViewState extends State<SearchView> {
     });
     unawaited(ApiService.logSearch(q));
     try {
-      final list = await ApiService.getProducts(query: q);
+      final list = await ApiService.getProductsStrict(query: q);
       if (!mounted) return;
       setState(() {
         _results = list;
@@ -122,8 +135,20 @@ class _SearchViewState extends State<SearchView> {
   }
 
   Widget _buildSuggest() {
-    if (_suggestLoading && _suggest == null) {
+    if (_suggestLoading && _suggest == null && _suggestError == null) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (_suggestError != null && _suggest == null) {
+      return Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(_suggestError!, style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () => _fetchSuggest(_controller.text.trim()),
+            child: const Text('다시 시도'),
+          ),
+        ]),
+      );
     }
     final s = _suggest;
     if (s == null || s.isEmpty) {

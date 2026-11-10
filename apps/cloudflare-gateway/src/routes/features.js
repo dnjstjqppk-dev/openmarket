@@ -289,6 +289,51 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
+  // 8b. Customer Cart (GET / PUT /api/v1/cart) — P1-M05 server sync.
+  // Replace semantics: the client sends the full line set. Unknown SKUs are
+  // rejected (400 INVALID_SKU), never silently dropped, so the client can
+  // show exactly which line failed. Prices/stock are re-read live on GET.
+  if (url.pathname === '/api/v1/cart') {
+    const customerId = (await requireCustomer(request, env)).userId;
+    if (request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT c.sku_id, c.quantity, c.updated_at,
+                s.product_id, s.sale_price, s.original_price, s.stock_quantity,
+                p.title, p.thumbnail_url, p.status AS product_status
+         FROM cart_items c
+         JOIN product_skus s ON s.id = c.sku_id
+         JOIN products p ON p.id = s.product_id
+         WHERE c.user_id = ?
+         ORDER BY c.updated_at DESC`
+      ).bind(customerId).all();
+      return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+    }
+    if (request.method === 'PUT') {
+      const b = await request.json().catch(() => ({}));
+      const items = Array.isArray(b.items) ? b.items : null;
+      if (!items) throw bad('ITEMS_REQUIRED', 'items 배열을 보내 주세요.');
+      if (items.length > 100) throw bad('CART_TOO_LARGE', '장바구니는 최대 100개 품목까지 저장됩니다.');
+      const lines = [];
+      for (const it of items) {
+        const skuId = String(it.sku_id || '').trim();
+        const qty = Number(it.quantity);
+        if (!skuId) throw bad('SKU_REQUIRED', 'sku_id가 비어 있는 품목이 있습니다.');
+        if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw bad('INVALID_QUANTITY', `수량은 1~99 사이의 정수여야 합니다. (${skuId})`);
+        const sku = await env.DB.prepare('SELECT id FROM product_skus WHERE id = ?').bind(skuId).first();
+        if (!sku) throw bad('INVALID_SKU', `존재하지 않는 상품 옵션입니다. (${skuId})`, { sku_id: skuId });
+        lines.push({ sku_id: skuId, quantity: qty });
+      }
+      const stmts = [env.DB.prepare('DELETE FROM cart_items WHERE user_id = ?').bind(customerId)];
+      for (const l of lines) {
+        stmts.push(env.DB.prepare(
+          'INSERT INTO cart_items (user_id, sku_id, quantity, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+        ).bind(customerId, l.sku_id, l.quantity));
+      }
+      await env.DB.batch(stmts);
+      return new Response(JSON.stringify({ success: true, count: lines.length, data: lines }), { headers: corsHeaders });
+    }
+  }
+
   // 9. Support FAQ & 1:1 Customer Inquiries
   if (url.pathname === '/api/v1/support/faq' && request.method === 'GET') {
     const faqs = [

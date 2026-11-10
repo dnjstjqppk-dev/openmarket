@@ -119,6 +119,40 @@ await t.test('T15 import-job detail returns the stored preview; foreign jobs are
   assert.equal((await g.call(`/api/v1/imports/${jobId}`, { token: pt2 })).status, 404);
 });
 
+await t.test('M05 cart PUT replaces lines, GET returns live prices; unknown SKU is 400', async () => {
+  const g = await boot();
+  const cust = await g.login('customer@example.com');
+  const put = await g.call('/api/v1/cart', { method: 'PUT', token: cust, body: { items: [{ sku_id: 'sku_001_w', quantity: 2 }, { sku_id: 'sku_002_65w', quantity: 1 }] } });
+  assert.equal(put.status, 200, put.text);
+  assert.equal(put.json.count, 2);
+  const get = await g.call('/api/v1/cart', { token: cust });
+  assert.equal(get.status, 200, get.text);
+  assert.equal(get.json.count, 2);
+  const w = get.json.data.find((l) => l.sku_id === 'sku_001_w');
+  assert.equal(w.quantity, 2);
+  assert.ok(w.title && w.sale_price > 0, 'enriched with live product data');
+  const badSku = await g.call('/api/v1/cart', { method: 'PUT', token: cust, body: { items: [{ sku_id: 'sku_nope', quantity: 1 }] } });
+  assert.equal(badSku.status, 400);
+  assert.equal(badSku.json.code, 'INVALID_SKU');
+  assert.equal(badSku.json.sku_id, 'sku_nope');
+  const badQty = await g.call('/api/v1/cart', { method: 'PUT', token: cust, body: { items: [{ sku_id: 'sku_001_w', quantity: 0 }] } });
+  assert.equal(badQty.status, 400);
+  assert.equal((await g.call('/api/v1/cart')).status, 401);
+  // Failed writes leave the stored cart untouched (delete-then-insert is atomic per call).
+  assert.equal((await g.call('/api/v1/cart', { token: cust })).json.count, 2);
+});
+
+await t.test('M05 cart lines are per-customer and cleared by an empty PUT', async () => {
+  const g = await boot();
+  const a = await g.login('customer@example.com');
+  const b = await g.login('alex.kim@olmoa.com');
+  await g.call('/api/v1/cart', { method: 'PUT', token: a, body: { items: [{ sku_id: 'sku_001_w', quantity: 1 }] } });
+  assert.equal((await g.call('/api/v1/cart', { token: b })).json.count, 0);
+  const clear = await g.call('/api/v1/cart', { method: 'PUT', token: a, body: { items: [] } });
+  assert.equal(clear.status, 200);
+  assert.equal((await g.call('/api/v1/cart', { token: a })).json.count, 0);
+});
+
 await t.test('T-N01 settlements payload carries payouts and per-row adjustments', async () => {
   const g = await boot();
   const pt = await g.login('seller@temu-supply.com', 'PARTNER');

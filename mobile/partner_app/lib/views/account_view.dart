@@ -25,11 +25,12 @@ class _PartnerAccountViewState extends State<PartnerAccountView> {
 
   Future<void> _refresh() async {
     await PartnerAuthSession.restore();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _ready = true;
         _loggedIn = PartnerAuthSession.isAuthenticated;
       });
+    }
   }
 
   @override
@@ -42,7 +43,7 @@ class _PartnerAccountViewState extends State<PartnerAccountView> {
         children: [
           const Icon(Icons.store, size: 72, color: OlmoaColors.lagoon600),
           const SizedBox(height: 12),
-          Text('${PartnerAuthSession.businessName ?? '판매자'}',
+          Text(PartnerAuthSession.businessName ?? '판매자',
               style:
                   const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),

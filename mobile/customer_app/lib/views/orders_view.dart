@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'login_view.dart';
+import 'order_detail_view.dart';
 
 class OrdersView extends StatefulWidget {
   const OrdersView({super.key});
@@ -59,7 +60,7 @@ class _OrdersViewState extends State<OrdersView> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                    '${err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.'}',
+                    err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.',
                     style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 12),
                 ElevatedButton(onPressed: _reload, child: const Text('다시 시도')),
@@ -94,11 +95,18 @@ class _OrdersViewState extends State<OrdersView> {
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(color: Colors.grey.shade200),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => OrderDetailView(
+                          orderId: (order['id'] ?? '').toString())),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -138,7 +146,8 @@ class _OrdersViewState extends State<OrdersView> {
                     Text('주문일시: $createdAt',
                         style: const TextStyle(
                             color: OlmoaColors.stone500, fontSize: 11)),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

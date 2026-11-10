@@ -1,8 +1,7 @@
 // mobile/customer_app/lib/utils/payment_guidance.dart
 // Pure payment-deadline guidance for a READY (payment-pending) order.
 // The server holds stock for 30 minutes (PAYMENT_WINDOW_MS) and reports the
-// deadline as payment_expires_at in UTC 'YYYY-MM-DD HH:MM:SS'. Mobile cannot pay
-// in-app yet, so the guidance points at the PC web order history.
+// deadline as payment_expires_at in UTC 'YYYY-MM-DD HH:MM:SS'.
 
 class PaymentGuidance {
   /// Short deadline line, e.g. '오늘 14:32까지 결제해 주세요 (29분 남음)'.
@@ -38,7 +37,7 @@ PaymentGuidance computePaymentGuidance({String? expiresAt, DateTime? now}) {
   final deadline = parseServerTime(expiresAt);
   if (deadline == null) {
     return const PaymentGuidance(
-      deadlineText: '주문 후 30분 이내에 PC 웹에서 결제를 완료해 주세요.',
+      deadlineText: '주문 후 30분 이내에 이 화면에서 결제를 완료해 주세요.',
       expired: false,
       deadlineKnown: false,
     );

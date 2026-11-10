@@ -45,6 +45,29 @@ void main() {
       expect(r.isEmpty, isTrue);
       expect(parseAutocompleteResponse({}).isEmpty, isTrue);
     });
+
+    test('P1-M01 empty-query payload exposes recommended_categories', () {
+      final r = parseAutocompleteResponse({
+        'success': true,
+        'brand': 'OLMOA',
+        'trending_keywords': [
+          {'keyword': '롱패딩'},
+        ],
+        'recommended_categories': [
+          {'id': 'cat_1', 'name': '패션의류', 'slug': 'fashion'},
+          {'id': 'cat_2', 'name': '가전디지털', 'slug': 'electronics'},
+        ],
+        'data': {
+          'keywords': [],
+          'suggestions': [],
+          'categories': [
+            {'id': 'cat_1', 'name': '패션의류', 'slug': 'fashion'},
+          ],
+          'products': [],
+        },
+      });
+      expect(r.categories.map((c) => c.slug), ['fashion', 'electronics']);
+    });
   });
 
   group('parseProductDetail', () {

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
+import 'token_store.dart';
 import '../models/product_detail.dart';
 import '../models/search.dart';
 
@@ -18,9 +19,12 @@ class AuthSession {
   static String? _userId;
   static String? _userName;
   static bool _restored = false;
+  // NEW-22: JWTs live in the OS keychain. Tests inject MemoryTokenStore.
+  static TokenStore tokenStore = SecureTokenStore();
 
   static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   static String? get userName => _userName;
+  static String? get userId => _userId;
 
   static Map<String, String> headers() => {
         'Content-Type': 'application/json',
@@ -32,8 +36,20 @@ class AuthSession {
     if (_restored) return;
     _restored = true;
     try {
+      _token = await tokenStore.read(_kToken);
       final prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString(_kToken);
+      // One-way migration: a token left in plaintext prefs by an older
+      // build moves into the keychain and is wiped from prefs.
+      final legacy = prefs.getString(_kToken);
+      if (_token == null && legacy != null && legacy.isNotEmpty) {
+        _token = legacy;
+        try {
+          await tokenStore.write(_kToken, legacy);
+          await prefs.remove(_kToken);
+        } catch (_) {}
+      } else if (legacy != null) {
+        try { await prefs.remove(_kToken); } catch (_) {}
+      }
       _userId = prefs.getString(_kUserId);
       _userName = prefs.getString(_kUserName);
     } catch (_) {
@@ -61,8 +77,11 @@ class AuthSession {
         _userId = body['customer_id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
         _userName = (user is Map ? (user['full_name'] ?? user['name']) : null)?.toString() ?? '회원';
         try {
+          await tokenStore.write(_kToken, _token!);
+        } catch (_) {}
+        try {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_kToken, _token!);
+          await prefs.remove(_kToken); // never leave the JWT in plaintext
           if (_userId != null) await prefs.setString(_kUserId, _userId!);
           await prefs.setString(_kUserName, _userName ?? '회원');
         } catch (_) {}
@@ -81,6 +100,9 @@ class AuthSession {
     _token = null;
     _userId = null;
     _userName = null;
+    try {
+      await tokenStore.delete(_kToken);
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kToken);
@@ -127,6 +149,9 @@ class ApiService {
     required String postalCode,
     String memo = '',
     required List<Product> products,
+    String? userCouponId,
+    int useCreditAmount = 0,
+    String? pccc,
   }) =>
       ApiService.createOrder(
         recipientName: recipientName,
@@ -136,6 +161,9 @@ class ApiService {
         postalCode: postalCode,
         memo: memo,
         products: products,
+        userCouponId: userCouponId,
+        useCreditAmount: useCreditAmount,
+        pccc: pccc,
       );
 
   Future<List<Map<String, dynamic>>> fetchBanners() => ApiService.getBanners();
@@ -197,6 +225,44 @@ class ApiService {
           .post(uri, headers: const {'Content-Type': 'application/json'}, body: jsonEncode({'keyword': kw}))
           .timeout(const Duration(seconds: 5));
     } catch (_) {}
+  }
+
+  /// P1-M03: strict catalog read — throws instead of returning [] so data
+  /// views can tell "no results" apart from "load failed" and offer a retry.
+  static Future<List<Product>> getProductsStrict({String? categorySlug, String? query}) async {
+    var uri = Uri.parse('$baseUrl/api/v1/products');
+    final params = <String, String>{'limit': '60'};
+    if (categorySlug != null && categorySlug.isNotEmpty) params['category'] = categorySlug;
+    if (query != null && query.isNotEmpty) params['q'] = query;
+    uri = uri.replace(queryParameters: params);
+    try {
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final body = _decode(response.body);
+        final List<dynamic> list = body['data'] ?? [];
+        return list.map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      }
+      throw ApiException(_decode(response.body)['error']?.toString() ?? '상품 목록을 불러오지 못했습니다.');
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 상품 목록을 불러오지 못했습니다.');
+    }
+  }
+
+  /// P1-M03: strict autocomplete — throws on transport failure so the search
+  /// screen can show a retry instead of a fake-empty suggestion list.
+  static Future<AutocompleteResult> getAutocompleteStrict(String query) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/search/autocomplete').replace(queryParameters: {'q': query});
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return parseAutocompleteResponse(_decode(res.body), query: query);
+      throw ApiException('추천 검색어를 불러오지 못했습니다.');
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 추천 검색어를 불러오지 못했습니다.');
+    }
   }
 
   static Future<ProductDetail> getProductDetail(String productId) async {
@@ -262,6 +328,247 @@ class ApiService {
     }
   }
 
+  /// PG availability from the server (Toss client key or sandbox simulator).
+  static Future<Map<String, dynamic>> getPaymentConfig() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/payments/config');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) return _decode(res.body);
+      return {'success': false, 'mode': 'DISABLED'};
+    } catch (_) {
+      return {'success': false, 'mode': 'DISABLED'};
+    }
+  }
+
+  /// Confirms a PG-approved (or simulator) payment with the server.
+  static Future<Map<String, dynamic>> confirmPayment({
+    required String orderRef,
+    required String paymentKey,
+    required int amount,
+  }) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/payments/confirm');
+      final response = await http
+          .post(
+            uri,
+            headers: {...AuthSession.headers(), 'X-Idempotency-Key': _idemKey()},
+            body: jsonEncode({'order_id': orderRef, 'payment_key': paymentKey, 'amount': amount}),
+          )
+          .timeout(const Duration(seconds: 15));
+      final body = _decode(response.body);
+      if (response.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if ((response.statusCode == 200 || response.statusCode == 201) && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '결제 승인에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 결제 승인에 실패했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> _postAction(String path, {Map<String, dynamic>? body, bool idem = false}) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              ...AuthSession.headers(),
+              if (idem) 'X-Idempotency-Key': _idemKey(),
+            },
+            body: body == null ? null : jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 12));
+      final decoded = _decode(response.body);
+      if (response.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if ((response.statusCode == 200 || response.statusCode == 201) && decoded['success'] == true) {
+        return {'success': true, 'data': decoded['data'], 'message': decoded['message']};
+      }
+      return {'success': false, 'error': decoded['error']?.toString() ?? '요청을 처리하지 못했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 요청을 처리하지 못했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getOrderDetail(String orderId) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/orders/$orderId');
+      final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        throw const AuthRequiredException();
+      }
+      final body = _decode(res.body);
+      if (res.statusCode == 404) throw ApiException('주문을 찾을 수 없습니다.');
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw ApiException(body['error']?.toString() ?? '주문 상세를 불러오지 못했습니다.');
+      }
+      return Map<String, dynamic>.from(body['data'] as Map);
+    } on AuthRequiredException {
+      rethrow;
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 주문 상세를 불러오지 못했습니다.');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getTracking(String orderId) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/orders/$orderId/tracking');
+      final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        throw const AuthRequiredException();
+      }
+      final body = _decode(res.body);
+      if (res.statusCode != 200 || body['success'] != true) {
+        throw ApiException(body['error']?.toString() ?? '배송 조회에 실패했습니다.');
+      }
+      final List<dynamic> list = body['tracking'] ?? [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } on AuthRequiredException {
+      rethrow;
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 배송 조회에 실패했습니다.');
+    }
+  }
+
+  static Future<Map<String, dynamic>> cancelOrder(String orderId) =>
+      _postAction('/api/v1/orders/$orderId/cancel');
+
+  static Future<Map<String, dynamic>> cancelSubOrder(String orderId, String subOrderId) =>
+      _postAction('/api/v1/orders/$orderId/sub-orders/$subOrderId/cancel', idem: true);
+
+  static Future<Map<String, dynamic>> confirmPurchase(String orderId) =>
+      _postAction('/api/v1/orders/$orderId/confirm');
+
+  static Future<Map<String, dynamic>> fileClaim({
+    required String orderId,
+    required String claimType,
+    String? subOrderId,
+    required String reason,
+    String? reasonCode,
+  }) =>
+      _postAction(
+        '/api/v1/orders/$orderId/claims',
+        body: {
+          'claim_type': claimType,
+          if (subOrderId != null) 'sub_order_id': subOrderId,
+          'reason': reason,
+          if (reasonCode != null) 'reason_code': reasonCode,
+        },
+      );
+
+  /// P1-M04: server-side quote (dry run, no writes). Returns
+  /// {success, data} or {success:false, error, code} - 403/409 policy codes
+  /// (CREDIT_UNVERIFIED, CREDIT_MIN_ORDER, PCCC_REQUIRED, ...) surface as-is.
+  static Future<Map<String, dynamic>> getQuote({
+    required List<Map<String, Object>> items,
+    String? userCouponId,
+    int useCreditAmount = 0,
+    String? pccc,
+  }) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/orders/quote');
+      final res = await http
+          .post(
+            uri,
+            headers: AuthSession.headers(),
+            body: jsonEncode({
+              'items': items,
+              if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
+              if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
+              if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'data': Map<String, dynamic>.from(body['data'] as Map)};
+      }
+      return {'success': false, 'code': body['code']?.toString(), 'error': body['error']?.toString() ?? '견적 조회에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 견적을 조회하지 못했습니다.'};
+    }
+  }
+
+  /// P1-M04: coupons the signed-in user owns and has not used yet.
+  static Future<List<Map<String, dynamic>>> getUsableCoupons() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/coupons');
+    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '쿠폰 목록을 불러오지 못했습니다.');
+    }
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((c) => c['is_claimed'] == true && c['is_used'] != true)
+        .toList();
+  }
+
+  /// P1-M04: current credit balance (0 when the ledger is empty).
+  static Future<int> getCreditBalance() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/credits');
+    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '적립금 잔액을 불러오지 못했습니다.');
+    }
+    final data = _decode(res.body)['data'];
+    final bal = data is Map ? data['balance'] : null;
+    return bal is int ? bal : int.tryParse(bal?.toString() ?? '') ?? 0;
+  }
+
+  /// Merges cart lines per SKU (same variant adds up, other variants stay separate).
+  static List<Map<String, Object>> mergeItemsBySku(List<Product> products) {
+    final bySku = <String, int>{};
+    for (final p in products) {
+      if (p.defaultSkuId.isEmpty) continue;
+      bySku[p.defaultSkuId] = (bySku[p.defaultSkuId] ?? 0) + 1;
+    }
+    return [for (final e in bySku.entries) {'sku_id': e.key, 'quantity': e.value}];
+  }
+
   static Future<Map<String, dynamic>> createOrder({
     required String recipientName,
     required String phone,
@@ -270,20 +577,17 @@ class ApiService {
     required String postalCode,
     String memo = '',
     required List<Product> products,
+    String? userCouponId,
+    int useCreditAmount = 0,
+    String? pccc,
   }) async {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) {
       return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
     }
-    // One line per product; the server re-prices and re-checks stock.
-    final byId = <String, int>{};
-    final skuOf = <String, String>{};
-    for (final p in products) {
-      if (p.defaultSkuId.isEmpty) continue;
-      byId[p.id] = (byId[p.id] ?? 0) + 1;
-      skuOf[p.id] = p.defaultSkuId;
-    }
-    if (byId.isEmpty) {
+    // One line per SKU; the server re-prices and re-checks stock.
+    final items = mergeItemsBySku(products);
+    if (items.isEmpty) {
       return {'success': false, 'error': '주문 가능한 상품 옵션(SKU)이 없습니다.'};
     }
     try {
@@ -293,13 +597,16 @@ class ApiService {
             uri,
             headers: {...AuthSession.headers(), 'X-Idempotency-Key': _idemKey()},
             body: jsonEncode({
-              'items': byId.entries.map((e) => {'sku_id': skuOf[e.key], 'quantity': e.value}).toList(),
+              'items': items,
               'recipient_name': recipientName,
               'recipient_phone': phone,
               'shipping_address_line1': addressLine1,
               'shipping_address_line2': addressLine2,
               'shipping_postal_code': postalCode,
               'shipping_memo': memo,
+              if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
+              if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
+              if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
             }),
           )
           .timeout(const Duration(seconds: 12));
@@ -322,6 +629,47 @@ class ApiService {
       return {'success': false, 'code': body['code']?.toString(), 'error': body['error']?.toString() ?? '주문 생성에 실패했습니다.'};
     } catch (_) {
       return {'success': false, 'error': '네트워크 오류로 주문을 생성하지 못했습니다.'};
+    }
+  }
+
+  /// P1-M05: pull the server cart (live prices/stock joined per line).
+  static Future<List<Map<String, dynamic>>> getCart() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/cart');
+    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '서버 장바구니를 불러오지 못했습니다.');
+    }
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// P1-M05: push the full local line set (replace semantics). Returns
+  /// {success} or {success:false, error} - INVALID_SKU names the bad line.
+  static Future<Map<String, dynamic>> syncCart(List<Map<String, Object>> items) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/cart');
+      final res = await http
+          .put(uri, headers: AuthSession.headers(), body: jsonEncode({'items': items}))
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'code': body['code']?.toString(), 'error': body['error']?.toString() ?? '서버 장바구니 저장에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 서버 장바구니를 저장하지 못했습니다.'};
     }
   }
 }

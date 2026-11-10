@@ -106,11 +106,31 @@ AutocompleteResult parseAutocompleteResponse(Map<String, dynamic> body, {String 
     }
   }
 
+  // P1-M01: the empty-query response carries categories as
+  // `recommended_categories` (top level) and `data.categories` — never as a
+  // top-level `categories` key. Read all three so the home chips and the
+  // search screen actually render what the server sends.
+  var categories = section('categories', AutocompleteCategory.fromJson);
+  if (categories.isEmpty) {
+    categories = section('recommended_categories', AutocompleteCategory.fromJson);
+  }
+  if (categories.isEmpty) {
+    final data = body['data'];
+    if (data is Map<String, dynamic>) {
+      final raw = data['categories'];
+      if (raw is List) {
+        categories = raw
+            .whereType<Map>()
+            .map((e) => AutocompleteCategory.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+    }
+  }
   return AutocompleteResult(
     query: (body['query'] ?? query).toString(),
     resolvedSynonym: body['resolved_synonym']?.toString(),
     suggestions: section('suggestions', AutocompleteSuggestion.fromJson),
-    categories: section('categories', AutocompleteCategory.fromJson),
+    categories: categories,
     products: section('products', AutocompleteProduct.fromJson),
     trendingKeywords: trending,
   );
