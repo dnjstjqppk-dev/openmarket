@@ -160,7 +160,8 @@ export async function crawlAndExtractProduct({ url, htmlOverride = null, pricing
       origin_language: rawCurrency === 'KRW' ? 'ko' : 'en',
       thumbnail_url: extracted.images[0] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e',
       gallery_images: extracted.images,
-      description_html: sanitizedDesc || '<p>공식 공급업체 직출고 검증 정품 상품입니다.</p>',
+      // NEW-03: never invent a "verified genuine" description; the seller writes it.
+      description_html: sanitizedDesc || '',
       hs_code: '6109.10',
       country_origin: 'KR',
       warehouse_location: 'INCHEON_FBO',

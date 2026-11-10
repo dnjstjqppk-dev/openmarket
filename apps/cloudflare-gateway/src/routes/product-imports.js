@@ -121,7 +121,8 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     if (preview.product) {
       preview.product.title = aiResult.translated_title;
       preview.product.description_html = aiResult.enhanced_summary;
-      preview.ai_enhanced = true;
+      // NEW-02: only a real external call (COMPLETED) may claim AI enhancement.
+      preview.ai_enhanced = aiResult.live_external_api_status === 'COMPLETED';
       preview.ai_bullets = aiResult.bullets;
     }
 

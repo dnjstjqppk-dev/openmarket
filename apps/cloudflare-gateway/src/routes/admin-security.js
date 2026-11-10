@@ -60,7 +60,8 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     if (user.totp_enabled_at) throw conflict('MFA_ALREADY_ENABLED', '이미 2단계 인증을 사용 중입니다.');
     if (!user.totp_pending_enc) throw conflict('MFA_SETUP_NOT_STARTED', '먼저 2단계 인증 설정을 시작해 주세요.');
-    if (String(env.ADMIN_MFA_APPROVAL_REQUIRED || '').toLowerCase() === 'true') {
+    // NEW-13: secure by default — SUPER_ADMIN approval is required unless explicitly disabled.
+    if (String(env.ADMIN_MFA_APPROVAL_REQUIRED ?? '').toLowerCase() !== 'false') {
       const approval = await env.DB.prepare("SELECT id FROM admin_audit_log WHERE action = 'ADMIN_MFA_ENROLL_APPROVED' AND target_type = 'user' AND target_id = ? AND created_at >= datetime('now', '-1 day') ORDER BY created_at DESC LIMIT 1").bind(me.userId).first();
       if (!approval) throw conflict('MFA_APPROVAL_REQUIRED', '최고관리자의 2단계 인증 등록 승인이 필요합니다.');
     }

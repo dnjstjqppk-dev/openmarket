@@ -71,7 +71,7 @@ await t.test('07 wishlist toggle + coupon claim', async () => {
   assert.ok(list.json.data.find((c) => c.code === 'VIP20').is_claimed);
   assert.equal((await g.call('/api/v1/coupons/claim', { method: 'POST', token: cust, body: { code: 'NOPE' } })).status, 404);
 });
-await t.test('08 registration with consents grants a journaled welcome credit', async () => {
+await t.test('08 registration stores consents; email verification grants a journaled welcome credit', async () => {
   const bad = await g.call('/api/v1/auth/register', { method: 'POST', body: { email: 'new1@example.com', password: 'weak', full_name: '신규', phone: '010-1111-2222', agree_terms: true, agree_privacy: true } });
   assert.equal(bad.status, 400);
   const r = await g.call('/api/v1/auth/register', { method: 'POST', body: { email: 'new1@example.com', password: 'Strong!Pass2026', full_name: '신규고객', phone: '010-1111-2222', agree_terms: true, agree_privacy: true } });

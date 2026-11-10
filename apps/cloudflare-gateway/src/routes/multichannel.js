@@ -204,8 +204,27 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     const salePrice = body.sale_price !== undefined ? posInt(body.sale_price, '채널 판매가') : prod.lowest_sale_price;
     const origPrice = body.original_price !== undefined ? posInt(body.original_price, '채널 정가') : prod.lowest_original_price;
 
+    // NEW-04: every channel-payload input comes from a real row (product /
+    // partner policy / owner contact) or an explicit seller body field — never
+    // an invented default. Fields with no real source stay empty so the
+    // connector fails closed with VALIDATION_ERROR.
+    const ownerContact = await env.DB.prepare('SELECT phone FROM users WHERE id = ?').bind(caller.partner.owner_user_id).first();
+    const asPhone = String(body.as_phone || (ownerContact && ownerContact.phone) || '').replace(/\D/g, '');
+    const baseFee = Number(caller.partner.base_shipping_fee ?? 0);
+    const freeThresholdCfg = Number(caller.partner.free_shipping_threshold ?? 0);
+    const feeTypeOverride = String(body.delivery_fee_type || '').trim().toUpperCase();
+    const deliveryFeeType = feeTypeOverride || (baseFee <= 0 ? 'FREE' : (freeThresholdCfg > 0 ? 'CONDITIONAL_FREE' : 'CHARGE'));
+
     const listingRes = await connector.createListing({
-      title: prod.title, description_html: prod.description_html, channel_sale_price: salePrice, channel_original_price: origPrice, stock_quantity: stock
+      title: prod.title, description_html: prod.description_html, channel_sale_price: salePrice, channel_original_price: origPrice, stock_quantity: stock,
+      brand: str(body.brand, { max: 100 }),
+      business_name: caller.partner.business_name,
+      as_phone: asPhone,
+      delivery_company: str(body.delivery_company, { max: 20 }),
+      external_category_id: str(body.external_category_id, { max: 20 }),
+      delivery_fee_type: deliveryFeeType,
+      delivery_fee: body.delivery_fee !== undefined ? Number(body.delivery_fee) : baseFee,
+      free_shipping_threshold: body.free_shipping_threshold !== undefined ? Number(body.free_shipping_threshold) : freeThresholdCfg
     }, await connectorCredentials(env, cred));
 
     // A simulated publish never claims the product is live on the channel.

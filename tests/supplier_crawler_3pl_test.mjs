@@ -200,7 +200,7 @@ await t.test('5. Complete Crawler Pipeline with Quality Scoring', async () => {
   assert.equal(res.data.pricing.calculated_sale_price, 54000); // 45,000 * 1.2 = 54,000
 });
 
-// Test 6: AI Translation & Rule-based Localization
+// Test 6: AI Translation & Rule-based Localization (NEW-02: no invented claims)
 await t.test('6. AI Translation & Localization Engine', async () => {
   const enhanced = await enhanceProductWithAi({
     title: 'Wireless Bluetooth Earbuds Pro with Fast Charging',
@@ -211,9 +211,11 @@ await t.test('6. AI Translation & Localization Engine', async () => {
   assert.ok(enhanced.translated_title.includes('무선'));
   assert.ok(enhanced.translated_title.includes('블루투스'));
   assert.ok(enhanced.translated_title.includes('프로'));
-  assert.ok(enhanced.bullets.length >= 2);
+  // NEW-02: no fabricated spec bullets, no false COMPLETED/provider report.
+  assert.deepEqual(enhanced.bullets, []);
   assert.equal(enhanced.provider, 'RULE_BASED_LOCALIZER');
-  assert.equal(enhanced.live_external_api_status, 'BLOCKED_NO_CREDENTIAL');
+  assert.equal(enhanced.live_external_api_status, 'SKIPPED');
+  assert.equal(enhanced.enhanced_summary, '<p>High-end waterproof earbuds.</p>');
 });
 
 // Test 7: Feature Flags Enforcement & E2E Workflows

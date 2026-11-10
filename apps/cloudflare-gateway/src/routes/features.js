@@ -440,8 +440,12 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     let status = 'NOT_SENT_PROVIDER_NOT_CONFIGURED';
     let providerMsgId = null;
 
-    // Real API integration if SOLAPI keys present
-    if (env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET) {
+    // Real API integration if SOLAPI keys present. NEW-05: no fake sender
+    // fallback — without a registered SOLAPI_SENDER_NUMBER the send is not
+    // attempted and the misconfiguration is reported honestly.
+    const smsSender = String(env.SOLAPI_SENDER_NUMBER || '').replace(/[^0-9]/g, '');
+    const senderConfigured = smsSender.length >= 8;
+    if (env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET && senderConfigured) {
       try {
         const solapiRes = await fetch('https://api.solapi.com/messages/v4/send', {
           method: 'POST',
@@ -452,7 +456,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
           body: JSON.stringify({
             message: {
               to: recipient.replace(/[^0-9]/g, ''),
-              from: env.SOLAPI_SENDER_NUMBER || '15880000',
+              from: smsSender,
               text: content
             }
           })
@@ -467,6 +471,8 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       } catch (err) {
         status = 'FAILED';
       }
+    } else if (env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET && !senderConfigured) {
+      status = 'NOT_SENT_SENDER_NOT_CONFIGURED';
     }
 
     await env.DB.prepare(
@@ -478,6 +484,8 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({
       success: true,
       provider_configured: Boolean(env.SOLAPI_API_KEY && env.SOLAPI_API_SECRET),
+      sender_configured: senderConfigured,
+      ...(senderConfigured ? {} : { config_error: 'SOLAPI_SENDER_NUMBER 미설정: 사전 등록된 발신번호를 설정해야 SMS를 발송할 수 있습니다.' }),
       data: {
         log_id: logId,
         channel,

@@ -985,6 +985,11 @@ await t.test('I45 TOTP 2FA: RFC 6238 vector, enrolment revokes old sessions, cod
   assert.match(setup.json.data.otpauth_uri, /^otpauth:\/\/totp\//);
   const stored = A.one("SELECT totp_pending_enc FROM users WHERE email = 'ops@olmoa.test'").totp_pending_enc;
   assert.ok(stored.startsWith('v1:') && !stored.includes(secret), 'secret is encrypted at rest');
+  // NEW-13: enrolment needs SUPER_ADMIN approval by default; obtain it before the OTP checks.
+  const opsId = A.one("SELECT id FROM users WHERE email = 'ops@olmoa.test'").id;
+  const ap = await A.call(`/api/v1/admin/admin-users/${opsId}`, { method: 'PUT', token: A.tok.ad, body: { approve_2fa: true } });
+  assert.equal(ap.status, 200, ap.text);
+  tok = (await opLogin('ops@olmoa.test')).json.token; // approval revokes sessions like any account change
   assert.equal((await A.call('/api/v1/auth/2fa/enable', { method: 'POST', token: tok, body: { code: '123456' === (await totpAt(secret, currentStep())) ? '654321' : '123456' } })).json.code, 'OTP_INVALID');
   // Pin the enrolment step: recomputing currentStep() later would mint a FRESH code if the
   // 30 s boundary passes mid-test, turning the replay assertion below into a real login (flake).
@@ -1021,7 +1026,8 @@ await t.test('I46 2FA is mandatory in production (cannot be switched off) and ca
   assert.equal(twoFactorRequired({ ENVIRONMENT: 'production' }), true);
   assert.equal(twoFactorRequired({ ENVIRONMENT: 'production', ADMIN_2FA_REQUIRED: 'false' }), true);
   assert.equal(twoFactorRequired({ ENVIRONMENT: 'test' }), false);
-  const g = await boot({ ADMIN_2FA_REQUIRED: 'true' });
+  // NEW-13: this test isolates the mandatory-2FA gate, so the orthogonal enrolment-approval default is opted out.
+  const g = await boot({ ADMIN_2FA_REQUIRED: 'true', ADMIN_MFA_APPROVAL_REQUIRED: 'false' });
   const lg = await g.call('/api/v1/auth/login', { method: 'POST', body: { email: 'admin@openmarket.com', password: PW, role: 'ADMIN' } });
   assert.equal(lg.status, 200);
   assert.equal(lg.json.mfa_setup_required, true);

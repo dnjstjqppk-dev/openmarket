@@ -33,7 +33,7 @@
     "test:partner-metrics": "node tests/partner_metrics_test.mjs",
     "test:claims": "node tests/claim_refund_perm_test.mjs",
     "test:fx": "node tests/fx_singlesource_test.mjs",
-    "test:p1": "node tests/p1_api_data_test.mjs && node tests/p1_sec_test.mjs && node tests/p1_funds_abuse_test.mjs",
+    "test:p1": "node tests/p1_api_data_test.mjs && node tests/p1_sec_test.mjs && node tests/p1_funds_abuse_test.mjs && node tests/p1_honesty_defaults_test.mjs",
     "test:e2e": "node tests/full_platform_e2e.mjs",
     "test": "node scripts/gen-dev-seed.mjs && npm run test:migrations && npm run test:security && npm run test:commercial && npm run test:crawler && npm run test:multichannel && npm run test:products && npm run test:client-errors && npm run test:email && npm run test:social && npm run test:bidding && npm run test:consents && npm run test:admin-reset && npm run test:imports && npm run test:admin-audit && npm run test:abuse && npm run test:payouts && npm run test:partner-fields && npm run test:partner-metrics && npm run test:claims && npm run test:fx && npm run test:p1 && npm run test:ui && npm run test:openapi && npm run test:e2e && npm run test:go",
     "lint": "node --check apps/cloudflare-gateway/src/index.js",

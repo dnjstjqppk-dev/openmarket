@@ -34,37 +34,80 @@ export class NaverCommerceConnector extends BaseCommerceConnector {
   }
 
   // Listing creation: POST /external/v2/products
+  //
+  // NEW-04: strict validation, zero invented defaults. Every field Naver
+  // requires must arrive as real caller input; anything missing returns an
+  // explicit VALIDATION_ERROR so a malformed product can never be registered
+  // on the external market.
   async createListing(input = {}, credentials = {}) {
     const authCheck = await this.verifyConnection(credentials);
     if (!authCheck.verified) {
       return { success: false, status: 'BLOCKED_NO_CREDENTIAL', error: authCheck.message };
     }
 
+    const missing = [];
+    const title = String(input.title || '').trim();
+    if (!title) missing.push('title');
+    const brand = String(input.brand || '').trim();
+    if (!brand) missing.push('brand');
+    const descriptionHtml = String(input.description_html || '').trim();
+    if (!descriptionHtml) missing.push('description_html');
+    // The publish route sends channel_sale_price; direct callers send sale_price. Both are real values.
+    const salePrice = Number(input.sale_price ?? input.channel_sale_price);
+    if (!Number.isSafeInteger(salePrice) || salePrice <= 0) missing.push('sale_price');
+    const stockQuantity = Number(input.stock_quantity);
+    if (!Number.isSafeInteger(stockQuantity) || stockQuantity < 0) missing.push('stock_quantity');
+    const asPhone = String(input.as_phone || '').replace(/\D/g, '');
+    if (asPhone.length < 8 || asPhone.length > 15) missing.push('as_phone');
+    const deliveryCompany = String(input.delivery_company || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,20}$/.test(deliveryCompany)) missing.push('delivery_company');
+    const leafCategoryId = String(input.external_category_id || '').trim();
+    if (!leafCategoryId) missing.push('external_category_id');
+    const feeTypeRaw = String(input.delivery_fee_type || '').trim().toUpperCase();
+    const feeType = { FREE: 'FREE', CHARGE: 'CHARGE', CONDITIONAL_FREE: 'CONDITIONAL_FREE', CONDITIONAL: 'CONDITIONAL_FREE' }[feeTypeRaw] || null;
+    if (!feeType) missing.push('delivery_fee_type');
+    const deliveryFee = Number(input.delivery_fee ?? 0);
+    if (feeType === 'CHARGE' && (!Number.isSafeInteger(deliveryFee) || deliveryFee <= 0)) missing.push('delivery_fee');
+    const freeThreshold = Number(input.free_shipping_threshold ?? 0);
+    if (feeType === 'CONDITIONAL_FREE' && (!Number.isSafeInteger(freeThreshold) || freeThreshold <= 0)) missing.push('free_shipping_threshold');
+
+    if (missing.length > 0) {
+      return {
+        success: false,
+        status: 'VALIDATION_ERROR',
+        error: `네이버 상품 등록 필수값 누락: ${missing.join(', ')}. 누락된 값을 입력해야 외부 마켓에 등록할 수 있습니다.`,
+        missing_fields: missing
+      };
+    }
+
+    const sellerName = String(input.business_name || brand).slice(0, 50);
     const payload = {
       originProduct: {
         statusType: 'SALE',
         saleType: 'NEW',
-        name: String(input.title || '').slice(0, 100),
+        name: title.slice(0, 100),
         detailAttribute: {
           naverShoppingSearchInfo: {
-            manufacturerName: input.brand || 'OLMOA PARTNER',
-            brandName: input.brand || 'OLMOA'
+            manufacturerName: brand,
+            brandName: brand
           },
           afterServiceInfo: {
-            afterServiceTelephoneNumber: '02-1588-0000',
-            afterServiceGuideContent: 'OLMOA 고객센터 및 공식 파트너사를 통해 신속한 AS 및 교환이 가능합니다.'
+            afterServiceTelephoneNumber: asPhone,
+            afterServiceGuideContent: `${sellerName} 고객센터(${asPhone})로 문의해 주세요.`
           },
-          detailContent: input.description_html || '<p>OLMOA 글로벌 정품 보장 상품입니다.</p>'
+          detailContent: descriptionHtml
         },
-        leafCategoryId: input.external_category_id || '50000803', // e.g. 음향가전
-        salePrice: Number(input.sale_price || 19900),
-        stockQuantity: Number(input.stock_quantity || 100),
+        leafCategoryId,
+        salePrice,
+        stockQuantity,
         deliveryInfo: {
           deliveryType: 'DELIVERY',
           deliveryAttributeType: 'NORMAL',
-          deliveryCompany: 'CJGLS',
+          deliveryCompany,
           deliveryFee: {
-            deliveryFeeType: 'FREE'
+            deliveryFeeType: feeType,
+            ...(feeType === 'CHARGE' ? { deliveryFee } : {}),
+            ...(feeType === 'CONDITIONAL_FREE' ? { deliveryFee, freeConditionalAmount: freeThreshold } : {})
           }
         }
       },
@@ -138,13 +181,29 @@ export class NaverCommerceConnector extends BaseCommerceConnector {
   }
 
   // Update Shipment Tracking: POST /external/v1/pay-order/seller/orders/dispatch
+  // NEW-04 (same class): no invented carrier — all inputs must be real.
   async updateShipment(shipmentInput = {}, credentials = {}) {
+    const trackingNumber = String(shipmentInput.tracking_number || '').trim();
+    const carrierCode = String(shipmentInput.carrier_code || '').trim().toUpperCase();
+    const externalOrderId = String(shipmentInput.external_order_id || '').trim();
+    const missing = [];
+    if (!trackingNumber) missing.push('tracking_number');
+    if (!/^[A-Z0-9]{2,20}$/.test(carrierCode)) missing.push('carrier_code');
+    if (!externalOrderId) missing.push('external_order_id');
+    if (missing.length > 0) {
+      return {
+        success: false,
+        status: 'VALIDATION_ERROR',
+        error: `송장 전송 필수값 누락: ${missing.join(', ')}.`,
+        missing_fields: missing
+      };
+    }
     return {
       success: true,
       status: 'DISPATCHED',
-      tracking_number: shipmentInput.tracking_number,
-      delivery_company: shipmentInput.carrier_code || 'CJGLS',
-      message: `네이버 스마트스토어 주문[${shipmentInput.external_order_id}]에 운송장(${shipmentInput.tracking_number})이 등록되었습니다.`
+      tracking_number: trackingNumber,
+      delivery_company: carrierCode,
+      message: `네이버 스마트스토어 주문[${externalOrderId}]에 운송장(${trackingNumber})이 등록되었습니다.`
     };
   }
 }
