@@ -16,12 +16,19 @@ const ROLES = Object.keys(ADMIN_ROLE_LABEL)
 const groupedSecret = computed(() => (setup.value?.secret || '').replace(/(.{4})/g, '$1 ').trim())
 
 async function load() {
-  const r = await adminApi('/api/v1/auth/me')
-  me.value = r.data.data
-  setAdminRole(me.value?.admin?.role || '')
-  if (me.value?.admin?.role === 'SUPER_ADMIN' && !me.value?.admin?.mfa_setup_required) {
-    const o = await adminApi('/api/v1/admin/admin-users')
-    operators.value = o.ok ? o.data.data : []
+  err.value = ''
+  try {
+    const r = await adminApi('/api/v1/auth/me')
+    if (!r.ok) throw new Error(r.data.error || '계정 정보를 불러오지 못했습니다.')
+    me.value = r.data.data
+    setAdminRole(me.value?.admin?.role || '')
+    if (me.value?.admin?.role === 'SUPER_ADMIN' && !me.value?.admin?.mfa_setup_required) {
+      const o = await adminApi('/api/v1/admin/admin-users')
+      operators.value = o.ok ? o.data.data : []
+      if (!o.ok) err.value = o.data.error || '운영자 목록을 불러오지 못했습니다.'
+    }
+  } catch (e: any) {
+    err.value = e?.message || '계정 정보를 불러오지 못했습니다.'
   }
 }
 

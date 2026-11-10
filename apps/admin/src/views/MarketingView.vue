@@ -152,6 +152,7 @@ async function deleteBanner(id: string) {
 
 async function handleBroadcastNotification() {
   if (!notifTitle.value.trim() || !notifMessage.value.trim()) return
+  if (!window.confirm(`[${notifTarget.value}] 대상으로 알림을 발송합니다. 계속할까요?`)) return
   sendingNotif.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/notifications`, {
@@ -171,9 +172,11 @@ async function handleBroadcastNotification() {
       notifTitle.value = ''
       notifMessage.value = ''
       await loadNotifications()
+    } else {
+      statusMsg.value = `발송에 실패했습니다 — ${json.error || '다시 시도해 주세요.'}`
     }
   } catch (e) {
-    console.error(e)
+    statusMsg.value = '발송에 실패했습니다 — 네트워크 오류. 다시 시도해 주세요.'
   } finally {
     sendingNotif.value = false
   }

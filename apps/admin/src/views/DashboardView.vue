@@ -26,31 +26,42 @@ const sampleQcList = ref<any[]>([]);
 const iprReports = ref<any[]>([]);
 const loading = ref(true);
 const toastMsg = ref('');
+// P1-A03/A04: per-source outcomes drive the status badges and the error banner.
+const failedSources = ref<string[]>([]);
+const loadError = ref('');
+
+async function fetchSource(label: string, path: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, { headers: getAdminHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || (data && data.success === false)) {
+      failedSources.value.push(label);
+      return {};
+    }
+    return data;
+  } catch (_) {
+    failedSources.value.push(label);
+    return {};
+  }
+}
 
 async function loadControlTower() {
   loading.value = true;
+  loadError.value = '';
+  failedSources.value = [];
   try {
-    const [dashRes, bnrRes, notifRes, ctRes, fdsRes, dispRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/admin/dashboard`, { headers: getAdminHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/admin/banners`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) })),
-      fetch(`${API_BASE_URL}/api/v1/admin/notifications`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) })),
-      fetch(`${API_BASE_URL}/api/v1/admin/control-tower`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) })),
-      fetch(`${API_BASE_URL}/api/v1/admin/fds/overview`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) })),
-      fetch(`${API_BASE_URL}/api/v1/admin/disputes`, { headers: getAdminHeaders() }).catch(() => ({ json: async () => ({}) }))
-    ]);
-    const [qcRes, iprRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/admin/sample-qc`, { headers: getAdminHeaders() }).then((r) => r.json()).catch(() => ({})),
-      fetch(`${API_BASE_URL}/api/v1/admin/ipr-reports`, { headers: getAdminHeaders() }).then((r) => r.json()).catch(() => ({}))
+    const [json, bnrJson, notifJson, ctJson, fdsJson, dispJson, qcRes, iprRes] = await Promise.all([
+      fetchSource('대시보드', '/api/v1/admin/dashboard'),
+      fetchSource('배너', '/api/v1/admin/banners'),
+      fetchSource('알림', '/api/v1/admin/notifications'),
+      fetchSource('관제', '/api/v1/admin/control-tower'),
+      fetchSource('FDS', '/api/v1/admin/fds/overview'),
+      fetchSource('분쟁', '/api/v1/admin/disputes'),
+      fetchSource('샘플QC', '/api/v1/admin/sample-qc'),
+      fetchSource('IPR', '/api/v1/admin/ipr-reports')
     ]);
     sampleQcList.value = Array.isArray(qcRes?.data) ? qcRes.data : [];
     iprReports.value = Array.isArray(iprRes?.data) ? iprRes.data : [];
-
-    const json = await dashRes.json();
-    const bnrJson = await bnrRes.json().catch(() => ({}));
-    const notifJson = await notifRes.json().catch(() => ({}));
-    const ctJson = await ctRes.json().catch(() => ({}));
-    const fdsJson = await fdsRes.json().catch(() => ({}));
-    const dispJson = await dispRes.json().catch(() => ({}));
 
     if (json.success && json.metrics) {
       metrics.value.totalProducts = json.metrics.total_products || 0;
@@ -75,7 +86,11 @@ async function loadControlTower() {
       disputes.value = dispJson.data;
     }
   } catch (_) {
+    loadError.value = '관제 지표를 불러오지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.';
   } finally {
+    if (failedSources.value.length && !loadError.value) {
+      loadError.value = `일부 지표 집계 실패 (${failedSources.value.join(', ')}) — 표시된 0은 미집계일 수 있습니다.`;
+    }
     loading.value = false;
   }
 }
@@ -83,6 +98,7 @@ async function loadControlTower() {
 async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER') {
   const notes = ruling === 'RELEASE_TO_SELLER' ? window.prompt('반품 거절(판매자 지급) 판정 근거를 입력하세요', '')?.trim() : null;
   if (ruling === 'RELEASE_TO_SELLER' && !notes) return;
+  if (ruling === 'FULL_REFUND_TO_BUYER' && !window.confirm(`분쟁 건(${claim.id})에 대해 구매자 환불을 승인합니다. 실제 환불이 실행됩니다. 계속할까요?`)) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claim.id}`, {
       method: 'PUT',
@@ -93,8 +109,14 @@ async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RE
       toastMsg.value = `✓ 분쟁 건(${claim.id})에 대해 [${ruling === 'FULL_REFUND_TO_BUYER' ? '구매자 환불 승인' : '판매자 정산 지급'}] 직권 판정이 완료되었습니다.`;
       setTimeout(() => { toastMsg.value = ''; }, 3500);
       await loadControlTower();
+    } else {
+      toastMsg.value = `판정에 실패했습니다 (HTTP ${res.status}). 다시 시도해 주세요.`;
+      setTimeout(() => { toastMsg.value = ''; }, 4000);
     }
-  } catch (_) {}
+  } catch (_) {
+    toastMsg.value = '판정에 실패했습니다 — 네트워크 오류. 다시 시도해 주세요.';
+    setTimeout(() => { toastMsg.value = ''; }, 4000);
+  }
 }
 
 
@@ -133,18 +155,36 @@ onMounted(loadControlTower);
         <p class="text-xs text-slate-500 mt-0.5">전 세계 주문 흐름, 관세청 통관 연동, FDS 부정결제 방어 및 3자 분쟁 중재 현황</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <span class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          Edge Gateway & D1 정상 가동
+        <span v-if="loading" class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold border border-slate-200">
+          상태 확인 중…
         </span>
-        <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-200">
-          ✈️ Uni-Pass & FX 동기화 완료
-        </span>
+        <template v-else>
+          <span v-if="!failedSources.includes('대시보드')" class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Edge Gateway & D1 정상 가동
+          </span>
+          <span v-else class="px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-200">
+            Edge Gateway 집계 실패
+          </span>
+          <span v-if="!failedSources.includes('관제')" class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-200">
+            ✈️ Uni-Pass & FX 동기화 완료
+          </span>
+          <span v-else class="px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-200">
+            Uni-Pass & FX 집계 실패
+          </span>
+        </template>
       </div>
     </div>
 
     <div v-if="toastMsg" class="p-3.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-xs">
       {{ toastMsg }}
+    </div>
+
+    <div v-if="loadError" role="alert" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex flex-wrap items-center justify-between gap-3">
+      <span>{{ loadError }}</span>
+      <button @click="loadControlTower" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
+        다시 시도
+      </button>
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
@@ -377,7 +417,7 @@ onMounted(loadControlTower);
                   ✓ 판매중단 완료
                 </span>
                 <button v-else @click="fastTrackTakedown(ipr.id)" class="px-3 py-1.5 rounded-lg bg-[#E60023] hover:bg-red-800 text-white font-bold text-[11px] cursor-pointer shadow-xs">
-                  즉시 블라인드 (Takedown)
+                  차단 요청 접수
                 </button>
               </div>
             </div>

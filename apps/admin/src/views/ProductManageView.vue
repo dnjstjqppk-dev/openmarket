@@ -19,6 +19,12 @@ interface AdminProduct {
 const products = ref<AdminProduct[]>([]);
 const loading = ref(true);
 const updatingId = ref<string | null>(null);
+const toastMsg = ref('');
+
+function toast(msg: string, ms = 4000) {
+  toastMsg.value = msg;
+  setTimeout(() => { toastMsg.value = ''; }, ms);
+}
 
 async function loadProducts() {
   loading.value = true;
@@ -37,6 +43,8 @@ async function loadProducts() {
 }
 
 async function updateStatus(p: AdminProduct, newStatus: 'ACTIVE' | 'HIDDEN') {
+  const label = newStatus === 'ACTIVE' ? '판매 재개(노출)' : '판매 중지(노출 중단)';
+  if (!window.confirm(`[${p.title}] 상품을 ${label} 처리합니다. 계속할까요?`)) return;
   updatingId.value = p.id;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/products/${p.id}/status`, {
@@ -46,8 +54,13 @@ async function updateStatus(p: AdminProduct, newStatus: 'ACTIVE' | 'HIDDEN') {
     });
     if (res.ok) {
       p.status = newStatus;
+      toast(`✓ [${p.title}] ${label} 처리되었습니다.`, 3000);
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      toast(`⚠ 상태 변경에 실패했습니다 (${errJson.error || `HTTP ${res.status}`}). 다시 시도해 주세요.`);
     }
   } catch (_) {
+    toast('⚠ 요청 중 네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
   } finally {
     updatingId.value = null;
   }
@@ -82,6 +95,10 @@ onMounted(() => {
       <button @click="loadProducts" class="text-xs text-indigo-600 font-bold hover:underline">
         <i class="fa-solid fa-arrows-rotate mr-1"></i>새로고침
       </button>
+    </div>
+
+    <div v-if="toastMsg" class="p-3 rounded-xl bg-slate-900 text-white text-xs font-bold">
+      {{ toastMsg }}
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
@@ -135,4 +152,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-

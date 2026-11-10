@@ -14,6 +14,20 @@ const checkAuth = () => {
   adminRole.value = getAdminRole();
 };
 
+// P1-A01: hide nav entries the operator role cannot open (route meta.roles).
+// Unknown role fails open — the server still denies unauthorized API calls.
+const canSee = (path: string) => {
+  const role = adminRole.value || getAdminRole();
+  if (!role) return true;
+  try {
+    const resolved = router.resolve(path);
+    const roles = resolved.matched.flatMap((r: any) => (r.meta?.roles as string[] | undefined) || []);
+    return roles.length === 0 || roles.includes(role);
+  } catch {
+    return true;
+  }
+};
+
 const handleLogout = () => {
   clearAdminToken();
   isLoggedIn.value = false;
@@ -48,42 +62,44 @@ onMounted(() => {
 
         <!-- Desktop Navigation -->
         <nav class="hidden md:flex items-center gap-1 text-xs">
-          <router-link to="/" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/')" to="/" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             대시보드
           </router-link>
-          <router-link to="/products" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/products')" to="/products" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             상품 관리
           </router-link>
-          <router-link to="/orders" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/orders')" to="/orders" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             주문 관리
           </router-link>
-          <router-link to="/users" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/users')" to="/users" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             회원 관리
           </router-link>
-          <router-link to="/reviews" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/reviews')" to="/reviews" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             리뷰 모더레이션
           </router-link>
-          <router-link to="/coupons" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/coupons')" to="/coupons" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             쿠폰 관리
           </router-link>
-          <router-link to="/categories" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/categories')" to="/categories" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             카테고리 관리
           </router-link>
-          <router-link to="/partners" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/partners')" to="/partners" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             셀러 심사
           </router-link>
-          <router-link to="/ledger" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/ledger')" to="/ledger" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             에스크로 원장
           </router-link>
-          <router-link to="/partner-applications" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">입점 심사</router-link>
-          <router-link to="/business" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">운영 사업자</router-link>
-          <router-link to="/suppliers" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">공급사·발주</router-link>
-          <router-link to="/supplier-integrations" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white flex items-center gap-1" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/partner-applications')" to="/partner-applications" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">입점 심사</router-link>
+          <router-link v-if="canSee('/business')" to="/business" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">운영 사업자</router-link>
+          <router-link v-if="canSee('/suppliers')" to="/suppliers" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">공급사·발주</router-link>
+          <router-link v-if="canSee('/supplier-integrations')" to="/supplier-integrations" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white flex items-center gap-1" active-class="bg-slate-800 text-orange-400 font-bold">
             <i class="fa-solid fa-boxes-packing text-amber-400"></i>3PL·수집통합
           </router-link>
-          <router-link to="/reconciliation" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">데이터 대사</router-link>
-          <router-link to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
-          <router-link to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
+          <router-link v-if="canSee('/reconciliation')" to="/reconciliation" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">데이터 대사</router-link>
+          <router-link v-if="canSee('/security')" to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
+          <router-link v-if="canSee('/audit-log')" to="/audit-log" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">감사 로그</router-link>
+          <router-link v-if="canSee('/inquiries')" to="/inquiries" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">고객 문의</router-link>
+          <router-link v-if="canSee('/marketing')" to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             마케팅·배너
           </router-link>
         </nav>
@@ -105,25 +121,42 @@ onMounted(() => {
 
       <!-- Mobile Navigation Dropdown -->
       <div v-if="mobileMenuOpen" class="md:hidden border-t border-slate-800 bg-slate-900/98 px-4 py-3 space-y-1">
-        <router-link to="/" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+        <router-link v-if="canSee('/')" to="/" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           대시보드
         </router-link>
-        <router-link to="/products" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+        <router-link v-if="canSee('/products')" to="/products" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           상품 관리
         </router-link>
-        <router-link to="/partners" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+        <router-link v-if="canSee('/orders')" to="/orders" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          주문 관리
+        </router-link>
+        <router-link v-if="canSee('/users')" to="/users" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          회원 관리
+        </router-link>
+        <router-link v-if="canSee('/reviews')" to="/reviews" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          리뷰 모더레이션
+        </router-link>
+        <router-link v-if="canSee('/coupons')" to="/coupons" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          쿠폰 관리
+        </router-link>
+        <router-link v-if="canSee('/categories')" to="/categories" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+          카테고리 관리
+        </router-link>
+        <router-link v-if="canSee('/partners')" to="/partners" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           셀러 심사
         </router-link>
-        <router-link to="/ledger" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+        <router-link v-if="canSee('/ledger')" to="/ledger" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           에스크로 원장
         </router-link>
-        <router-link to="/partner-applications" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">입점 심사</router-link>
-        <router-link to="/business" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">운영 사업자</router-link>
-        <router-link to="/suppliers" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">공급사·발주</router-link>
-        <router-link to="/supplier-integrations" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">3PL·수집통합</router-link>
-        <router-link to="/reconciliation" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">데이터 대사</router-link>
-        <router-link to="/security" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">계정 보안</router-link>
-        <router-link to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
+        <router-link v-if="canSee('/partner-applications')" to="/partner-applications" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">입점 심사</router-link>
+        <router-link v-if="canSee('/business')" to="/business" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">운영 사업자</router-link>
+        <router-link v-if="canSee('/suppliers')" to="/suppliers" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">공급사·발주</router-link>
+        <router-link v-if="canSee('/supplier-integrations')" to="/supplier-integrations" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">3PL·수집통합</router-link>
+        <router-link v-if="canSee('/reconciliation')" to="/reconciliation" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">데이터 대사</router-link>
+        <router-link v-if="canSee('/security')" to="/security" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">계정 보안</router-link>
+        <router-link v-if="canSee('/audit-log')" to="/audit-log" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">감사 로그</router-link>
+        <router-link v-if="canSee('/inquiries')" to="/inquiries" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">고객 문의</router-link>
+        <router-link v-if="canSee('/marketing')" to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           마케팅·배너 & 알림 센터
         </router-link>
         <div class="pt-2 border-t border-slate-800">

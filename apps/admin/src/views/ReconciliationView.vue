@@ -1,26 +1,38 @@
 <script setup lang="ts">
 // 데이터 대사(R01~R19) · 주기 대사 이력 · 시산표 · 판매자 지급(롤링 리저브 포함). 모든 수치는 원장/DB 실데이터에서 계산된다.
 import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { adminApi, won } from '../config'
 
+const route = useRoute()
 const recon = ref<any>(null)
 const trial = ref<any[]>([])
 const payouts = ref<any>({ payouts: [], pending: [] })
 const runs = ref<any>({ runs: [], last_cron: null, alert_channel_configured: false })
 const loading = ref(false)
 const msg = ref('')
+const loadError = ref('')
 const failing = computed(() => (recon.value?.checks || []).filter((c: any) => !c.ok))
+// P1-A11: partner carried over from the ledger's "지급 화면으로 이동" button.
+const highlightPartner = computed(() => typeof route.query.partner_id === 'string' ? route.query.partner_id : '')
 
 async function load() {
   loading.value = true
-  const [a, b, c] = await Promise.all([adminApi('/api/v1/admin/reconciliation'), adminApi('/api/v1/admin/finance/trial-balance'), adminApi('/api/v1/admin/finance/payouts')])
-  recon.value = a.data.data
-  trial.value = b.data.data || []
-  payouts.value = c.data.data || { payouts: [], pending: [] }
-  // Loaded after the manual run above so that run appears in the history.
-  const d = await adminApi('/api/v1/admin/finance/reconciliation-runs')
-  runs.value = d.data?.data || runs.value
-  loading.value = false
+  loadError.value = ''
+  try {
+    const [a, b, c] = await Promise.all([adminApi('/api/v1/admin/reconciliation'), adminApi('/api/v1/admin/finance/trial-balance'), adminApi('/api/v1/admin/finance/payouts')])
+    if (!a.ok || !b.ok || !c.ok) throw new Error(a.data?.error || b.data?.error || c.data?.error || '대사 데이터를 불러오지 못했습니다.')
+    recon.value = a.data.data
+    trial.value = b.data.data || []
+    payouts.value = c.data.data || { payouts: [], pending: [] }
+    // Loaded after the manual run above so that run appears in the history.
+    const d = await adminApi('/api/v1/admin/finance/reconciliation-runs')
+    runs.value = d.data?.data || runs.value
+  } catch (e: any) {
+    loadError.value = e?.message || '대사 데이터를 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
 }
 async function pay(p: any) {
   const reserveNote = p.reserve_to_hold || p.reserve_to_release
@@ -53,6 +65,10 @@ onMounted(load)
       <button class="h-9 px-4 rounded-lg bg-slate-900 text-white font-bold" :disabled="loading" @click="load">{{ loading ? '검증 중...' : '다시 검증' }}</button>
     </div>
     <div v-if="msg" role="status" class="p-3 rounded-lg bg-indigo-50 text-indigo-900 font-bold">{{ msg }}</div>
+    <div v-if="loadError" role="alert" class="p-3 rounded-lg bg-red-50 text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
+      <span>{{ loadError }}</span>
+      <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
+    </div>
 
     <section v-if="recon" class="bg-white rounded-xl border p-4" :class="recon.ok ? 'border-emerald-300' : 'border-red-300'">
       <div class="text-sm font-black" :class="recon.ok ? 'text-emerald-700' : 'text-red-700'" data-testid="recon-status">
@@ -87,8 +103,9 @@ onMounted(load)
     <section class="bg-white rounded-xl border border-slate-200 p-4">
       <h2 class="font-black text-sm mb-2">판매자 지급 대기</h2>
       <p class="text-slate-500 mb-2">지급액 = 정산 + 이월 차감 − 롤링 리저브 보류 + 보류 기간이 끝난 리저브. 보류분은 판매자 미지급금으로 남아 있습니다.</p>
+      <p v-if="highlightPartner" class="mb-2 p-2 rounded-lg bg-indigo-50 text-indigo-800 font-bold">원장에서 이동 — 판매자 {{ highlightPartner }}의 지급 대기가 강조 표시됩니다.</p>
       <div class="overflow-x-auto"><table class="w-full min-w-[640px]"><thead class="text-slate-500"><tr><th class="text-left p-1">판매자</th><th class="text-right p-1">정산 건</th><th class="text-right p-1">이월 차감</th><th class="text-right p-1">정산액</th><th class="text-right p-1">리저브 보류</th><th class="text-right p-1">리저브 해제</th><th class="text-right p-1">지급액</th><th></th></tr></thead>
-        <tbody><tr v-for="p in payouts.pending" :key="p.partner_id" class="border-t">
+        <tbody><tr v-for="p in payouts.pending" :key="p.partner_id" class="border-t" :class="p.partner_id === highlightPartner ? 'bg-indigo-50' : ''">
           <td class="p-1">{{ p.business_name }}<div v-if="p.reserve_outstanding" class="text-slate-400">보류 중 리저브 {{ won(p.reserve_outstanding) }} · 다음 해제 {{ p.next_reserve_release }}</div></td>
           <td class="p-1 text-right">{{ p.settlements }}</td><td class="p-1 text-right">{{ p.carried_adjustments }}</td>
           <td class="p-1 text-right">{{ won(p.gross_amount) }}</td><td class="p-1 text-right text-amber-700">{{ p.reserve_to_hold ? `−${won(p.reserve_to_hold)}` : '-' }}</td>

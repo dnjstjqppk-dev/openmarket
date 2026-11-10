@@ -14,8 +14,13 @@ interface Coupon {
   is_active: number;
 }
 
+// A-N02: every PERCENT coupon must carry a cap — an uncapped percent coupon
+// discounts up to 90% of any order. 50000 is the house default.
+const PERCENT_DEFAULT_CAP = 50000;
+
 const coupons = ref<Coupon[]>([]);
 const loading = ref(true);
+const formError = ref('');
 const form = ref({
   code: '',
   title: '',
@@ -25,6 +30,13 @@ const form = ref({
   max_discount_amount: null as number | null,
   expires_at: ''
 });
+
+function onDiscountTypeChange() {
+  formError.value = '';
+  if (form.value.discount_type === 'PERCENT' && form.value.max_discount_amount === null) {
+    form.value.max_discount_amount = PERCENT_DEFAULT_CAP;
+  }
+}
 
 async function loadCoupons() {
   loading.value = true;
@@ -43,7 +55,17 @@ async function loadCoupons() {
 }
 
 async function createCoupon() {
+  formError.value = '';
   if (!form.value.code || !form.value.title) return;
+  if (form.value.discount_type === 'PERCENT') {
+    if (form.value.max_discount_amount === null || Number(form.value.max_discount_amount) <= 0) {
+      form.value.max_discount_amount = PERCENT_DEFAULT_CAP;
+    }
+    if (!(Number(form.value.max_discount_amount) > 0)) {
+      formError.value = '정률(%) 쿠폰은 최대 할인금액(상한) 입력이 필수입니다.';
+      return;
+    }
+  }
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/coupons`, {
       method: 'POST',
@@ -53,8 +75,12 @@ async function createCoupon() {
     if (res.ok) {
       form.value = { code: '', title: '', discount_type: 'FIXED_AMOUNT', discount_value: 0, min_order_amount: 0, max_discount_amount: null, expires_at: '' };
       await loadCoupons();
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      formError.value = errJson.error || '쿠폰 생성에 실패했습니다.';
     }
   } catch (_) {
+    formError.value = '쿠폰 생성 중 네트워크 오류가 발생했습니다.';
   }
 }
 
@@ -86,17 +112,22 @@ onMounted(loadCoupons);
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
       <input v-model="form.code" placeholder="쿠폰 코드" class="border border-slate-300 rounded-lg px-2 py-1.5" />
       <input v-model="form.title" placeholder="쿠폰 제목" class="border border-slate-300 rounded-lg px-2 py-1.5" />
-      <select v-model="form.discount_type" class="border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
+      <select v-model="form.discount_type" @change="onDiscountTypeChange" class="border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
         <option value="FIXED_AMOUNT">정액 (원)</option>
         <option value="PERCENT">정률 (%)</option>
       </select>
       <input v-model.number="form.discount_value" type="number" placeholder="할인값" class="border border-slate-300 rounded-lg px-2 py-1.5" />
       <input v-model.number="form.min_order_amount" type="number" placeholder="최소 주문금액" class="border border-slate-300 rounded-lg px-2 py-1.5" />
+      <label class="flex flex-col gap-1">
+        <span class="font-bold text-slate-600">최대 할인금액(상한){{ form.discount_type === 'PERCENT' ? ' — 정률 필수' : ' (선택)' }}</span>
+        <input v-model.number="form.max_discount_amount" type="number" min="0" step="1000" :placeholder="form.discount_type === 'PERCENT' ? '50000' : '상한 없음'" class="border border-slate-300 rounded-lg px-2 py-1.5" />
+      </label>
       <input v-model="form.expires_at" type="date" class="border border-slate-300 rounded-lg px-2 py-1.5" />
       <button @click="createCoupon" class="bg-indigo-600 text-white rounded-lg px-3 py-1.5 font-bold hover:bg-indigo-700">
         쿠폰 생성
       </button>
     </div>
+    <p v-if="formError" role="alert" class="text-xs font-bold text-rose-600">{{ formError }}</p>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
       <i class="fa-solid fa-spinner fa-spin mr-2"></i>쿠폰 목록을 불러오는 중...

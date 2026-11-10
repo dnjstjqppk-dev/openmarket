@@ -50,9 +50,11 @@ async function loadPartners() {
 }
 
 async function verify(p: Partner, newStatus: 'APPROVED' | 'REJECTED' | 'SUSPENDED') {
-  isProcessing.value = p.id;
   const tier = selectedRiskTier.value[p.id] || 'TIER_1_NORMAL';
   const reserve = tier === 'TIER_3_HIGH_RISK' ? 10.0 : tier === 'TIER_2_WATCH' ? 5.0 : 0.0;
+  const actionLabel = newStatus === 'SUSPENDED' ? '정지(판매 중단)' : newStatus === 'REJECTED' ? '반려' : '승인/등급적용';
+  if (!window.confirm(`[${p.business_name}] 파트너를 ${actionLabel} 처리합니다.\n위험등급: ${tier} · 롤링 리저브: ${reserve}%\n계속할까요?`)) return;
+  isProcessing.value = p.id;
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/partners/${p.id}/verify`, {
@@ -71,8 +73,14 @@ async function verify(p: Partner, newStatus: 'APPROVED' | 'REJECTED' | 'SUSPENDE
       p.rolling_reserve_pct = reserve;
       toastMsg.value = `✓ [${p.business_name}] 파트너가 ${newStatus} (위험등급: ${tier}, 유보금: ${reserve}%) 처리되었습니다.`;
       setTimeout(() => { toastMsg.value = ''; }, 3500);
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      toastMsg.value = `⚠ [${p.business_name}] 처리에 실패했습니다 (${errJson.error || `HTTP ${res.status}`}). 다시 시도해 주세요.`;
+      setTimeout(() => { toastMsg.value = ''; }, 4000);
     }
   } catch (_) {
+    toastMsg.value = `⚠ [${p.business_name}] 요청 중 네트워크 오류가 발생했습니다. 다시 시도해 주세요.`;
+    setTimeout(() => { toastMsg.value = ''; }, 4000);
   } finally {
     isProcessing.value = null;
   }

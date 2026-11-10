@@ -87,4 +87,27 @@ await t.test('A04 GET /api/v1/admin/orders attaches sub_orders[].items for the r
   assert.equal(ord.sub_orders[0].items[0].id, 'oi_admops')
 })
 
+await t.test('A05 dispute arbitration confirms before moving money either way', async () => {
+  const v = read('apps/admin/src/views/DashboardView.vue')
+  assert.ok(v.includes('FULL_REFUND_TO_BUYER'), 'refund ruling exists')
+  assert.ok(v.includes('window.confirm'), 'money-moving ruling requires confirmation')
+  assert.ok(v.includes('구매자 환불'), 'confirm names the refund action')
+  assert.ok(v.includes('판정에 실패'), 'arbitration failure is reported')
+})
+
+await t.test('A06 broadcast push confirms target before sending', async () => {
+  const v = read('apps/admin/src/views/MarketingView.vue')
+  assert.ok(v.includes('window.confirm'), 'broadcast requires confirmation')
+  assert.ok(v.includes('notifTarget.value'), 'confirm names the target audience')
+  assert.ok(v.includes('발송에 실패'), 'broadcast failure is reported')
+})
+
+await t.test('A07 ledger claim approve confirms with amount before moving money', async () => {
+  const v = read('apps/admin/src/views/LedgerAuditView.vue')
+  assert.ok(v.includes('window.confirm'), 'approve requires confirmation')
+  assert.ok(v.includes('실제 환불이 실행됩니다'), 'confirm warns money moves')
+  assert.ok(v.includes("resolveClaim(cl.id, 'APPROVED', cl.refund_amount)"), 'approve passes the amount')
+  assert.ok(v.includes("resolveClaim(cl.id, 'REJECTED')"), 'reject path unchanged')
+})
+
 t.finish()

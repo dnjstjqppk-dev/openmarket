@@ -8,8 +8,16 @@ import App from './App.vue';
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);
-import { API_BASE_URL, getAdminToken, clearAdminToken } from './config';
-router.beforeEach((to) => (to.path !== '/login' && !getAdminToken()) ? { path: '/login', query: { redirect: to.fullPath } } : true);
+import { API_BASE_URL, getAdminToken, getAdminRole, clearAdminToken } from './config';
+// P1-A01: token presence + per-route role check (server still enforces per-call;
+// an unknown role fails open to the server rather than locking operators out).
+router.beforeEach((to) => {
+  if (to.path !== '/login' && !getAdminToken()) return { path: '/login', query: { redirect: to.fullPath } };
+  const roles = (to.meta?.roles as string[] | undefined) || (to.matched?.flatMap((r: any) => (r.meta?.roles as string[] | undefined) || []) as string[]);
+  const role = getAdminRole();
+  if (roles && roles.length && role && !roles.includes(role)) return { path: '/', query: { denied: to.path } };
+  return true;
+});
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const res = await nativeFetch(input, init);

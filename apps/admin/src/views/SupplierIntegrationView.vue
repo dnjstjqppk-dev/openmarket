@@ -119,9 +119,11 @@ async function loadOrders() {
   isLoading.value = true;
   try {
     const r = await adminApi('/api/v1/admin/supplier-orders');
+    if (!r.ok) throw new Error(r.data.error || '발주 목록을 불러오지 못했습니다.');
     orders.value = r.data.data || [];
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load supplier orders:', err);
+    errorMsg.value = err.message || '발주 목록을 불러오지 못했습니다.';
   } finally {
     isLoading.value = false;
   }
@@ -131,9 +133,11 @@ async function loadImportJobs() {
   isLoading.value = true;
   try {
     const r = await adminApi('/api/v1/admin/imports/jobs');
+    if (!r.ok) throw new Error(r.data.error || '수집 작업 목록을 불러오지 못했습니다.');
     importJobs.value = r.data.data || [];
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load import jobs:', err);
+    errorMsg.value = err.message || '수집 작업 목록을 불러오지 못했습니다.';
   } finally {
     isLoading.value = false;
   }
@@ -143,9 +147,11 @@ async function loadSyncLogs() {
   isLoading.value = true;
   try {
     const r = await adminApi('/api/v1/admin/sync/logs');
+    if (!r.ok) throw new Error(r.data.error || '동기화 로그를 불러오지 못했습니다.');
     syncLogs.value = r.data.data || [];
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load sync logs:', err);
+    errorMsg.value = err.message || '동기화 로그를 불러오지 못했습니다.';
   } finally {
     isLoading.value = false;
   }
@@ -155,9 +161,11 @@ async function loadFlags() {
   isLoading.value = true;
   try {
     const r = await adminApi('/api/v1/admin/feature-flags');
+    if (!r.ok) throw new Error(r.data.error || '기능 플래그를 불러오지 못했습니다.');
     flags.value = r.data.data || [];
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load feature flags:', err);
+    errorMsg.value = err.message || '기능 플래그를 불러오지 못했습니다.';
   } finally {
     isLoading.value = false;
   }
@@ -255,12 +263,14 @@ async function loadPlatforms() {
   isLoading.value = true;
   try {
     const r = await adminApi('/api/v1/channels/platforms');
-    if (r.ok && r.data) {
+    if (!r.ok) throw new Error(r.data.error || '플랫폼 목록을 불러오지 못했습니다.');
+    if (r.data) {
       platforms.value = r.data.platforms || [];
       platformSummary.value = r.data.summary || null;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to load platforms:', err);
+    errorMsg.value = err.message || '플랫폼 목록을 불러오지 못했습니다.';
   } finally {
     isLoading.value = false;
   }
@@ -309,6 +319,9 @@ onMounted(() => {
     <div v-if="errorMsg" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-3">
       <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg flex-shrink-0"></i>
       <span class="text-sm font-semibold">{{ errorMsg }}</span>
+    </div>
+    <div v-if="isLoading" class="p-8 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200">
+      <i class="fa-solid fa-spinner fa-spin mr-2"></i>데이터를 불러오는 중입니다...
     </div>
 
     <!-- Navigation Tabs -->

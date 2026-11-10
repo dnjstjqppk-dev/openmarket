@@ -21,8 +21,13 @@ const showNewCampaignModal = ref(false)
 const newCampaign = ref<any>({ title: '', category_id: '', ceiling_supply_price: null, min_moq: null, notes: '' })
 
 async function loadCampaigns() {
-  const r = await adminApi('/api/v1/bidding/campaigns?status=ALL')
-  campaigns.value = r.data.data || []
+  try {
+    const r = await adminApi('/api/v1/bidding/campaigns?status=ALL')
+    campaigns.value = r.ok ? (r.data.data || []) : []
+    if (!r.ok) msg.value = r.data.error || '캠페인 목록을 불러오지 못했습니다.'
+  } catch (e: any) {
+    msg.value = e?.message || '캠페인 목록을 불러오지 못했습니다.'
+  }
 }
 
 async function createCampaign() {
@@ -46,8 +51,13 @@ async function createCampaign() {
 
 async function viewBids(campaignId: string) {
   activeCampaignId.value = campaignId
-  const r = await adminApi(`/api/v1/bidding/campaigns/${campaignId}`)
-  campaignBids.value = r.data.data?.bids || []
+  try {
+    const r = await adminApi(`/api/v1/bidding/campaigns/${campaignId}`)
+    campaignBids.value = r.ok ? (r.data.data?.bids || []) : []
+    if (!r.ok) msg.value = r.data.error || '입찰 목록을 불러오지 못했습니다.'
+  } catch (e: any) {
+    msg.value = e?.message || '입찰 목록을 불러오지 못했습니다.'
+  }
 }
 
 async function awardBid(campaignId: string, bidId: string) {
@@ -66,11 +76,34 @@ async function awardBid(campaignId: string, bidId: string) {
 const NEXT: Record<string, string[]> = { DRAFT: ['SENT', 'CANCELLED'], SENT: ['CONFIRMED', 'FAILED', 'CANCELLED'], CONFIRMED: ['SHIPPED', 'FAILED'], FAILED: ['SENT', 'CANCELLED'] }
 const LABEL: Record<string, string> = { DRAFT: '발주 대기', SENT: '발주 전송', CONFIRMED: '공급사 확인', SHIPPED: '출고', FAILED: '실패/품절', CANCELLED: '취소' }
 
-async function loadPos() { const r = await adminApi(`/api/v1/admin/purchase-orders${poFilter.value ? `?status=${poFilter.value}` : ''}`); pos.value = r.data.data || [] }
-async function loadSuppliers() { const r = await adminApi('/api/v1/admin/suppliers'); suppliers.value = r.data.data || [] }
-async function openSupplier(s: any) { selectedSupplier.value = s; const r = await adminApi(`/api/v1/admin/suppliers/${s.id}/mappings`); mappings.value = r.data.data || [] }
+async function loadPos() {
+  try {
+    const r = await adminApi(`/api/v1/admin/purchase-orders${poFilter.value ? `?status=${poFilter.value}` : ''}`)
+    pos.value = r.ok ? (r.data.data || []) : []
+    if (!r.ok) msg.value = r.data.error || '발주 목록을 불러오지 못했습니다.'
+  } catch (e: any) { msg.value = e?.message || '발주 목록을 불러오지 못했습니다.' }
+}
+async function loadSuppliers() {
+  try {
+    const r = await adminApi('/api/v1/admin/suppliers')
+    suppliers.value = r.ok ? (r.data.data || []) : []
+    if (!r.ok) msg.value = r.data.error || '공급사 목록을 불러오지 못했습니다.'
+  } catch (e: any) { msg.value = e?.message || '공급사 목록을 불러오지 못했습니다.' }
+}
+async function openSupplier(s: any) {
+  selectedSupplier.value = s
+  try {
+    const r = await adminApi(`/api/v1/admin/suppliers/${s.id}/mappings`)
+    mappings.value = r.ok ? (r.data.data || []) : []
+    if (!r.ok) msg.value = r.data.error || '소싱 정보를 불러오지 못했습니다.'
+  } catch (e: any) { msg.value = e?.message || '소싱 정보를 불러오지 못했습니다.' }
+}
 
 async function movePo(po: any, status: string) {
+  // P1-A10: CANCELLED is terminal (no outgoing transitions) and FAILED is
+  // destructive — both need an explicit confirmation before the click lands.
+  if (status === 'CANCELLED' && !confirm(`발주 ${po.po_no}를 취소합니다. 취소는 되돌릴 수 없습니다(terminal). 계속할까요?`)) return
+  if (status === 'FAILED' && !confirm(`발주 ${po.po_no}를 실패/품절 처리합니다. 계속할까요?`)) return
   const body: any = { status }
   if (status === 'SENT' || status === 'CONFIRMED') body.supplier_order_ref = prompt('공급사 주문번호(선택)') || undefined
   if (status === 'FAILED') body.failure_reason = prompt('실패 사유 (예: 공급사 재고 소진)') || '공급사 발주 실패'

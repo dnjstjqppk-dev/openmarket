@@ -12,14 +12,28 @@ const forms = reactive<Record<string, any>>({})
 const DOC_LABEL: Record<string, string> = { BUSINESS_REGISTRATION: '사업자등록증', MAIL_ORDER_REGISTRATION: '통신판매업 신고증', BANK_ACCOUNT_COPY: '통장 사본', OTHER: '기타' }
 const STATUS_LABEL: Record<string, string> = { DRAFT: '작성 중', SUBMITTED: '심사 대기', RESUBMIT_REQUIRED: '보완 요청됨', APPROVED: '승인', REJECTED: '반려' }
 
+// A-N01: same masking standard as PartnerVerifyView — the API already sends
+// masked numbers, and this keeps the console masked even if that ever changes.
+function maskAcct(n?: string) {
+  const t = String(n || '')
+  if (!t || t === '-') return '-'
+  if (t.startsWith('****')) return t
+  return `****${t.slice(-4)}`
+}
+
 async function load() {
   loading.value = true; err.value = ''
-  const r = await adminApi(`/api/v1/admin/partner-applications?kyc_status=${filter.value}`)
-  loading.value = false
-  if (!r.ok) { err.value = r.data.error || '목록을 불러오지 못했습니다.'; return }
-  apps.value = r.data.data || []
-  for (const a of apps.value) {
-    forms[a.partner_id] = forms[a.partner_id] || { commission_rate: '', business_status_evidence: '', confirm_documents_checked: false, note: '', rejected: [] as string[] }
+  try {
+    const r = await adminApi(`/api/v1/admin/partner-applications?kyc_status=${filter.value}`)
+    if (!r.ok) { err.value = r.data.error || '목록을 불러오지 못했습니다.'; return }
+    apps.value = r.data.data || []
+    for (const a of apps.value) {
+      forms[a.partner_id] = forms[a.partner_id] || { commission_rate: '', business_status_evidence: '', confirm_documents_checked: false, note: '', rejected: [] as string[] }
+    }
+  } catch (e: any) {
+    err.value = e?.message || '목록을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -71,7 +85,7 @@ onMounted(load)
           <h2 class="text-sm font-black">{{ a.business_name }} <span class="ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">{{ STATUS_LABEL[a.kyc_status] || a.kyc_status }}</span></h2>
           <p class="text-slate-500">사업자 {{ a.business_reg_number }} · 대표 {{ a.representative_name }} · 통신판매업 {{ a.mail_order_reg_number || `면제: ${a.mail_order_exempt_reason}` }}</p>
           <p class="text-slate-500">담당 {{ a.contact_name }} ({{ a.contact_email }}, {{ a.contact_phone }}) · 고객센터 {{ a.customer_service_phone }}</p>
-          <p class="text-slate-500">정산 계좌 {{ a.bank_code }} {{ a.bank_account_number }} ({{ a.bank_account_holder }}) · 반품지 {{ a.return_shipping_address }}</p>
+          <p class="text-slate-500">정산 계좌 {{ a.bank_code }} {{ maskAcct(a.bank_account_number) }} ({{ a.bank_account_holder }}) · 반품지 {{ a.return_shipping_address }}</p>
         </div>
         <div class="text-slate-400 text-right">신청 {{ a.applied_at }}<br />심사 요청 {{ a.submitted_at || '-' }}</div>
       </div>

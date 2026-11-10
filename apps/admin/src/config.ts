@@ -22,13 +22,19 @@ export const setAdminRole = (r: string) => { try { localStorage.setItem(ROLE_KEY
 export const ADMIN_ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: '최고관리자', FINANCE: '재무', OPERATIONS: '운영·MD', CS: '고객지원', PRIVACY_OFFICER: '개인정보 보호책임' }
 
 export async function adminApi<T = any>(path: string, init: RequestInit & { json?: any } = {}): Promise<{ ok: boolean; status: number; data: T | any }> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: { ...getAdminHeaders(), ...(init.headers || {}) },
-    body: init.json !== undefined ? JSON.stringify(init.json) : init.body
-  })
-  const data = await res.json().catch(() => ({}))
-  return { ok: res.ok && data.success !== false, status: res.status, data }
+  // P1-A14: never throws — transport/parse failures return {ok:false} so callers
+  // degrade to error states instead of stuck loaders or blank screens.
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: { ...getAdminHeaders(), ...(init.headers || {}) },
+      body: init.json !== undefined ? JSON.stringify(init.json) : init.body
+    })
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok && data.success !== false, status: res.status, data }
+  } catch (err: any) {
+    return { ok: false, status: 0, data: { success: false, error: err?.message || '서버에 연결할 수 없습니다.' } }
+  }
 }
 
 export const won = (n: number | null | undefined) => `${Number(n || 0).toLocaleString('ko-KR')}원`
