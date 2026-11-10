@@ -9,7 +9,7 @@ import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
-import { logPiiView } from '../services/privacy.js';
+import { logPiiView, maskLast4 } from '../services/privacy.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
@@ -51,6 +51,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        LEFT JOIN users u ON r.user_id = u.id
        ORDER BY r.created_at DESC LIMIT 100`
     ).all();
+    await logPiiView(env, admin, 'admin.reviews', 'review', results.map((r) => r.id), 'reviewer_email', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
@@ -114,7 +115,8 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        ORDER BY p.created_at DESC`
     ).all();
     await logPiiView(env, admin, 'admin.partners', 'user', results.map((r) => r.owner_user_id), 'email,full_name,phone,bank_account', request);
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+    const maskedPartners = results.map((r) => ({ ...r, bank_account_number: maskLast4(r.bank_account_number) }));
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: maskedPartners }), { headers: corsHeaders });
   }
 
   // 3. Admin Verify Partner (Approve / Reject / Risk Tiering / Rolling Reserve)
@@ -232,9 +234,12 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   // 6. Admin All Orders
   if (url.pathname === '/api/v1/admin/orders' && request.method === 'GET') {
+    const admPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const admPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
+    const admTotal = await env.DB.prepare('SELECT COUNT(*) AS c FROM orders').first('c') || 0;
     const { results: orders } = await env.DB.prepare(
-      'SELECT o.*, u.email as buyer_email FROM orders o LEFT JOIN users u ON o.customer_id = u.id ORDER BY o.created_at DESC LIMIT 50'
-    ).all();
+      'SELECT o.*, u.email as buyer_email FROM orders o LEFT JOIN users u ON o.customer_id = u.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?'
+    ).bind(admPerPage, (admPage - 1) * admPerPage).all();
 
     for (const ord of orders) {
       const { results: subs } = await env.DB.prepare(
@@ -247,19 +252,22 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       ord.sub_orders = subs;
     }
     await logPiiView(env, admin, 'admin.orders', 'order', orders.map((o) => o.id), 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, data: orders }), { headers: corsHeaders });
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, pagination: { page: admPage, per_page: admPerPage, total: Number(admTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(admTotal) || 0) / admPerPage)) }, data: orders }), { headers: corsHeaders });
   }
 
   // 7. Admin Ledger / Settlements & Approve Payout
   if ((url.pathname === '/api/v1/admin/ledger' || url.pathname === '/api/v1/admin/ledgers') && request.method === 'GET') {
+    const ledPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const ledPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
+    const ledTotal = await env.DB.prepare('SELECT COUNT(*) AS c FROM settlements').first('c') || 0;
     const { results } = await env.DB.prepare(
       `SELECT s.*, p.business_name, sub.sub_order_no, sub.status as sub_order_status
        FROM settlements s
        LEFT JOIN partners p ON s.partner_id = p.id
        LEFT JOIN sub_orders sub ON s.sub_order_id = sub.id
-       ORDER BY s.created_at DESC`
-    ).all();
-    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
+       ORDER BY s.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(ledPerPage, (ledPage - 1) * ledPerPage).all();
+    return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, pagination: { page: ledPage, per_page: ledPerPage, total: Number(ledTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(ledTotal) || 0) / ledPerPage)) }, data: results }), { headers: corsHeaders });
   }
 
   if (url.pathname.match(/^\/api\/v1\/admin\/settlements\/[^\/]+\/approve$/) && request.method === 'POST') {
@@ -268,14 +276,18 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   // 8. Admin Claims & Dispute Management
   if (url.pathname === '/api/v1/admin/claims' && request.method === 'GET') {
+    const clmPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const clmPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
+    const clmTotal = await env.DB.prepare('SELECT COUNT(*) AS c FROM returns').first('c') || 0;
     const { results } = await env.DB.prepare(
       `SELECT r.*, o.order_no, u.email as customer_email
        FROM returns r
        LEFT JOIN orders o ON r.order_id = o.id
        LEFT JOIN users u ON r.user_id = u.id
-       ORDER BY r.created_at DESC`
-    ).all();
-    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+       ORDER BY r.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(clmPerPage, (clmPage - 1) * clmPerPage).all();
+    await logPiiView(env, admin, 'admin.claims', 'claim', results.map((r) => r.id), 'customer_email', request);
+    return new Response(JSON.stringify({ success: true, count: results.length, pagination: { page: clmPage, per_page: clmPerPage, total: Number(clmTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(clmTotal) || 0) / clmPerPage)) }, data: results }), { headers: corsHeaders });
   }
 
   if (url.pathname.match(/^\/api\/v1\/admin\/claims\/[^\/]+$/) && request.method === 'PUT') {
@@ -345,9 +357,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (request.method === 'PUT' || request.method === 'PATCH') {
       const body = await readJson(request);
       const existing = await env.DB.prepare('SELECT * FROM banners WHERE id = ?').bind(bnrId).first();
-      if (!existing) {
-        return new Response(JSON.stringify({ error: 'Banner not found' }), { status: 404, headers: corsHeaders });
-      }
+      if (!existing) throw notFound('Banner not found');
       const isActive = body.is_active !== undefined ? (body.is_active ? 1 : 0) : existing.is_active;
       const displayOrder = body.display_order !== undefined ? parseInt(body.display_order, 10) : existing.display_order;
       const title = body.title ? body.title.trim() : existing.title;
@@ -385,6 +395,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        LEFT JOIN users u ON n.user_id = u.id
        ORDER BY n.created_at DESC LIMIT 100`
     ).all();
+    await logPiiView(env, admin, 'admin.notifications', 'user', results.map((n) => n.user_id), 'user_email,user_name', request);
     return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
   }
 
@@ -396,9 +407,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const type = ['ORDER_STATUS', 'DISCOUNT', 'CREDIT_GRANTED', 'SYSTEM'].includes(body.type) ? body.type : 'SYSTEM';
     const actionUrl = (body.action_url || body.link_url || '/').trim();
 
-    if (!title || !message) {
-      return new Response(JSON.stringify({ error: '알림 제목과 메시지는 필수 항목입니다.' }), { status: 400, headers: corsHeaders });
-    }
+    if (!title || !message) throw bad('NOTIFICATION_REQUIRED', '알림 제목과 메시지는 필수 항목입니다.');
 
     let targetUserIds = [];
     if (target === 'ALL') {
@@ -431,6 +440,22 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }), { status: 201, headers: corsHeaders });
   }
 
+  // P1-A13: operator audit-trail query (admin_audit_log is otherwise INSERT-only).
+  if (url.pathname === '/api/v1/admin/audit-log' && request.method === 'GET') {
+    const actor = url.searchParams.get('actor_user_id');
+    const action = url.searchParams.get('action');
+    const targetType = url.searchParams.get('target_type');
+    const targetId = url.searchParams.get('target_id');
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 100, 1), 500);
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM admin_audit_log
+       WHERE (? IS NULL OR actor_user_id = ?) AND (? IS NULL OR action = ?)
+         AND (? IS NULL OR target_type = ?) AND (? IS NULL OR target_id = ?)
+       ORDER BY created_at DESC, rowid DESC LIMIT ?`
+    ).bind(actor, actor, action, action, targetType, targetType, targetId, targetId, limit).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
   // 11. Admin Coupon Management
   if (url.pathname === '/api/v1/admin/coupons' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all();
@@ -441,9 +466,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const body = await readJson(request);
     const code = (body.code || '').trim().toUpperCase();
     const title = (body.title || '').trim();
-    if (!code || !title) {
-      return new Response(JSON.stringify({ error: '쿠폰 코드와 제목은 필수입니다.' }), { status: 400, headers: corsHeaders });
-    }
+    if (!code || !title) throw bad('COUPON_REQUIRED', '쿠폰 코드와 제목은 필수입니다.');
     const id = newId('cpn');
     const dv = Number(body.discount_value);
     if (!Number.isSafeInteger(dv) || dv <= 0 || (body.discount_type === 'PERCENT' && dv > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
@@ -483,9 +506,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const body = await readJson(request);
     const name = (body.name || '').trim();
     const slug = (body.slug || name.toLowerCase().replace(/\s+/g, '-')).trim();
-    if (!name) {
-      return new Response(JSON.stringify({ error: '카테고리명은 필수입니다.' }), { status: 400, headers: corsHeaders });
-    }
+    if (!name) throw bad('CATEGORY_NAME_REQUIRED', '카테고리명은 필수입니다.');
     const id = body.id || newId('cat');
     const parentId = body.parent_id || null;
     const depth = parentId ? 1 : 0;

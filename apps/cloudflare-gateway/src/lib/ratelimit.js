@@ -5,7 +5,7 @@
 //
 //   RL_AUTH    10 / 60 s per IP   login, register, password reset, seller application, 2FA, withdrawal
 //   RL_LOGIN    5 / 60 s per account (e-mail)  — distributed guessing against one account
-//   RL_WRITE   30 / 60 s per user (or IP)      checkout, payment confirm, claims, uploads, reviews, Q&A
+//   RL_WRITE   30 / 60 s per user (or IP)      checkout, payment confirm, claims, uploads, reviews, Q&A, imports, channels, bidding
 //   RL_API    300 / 60 s per IP                everything else
 //
 // Missing binding (local dev / tests) = no limit, unless RATE_LIMIT_REQUIRED=true (then fail closed with 503).
@@ -18,7 +18,9 @@ const AUTH_PATHS = [
 ];
 const WRITE_PATHS = [
   /^\/api\/v1\/orders\/checkout$/, /^\/api\/v1\/payments\//, /^\/api\/v1\/orders\/[^/]+\/(claims|cancel|sub-orders\/[^/]+\/cancel)$/,
-  /^\/api\/v1\/storage\/upload$/, /^\/api\/v1\/products\/[^/]+\/(reviews|qna)$/, /^\/api\/v1\/support/
+  /^\/api\/v1\/storage\/upload$/, /^\/api\/v1\/products\/[^/]+\/(reviews|qna)$/, /^\/api\/v1\/support/,
+  /^\/api\/v1\/imports\//, /^\/api\/v1\/channels\//, /^\/api\/v1\/bidding\//,
+  /^\/api\/v1\/pricing\//, /^\/api\/v1\/(admin|partner)\/(bidding|pricing)\//, /^\/api\/v1\/auth\/social\//
 ];
 
 export function classify(method, path) {

@@ -1,6 +1,7 @@
 // apps/cloudflare-gateway/src/routes/integrations.js
 // OLMOA External Integrations: PriceScanner Product Feed & Selbym Partner Boundary
 import { timingSafeEqual } from '../utils/crypto-auth.js';
+import { unauthorized } from '../lib/http.js';
 
 export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
   // 1. PriceScanner Authenticated Product Feed
@@ -9,13 +10,11 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
     const validKey = env.PRICESCANNER_API_KEY;
 
     if (!validKey || validKey.length < 24 || !feedKey || !timingSafeEqual(feedKey, validKey)) {
-      return new Response(JSON.stringify({
-        error: 'Unauthorized: Valid X-Integration-Key required for PriceScanner feed.'
-      }), { status: 401, headers: corsHeaders });
+      throw unauthorized('Valid X-Integration-Key required for PriceScanner feed.');
     }
 
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
     const offset = (page - 1) * limit;
     const updatedAfter = url.searchParams.get('updated_after');
 
@@ -43,9 +42,9 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
     const stmt = env.DB.prepare(query).bind(...binds);
     const { results } = await stmt.all();
 
-    const countRes = await env.DB.prepare(
-      `SELECT COUNT(*) as cnt FROM products p JOIN partners pt ON p.partner_id = pt.id WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED'`
-    ).first();
+    const countSql = `SELECT COUNT(*) as cnt FROM products p JOIN partners pt ON p.partner_id = pt.id WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED'` + (updatedAfter ? ` AND p.updated_at >= ?` : '');
+    const countStmt = updatedAfter ? env.DB.prepare(countSql).bind(updatedAfter) : env.DB.prepare(countSql);
+    const countRes = await countStmt.first();
     const totalCount = countRes ? countRes.cnt : results.length;
 
     const feedItems = results.map(row => {
@@ -75,8 +74,10 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
 
     const paginationMeta = {
       page,
+      per_page: limit,
       limit,
       total: totalCount,
+      total_pages: Math.max(1, Math.ceil(totalCount / limit)),
       has_more: offset + results.length < totalCount
     };
 

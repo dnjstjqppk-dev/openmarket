@@ -24,6 +24,23 @@ const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 // update this allowlist in the same commit.
 const EXPECTED = [
   // [path-template, method, unauthenticated expectation]
+  ['/api/v1/auth/login', 'POST', 400],
+  ['/api/v1/auth/register', 'POST', 400],
+  ['/api/v1/auth/me', 'GET', 401],
+  ['/api/v1/payments/config', 'GET', 200],
+  ['/api/v1/payments/confirm', 'POST', 401],
+  ['/api/v1/orders/quote', 'POST', 401],
+  ['/api/v1/orders', 'GET', 401],
+  ['/api/v1/orders/{id}', 'GET', 401],
+  ['/api/v1/orders/{id}/cancel', 'POST', 401],
+  ['/api/v1/orders/{id}/sub-orders/{subId}/cancel', 'POST', 401],
+  ['/api/v1/orders/{id}/confirm', 'POST', 401],
+  ['/api/v1/orders/{id}/tracking', 'GET', 401],
+  ['/api/v1/orders/{id}/claims', 'POST', 401],
+  ['/api/v1/channels/suppliers', 'GET', 401],
+  ['/api/v1/channels/carriers', 'GET', 401],
+  ['/api/v1/partner/orders', 'GET', 401],
+  ['/api/v1/partner/metrics', 'GET', 401],
   ['/api/v1/products', 'GET', 200],
   ['/api/v1/products/{id}', 'GET', 200],
   ['/api/v1/orders/checkout', 'POST', 401],
@@ -39,7 +56,196 @@ const EXPECTED = [
   ['/api/v1/admin/partners/{id}/verify', 'PUT', 401],
   ['/api/v1/admin/users/{id}/reset-password', 'POST', 401],
   ['/api/v1/admin/finance/payouts', 'GET', 401],
-  ['/api/v1/admin/finance/payouts', 'POST', 401]
+  ['/api/v1/admin/finance/payouts', 'POST', 401],
+  ['/api/v1/auth/profile', 'PUT', 401],
+  ['/api/v1/auth/privacy/export', 'GET', 401],
+  ['/api/v1/auth/withdraw/precheck', 'GET', 401],
+  ['/api/v1/auth/withdraw', 'POST', 401],
+  ['/api/v1/auth/logout-all', 'POST', 401],
+  ['/api/v1/auth/forgot-password', 'POST', 400],
+  ['/api/v1/auth/reset-password', 'POST', 400],
+  ['/api/v1/auth/send-verification', 'POST', 401],
+  ['/api/v1/auth/verify-email', 'POST', 400],
+  ['/api/v1/auth/social-login', 'POST', 501],
+  ['/api/v1/auth/social/kakao/start', 'GET', 501],
+  ['/api/v1/auth/social/kakao/callback', 'GET', 501],
+  ['/api/v1/auth/social/kakao/exchange', 'POST', 400],
+  ['/api/v1/auth/2fa/setup', 'POST', 401],
+  ['/api/v1/auth/2fa/enable', 'POST', 401],
+  ['/api/v1/categories', 'GET', 200],
+  ['/api/v1/categories/{slug}', 'GET', 200],
+  ['/api/v1/products/{id}/buy-box', 'GET', 200],
+  ['/api/v1/partners/{id}/store', 'GET', 200],
+  ['/api/v1/products/{id}/live-activity', 'GET', 200],
+  ['/api/v1/search/visual-similarity', 'POST', 501],
+  ['/api/v1/deals/lightning', 'GET', 410],
+  ['/api/v1/products/{id}/reviews', 'GET', 200],
+  ['/api/v1/products/{id}/reviews', 'POST', 401],
+  ['/api/v1/products/{id}/qna', 'GET', 200],
+  ['/api/v1/products/{id}/qna', 'POST', 401],
+  ['/api/v1/customs/validate-pccc', 'POST', 400],
+  ['/api/v1/fx/rates', 'GET', 200],
+  ['/api/v1/customs/estimate-duty', 'POST', 200],
+  ['/api/v1/fx/convert', 'POST', 200],
+  ['/api/v1/logistics/carriers', 'GET', 200],
+  ['/api/v1/logistics/tracking/{subId}', 'GET', 401],
+  ['/api/v1/logistics/milestone-webhook', 'POST', 503],
+  ['/api/v1/channels/platforms', 'GET', 200],
+  ['/api/v1/channels/sales-channels', 'GET', 200],
+  ['/api/v1/channels/credentials', 'GET', 401],
+  ['/api/v1/channels/credentials', 'POST', 401],
+  ['/api/v1/channels/credentials/{id}/verify', 'POST', 401],
+  ['/api/v1/channels/pricing/calculate', 'POST', 400],
+  ['/api/v1/channels/listings/publish', 'POST', 401],
+  ['/api/v1/channels/listings', 'GET', 401],
+  ['/api/v1/channels/orders/sync', 'POST', 401],
+  ['/api/v1/channels/orders', 'GET', 401],
+  ['/api/v1/channels/orders/{id}/dispatch-po', 'POST', 401],
+  ['/api/v1/channels/orders/{id}/fulfill', 'POST', 401],
+  ['/api/v1/channels/webhooks/{platform}', 'POST', 501],
+  ['/api/v1/orders/cron/auto-confirm', 'POST', 401],
+  ['/api/v1/orders/cron/expire', 'POST', 401],
+  ['/api/v1/orders/{id}/commercial-invoice', 'GET', 401],
+  ['/api/v1/orders/{id}/late-delivery-claim', 'POST', 401],
+  ['/api/v1/payments/webhook', 'POST', 503],
+  ['/api/v1/partner/profile', 'GET', 401],
+  ['/api/v1/partner/profile', 'PUT', 401],
+  ['/api/v1/partner/products', 'GET', 401],
+  ['/api/v1/partner/products/{id}', 'PUT', 401],
+  ['/api/v1/partner/products/{id}/price', 'PUT', 401],
+  ['/api/v1/partner/products/{id}/stock', 'PUT', 401],
+  ['/api/v1/partner/orders/{id}/prepare', 'POST', 401],
+  ['/api/v1/partner/qna', 'GET', 401],
+  ['/api/v1/partner/qna/{id}/answer', 'POST', 401],
+  ['/api/v1/partner/returns', 'GET', 401],
+  ['/api/v1/partner/returns/{id}/reship', 'POST', 401],
+  ['/api/v1/partner/returns/{id}', 'PUT', 401],
+  ['/api/v1/coupons', 'GET', 200],
+  ['/api/v1/coupons/claim', 'POST', 401],
+  ['/api/v1/credits', 'GET', 401],
+  ['/api/v1/wishlist', 'GET', 401],
+  ['/api/v1/wishlist', 'POST', 401],
+  ['/api/v1/support/faq', 'GET', 200],
+  ['/api/v1/support/inquiries', 'GET', 401],
+  ['/api/v1/support/inquiries', 'POST', 401],
+  ['/api/v1/banners', 'GET', 200],
+  ['/api/v1/addresses', 'GET', 401],
+  ['/api/v1/addresses', 'POST', 401],
+  ['/api/v1/addresses/{id}/default', 'PUT', 401],
+  ['/api/v1/addresses/{id}', 'DELETE', 401],
+  ['/api/v1/notifications', 'GET', 401],
+  ['/api/v1/notifications/dispatch', 'POST', 401],
+  ['/api/v1/notifications/read-all', 'PUT', 401],
+  ['/api/v1/notifications/{id}/read', 'PUT', 401],
+  ['/api/v1/admin/dashboard', 'GET', 401],
+  ['/api/v1/admin/reviews', 'GET', 401],
+  ['/api/v1/admin/reviews/{id}', 'DELETE', 401],
+  ['/api/v1/admin/users', 'GET', 401],
+  ['/api/v1/admin/privacy/access-log', 'GET', 401],
+  ['/api/v1/admin/audit-log', 'GET', 401],
+  ['/api/v1/admin/partners', 'GET', 401],
+  ['/api/v1/admin/products', 'GET', 401],
+  ['/api/v1/admin/products/{id}/status', 'PUT', 401],
+  ['/api/v1/admin/products/{id}/review', 'POST', 401],
+  ['/api/v1/admin/partners/{id}/payout-account', 'POST', 401],
+  ['/api/v1/admin/orders', 'GET', 401],
+  ['/api/v1/admin/ledger', 'GET', 401],
+  ['/api/v1/admin/settlements/{id}/approve', 'POST', 401],
+  ['/api/v1/admin/claims', 'GET', 401],
+  ['/api/v1/admin/claims/{id}', 'PUT', 401],
+  ['/api/v1/admin/banners', 'GET', 401],
+  ['/api/v1/admin/banners', 'POST', 401],
+  ['/api/v1/admin/banners/{id}', 'PUT', 401],
+  ['/api/v1/admin/banners/{id}', 'DELETE', 401],
+  ['/api/v1/admin/notifications', 'GET', 401],
+  ['/api/v1/admin/notifications', 'POST', 401],
+  ['/api/v1/admin/coupons', 'GET', 401],
+  ['/api/v1/admin/coupons', 'POST', 401],
+  ['/api/v1/admin/coupons/{id}', 'DELETE', 401],
+  ['/api/v1/admin/categories', 'GET', 401],
+  ['/api/v1/admin/categories', 'POST', 401],
+  ['/api/v1/admin/categories/{id}', 'DELETE', 401],
+  ['/api/v1/admin/admin-users', 'GET', 401],
+  ['/api/v1/admin/admin-users', 'POST', 401],
+  ['/api/v1/admin/admin-users/{id}', 'PUT', 401],
+  ['/api/v1/finance/cash-receipts/request', 'POST', 401],
+  ['/api/v1/finance/cash-receipts/{id}', 'GET', 401],
+  ['/api/v1/finance/tax-invoices', 'GET', 401],
+  ['/api/v1/admin/finance/cash-receipts/{id}/issue', 'POST', 401],
+  ['/api/v1/admin/finance/cash-receipts/{id}/fail', 'POST', 401],
+  ['/api/v1/admin/reconciliation', 'GET', 401],
+  ['/api/v1/admin/finance/reconciliation-runs', 'GET', 401],
+  ['/api/v1/admin/finance/reserve-holds', 'GET', 401],
+  ['/api/v1/admin/finance/trial-balance', 'GET', 401],
+  ['/api/v1/admin/finance/journal', 'GET', 401],
+  ['/api/v1/admin/finance/payouts/{id}/transferred', 'POST', 401],
+  ['/api/v1/admin/orders/{id}/refund', 'POST', 401],
+  ['/api/v1/admin/sub-orders/{id}/delivered', 'POST', 401],
+  ['/api/v1/business-info', 'GET', 200],
+  ['/api/v1/admin/business-entities', 'GET', 401],
+  ['/api/v1/admin/business-entities', 'POST', 401],
+  ['/api/v1/admin/business-entities/{id}', 'PUT', 401],
+  ['/api/v1/admin/business-entities/{id}/obligations', 'GET', 401],
+  ['/api/v1/admin/business-entities/{id}/events', 'GET', 401],
+  ['/api/v1/admin/business-entities/{id}/activate', 'POST', 401],
+  ['/api/v1/admin/suppliers', 'GET', 401],
+  ['/api/v1/admin/suppliers', 'POST', 401],
+  ['/api/v1/admin/suppliers/{id}/mappings', 'GET', 401],
+  ['/api/v1/admin/suppliers/{id}', 'PUT', 401],
+  ['/api/v1/admin/supplier-mappings', 'POST', 401],
+  ['/api/v1/admin/purchase-orders', 'GET', 401],
+  ['/api/v1/admin/purchase-orders/{id}/status', 'PUT', 401],
+  ['/api/v1/admin/partners/{id}/sales-model', 'PUT', 401],
+  ['/api/v1/supplier-orders', 'POST', 401],
+  ['/api/v1/supplier-orders', 'GET', 401],
+  ['/api/v1/admin/supplier-orders', 'GET', 401],
+  ['/api/v1/supplier-orders/{id}/respond', 'POST', 401],
+  ['/api/v1/supplier-orders/{id}/dispatch', 'POST', 401],
+  ['/api/v1/sync/supplier-inventory', 'POST', 401],
+  ['/api/v1/integrations/health', 'GET', 401],
+  ['/api/v1/admin/sync/logs', 'GET', 401],
+  ['/api/v1/integrations/pricescanner/feed', 'GET', 401],
+  ['/api/v1/integrations/selbym/status', 'GET', 200],
+  ['/api/v1/admin/logistics/consolidate', 'POST', 401],
+  ['/api/v1/imports/crawl', 'POST', 401],
+  ['/api/v1/imports/jobs', 'GET', 401],
+  ['/api/v1/imports/{id}/ai-enhance', 'POST', 401],
+  ['/api/v1/imports/{id}', 'GET', 401],
+  ['/api/v1/imports/{id}/publish', 'POST', 401],
+  ['/api/v1/imports/bulk', 'POST', 401],
+  ['/api/v1/admin/imports/jobs', 'GET', 401],
+  ['/api/v1/partner/sample-qc', 'GET', 401],
+  ['/api/v1/partner/sample-qc', 'POST', 401],
+  ['/api/v1/admin/sample-qc', 'GET', 401],
+  ['/api/v1/admin/sample-qc/{id}/inspect', 'POST', 401],
+  ['/api/v1/ipr/report', 'POST', 401],
+  ['/api/v1/admin/ipr-reports', 'GET', 401],
+  ['/api/v1/admin/feature-flags', 'GET', 401],
+  ['/api/v1/admin/feature-flags/{key}/toggle', 'POST', 401],
+  ['/api/v1/feature-flags/public', 'GET', 200],
+  ['/api/v1/bidding/campaigns', 'GET', 200],
+  ['/api/v1/bidding/campaigns', 'POST', 401],
+  ['/api/v1/bidding/my-bids', 'GET', 401],
+  ['/api/v1/bidding/campaigns/{id}', 'GET', 404],
+  ['/api/v1/bidding/campaigns/{id}/bids', 'POST', 401],
+  ['/api/v1/admin/bidding/campaigns/{id}/award', 'POST', 401],
+  ['/api/v1/pricing/negotiations', 'GET', 404],
+  ['/api/v1/admin/pricing/negotiations', 'POST', 401],
+  ['/api/v1/partner/pricing/negotiations/{id}/respond', 'POST', 401],
+  ['/api/v1/onboarding/validate-business', 'POST', 400],
+  ['/api/v1/partner-applications', 'POST', 400],
+  ['/api/v1/partner/application', 'GET', 401],
+  ['/api/v1/partner/application/documents', 'POST', 401],
+  ['/api/v1/partner/application/submit', 'POST', 401],
+  ['/api/v1/admin/partner-applications', 'GET', 401],
+  ['/api/v1/admin/partner-applications/{id}/review', 'POST', 401],
+  ['/api/v1/admin/control-tower', 'GET', 401],
+  ['/api/v1/admin/fds/overview', 'GET', 401],
+  ['/api/v1/admin/fds/evaluate', 'POST', 401],
+  ['/api/v1/admin/disputes', 'GET', 401],
+  ['/api/v1/admin/disputes/{id}/arbitrate', 'POST', 401],
+  ['/api/v1/storage/file/{fileKey}', 'GET', 404],
+  ['/api/v1/client-errors', 'POST', 400],
 ];
 
 // Retired 2026-11-07: documented paths with no gateway route behind them.
@@ -79,11 +285,17 @@ function parseDocumented() {
 }
 
 function probePath(template) {
-  // The dev seed used by the harness carries prod_001; anything else gets a dummy id.
-  if (template === '/api/v1/products/{id}') return '/api/v1/products/prod_001';
-  return template.replace('{id}', 'probe-id');
+  // Seed-backed ids for public detail routes: bare probes must return the
+  // documented live status (usually 200), not a handler 404.
+  if (template === '/api/v1/products/{id}' || template.startsWith('/api/v1/products/{id}/')) {
+    return template.replace('{id}', 'prod_001');
+  }
+  if (template === '/api/v1/categories/{slug}') return '/api/v1/categories/womens-clothing';
+  if (template === '/api/v1/partners/{id}/store') return '/api/v1/partners/pt_001/store';
+  return template.replaceAll('{id}', 'probe-id').replaceAll('{subId}', 'probe-sub')
+    .replaceAll('{slug}', 'probe-slug').replaceAll('{platform}', 'probe-id')
+    .replaceAll('{key}', 'probe-id').replaceAll('{fileKey}', 'probe-id');
 }
-
 async function newGateway() {
   return createGateway({
     seedFiles: ['migrations/dev/seed_local_dev.sql'],
@@ -118,7 +330,20 @@ await t.test('2. retired stale paths stay out of the docs and answer 404', async
     'docs/openapi/paths/search.yaml',
     'docs/openapi/paths/partner.yaml',
     'docs/openapi/paths/storage.yaml',
-    'docs/openapi/paths/admin.yaml'
+    'docs/openapi/paths/admin.yaml',
+    'docs/openapi/paths/auth.yaml',
+    'docs/openapi/paths/payments.yaml',
+    'docs/openapi/paths/orders.yaml',
+    'docs/openapi/paths/channels.yaml',
+    'docs/openapi/paths/features.yaml',
+    'docs/openapi/paths/finance.yaml',
+    'docs/openapi/paths/supply.yaml',
+    'docs/openapi/paths/sourcing.yaml',
+    'docs/openapi/paths/bidding.yaml',
+    'docs/openapi/paths/onboarding.yaml',
+    'docs/openapi/paths/governance.yaml',
+    'docs/openapi/paths/ops.yaml',
+    'docs/api/OPENAPI.yaml'
   ].map((p) => {
     try { return read(p); } catch { return ''; }
   }).join('\n');
@@ -168,6 +393,40 @@ await t.test('3. documented response shapes match the implementation', async () 
   // Checkout alias documented alongside /orders/checkout.
   const alias = await g.call('/api/v1/orders', { method: 'POST' });
   assert.equal(alias.status, 401);
+  // Payments config shape pins the client payment routing (web + mobile).
+  const payCfg = await g.call('/api/v1/payments/config');
+  assert.equal(payCfg.status, 200);
+  assert.equal(payCfg.json.mode, 'SANDBOX_SIMULATOR');
+  assert.equal(payCfg.json.client_key, null);
+  // Auth rejects empty credentials with a client error, not a crash.
+  const emptyLogin = await g.call('/api/v1/auth/login', { method: 'POST', body: {} });
+  assert.equal(emptyLogin.status, 400);
+
+  // Wave 2: bare-probe locks — these rows answer differently with a body, so the
+  // EXPECTED values above hold only for bodyless probes like test 1.
+  const barePricing = await g.call('/api/v1/channels/pricing/calculate', { method: 'POST' });
+  assert.equal(barePricing.status, 400);
+  assert.equal(barePricing.json.code, 'INVALID_NUMBER');
+  const bareClientErr = await g.call('/api/v1/client-errors', { method: 'POST' });
+  assert.equal(bareClientErr.status, 400);
+  assert.equal(bareClientErr.json.code, 'REQUIRED');
+  // Wave 2: 404 rows whose handler envelope differs from ROUTE_NOT_FOUND.
+  const campDetail = await g.call('/api/v1/bidding/campaigns/probe-id');
+  assert.equal(campDetail.status, 404);
+  assert.equal(campDetail.json.code, 'NOT_FOUND');
+  const nego = await g.call('/api/v1/pricing/negotiations');
+  assert.equal(nego.status, 404);
+  assert.equal(nego.json.code, 'NOT_FOUND');
+  const fileDl = await g.call('/api/v1/storage/file/probe-id');
+  assert.equal(fileDl.status, 404);
+  assert.equal(fileDl.json.error, 'File not found in storage');
+  // Wave 2: env-dependent rows pinned to the harness env (no KAKAO/webhook secrets).
+  const kakaoStart = await g.call('/api/v1/auth/social/kakao/start');
+  assert.equal(kakaoStart.status, 501);
+  assert.equal(kakaoStart.json.code, 'SOCIAL_LOGIN_NOT_INTEGRATED');
+  const gone = await g.call('/api/v1/deals/lightning');
+  assert.equal(gone.status, 410);
+  assert.equal(gone.json.code, 'GONE');
 });
 
 t.finish();

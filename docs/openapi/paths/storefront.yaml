@@ -373,3 +373,831 @@ paths:
                         type: array
                         items:
                           type: object
+
+  /api/v1/categories:
+    get:
+      summary: Full category tree with bottom-up product counts
+      tags: [Storefront]
+      security: []
+      responses:
+        '200':
+          description: Active categories sorted by depth then sort_order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, slug, depth, sort_order, product_count]
+                      properties:
+                        id:
+                          type: string
+                        parent_id:
+                          type: string
+                          nullable: true
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        depth:
+                          type: integer
+                        sort_order:
+                          type: integer
+                        product_count:
+                          type: integer
+                          description: Direct ACTIVE count rolled up bottom-up from descendants.
+
+  /api/v1/categories/{slug}:
+    get:
+      summary: Category detail with parent and subcategories
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Category slug or id (matched against either column).
+      responses:
+        '200':
+          description: Category row plus parent_category and subcategories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [id, name, slug, subcategories]
+                    properties:
+                      id:
+                        type: string
+                      parent_id:
+                        type: string
+                        nullable: true
+                      name:
+                        type: string
+                      slug:
+                        type: string
+                      depth:
+                        type: integer
+                      sort_order:
+                        type: integer
+                      parent_category:
+                        type: object
+                        nullable: true
+                        description: Null for root categories.
+                      subcategories:
+                        type: array
+                        items:
+                          type: object
+        '404':
+          description: Category not found
+
+  /api/v1/products/{id}/buy-box:
+    get:
+      summary: Buy-box evaluation for a single-supplier product
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Single-supplier direct offer analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [product_id, evaluated_at, mode, supplier, winner, eligibility]
+                    properties:
+                      product_id:
+                        type: string
+                      evaluated_at:
+                        type: string
+                        format: date-time
+                      mode:
+                        type: string
+                      competitive_offers_count:
+                        type: integer
+                      supplier:
+                        type: object
+                      winner:
+                        type: object
+                      eligibility:
+                        type: object
+                        properties:
+                          is_buy_box_eligible:
+                            type: boolean
+                          is_lowest_price_guaranteed:
+                            type: boolean
+                          selection_reason:
+                            type: string
+        '404':
+          description: Product not found
+
+  /api/v1/partners/{id}/store:
+    get:
+      summary: Public partner mini-shop storefront
+      tags: [Storefront]
+      security: []
+      description: Only APPROVED partners have a public store; pending, rejected and suspended ones return 404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Partner profile, shipping policy, stats and ACTIVE products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [partner, shipping_policy, stats, metrics, products]
+                    properties:
+                      partner:
+                        type: object
+                      shipping_policy:
+                        type: object
+                        properties:
+                          base_fee:
+                            type: integer
+                          free_shipping_threshold:
+                            type: integer
+                      stats:
+                        type: object
+                        properties:
+                          product_count:
+                            type: integer
+                          total_sold_count:
+                            type: integer
+                          store_rating:
+                            type: number
+                            nullable: true
+                            description: Average of reviews on this partner's products; null when there are none.
+                          review_count:
+                            type: integer
+                      metrics:
+                        type: object
+                      products:
+                        type: array
+                        items:
+                          type: object
+        '404':
+          description: Partner store not found
+
+  /api/v1/products/{id}/live-activity:
+    get:
+      summary: Measured 24h purchase activity and stock for a product
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paid, non-refunded units only; same basis as urgency stats
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, product_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  product_id:
+                    type: string
+                  data:
+                    type: object
+                    required: [recent_24h_purchases, all_time_sales, total_remaining_stock]
+                    properties:
+                      recent_24h_purchases:
+                        type: integer
+                      all_time_sales:
+                        type: integer
+                      total_remaining_stock:
+                        type: integer
+                      stock_urgency:
+                        type: string
+                        nullable: true
+                      delivery_guarantee:
+                        type: string
+        '404':
+          description: No ACTIVE product with this id
+
+  /api/v1/search/visual-similarity:
+    post:
+      summary: Image similarity search (not available)
+      tags: [Storefront]
+      security: []
+      description: No image model is integrated; always returns 501 so nothing is presented as a visual match.
+      responses:
+        '501':
+          description: VISUAL_SEARCH_NOT_AVAILABLE with a keyword-search hint
+
+  /api/v1/deals/lightning:
+    get:
+      summary: Retired lightning-deals feed (use campaigns feed)
+      tags: [Storefront]
+      security: []
+      deprecated: true
+      responses:
+        '410':
+          description: GONE; use GET /api/v1/campaigns/lightning
+
+  /api/v1/products/{id}/reviews:
+    get:
+      summary: Review list with average rating summary
+      tags: [Storefront]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reviews newest-first; avg_rating is null when there are none
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, product_id, review_count, reviews, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  product_id:
+                    type: string
+                  avg_rating:
+                    type: number
+                    nullable: true
+                  review_count:
+                    type: integer
+                  reviews:
+                    type: array
+                    items:
+                      type: object
+                  data:
+                    type: object
+                    properties:
+                      reviews:
+                        type: array
+                        items:
+                          type: object
+                      summary:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                          average_rating:
+                            type: number
+                            nullable: true
+    post:
+      summary: Write a verified-purchase review
+      tags: [Storefront]
+      description: Only a buyer with a delivered, non-refunded purchase of this product; one review per order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, content]
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Buyer-chosen; nothing is defaulted.
+                content:
+                  type: string
+                  maxLength: 3000
+                  description: Alias comment is accepted.
+                images:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: string
+                user_height_cm:
+                  type: integer
+                user_weight_kg:
+                  type: integer
+                fit_type:
+                  type: string
+                  enum: [TRUE_TO_SIZE, RUNS_SMALL, RUNS_LARGE]
+      responses:
+        '201':
+          description: Review created (verified purchase, masked reviewer name)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, review_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  review_id:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Missing content or INVALID_RATING (1-5 required)
+        '401':
+          description: Missing or expired customer JWT
+        '403':
+          description: No delivered purchase of this product
+        '409':
+          description: REVIEW_EXISTS for this order
+
+  /api/v1/products/{id}/qna:
+    get:
+      summary: Product Q&A list with secret-post masking
+      tags: [Storefront]
+      security: []
+      description: Secret posts are masked unless the caller is the author (optional JWT).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Q&A newest-first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+    post:
+      summary: Ask a product question
+      tags: [Storefront]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  maxLength: 2000
+                is_secret:
+                  type: boolean
+      responses:
+        '201':
+          description: Question created with status WAITING
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, qna_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  qna_id:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Missing question
+        '401':
+          description: Missing or expired customer JWT
+        '404':
+          description: Product not found
+
+  /api/v1/customs/validate-pccc:
+    post:
+      summary: Validate a personal customs clearance code (PCCC)
+      tags: [Storefront]
+      security: []
+      description: Format check only unless UNIPASS_API_KEY is configured; without Uni-Pass, verified is always false.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pccc:
+                  type: string
+                  description: P followed by 12 digits, e.g. P123456789012.
+                name:
+                  type: string
+                  description: Recipient name (alias recipient_name).
+                phone:
+                  type: string
+                  description: Recipient phone (alias recipient_phone).
+      responses:
+        '200':
+          description: Format verdict plus verification mode
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, verified, format_valid, verification_mode, data]
+                properties:
+                  success:
+                    type: boolean
+                  verified:
+                    type: boolean
+                  format_valid:
+                    type: boolean
+                  verification_mode:
+                    type: string
+                    enum: [FORMAT_ONLY, UNIPASS_MATCH, UNIPASS_NO_MATCH, UNIPASS_UNAVAILABLE]
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: MISSING_PCCC, INVALID_PCCC_FORMAT or INVALID_NAME
+
+  /api/v1/fx/rates:
+    get:
+      summary: Operator-maintained display exchange rates
+      tags: [Storefront]
+      security: []
+      description: Reference rates from the exchange_rates table (KRW base); payment is in KRW. Cached 300s.
+      responses:
+        '200':
+          description: Rates for currencies with a table row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, base_currency, supported_currencies, rates, inverse_rates]
+                properties:
+                  success:
+                    type: boolean
+                  base_currency:
+                    type: string
+                  supported_currencies:
+                    type: array
+                    items:
+                      type: string
+                  rates:
+                    type: object
+                    description: Per-currency table rate keyed by code (KRW is 1).
+                  inverse_rates:
+                    type: object
+                  updated_at:
+                    type: object
+                    description: Per-currency row updated_at.
+                  last_updated:
+                    type: string
+                    nullable: true
+                  source:
+                    type: string
+                  source_note:
+                    type: string
+
+  /api/v1/customs/estimate-duty:
+    post:
+      summary: Estimate customs duty and VAT (DDP vs DDU)
+      tags: [Storefront]
+      security: []
+      description: De-minimis threshold is USD 200 for US origin, USD 150 otherwise; above it ~8% tariff plus 10% VAT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                goods_amount_krw:
+                  type: integer
+                  description: Alias total_goods_amount.
+                shipping_fee_krw:
+                  type: integer
+                  description: Alias total_shipping_amount.
+                country_origin:
+                  type: string
+                  default: OTHER
+      responses:
+        '200':
+          description: Duty estimate with DDP/DDU totals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [total_order_krw, total_order_usd, is_tax_exempt, total_estimated_tax_krw]
+                    properties:
+                      total_order_krw:
+                        type: integer
+                      total_order_usd:
+                        type: number
+                      country_origin:
+                        type: string
+                      exemption_threshold_usd:
+                        type: integer
+                      is_tax_exempt:
+                        type: boolean
+                      estimated_tariff_krw:
+                        type: integer
+                      estimated_vat_krw:
+                        type: integer
+                      total_estimated_tax_krw:
+                        type: integer
+                      ddp_total_amount_krw:
+                        type: integer
+                      ddu_total_amount_krw:
+                        type: integer
+                      explanation:
+                        type: string
+
+  /api/v1/fx/convert:
+    post:
+      summary: Convert an amount between currencies
+      tags: [Storefront]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                from:
+                  type: string
+                  default: KRW
+                to:
+                  type: string
+                  default: USD
+      responses:
+        '200':
+          description: Converted amount via the single-source FX table
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, from, to, original_amount, converted_amount]
+                properties:
+                  success:
+                    type: boolean
+                  from:
+                    type: string
+                  to:
+                    type: string
+                  original_amount:
+                    type: number
+                  converted_amount:
+                    type: number
+                  formatted:
+                    type: string
+
+  /api/v1/logistics/carriers:
+    get:
+      summary: Supported carrier directory
+      tags: [Storefront]
+      security: []
+      responses:
+        '200':
+          description: Static cross-border and domestic carrier list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, name, type]
+                      properties:
+                        code:
+                          type: string
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: [CROSS_BORDER, DOMESTIC]
+                        tracking_url:
+                          type: string
+
+  /api/v1/logistics/tracking/{subId}:
+    get:
+      summary: 7-stage milestone tracking timeline for a sub-order
+      tags: [Storefront]
+      description: Owner, fulfilling partner or ADMIN only. Only recorded carrier events are shown.
+      parameters:
+        - name: subId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Sub-order id, sub_order_no or parent order id.
+      responses:
+        '200':
+          description: Carrier info, milestone checklist and recorded timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [sub_order_id, status, milestone_status, milestones, timeline]
+                    properties:
+                      sub_order_id:
+                        type: string
+                      sub_order_no:
+                        type: string
+                      order_no:
+                        type: string
+                      status:
+                        type: string
+                      milestone_status:
+                        type: string
+                      current_milestone:
+                        type: string
+                      carrier:
+                        type: string
+                        nullable: true
+                      carrier_info:
+                        type: object
+                        nullable: true
+                      tracking_number:
+                        type: string
+                        nullable: true
+                      full_tracking_url:
+                        type: string
+                        nullable: true
+                      pccc:
+                        type: string
+                        nullable: true
+                        description: Masked PCCC.
+                      milestones:
+                        type: array
+                        items:
+                          type: object
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                      timeline:
+                        type: array
+                        items:
+                          type: object
+                      current_stage:
+                        type: object
+        '400':
+          description: Missing sub_order_id
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Only the order owner, fulfilling partner or ADMIN
+        '404':
+          description: Sub-order not found
+
+  /api/v1/logistics/milestone-webhook:
+    post:
+      summary: Carrier milestone webhook ingestion
+      tags: [Storefront]
+      security: []
+      description: Machine caller authenticated by the X-Carrier-Webhook-Secret shared secret (min 24 chars).
+      parameters:
+        - name: X-Carrier-Webhook-Secret
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sub_order_id, milestone]
+              properties:
+                sub_order_id:
+                  type: string
+                  description: Sub-order id or sub_order_no in SHIPPED, IN_TRANSIT or DELIVERED state.
+                milestone:
+                  type: string
+                  description: 7-stage code, e.g. SHIPPED; alias stage_code.
+                location:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                  maxLength: 500
+                tracking_number:
+                  type: string
+                carrier:
+                  type: string
+                  description: Alias carrier_code; falls back to the sub-order's own carrier.
+                customs_clearance_no:
+                  type: string
+      responses:
+        '200':
+          description: Milestone recorded and sub-order state advanced
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Missing sub_order_id, STAGE_REQUIRED or UNKNOWN_STAGE
+        '401':
+          description: Webhook secret mismatch
+        '409':
+          description: NOT_IN_TRANSIT_STATE
+        '503':
+          description: WEBHOOK_NOT_CONFIGURED when the server secret is unset

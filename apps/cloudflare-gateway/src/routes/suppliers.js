@@ -6,6 +6,7 @@ import { requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str, intParam } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement, getActiveOperator } from '../lib/ledger.js';
+import { logPiiView } from '../services/privacy.js';
 
 const PO_TRANSITIONS = {
   DRAFT: ['SENT', 'CANCELLED'],
@@ -109,6 +110,7 @@ export async function handleSupplierRoutes(request, url, env, corsHeaders) {
     for (const po of results) {
       po.items = (await env.DB.prepare('SELECT poi.*, i.product_title, i.option_summary FROM purchase_order_items poi JOIN order_items i ON i.id = poi.order_item_id WHERE poi.purchase_order_id = ?').bind(po.id).all()).results;
     }
+    await logPiiView(env, admin, 'admin.purchase-orders', 'order', results.map((po) => po.id), 'recipient_name,shipping_address_line1,shipping_postal_code', request);
     return json(corsHeaders, { success: true, count: results.length, data: results, supplier_api: 'NOT_INTEGRATED' });
   }
 

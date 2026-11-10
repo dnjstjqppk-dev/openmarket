@@ -101,3 +101,22 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/storage/file/{fileKey}:
+    get:
+      summary: Download or stream a stored file
+      tags: [Storage]
+      security: []
+      description: PUBLIC objects stream to anyone with long-lived immutable caching. PRIVATE objects (kyb/*) require the uploader or an admin; missing and forbidden keys both return 404 so key existence is not leaked.
+      parameters:
+        - name: fileKey
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Folder-prefixed key, e.g. products/obj_.... Served from R2 when bound, else D1 embedded base64.
+      responses:
+        '200':
+          description: File bytes with content-type, private no-store headers for PRIVATE objects
+        '404':
+          description: File not found in storage (also returned for forbidden PRIVATE keys)

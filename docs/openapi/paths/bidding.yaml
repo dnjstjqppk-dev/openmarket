@@ -1,0 +1,388 @@
+# Bidding paths (reverse-bidding campaigns, price negotiations).
+# Verified against the gateway implementation (apps/cloudflare-gateway/src/routes/bidding-m2c.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/bidding/campaigns:
+    get:
+      summary: List reverse-bidding campaigns with bid aggregates
+      tags: [Bidding]
+      security: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            default: OPEN
+          description: Campaign status filter, or ALL for every campaign.
+      responses:
+        '200':
+          description: Campaign list with bid_count and lowest_bid_price per row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: bidding_campaigns row plus category_name, reference_title, bid_count, lowest_bid_price.
+    post:
+      summary: Create a reverse-bidding campaign (admin)
+      tags: [Bidding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category_id, ceiling_supply_price]
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                category_id:
+                  type: string
+                ceiling_supply_price:
+                  type: integer
+                  minimum: 100
+                min_moq:
+                  type: integer
+                  minimum: 1
+                  default: 100
+                reference_product_id:
+                  type: string
+                  nullable: true
+                target_spec:
+                  type: object
+                starts_at:
+                  type: string
+                  format: date-time
+                ends_at:
+                  type: string
+                  format: date-time
+                  description: Defaults to 7 days from creation.
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [id, title, ceiling_supply_price, ends_at]
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      ceiling_supply_price:
+                        type: integer
+                      ends_at:
+                        type: string
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Category not found
+
+  /api/v1/bidding/my-bids:
+    get:
+      summary: List the approved partner's own bids across campaigns
+      tags: [Bidding]
+      responses:
+        '200':
+          description: Own bids with campaign_title and campaign_status per row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or partner not approved
+
+  /api/v1/bidding/campaigns/{id}:
+    get:
+      summary: Campaign detail with role-scoped bids
+      tags: [Bidding]
+      security: []
+      description: Public detail; admins see all bids with partner_name, partners see only their own bids, anonymous viewers see an empty bids list.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign plus bids array
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    description: Campaign row plus category_name, reference_title and bids.
+        '404':
+          description: Campaign not found
+
+  /api/v1/bidding/campaigns/{id}/bids:
+    post:
+      summary: Submit a competitive wholesale bid (approved partner)
+      tags: [Bidding]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bid_supply_price]
+              properties:
+                bid_supply_price:
+                  type: integer
+                  minimum: 100
+                  description: Must not exceed the campaign ceiling_supply_price.
+                moq:
+                  type: integer
+                  minimum: 1
+                  description: Defaults to the campaign min_moq.
+                production_lead_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 90
+                  default: 7
+                sample_offered:
+                  type: boolean
+                  default: true
+                bid_notes:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '201':
+          description: Bid submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [id, campaign_id, bid_supply_price]
+                    properties:
+                      id:
+                        type: string
+                      campaign_id:
+                        type: string
+                      bid_supply_price:
+                        type: integer
+        '400':
+          description: EXCEEDS_CEILING_PRICE when the bid is above the ceiling
+        '401':
+          description: Missing or expired JWT, or partner not approved
+        '404':
+          description: Campaign not found
+        '409':
+          description: BIDDING_CLOSED when the campaign is closed or past ends_at
+
+  /api/v1/admin/bidding/campaigns/{id}/award:
+    post:
+      summary: Award a campaign to the winning bid (admin)
+      tags: [Bidding]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [winning_bid_id]
+              properties:
+                winning_bid_id:
+                  type: string
+      responses:
+        '200':
+          description: Campaign awarded; replaying the same winning_bid_id returns idempotent_replay
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  idempotent_replay:
+                    type: boolean
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Campaign or bid not found
+        '409':
+          description: ALREADY_AWARDED when the campaign already has a different winner
+
+  /api/v1/pricing/negotiations:
+    get:
+      summary: List MD price-negotiation counter-offers (partner scoped, admin all)
+      tags: [Bidding]
+      description: Partners see only their own negotiations. Unauthenticated callers get 404 (handler throws notFound when no viewer), not 401.
+      responses:
+        '200':
+          description: Negotiations with product_title, thumbnail_url and partner_name per row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '404':
+          description: Returned when unauthenticated (no viewer)
+
+  /api/v1/admin/pricing/negotiations:
+    post:
+      summary: Propose a price-reduction counter-offer to a seller (admin MD)
+      tags: [Bidding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, suggested_target_price, md_proposal_notes]
+              properties:
+                product_id:
+                  type: string
+                sku_id:
+                  type: string
+                  nullable: true
+                suggested_target_price:
+                  type: integer
+                  minimum: 100
+                md_proposal_notes:
+                  type: string
+                  maxLength: 1000
+                external_market_benchmark:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Counter-offer sent to the seller
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [id, current_price, target_price, discount_rate]
+                    properties:
+                      id:
+                        type: string
+                      current_price:
+                        type: integer
+                      target_price:
+                        type: integer
+                      discount_rate:
+                        type: number
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Product not found
+
+  /api/v1/partner/pricing/negotiations/{id}/respond:
+    post:
+      summary: Accept or reject an MD counter-offer (approved partner)
+      tags: [Bidding]
+      description: Accepting immediately lowers the product (and SKU) sale price to suggested_target_price.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accept:
+                  type: boolean
+                  description: true accepts and reprices, anything else rejects.
+                partner_response_notes:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT, or partner not approved
+        '404':
+          description: Negotiation not found for this partner
+        '409':
+          description: ALREADY_RESOLVED when the negotiation is no longer PROPOSED

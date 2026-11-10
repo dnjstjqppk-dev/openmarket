@@ -3,6 +3,7 @@
 
 import { requireAdmin } from '../lib/auth.js';
 import { json } from '../lib/http.js';
+import { logPiiView, maskLast4 } from '../services/privacy.js';
 
 export const FDS_ACTIVE_RULES = [
   { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '동일 IP 10분 내 다중 카드 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
@@ -19,7 +20,7 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     return null;
   }
 
-  await requireAdmin(request, env);
+  const govAdmin = await requireAdmin(request, env);
 
   // 1. Central Operations Control Tower Overview (/api/v1/admin/control-tower)
   if (url.pathname === '/api/v1/admin/control-tower' && request.method === 'GET') {
@@ -125,12 +126,13 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
        LEFT JOIN orders o ON r.order_id = o.id
        ORDER BY r.created_at DESC LIMIT 50`
     ).all();
+    await logPiiView(env, govAdmin, 'admin.disputes', 'claim', claims.map((c) => c.id), 'recipient_name,pccc', request);
 
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA Dispute Tribunal',
       count: claims.length,
-      data: claims
+      data: claims.map((c) => ({ ...c, pccc: maskLast4(c.pccc) }))
     }), { headers: corsHeaders });
   }
 

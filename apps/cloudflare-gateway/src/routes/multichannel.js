@@ -12,13 +12,25 @@ import { requireApprovedPartner } from '../lib/auth.js';
 import { krwPerUnitMap } from '../lib/fx.js';
 import { json, readJson, bad, notFound, conflict, HttpError, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
+import { auditStatement } from '../lib/ledger.js';
 import { sealSecret, openSecret } from '../lib/totp.js';
 import { assertFeatureEnabled } from '../services/feature-flags.js';
 import { registry } from '../services/connectors/connector-registry.js';
+import { DomesticB2BSupplierConnector } from '../services/connectors/domestic-b2b-connector.js';
 import { assertConnectorUsable } from '../services/connectors/simulation.js';
 import { calculateGlobalPrice } from '../services/pricing/global-pricing-engine.js';
 
 const TRACKING_RE = /^[A-Za-z0-9-]{6,40}$/;
+
+// P1-C04: the column is named recipient_phone_MASKED — the raw number must
+// never land in it. Keep first 3 + last 2 digits so CS can still identify
+// the recipient ("010-****-**32" style). Only the masked form ever leaves
+// OLMOA toward supplier connectors (dispatch-po forwards this column).
+export function maskPhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length < 7) return '****';
+  return `${digits.slice(0, 3)}-****-**${digits.slice(-2)}`;
+}
 
 function maskKey(k) {
   return k.length > 8 ? `${k.slice(0, 4)}...${k.slice(-4)}` : '****';
@@ -68,6 +80,24 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, count: channels.length, data: channels });
   }
 
+  // 2a. B2B supplier directory (feeds the dispatch-po form; static reference data)
+  if (p === '/api/v1/channels/suppliers' && request.method === 'GET') {
+    await requireApprovedPartner(request, env);
+    const data = registry.listRegisteredPlatforms()
+      .map((id) => registry.get(id))
+      .filter((c) => c instanceof DomesticB2BSupplierConnector)
+      .map((c) => ({ id: c.platformId, name: c.platformName }));
+    return json(corsHeaders, { success: true, count: data.length, data });
+  }
+
+  // 2b. 3PL carrier directory (feeds the fulfill form; static reference data)
+  if (p === '/api/v1/channels/carriers' && request.method === 'GET') {
+    await requireApprovedPartner(request, env);
+    const logistics = registry.get('3pl_logistics');
+    const data = Object.values(logistics.carriers || {}).map((c) => ({ code: c.code, name: c.name }));
+    return json(corsHeaders, { success: true, count: data.length, data });
+  }
+
   // 3. Seller platform credentials
   if (p === '/api/v1/channels/credentials' && request.method === 'GET') {
     const caller = await requireApprovedPartner(request, env);
@@ -101,6 +131,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
         credential_name = excluded.credential_name, api_key_masked = excluded.api_key_masked, secret_key_enc = excluded.secret_key_enc,
         seller_account_id = excluded.seller_account_id, status = 'CONFIGURED', last_verified_at = NULL, updated_at = CURRENT_TIMESTAMP
     `).bind(newId('cred'), caller.partner.id, platformId, credName, maskKey(apiKey), sealed, sellerAccountId || null, isSandbox).run();
+    await auditStatement(env, caller, { action: 'CHANNEL_CREDENTIAL_SAVE', targetType: 'platform_credential', after: { platform_id: platformId, credential_name: credName, is_sandbox: isSandbox }, request }).run();
 
     return json(corsHeaders, {
       success: true,
@@ -243,7 +274,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
                                       order_status, raw_payload_json, collected_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COLLECTED', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           ON CONFLICT(sales_channel_id, external_order_id) DO NOTHING
-        `).bind(chOrdId, channel.id, caller.partner.id, externalId, ord.external_order_no, ord.buyer_name, ord.recipient_name, ord.recipient_phone,
+        `).bind(chOrdId, channel.id, caller.partner.id, externalId, ord.external_order_no, ord.buyer_name, ord.recipient_name, maskPhone(ord.recipient_phone),
           ord.shipping_address, ord.customs_id_pccc || null, amount, commission, amount - commission, ord.currency || 'KRW',
           JSON.stringify({ ...ord, simulated }))];
         for (const item of (ord.items || [])) {
@@ -300,6 +331,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
       UPDATE channel_orders SET order_status = 'PO_DISPATCHED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND order_status IN ('COLLECTED','CONFIRMED')
     `).bind(chOrder.id).run();
     if (r.meta.changes !== 1) throw conflict('ALREADY_DISPATCHED', '이미 공급업체에 발주된 주문입니다.');
+    await auditStatement(env, caller, { action: 'CHANNEL_PO_DISPATCH', targetType: 'channel_order', targetId: chOrder.id, before: { status: chOrder.order_status }, after: { status: 'PO_DISPATCHED', supplier_id: supplierId, total_cost_krw: totalCost, simulated }, request }).run();
     return json(corsHeaders, {
       success: true, simulated, b2b_order_id: simulated ? null : poRes.b2b_order_id, status: 'PO_DISPATCHED', total_cost_krw: totalCost,
       message: simulated ? '[시뮬레이션] 공급사에 실제 발주되지 않았습니다.' : poRes.message
@@ -334,6 +366,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
       UPDATE channel_orders SET order_status = 'SHIPPED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND order_status IN ('COLLECTED','CONFIRMED','PO_DISPATCHED')
     `).bind(chOrder.id).run();
     if (r.meta.changes !== 1) throw conflict('NOT_SHIPPABLE', `출고할 수 없는 주문 상태입니다. (현재: ${chOrder.order_status})`);
+    await auditStatement(env, caller, { action: 'CHANNEL_ORDER_FULFILL', targetType: 'channel_order', targetId: chOrder.id, before: { status: chOrder.order_status }, after: { status: 'SHIPPED', tracking_number: trackingNumber, carrier: carrier.code, simulated }, request }).run();
     return json(corsHeaders, {
       success: true, simulated, status: 'SHIPPED', tracking_number: trackingNumber, carrier_name: carrier.name,
       tracking_url: `${carrier.trackingUrl}${encodeURIComponent(trackingNumber)}`,

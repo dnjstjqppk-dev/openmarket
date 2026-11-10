@@ -8,6 +8,7 @@ import { newId } from '../lib/ids.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
 import { logPiiView } from '../services/privacy.js';
 import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
+import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 
 
 function optionSummary(json) {
@@ -130,7 +131,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
              hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location,
              custody_type, supply_price, brand)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(prodId, partnerId, catId, title, thumb, str(b.description_html, { max: 200000 }) || `<p>${title}</p>`, orig, sale,
+        ).bind(prodId, partnerId, catId, title, thumb, sanitizeHtml(str(b.description_html, { max: 200000 }) || `<p>${title}</p>`), orig, sale,
           str(b.hs_code, { max: 12 }) || null, str(b.country_origin, { max: 2 }).toUpperCase() || 'KR', pkg[0], pkg[1], pkg[2], pkg[3], volWeight, str(b.warehouse_location, { max: 50 }) || null,
           custody, supply, brand),
         env.DB.prepare(
@@ -234,7 +235,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
            review_status = CASE WHEN ? = 1 AND review_status = 'APPROVED' THEN 'PENDING' ELSE review_status END,
            status = CASE WHEN ? = 1 AND status = 'ACTIVE' THEN 'DRAFT' ELSE status END, updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND partner_id = ?`
-      ).bind(title, b.description_html !== undefined ? str(b.description_html, { max: 200000 }) : product.description_html,
+      ).bind(title, b.description_html !== undefined ? sanitizeHtml(str(b.description_html, { max: 200000 })) : product.description_html,
         b.thumbnail_url || product.thumbnail_url, catId, orig, sale, b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
         custody, supply, brand, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
       env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
@@ -467,10 +468,40 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const qna = await q("SELECT COUNT(*) c FROM product_qna WHERE partner_id = ? AND status = 'WAITING'");
     const claims = await q("SELECT COUNT(*) c FROM returns r JOIN sub_orders so ON so.id = r.sub_order_id WHERE so.partner_id = ? AND r.status = 'REQUESTED'");
     const review = await q("SELECT COUNT(*) c FROM products WHERE partner_id = ? AND review_status = 'PENDING'");
+    // Weekly GMV buckets (UTC days, oldest first) + week-over-week change.
+    const { results: buckets } = await env.DB.prepare(
+      `SELECT date(created_at) d, COALESCE(SUM(goods_amount + shipping_fee),0) s FROM sub_orders
+       WHERE partner_id = ? AND status NOT IN ('PAYMENT_PENDING','EXPIRED','CANCELLED')
+         AND date(created_at) >= date('now','-13 days') GROUP BY d`
+    ).bind(partnerId).all();
+    const byDay = new Map((buckets || []).map((x) => [x.d, x.s]));
+    const dayKeys = [];
+    for (let i = 6; i >= 0; i--) {
+      const dd = new Date(Date.now() - i * 86400000);
+      dayKeys.push(dd.toISOString().slice(0, 10));
+    }
+    const weeklyGmv = dayKeys.map((day) => ({ day, amount: byDay.get(day) || 0 }));
+    const thisWeek = weeklyGmv.reduce((t, x) => t + x.amount, 0);
+    let prevWeek = 0;
+    for (let i = 7; i <= 13; i++) {
+      const dd = new Date(Date.now() - i * 86400000);
+      prevWeek += byDay.get(dd.toISOString().slice(0, 10)) || 0;
+    }
+    const wowPct = prevWeek > 0 ? Math.round(((thisWeek - prevWeek) / prevWeek) * 1000) / 10 : null;
+    // Fulfillment quality gauges (null until measurable — never invented).
+    const ship = await q("SELECT COUNT(*) c, COALESCE(SUM(CASE WHEN shipped_at IS NOT NULL AND (julianday(shipped_at) - julianday(created_at)) * 24 <= 24 THEN 1 ELSE 0 END),0) n FROM sub_orders WHERE partner_id = ? AND shipped_at IS NOT NULL");
+    const shipOnTime = ship.c > 0 ? Math.round((ship.n / ship.c) * 1000) / 10 : null;
+    const del = await q("SELECT AVG((julianday(delivered_at) - julianday(shipped_at))) a FROM sub_orders WHERE partner_id = ? AND shipped_at IS NOT NULL AND delivered_at IS NOT NULL");
+    const avgDays = del.a === null ? null : Math.round(del.a * 10) / 10;
+    const sub = await q('SELECT COUNT(*) c FROM sub_orders WHERE partner_id = ?');
+    const allClaims = await q('SELECT COUNT(*) c FROM returns r JOIN sub_orders so ON so.id = r.sub_order_id WHERE so.partner_id = ?');
+    const claimRate = sub.c > 0 ? Math.round((allClaims.c / sub.c) * 1000) / 10 : null;
     return json(corsHeaders, {
       success: true, partner_id: partnerId, business_name: partner.business_name,
       products_count: prod.c, orders_count: ord.c, total_sales_amount: ord.s, to_ship_count: toShip.c,
-      settlement_expected_amount: stl.n, waiting_qna_count: qna.c, open_claims_count: claims.c, pending_review_count: review.c
+      settlement_expected_amount: stl.n, waiting_qna_count: qna.c, open_claims_count: claims.c, pending_review_count: review.c,
+      weekly_gmv: weeklyGmv, wow_pct: wowPct,
+      ship_on_time_rate: shipOnTime, avg_delivery_days: avgDays, claim_rate_pct: claimRate
     });
   }
 

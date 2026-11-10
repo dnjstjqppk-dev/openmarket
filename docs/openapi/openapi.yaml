@@ -4,7 +4,9 @@ info:
   version: 2.0.0-v3-integrity
   description: Contract for the Cloudflare Workers gateway (apps/cloudflare-gateway),
     the Vue 3 storefront/admin/partner apps, and the Flutter mobile apps.
-    Reconciled against the implementation 2026-11-07; every path below is
+    Reconciled against the implementation 2026-11-07, extended 2026-11-09
+    (auth / payments / orders / channels / partner wave 1) and 2026-11-10
+    (full-gateway wave 2, 201 paths); every path below is
     covered by tests/openapi_reconciliation_test.mjs.
 servers:
   - url: https://olmoa-api.dnjstjqppk.workers.dev
@@ -16,6 +18,104 @@ security:
   - BearerAuth: []
 
 paths:
+  /api/v1/auth/login:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1login'
+  /api/v1/auth/register:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1register'
+  /api/v1/auth/me:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1me'
+  /api/v1/auth/profile:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1profile'
+  /api/v1/auth/privacy/export:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1privacy~1export'
+  /api/v1/auth/withdraw/precheck:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1withdraw~1precheck'
+  /api/v1/auth/withdraw:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1withdraw'
+  /api/v1/auth/logout-all:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1logout-all'
+  /api/v1/auth/forgot-password:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1forgot-password'
+  /api/v1/auth/reset-password:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1reset-password'
+  /api/v1/auth/send-verification:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1send-verification'
+  /api/v1/auth/verify-email:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1verify-email'
+  /api/v1/auth/social-login:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1social-login'
+  /api/v1/auth/social/kakao/start:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1social~1kakao~1start'
+  /api/v1/auth/social/kakao/callback:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1social~1kakao~1callback'
+  /api/v1/auth/social/kakao/exchange:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1social~1kakao~1exchange'
+  /api/v1/auth/2fa/setup:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~12fa~1setup'
+  /api/v1/auth/2fa/enable:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~12fa~1enable'
+
+  /api/v1/payments/config:
+    $ref: './paths/payments.yaml#/paths/~1api~1v1~1payments~1config'
+  /api/v1/payments/confirm:
+    $ref: './paths/payments.yaml#/paths/~1api~1v1~1payments~1confirm'
+  /api/v1/payments/webhook:
+    $ref: './paths/payments.yaml#/paths/~1api~1v1~1payments~1webhook'
+
+  /api/v1/orders/quote:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1quote'
+  /api/v1/orders:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders'
+  /api/v1/orders/{id}:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}'
+  /api/v1/orders/{id}/cancel:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1cancel'
+  /api/v1/orders/{id}/sub-orders/{subId}/cancel:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1sub-orders~1{subId}~1cancel'
+  /api/v1/orders/{id}/confirm:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1confirm'
+  /api/v1/orders/{id}/tracking:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1tracking'
+  /api/v1/orders/{id}/claims:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1claims'
+  /api/v1/orders/cron/auto-confirm:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1cron~1auto-confirm'
+  /api/v1/orders/cron/expire:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1cron~1expire'
+  /api/v1/orders/{id}/commercial-invoice:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1commercial-invoice'
+  /api/v1/orders/{id}/late-delivery-claim:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1late-delivery-claim'
+
+  /api/v1/channels/suppliers:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1suppliers'
+  /api/v1/channels/carriers:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1carriers'
+  /api/v1/channels/platforms:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1platforms'
+  /api/v1/channels/sales-channels:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1sales-channels'
+  /api/v1/channels/credentials:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1credentials'
+  /api/v1/channels/credentials/{id}/verify:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1credentials~1{id}~1verify'
+  /api/v1/channels/pricing/calculate:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1pricing~1calculate'
+  /api/v1/channels/listings/publish:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1listings~1publish'
+  /api/v1/channels/listings:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1listings'
+  /api/v1/channels/orders/sync:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1orders~1sync'
+  /api/v1/channels/orders:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1orders'
+  /api/v1/channels/orders/{id}/dispatch-po:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1orders~1{id}~1dispatch-po'
+  /api/v1/channels/orders/{id}/fulfill:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1orders~1{id}~1fulfill'
+  /api/v1/channels/webhooks/{platform}:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1webhooks~1{platform}'
+
   /api/v1/products:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products'
   /api/v1/products/{id}:
@@ -24,6 +124,38 @@ paths:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1orders~1checkout'
   /api/v1/campaigns/lightning:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1campaigns~1lightning'
+  /api/v1/categories:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1categories'
+  /api/v1/categories/{slug}:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1categories~1{slug}'
+  /api/v1/products/{id}/buy-box:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1buy-box'
+  /api/v1/partners/{id}/store:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1partners~1{id}~1store'
+  /api/v1/products/{id}/live-activity:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1live-activity'
+  /api/v1/search/visual-similarity:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1search~1visual-similarity'
+  /api/v1/deals/lightning:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1deals~1lightning'
+  /api/v1/products/{id}/reviews:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1reviews'
+  /api/v1/products/{id}/qna:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1qna'
+  /api/v1/customs/validate-pccc:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1customs~1validate-pccc'
+  /api/v1/fx/rates:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1fx~1rates'
+  /api/v1/customs/estimate-duty:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1customs~1estimate-duty'
+  /api/v1/fx/convert:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1fx~1convert'
+  /api/v1/logistics/carriers:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1logistics~1carriers'
+  /api/v1/logistics/tracking/{subId}:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1logistics~1tracking~1{subId}'
+  /api/v1/logistics/milestone-webhook:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1logistics~1milestone-webhook'
   /api/v1/search/autocomplete:
     $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1autocomplete'
   /api/v1/search/log:
@@ -39,9 +171,35 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1bulk-shipment'
   /api/v1/partner/settlements:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1settlements'
+  /api/v1/partner/orders:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders'
+  /api/v1/partner/metrics:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1metrics'
+  /api/v1/partner/profile:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1profile'
+  /api/v1/partner/products/{id}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1{id}'
+  /api/v1/partner/products/{id}/price:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1{id}~1price'
+  /api/v1/partner/products/{id}/stock:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1{id}~1stock'
+  /api/v1/partner/orders/{id}/prepare:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1{id}~1prepare'
+  /api/v1/partner/qna:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1qna'
+  /api/v1/partner/qna/{id}/answer:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1qna~1{id}~1answer'
+  /api/v1/partner/returns:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns'
+  /api/v1/partner/returns/{id}/reship:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}~1reship'
+  /api/v1/partner/returns/{id}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}'
 
   /api/v1/storage/upload:
     $ref: './paths/storage.yaml#/paths/~1api~1v1~1storage~1upload'
+  /api/v1/storage/file/{fileKey}:
+    $ref: './paths/storage.yaml#/paths/~1api~1v1~1storage~1file~1{fileKey}'
 
   /api/v1/admin/partners/{id}/verify:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1verify'
@@ -49,6 +207,237 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1users~1{id}~1reset-password'
   /api/v1/admin/finance/payouts:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1finance~1payouts'
+  /api/v1/admin/dashboard:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1dashboard'
+  /api/v1/admin/reviews:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1reviews'
+  /api/v1/admin/reviews/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1reviews~1{id}'
+  /api/v1/admin/users:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1users'
+  /api/v1/admin/privacy/access-log:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1privacy~1access-log'
+  /api/v1/admin/audit-log:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1audit-log'
+  /api/v1/admin/partners:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners'
+  /api/v1/admin/products:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products'
+  /api/v1/admin/products/{id}/status:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products~1{id}~1status'
+  /api/v1/admin/products/{id}/review:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products~1{id}~1review'
+  /api/v1/admin/partners/{id}/payout-account:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1payout-account'
+  /api/v1/admin/orders:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1orders'
+  /api/v1/admin/ledger:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1ledger'
+  /api/v1/admin/settlements/{id}/approve:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1settlements~1{id}~1approve'
+  /api/v1/admin/claims:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1claims'
+  /api/v1/admin/claims/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1claims~1{id}'
+  /api/v1/admin/banners:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1banners'
+  /api/v1/admin/banners/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1banners~1{id}'
+  /api/v1/admin/notifications:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1notifications'
+  /api/v1/admin/coupons:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1coupons'
+  /api/v1/admin/coupons/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1coupons~1{id}'
+  /api/v1/admin/categories:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1categories'
+  /api/v1/admin/categories/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1categories~1{id}'
+  /api/v1/admin/admin-users:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1admin-users'
+  /api/v1/admin/admin-users/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1admin-users~1{id}'
+
+
+  /api/v1/coupons:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1coupons'
+  /api/v1/coupons/claim:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1coupons~1claim'
+  /api/v1/credits:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1credits'
+  /api/v1/wishlist:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1wishlist'
+  /api/v1/support/faq:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1support~1faq'
+  /api/v1/support/inquiries:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1support~1inquiries'
+  /api/v1/banners:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1banners'
+  /api/v1/addresses:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1addresses'
+  /api/v1/addresses/{id}/default:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1addresses~1{id}~1default'
+  /api/v1/addresses/{id}:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1addresses~1{id}'
+  /api/v1/notifications:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications'
+  /api/v1/notifications/dispatch:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications~1dispatch'
+  /api/v1/notifications/read-all:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications~1read-all'
+  /api/v1/notifications/{id}/read:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications~1{id}~1read'
+
+  /api/v1/finance/cash-receipts/request:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1request'
+  /api/v1/finance/cash-receipts/{id}:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1{id}'
+  /api/v1/finance/tax-invoices:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1tax-invoices'
+  /api/v1/admin/finance/cash-receipts/{id}/issue:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1issue'
+  /api/v1/admin/finance/cash-receipts/{id}/fail:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1fail'
+  /api/v1/admin/reconciliation:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1reconciliation'
+  /api/v1/admin/finance/reconciliation-runs:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1reconciliation-runs'
+  /api/v1/admin/finance/reserve-holds:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1reserve-holds'
+  /api/v1/admin/finance/trial-balance:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1trial-balance'
+  /api/v1/admin/finance/journal:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1journal'
+  /api/v1/admin/finance/payouts/{id}/transferred:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1payouts~1{id}~1transferred'
+  /api/v1/admin/orders/{id}/refund:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1orders~1{id}~1refund'
+  /api/v1/admin/sub-orders/{id}/delivered:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1sub-orders~1{id}~1delivered'
+
+  /api/v1/admin/suppliers:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1suppliers'
+  /api/v1/admin/suppliers/{id}/mappings:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1suppliers~1{id}~1mappings'
+  /api/v1/admin/suppliers/{id}:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1suppliers~1{id}'
+  /api/v1/admin/supplier-mappings:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1supplier-mappings'
+  /api/v1/admin/purchase-orders:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1purchase-orders'
+  /api/v1/admin/purchase-orders/{id}/status:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1purchase-orders~1{id}~1status'
+  /api/v1/admin/partners/{id}/sales-model:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1sales-model'
+  /api/v1/supplier-orders:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1supplier-orders'
+  /api/v1/admin/supplier-orders:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1supplier-orders'
+  /api/v1/supplier-orders/{id}/respond:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1supplier-orders~1{id}~1respond'
+  /api/v1/supplier-orders/{id}/dispatch:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1supplier-orders~1{id}~1dispatch'
+  /api/v1/sync/supplier-inventory:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1sync~1supplier-inventory'
+  /api/v1/integrations/health:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1integrations~1health'
+  /api/v1/admin/sync/logs:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1sync~1logs'
+  /api/v1/integrations/pricescanner/feed:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1integrations~1pricescanner~1feed'
+  /api/v1/integrations/selbym/status:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1integrations~1selbym~1status'
+  /api/v1/admin/logistics/consolidate:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1logistics~1consolidate'
+
+  /api/v1/imports/crawl:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1crawl'
+  /api/v1/imports/jobs:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1jobs'
+  /api/v1/imports/{id}/ai-enhance:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1{id}~1ai-enhance'
+  /api/v1/imports/{id}:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1{id}'
+  /api/v1/imports/{id}/publish:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1{id}~1publish'
+  /api/v1/imports/bulk:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1imports~1bulk'
+  /api/v1/admin/imports/jobs:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1imports~1jobs'
+  /api/v1/partner/sample-qc:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1partner~1sample-qc'
+  /api/v1/admin/sample-qc:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1sample-qc'
+  /api/v1/admin/sample-qc/{id}/inspect:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1sample-qc~1{id}~1inspect'
+  /api/v1/ipr/report:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1ipr~1report'
+  /api/v1/admin/ipr-reports:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1ipr-reports'
+
+  /api/v1/bidding/campaigns:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1bidding~1campaigns'
+  /api/v1/bidding/my-bids:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1bidding~1my-bids'
+  /api/v1/bidding/campaigns/{id}:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1bidding~1campaigns~1{id}'
+  /api/v1/bidding/campaigns/{id}/bids:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1bidding~1campaigns~1{id}~1bids'
+  /api/v1/admin/bidding/campaigns/{id}/award:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1admin~1bidding~1campaigns~1{id}~1award'
+  /api/v1/pricing/negotiations:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1pricing~1negotiations'
+  /api/v1/admin/pricing/negotiations:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1admin~1pricing~1negotiations'
+  /api/v1/partner/pricing/negotiations/{id}/respond:
+    $ref: './paths/bidding.yaml#/paths/~1api~1v1~1partner~1pricing~1negotiations~1{id}~1respond'
+
+  /api/v1/onboarding/validate-business:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1onboarding~1validate-business'
+  /api/v1/partner-applications:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1partner-applications'
+  /api/v1/partner/application:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1partner~1application'
+  /api/v1/partner/application/documents:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1partner~1application~1documents'
+  /api/v1/partner/application/submit:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1partner~1application~1submit'
+  /api/v1/admin/partner-applications:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1admin~1partner-applications'
+  /api/v1/admin/partner-applications/{id}/review:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1admin~1partner-applications~1{id}~1review'
+
+  /api/v1/admin/control-tower:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1control-tower'
+  /api/v1/admin/fds/overview:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1overview'
+  /api/v1/admin/fds/evaluate:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1evaluate'
+  /api/v1/admin/disputes:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1disputes'
+  /api/v1/admin/disputes/{id}/arbitrate:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1disputes~1{id}~1arbitrate'
+
+  /api/v1/business-info:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1business-info'
+  /api/v1/admin/business-entities:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1business-entities'
+  /api/v1/admin/business-entities/{id}:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1business-entities~1{id}'
+  /api/v1/admin/business-entities/{id}/obligations:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1business-entities~1{id}~1obligations'
+  /api/v1/admin/business-entities/{id}/events:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1business-entities~1{id}~1events'
+  /api/v1/admin/business-entities/{id}/activate:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1business-entities~1{id}~1activate'
+  /api/v1/admin/feature-flags:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1feature-flags'
+  /api/v1/admin/feature-flags/{key}/toggle:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1admin~1feature-flags~1{key}~1toggle'
+  /api/v1/feature-flags/public:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1feature-flags~1public'
+  /api/v1/client-errors:
+    $ref: './paths/ops.yaml#/paths/~1api~1v1~1client-errors'
 
 components:
   securitySchemes:

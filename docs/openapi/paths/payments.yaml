@@ -1,0 +1,153 @@
+# Payment paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/payments.js). The server decides the
+# payment route: TOSS widget when a client key is configured, the sandbox
+# simulator in development, DISABLED otherwise. Approval is always confirmed
+# server-side; the mobile PaymentView and the storefront checkout follow this.
+paths:
+  /api/v1/payments/config:
+    get:
+      summary: PG availability and the client key for the payment widget
+      tags: [Payments]
+      security: []
+      responses:
+        '200':
+          description: Payment route decision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, mode]
+                properties:
+                  success:
+                    type: boolean
+                  provider:
+                    type: string
+                    nullable: true
+                    enum: [TOSS_PAYMENTS, null]
+                  mode:
+                    type: string
+                    enum: [TOSS, SANDBOX_SIMULATOR, DISABLED]
+                  client_key:
+                    type: string
+                    nullable: true
+                    description: Toss client key when mode is TOSS, else null.
+                  is_test_key:
+                    type: boolean
+                    nullable: true
+                  message:
+                    type: string
+                    description: Present when DISABLED (PG contract/keys missing).
+
+  /api/v1/payments/confirm:
+    post:
+      summary: Confirm a PG-approved (or simulator) payment for a READY order
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, payment_key, amount]
+              properties:
+                order_id:
+                  type: string
+                  description: Order id or order_no (alias orderId).
+                payment_key:
+                  type: string
+                  description: PG payment key, or sandbox_* in the simulator (alias paymentKey).
+                amount:
+                  type: integer
+                  description: Must equal the order's total_pay_amount.
+      responses:
+        '200':
+          description: Payment approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [order_id, order_no, amount, status]
+                    properties:
+                      order_id:
+                        type: string
+                      order_no:
+                        type: string
+                      amount:
+                        type: integer
+                      status:
+                        type: string
+                      payment_key:
+                        type: string
+                      receipt_url:
+                        type: string
+                        nullable: true
+                      is_sandbox:
+                        type: boolean
+                      idempotent_replay:
+                        type: boolean
+        '401':
+          description: Missing or expired customer JWT
+
+  /api/v1/payments/webhook:
+    post:
+      summary: PG payment event webhook (verified, never trusted blindly)
+      tags: [Payments]
+      description: Live mode re-reads the payment from the PG; sandbox mode requires the X-Webhook-Secret machine secret. Duplicate event keys replay success.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eventType:
+                  type: string
+                createdAt:
+                  type: string
+                paymentKey:
+                  type: string
+                data:
+                  type: object
+                  properties:
+                    paymentKey:
+                      type: string
+                    orderId:
+                      type: string
+                    totalAmount:
+                      type: number
+                    status:
+                      type: string
+                    createdAt:
+                      type: string
+      responses:
+        '200':
+          description: Event recorded with capture outcome, or duplicate replay
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  outcome:
+                    type: string
+                    description: IGNORED, ORDER_NOT_FOUND, VERIFICATION_FAILED, PG_SIDE_STATUS_RECORDED_FOR_RECONCILIATION, or the capture result.
+                  duplicate:
+                    type: boolean
+                    description: True when the event key was already recorded.
+        '400':
+          description: MISSING_PAYMENT_KEY in live mode
+        '401':
+          description: Webhook secret mismatch in sandbox mode
+        '503':
+          description: WEBHOOK_NOT_CONFIGURED when PAYMENT_WEBHOOK_SECRET is unset

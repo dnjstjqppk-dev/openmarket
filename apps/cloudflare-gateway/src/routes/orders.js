@@ -87,11 +87,13 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
   if (p === '/api/v1/orders' && request.method === 'GET') {
     const me = await requireAuth(request, env);
     const target = me.role === 'ROLE_ADMIN' && url.searchParams.get('customer_id') ? url.searchParams.get('customer_id') : me.userId;
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10) || 30));
-    const { results } = await env.DB.prepare('SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT ?').bind(target, limit).all();
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '30', 10) || 30));
+    const total = await env.DB.prepare('SELECT COUNT(*) AS c FROM orders WHERE customer_id = ?').bind(target).first('c') || 0;
+    const { results } = await env.DB.prepare('SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(target, perPage, (page - 1) * perPage).all();
     const data = [];
     for (const r of results) data.push(presentOrder(await loadOrderBundle(env, r.id)));
-    return json(corsHeaders, { success: true, count: data.length, data });
+    return json(corsHeaders, { success: true, count: data.length, pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data });
   }
 
   const m = p.match(/^\/api\/v1\/orders\/([^/]+)(?:\/(.+))?$/);

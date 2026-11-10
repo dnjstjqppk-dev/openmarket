@@ -1,0 +1,631 @@
+# Features paths (coupons, credits, wishlist, support, banners, addresses, notifications).
+# Verified against the gateway implementation (apps/cloudflare-gateway/src/routes/features.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/coupons:
+    get:
+      summary: List active claimable coupons with my claim status
+      tags: [Features]
+      security: []
+      description: Public list; when called with a customer JWT each coupon is enriched with claimed_status (CLAIMED/USED), is_claimed, user_coupon_id and is_used.
+      responses:
+        '200':
+          description: Active coupons (expires_at in the future)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        code:
+                          type: string
+                        title:
+                          type: string
+                        name:
+                          type: string
+                          description: title, falling back to code.
+                        discount_type:
+                          type: string
+                        discount_value:
+                          type: number
+                        min_order_amount:
+                          type: integer
+                        max_discount_amount:
+                          type: integer
+                        expires_at:
+                          type: string
+                        valid_until:
+                          type: string
+                          description: Alias of expires_at.
+                        claimed_status:
+                          type: string
+                          nullable: true
+                          enum: [CLAIMED, USED]
+                          description: Null for anonymous callers or unclaimed coupons.
+                        is_claimed:
+                          type: boolean
+                        user_coupon_id:
+                          type: string
+                          nullable: true
+                        is_used:
+                          type: boolean
+
+  /api/v1/coupons/claim:
+    post:
+      summary: Claim a coupon into my coupon wallet
+      tags: [Features]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coupon_id:
+                  type: string
+                  description: Coupon id or code (case-insensitive code match).
+                code:
+                  type: string
+                  description: Alias of coupon_id.
+      responses:
+        '200':
+          description: Coupon issued (idempotent; re-claim returns the same coupon)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, coupon, data]
+                properties:
+                  success:
+                    type: boolean
+                  coupon:
+                    type: object
+                  data:
+                    type: object
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Invalid, inactive or expired coupon code
+
+  /api/v1/credits:
+    get:
+      summary: My credit balance and ledger history
+      tags: [Features]
+      responses:
+        '200':
+          description: Balance is the SUM of amount_delta over the ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, customer_id, balance, data]
+                properties:
+                  success:
+                    type: boolean
+                  customer_id:
+                    type: string
+                  balance:
+                    type: integer
+                  data:
+                    type: object
+                    required: [balance, history]
+                    properties:
+                      balance:
+                        type: integer
+                      history:
+                        type: array
+                        description: user_credits rows, newest first; each row carries amount and amount_delta.
+                        items:
+                          type: object
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/wishlist:
+    get:
+      summary: My wishlist with product detail
+      tags: [Features]
+      responses:
+        '200':
+          description: Wishlist rows joined with products, category and brand
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        wishlist_id:
+                          type: string
+                        wished_at:
+                          type: string
+                        product_id:
+                          type: string
+                        slug:
+                          type: string
+                        brand:
+                          type: string
+                        category_name:
+                          type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    post:
+      summary: Toggle a product in my wishlist (add or remove)
+      tags: [Features]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id]
+              properties:
+                product_id:
+                  type: string
+      responses:
+        '200':
+          description: Toggle result; wished false means the row was removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, wished, action, product_id]
+                properties:
+                  success:
+                    type: boolean
+                  wished:
+                    type: boolean
+                  action:
+                    type: string
+                    enum: [ADDED, REMOVED]
+                  product_id:
+                    type: string
+        '400':
+          description: product_id required
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/support/faq:
+    get:
+      summary: Static support FAQ list
+      tags: [Features]
+      security: []
+      description: Hardcoded FAQ entries (shipping, price-match, returns, payout, partner onboarding); no database read.
+      responses:
+        '200':
+          description: FAQ entries with category, q and a
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [category, q, a]
+                      properties:
+                        category:
+                          type: string
+                        q:
+                          type: string
+                        a:
+                          type: string
+
+  /api/v1/support/inquiries:
+    get:
+      summary: My 1:1 support inquiries
+      tags: [Features]
+      responses:
+        '200':
+          description: support_inquiries rows, newest first; each row carries message as an alias of content
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    post:
+      summary: File a 1:1 support inquiry
+      tags: [Features]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: string
+                  maxLength: 200
+                content:
+                  type: string
+                  maxLength: 5000
+                  description: Message body; message is accepted as an alias.
+                message:
+                  type: string
+                category:
+                  type: string
+                  enum: [DELIVERY, REFUND_RETURN, PRICE_MATCH, PAYMENT, PARTNER_JOIN, OTHER]
+                  description: Unknown values fall back to OTHER.
+                order_id:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Inquiry opened with status OPEN
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, inquiry_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  inquiry_id:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      inquiry_id:
+                        type: string
+                      status:
+                        type: string
+                  message:
+                    type: string
+        '400':
+          description: Subject and content are both required
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/banners:
+    get:
+      summary: Active promotional banners for the homepage
+      tags: [Features]
+      security: []
+      responses:
+        '200':
+          description: Banners ordered by display_order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        subtitle:
+                          type: string
+                        badge_text:
+                          type: string
+                        image_url:
+                          type: string
+                        link_url:
+                          type: string
+                        bg_gradient:
+                          type: string
+                        display_order:
+                          type: integer
+
+  /api/v1/addresses:
+    get:
+      summary: My address book, default first
+      tags: [Features]
+      responses:
+        '200':
+          description: user_addresses rows ordered by is_default then newest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    post:
+      summary: Add an address to my address book
+      tags: [Features]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_name:
+                  type: string
+                  description: Required; name is accepted as an alias.
+                name:
+                  type: string
+                phone:
+                  type: string
+                  description: Required.
+                postal_code:
+                  type: string
+                  description: Defaults to 00000; zip is accepted as an alias.
+                address_line1:
+                  type: string
+                  description: Required; address is accepted as an alias.
+                address_line2:
+                  type: string
+                  description: detail_address is accepted as an alias.
+                is_default:
+                  type: integer
+                  description: Truthy clears the previous default atomically.
+                delivery_note:
+                  type: string
+                  description: note is accepted as an alias.
+      responses:
+        '201':
+          description: Created address row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Recipient, phone and address_line1 are required
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/addresses/{id}/default:
+    put:
+      summary: Set an address as my default
+      tags: [Features]
+      description: POST to this path is an alias of this operation (same handler; storefront uses PUT).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Default switched (previous default cleared atomically)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Address not found or belongs to another user
+
+  /api/v1/addresses/{id}:
+    delete:
+      summary: Delete one of my addresses
+      tags: [Features]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Address deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Address not found or belongs to another user
+
+  /api/v1/notifications:
+    get:
+      summary: My latest notifications with unread count
+      tags: [Features]
+      responses:
+        '200':
+          description: Newest 20 notifications rows; unread_count counts is_read = 0 within them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, unread_count, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  unread_count:
+                    type: integer
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/notifications/dispatch:
+    post:
+      summary: Dispatch an SMS/AlimTalk/email via the external provider (admin)
+      tags: [Features]
+      description: Requires ADMIN. Sends through SOLAPI when SOLAPI_API_KEY/SECRET are configured; otherwise logs NOT_SENT_PROVIDER_NOT_CONFIGURED. Every attempt is recorded in notification_delivery_logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  description: Uppercased; defaults to ALIMTALK.
+                recipient:
+                  type: string
+                  description: Required; phone or email are accepted as aliases.
+                template_code:
+                  type: string
+                  description: Uppercased; defaults to ORDER_NOTIFICATION.
+                title:
+                  type: string
+                  description: Defaults to the OLMOA notice title.
+                content:
+                  type: string
+                  description: message is accepted as an alias.
+      responses:
+        '200':
+          description: Dispatch attempt logged with honest provider status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, provider_configured, data]
+                properties:
+                  success:
+                    type: boolean
+                  provider_configured:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [log_id, channel, recipient, template_code, status, provider]
+                    properties:
+                      log_id:
+                        type: string
+                      channel:
+                        type: string
+                      recipient:
+                        type: string
+                      template_code:
+                        type: string
+                      status:
+                        type: string
+                        description: SENT, FAILED or NOT_SENT_PROVIDER_NOT_CONFIGURED.
+                      provider:
+                        type: string
+                      provider_msg_id:
+                        type: string
+                        nullable: true
+                      dispatched_at:
+                        type: string
+        '400':
+          description: recipient is required for dispatch
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '403':
+          description: ADMIN role required
+
+  /api/v1/notifications/read-all:
+    put:
+      summary: Mark all my notifications as read
+      tags: [Features]
+      description: POST to this path is an alias of this operation (same handler; PUT matches the sibling single-read route used by the storefront).
+      responses:
+        '200':
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/notifications/{id}/read:
+    put:
+      summary: Mark one notification as read
+      tags: [Features]
+      description: POST to this path is an alias of this operation (same handler; storefront uses PUT).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked read (idempotent; unknown ids still return success)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)

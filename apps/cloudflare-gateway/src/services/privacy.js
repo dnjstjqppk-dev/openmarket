@@ -31,6 +31,12 @@ export function piiAccessStatement(env, principal, { action, resource, subjectTy
   );
 }
 
+/** Mask an account/PCCC-style secret to its last 4 chars ("****1234", same shape as the seller profile API). */
+export function maskLast4(value) {
+  if (value === null || value === undefined || value === '') return value;
+  return `****${String(value).slice(-4)}`;
+}
+
 /** Convenience: log a VIEW of personal data. Awaited so the record exists before the data leaves the server. */
 export async function logPiiView(env, principal, resource, subjectType, subjectIds, fields, request) {
   if (!subjectIds || !subjectIds.length) return;

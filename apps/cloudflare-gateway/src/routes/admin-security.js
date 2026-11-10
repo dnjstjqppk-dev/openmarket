@@ -50,7 +50,7 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
     const user = await env.DB.prepare('SELECT email, totp_enabled_at FROM users WHERE id = ?').bind(me.userId).first();
     if (user.totp_enabled_at) throw conflict('MFA_ALREADY_ENABLED', '이미 2단계 인증을 사용 중입니다. 재설정은 최고관리자에게 요청하세요.');
     const secret = newTotpSecret();
-    await env.DB.prepare('UPDATE users SET totp_pending_enc = ? WHERE id = ?').bind(await sealSecret(env, secret), me.userId).run();
+    await env.DB.batch([env.DB.prepare('UPDATE users SET totp_pending_enc = ? WHERE id = ?').bind(await sealSecret(env, secret), me.userId), auditStatement(env, me, { action: 'ADMIN_MFA_SETUP_STARTED', targetType: 'user', targetId: me.userId, request })]);
     return json(corsHeaders, { success: true, data: { secret, otpauth_uri: otpauthUri(secret, user.email) } });
   }
 
@@ -60,6 +60,10 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     if (user.totp_enabled_at) throw conflict('MFA_ALREADY_ENABLED', '이미 2단계 인증을 사용 중입니다.');
     if (!user.totp_pending_enc) throw conflict('MFA_SETUP_NOT_STARTED', '먼저 2단계 인증 설정을 시작해 주세요.');
+    if (String(env.ADMIN_MFA_APPROVAL_REQUIRED || '').toLowerCase() === 'true') {
+      const approval = await env.DB.prepare("SELECT id FROM admin_audit_log WHERE action = 'ADMIN_MFA_ENROLL_APPROVED' AND target_type = 'user' AND target_id = ? AND created_at >= datetime('now', '-1 day') ORDER BY created_at DESC LIMIT 1").bind(me.userId).first();
+      if (!approval) throw conflict('MFA_APPROVAL_REQUIRED', '최고관리자의 2단계 인증 등록 승인이 필요합니다.');
+    }
     const secret = await openSecret(env, user.totp_pending_enc);
     const step = await verifyTotp(secret, String(b.code || '').trim());
     if (step === null) throw bad('OTP_INVALID', '인증 코드가 올바르지 않습니다. 기기 시간을 확인해 주세요.');
@@ -122,7 +126,8 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
     if (target.admin_role === 'SUPER_ADMIN' && !stillSuper && (await activeSuperAdmins(env, target.id)) === 0) {
       throw conflict('LAST_SUPER_ADMIN', '활성 최고관리자가 최소 1명 있어야 합니다.');
     }
-    const changed = role !== target.admin_role || active !== Number(target.is_active) || reset2fa;
+    const approve2fa = b.approve_2fa === true;
+    const changed = role !== target.admin_role || active !== Number(target.is_active) || reset2fa || approve2fa;
     if (!changed) return json(corsHeaders, { success: true, data: { id: target.id, unchanged: true } });
     await env.DB.batch([
       env.DB.prepare(
@@ -132,10 +137,11 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
                 mfa_recovery_hashes_json = CASE WHEN ? THEN NULL ELSE mfa_recovery_hashes_json END, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`
       ).bind(role, active, reset2fa ? 1 : 0, reset2fa ? 1 : 0, reset2fa ? 1 : 0, reset2fa ? 1 : 0, reset2fa ? 1 : 0, target.id),
+      ...(approve2fa ? [auditStatement(env, admin, { action: 'ADMIN_MFA_ENROLL_APPROVED', targetType: 'user', targetId: target.id, after: { approved_by: admin.userId }, request })] : []),
       auditStatement(env, admin, { action: 'ADMIN_USER_UPDATE', targetType: 'user', targetId: target.id,
         before: { admin_role: target.admin_role, is_active: target.is_active, mfa: Boolean(target.totp_enabled_at) }, after: { admin_role: role, is_active: active, reset2fa }, request })
     ]);
-    return json(corsHeaders, { success: true, data: { id: target.id, admin_role: role, is_active: Boolean(active), mfa_reset: reset2fa, sessions_revoked: true } });
+    return json(corsHeaders, { success: true, data: { id: target.id, admin_role: role, is_active: Boolean(active), mfa_reset: reset2fa, mfa_enroll_approved: approve2fa, sessions_revoked: true } });
   }
 
   return null;

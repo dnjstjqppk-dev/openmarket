@@ -1,6 +1,7 @@
 import { authenticate } from '../lib/auth.js';
 import { krwPerUnit, krwPerUnitMap } from '../lib/fx.js';
 import { logPiiView } from '../services/privacy.js';
+import { forbidden, notFound, HttpError } from '../lib/http.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
 
@@ -207,12 +208,7 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     const isAdmin = Boolean(principal && principal.role === 'ROLE_ADMIN');
     const customerId = principal && principal.role === 'ROLE_CUSTOMER' ? principal.userId : '';
 
-    if (!isAdmin && !customerId) {
-      return new Response(JSON.stringify({
-        error: 'Authentication required: Please provide Authorization token or X-Customer-Id header',
-        code: 'UNAUTHORIZED'
-      }), { status: 401, headers: corsHeaders });
-    }
+    if (!isAdmin && !customerId) throw new HttpError(401, 'UNAUTHORIZED', 'Authentication required: Please provide Authorization token or X-Customer-Id header');
 
     const orderId = url.pathname.split('/')[4];
     const order = await env.DB.prepare(
@@ -222,17 +218,10 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
        WHERE o.id = ? OR o.order_no = ?`
     ).bind(orderId, orderId).first();
 
-    if (!order) {
-      return new Response(JSON.stringify({ error: 'Order not found', order_id: orderId }), { status: 404, headers: corsHeaders });
-    }
+    if (!order) throw new HttpError(404, 'NOT_FOUND', 'Order not found', { order_id: orderId });
 
     if (isAdmin && order.customer_id) await logPiiView(env, principal, 'admin.commercial-invoice', 'order', [order.id], 'recipient_name,recipient_phone,shipping_address,pccc,customer_email', request);
-    if (!isAdmin && order.customer_id !== customerId) {
-      return new Response(JSON.stringify({
-        error: 'Access denied: You do not have permission to view this order commercial invoice',
-        code: 'FORBIDDEN'
-      }), { status: 403, headers: corsHeaders });
-    }
+    if (!isAdmin && order.customer_id !== customerId) throw forbidden('Access denied: You do not have permission to view this order commercial invoice');
 
     // Fail-Closed Validation (OM-09): Required customs/recipient information must be present and non-empty
     const missingFields = [];
@@ -242,15 +231,7 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     if (!order.shipping_address_line1 || !String(order.shipping_address_line1).trim()) missingFields.push('shipping_address_line1');
     if (!order.shipping_postal_code || !String(order.shipping_postal_code).trim()) missingFields.push('shipping_postal_code');
 
-    if (missingFields.length > 0) {
-      return new Response(JSON.stringify({
-        error: 'Customs commercial invoice cannot be generated: required customs/recipient information is missing (Fail-Closed)',
-        code: 'INCOMPLETE_CUSTOMS_DATA',
-        order_id: order.id,
-        order_no: order.order_no,
-        missing_fields: missingFields
-      }), { status: 422, headers: corsHeaders });
-    }
+    if (missingFields.length > 0) throw new HttpError(422, 'INCOMPLETE_CUSTOMS_DATA', 'Customs commercial invoice cannot be generated: required customs/recipient information is missing (Fail-Closed)', { order_id: order.id, order_no: order.order_no, missing_fields: missingFields });
 
     const { results: items } = await env.DB.prepare(
       `SELECT oi.*, so.partner_id, so.carrier_code, so.tracking_number,

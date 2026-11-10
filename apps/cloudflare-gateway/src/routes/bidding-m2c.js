@@ -2,7 +2,7 @@
 // Temu-style M2C Supply Chain: Dynamic Reverse Bidding, MD Price Negotiations, and Package Consolidation
 
 import { requireAdmin, requireApprovedPartner, authenticate } from '../lib/auth.js';
-import { json, readJson, bad, notFound, conflict, str, intParam } from '../lib/http.js';
+import { json, readJson, bad, notFound, conflict, forbidden, str, intParam } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 
@@ -179,6 +179,11 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
   if (p === '/api/v1/pricing/negotiations' && request.method === 'GET') {
     const viewer = await authenticate(request, env);
     if (!viewer) throw notFound();
+    // Costs, margins and competitor names: sellers see only their own rows,
+    // operators see all, customers see nothing (P1-C03).
+    if (viewer.role !== 'ROLE_PARTNER' && viewer.role !== 'ROLE_ADMIN') {
+      throw forbidden('가격 협상 내역 조회 권한이 없습니다.');
+    }
 
     let query = `
       SELECT pn.*, p.title AS product_title, p.thumbnail_url, pt.business_name AS partner_name
@@ -260,6 +265,7 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
     }
 
     await env.DB.batch(batch);
+    await auditStatement(env, partner, { action: 'NEGOTIATION_RESPOND', targetType: 'price_negotiation', targetId: negoId, before: { status: 'PROPOSED', sale_price: nego.current_sale_price }, after: { status: newStatus, target_price: nego.suggested_target_price }, request }).run();
     return json(corsHeaders, {
       success: true,
       message: accept ? '가격 제안을 수락하여 판매가가 인하 조정되었습니다.' : '가격 제안을 거절하였습니다.'

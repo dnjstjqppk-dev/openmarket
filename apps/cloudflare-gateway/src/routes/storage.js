@@ -1,6 +1,7 @@
 import { requireAuth, authenticate } from '../lib/auth.js';
 import { logPiiView } from '../services/privacy.js';
 import { newId } from '../lib/ids.js';
+import { bad, notFound, HttpError } from '../lib/http.js';
 // apps/cloudflare-gateway/src/routes/storage.js
 // OLMOA Cloudflare R2 & D1 Resilient Media Storage Engine
 
@@ -36,9 +37,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       mimeType = (body.content_type || 'image/png').trim().toLowerCase();
       folder = (body.folder || 'products').trim().toLowerCase();
 
-      if (!fileBase64) {
-        return new Response(JSON.stringify({ error: 'Missing file_data in JSON body' }), { status: 400, headers: corsHeaders });
-      }
+      if (!fileBase64) throw bad('FILE_REQUIRED', 'Missing file_data in JSON body');
 
       // Strip data:image/...;base64, prefix if present
       if (fileBase64.includes(';base64,')) {
@@ -55,14 +54,10 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       }
     } else if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData().catch(() => null);
-      if (!formData) {
-        return new Response(JSON.stringify({ error: 'Invalid multipart form data' }), { status: 400, headers: corsHeaders });
-      }
+      if (!formData) throw bad('INVALID_FORM_DATA', 'Invalid multipart form data');
       const file = formData.get('file');
       folder = (formData.get('folder') || 'products').toString();
-      if (!file || typeof file === 'string') {
-        return new Response(JSON.stringify({ error: 'No file found in multipart upload' }), { status: 400, headers: corsHeaders });
-      }
+      if (!file || typeof file === 'string') throw bad('FILE_REQUIRED', 'No file found in multipart upload');
 
       originalName = file.name || 'upload.png';
       mimeType = file.type || 'image/png';
@@ -76,14 +71,12 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       }
       fileBase64 = btoa(binary);
     } else {
-      return new Response(JSON.stringify({ error: 'Unsupported Content-Type for upload' }), { status: 415, headers: corsHeaders });
+      throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported Content-Type for upload');
     }
 
     folder = String(folder || 'products').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30) || 'products';
     if (!ALLOWED_CONTENT_TYPES.includes(mimeType)) {
-      return new Response(JSON.stringify({
-        error: `Invalid file type: ${mimeType}. Allowed types: ${ALLOWED_CONTENT_TYPES.join(', ')}`
-      }), { status: 400, headers: corsHeaders });
+      throw bad('INVALID_FILE_TYPE', `Invalid file type: ${mimeType}. Allowed types: ${ALLOWED_CONTENT_TYPES.join(', ')}`);
     }
 
     const isPrivate = PRIVATE_FOLDERS.has(folder);
@@ -97,9 +90,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
     }
 
     const byteSize = fileBytes.byteLength;
-    if (byteSize > 10 * 1024 * 1024) {
-      return new Response(JSON.stringify({ error: 'File size exceeds 10MB limit' }), { status: 400, headers: corsHeaders });
-    }
+    if (byteSize > 10 * 1024 * 1024) throw bad('FILE_TOO_LARGE', 'File size exceeds 10MB limit');
 
     const extMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
     const ext = extMatch ? extMatch[1].toLowerCase() : (mimeType === 'image/webp' ? 'webp' : 'png');
@@ -158,9 +149,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
   // 2. File Download & CDN Streaming (GET /api/v1/storage/file/*)
   if (url.pathname.startsWith('/api/v1/storage/file/') && request.method === 'GET') {
     const fileKey = url.pathname.replace('/api/v1/storage/file/', '').trim();
-    if (!fileKey) {
-      return new Response('Missing file key', { status: 400, headers: corsHeaders });
-    }
+    if (!fileKey) throw bad('FILE_KEY_REQUIRED', 'Missing file key');
 
     const meta = await env.DB.prepare('SELECT id, uploader_id, visibility, folder FROM storage_objects WHERE id = ?').bind(fileKey).first();
     const isPrivate = (meta && meta.visibility === 'PRIVATE') || PRIVATE_FOLDERS.has(fileKey.split('/')[0]);
@@ -170,7 +159,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       const allowed = viewer && meta && (viewer.role === 'ROLE_ADMIN' || viewer.userId === meta.uploader_id);
       if (!allowed) {
         // Same answer for "missing" and "not yours": no existence oracle.
-        return new Response(JSON.stringify({ error: 'File not found in storage' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        throw notFound('File not found in storage');
       }
       if (viewer.role === 'ROLE_ADMIN') await logPiiView(env, viewer, 'admin.kyb-document', 'storage_object', [meta.id], 'kyb_document', request);
       privateHeaders = { ...corsHeaders, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': 'inline' };
@@ -198,12 +187,7 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
     // B. Check D1 Storage Object
     const row = await env.DB.prepare('SELECT * FROM storage_objects WHERE id = ?').bind(fileKey).first();
-    if (!row || !row.data_base64) {
-      return new Response(JSON.stringify({ error: 'File not found in storage' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    if (!row || !row.data_base64) throw notFound('File not found in storage');
 
     const binaryString = atob(row.data_base64);
     const bytes = new Uint8Array(binaryString.length);

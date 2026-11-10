@@ -1,5 +1,5 @@
 import { authenticate, requireMachineSecret } from '../lib/auth.js';
-import { unauthorized, forbidden, readJson, bad, str } from '../lib/http.js';
+import { unauthorized, forbidden, readJson, bad, conflict, str, HttpError } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 // apps/cloudflare-gateway/src/routes/global-logistics.js
 // OLMOA Global OpenMarket Logistics Engine: International Carriers, 7-Stage Milestone Tracking & Webhook
@@ -44,9 +44,7 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
   // 2. 7-Stage Milestone Tracking Timeline (/api/v1/logistics/tracking/:subOrderId)
   if (url.pathname.startsWith('/api/v1/logistics/tracking/') && request.method === 'GET') {
     const subOrderId = url.pathname.replace('/api/v1/logistics/tracking/', '').trim();
-    if (!subOrderId) {
-      return new Response(JSON.stringify({ error: 'Missing sub_order_id' }), { status: 400, headers: corsHeaders });
-    }
+    if (!subOrderId) throw bad('SUB_ORDER_REQUIRED', 'Missing sub_order_id');
 
     const viewer = await authenticate(request, env);
     if (!viewer) throw unauthorized();
@@ -58,9 +56,7 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
        WHERE s.id = ? OR s.sub_order_no = ? OR s.parent_order_id = ? LIMIT 1`
     ).bind(subOrderId, subOrderId, subOrderId).first();
 
-    if (!subOrder) {
-      return new Response(JSON.stringify({ error: 'Sub-order not found', sub_order_id: subOrderId }), { status: 404, headers: corsHeaders });
-    }
+    if (!subOrder) throw new HttpError(404, 'NOT_FOUND', 'Sub-order not found', { sub_order_id: subOrderId });
     const ownerId = (await env.DB.prepare('SELECT customer_id FROM orders WHERE id = ?').bind(subOrder.parent_order_id).first('customer_id'));
     const allowed = viewer.role === 'ROLE_ADMIN' || viewer.userId === ownerId || (viewer.role === 'ROLE_PARTNER' && viewer.partnerId === subOrder.partner_id);
     if (!allowed) throw forbidden('본인 주문의 배송 정보만 조회할 수 있습니다.');
@@ -151,14 +147,10 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     const carrierCode = str(body.carrier ?? body.carrier_code, { max: 40 }) || null; // falls back to the sub-order's own carrier below
     const customsClearanceNo = str(body.customs_clearance_no, { max: 40 }) || null;
 
-    if (!subOrderId) {
-      return new Response(JSON.stringify({ error: 'Missing sub_order_id' }), { status: 400, headers: corsHeaders });
-    }
+    if (!subOrderId) throw bad('SUB_ORDER_REQUIRED', 'Missing sub_order_id');
 
     const subOrder = await env.DB.prepare("SELECT * FROM sub_orders WHERE (id = ? OR sub_order_no = ?) AND status IN ('SHIPPED','IN_TRANSIT','DELIVERED') LIMIT 1").bind(subOrderId, subOrderId).first();
-    if (!subOrder) {
-      return new Response(JSON.stringify({ error: '배송 중(SHIPPED/IN_TRANSIT/DELIVERED) 상태의 판매자 주문이 아닙니다.', code: 'NOT_IN_TRANSIT_STATE' }), { status: 409, headers: corsHeaders });
-    }
+    if (!subOrder) throw conflict('NOT_IN_TRANSIT_STATE', '배송 중(SHIPPED/IN_TRANSIT/DELIVERED) 상태의 판매자 주문이 아닙니다.');
 
     const logId = newId('trk');
 

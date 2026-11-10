@@ -1,0 +1,582 @@
+# Finance paths (cash receipts, tax invoices, reconciliation, journal, refunds).
+# Verified against the gateway implementation (apps/cloudflare-gateway/src/routes/finance.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/finance/cash-receipts/request:
+    post:
+      summary: Request a cash receipt (현금영수증) for a paid cash-method order
+      tags: [Finance]
+      description: >
+        Buyer-only request; there is no NTS/PG cash-receipt API integration.
+        The operator issues the receipt in the PG console or Hometax and records
+        the real approval number via POST
+        /api/v1/admin/finance/cash-receipts/{id}/issue. Only TRANSFER and
+        VIRTUAL_ACCOUNT payments qualify; card payments are rejected with
+        NOT_CASH_PAYMENT. Repeat requests for the same order return 200 with
+        already_requested instead of creating a duplicate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id:
+                  type: string
+                  description: Order id or order_no of the buyer's own order.
+                buyer_identifier:
+                  type: string
+                  maxLength: 20
+                  description: Phone digits or business registration number (identity_number is accepted as an alias).
+                identity_number:
+                  type: string
+                  maxLength: 20
+                  description: Alias of buyer_identifier.
+                identifier_type:
+                  type: string
+                  enum: [PHONE, BUSINESS_REG_NO]
+                  description: Defaults to BUSINESS_REG_NO when receipt_type is BUSINESS, else PHONE.
+                receipt_type:
+                  type: string
+                  description: BUSINESS selects BUSINESS_REG_NO identifier type.
+      responses:
+        '201':
+          description: Receipt request accepted (identifier masked in the response)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '200':
+          description: Receipt already requested or issued for this order (already_requested)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, already_requested, data]
+                properties:
+                  success:
+                    type: boolean
+                  already_requested:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_IDENTIFIER, ORDER_NOT_PAID or NOT_CASH_PAYMENT
+        '401':
+          description: Missing or expired JWT, or not a customer session
+        '404':
+          description: Unknown order id, or not the buyer's own order
+
+  /api/v1/finance/cash-receipts/{id}:
+    get:
+      summary: Look up the latest cash receipt by order id or order number
+      tags: [Finance]
+      description: >
+        The path id is an order id OR order_no (not the receipt id). Buyers see
+        only their own orders; ADMIN callers may look up any order. The
+        buyer_identifier is masked in the response.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order id or order_no whose latest CASH_RECEIPT row is returned.
+      responses:
+        '200':
+          description: Latest cash receipt row for the order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: No cash receipt request exists for this order
+
+  /api/v1/finance/tax-invoices:
+    get:
+      summary: List tax invoice and cash receipt rows (operator, latest 100)
+      tags: [Finance]
+      responses:
+        '200':
+          description: Newest-first invoice rows with masked buyer identifiers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/cash-receipts/{id}/issue:
+    post:
+      summary: Record a cash receipt issuance with the real approval number
+      tags: [Finance]
+      description: >
+        Records an issuance the operator performed in the PG console or Hometax.
+        Only REQUESTED rows can be processed; the loser of a concurrent
+        issue/fail race gets 409 NOT_REQUESTED.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: tax_invoices row id (invoice_type CASH_RECEIPT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hometax_approval_no]
+              properties:
+                hometax_approval_no:
+                  type: string
+                  maxLength: 40
+                  description: Real NTS approval number (6-40 alphanumerics and dashes).
+                memo:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: Receipt marked ISSUED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, id, issue_status]
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+                  issue_status:
+                    type: string
+                    enum: [ISSUED]
+        '400':
+          description: INVALID_APPROVAL_NO when the approval number shape is wrong
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown cash receipt id
+        '409':
+          description: NOT_REQUESTED when the row is no longer in REQUESTED state
+
+  /api/v1/admin/finance/cash-receipts/{id}/fail:
+    post:
+      summary: Mark a cash receipt request as failed with a reason
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: tax_invoices row id (invoice_type CASH_RECEIPT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: Receipt marked FAILED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, id, issue_status]
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+                  issue_status:
+                    type: string
+                    enum: [FAILED]
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown cash receipt id
+        '409':
+          description: NOT_REQUESTED when the row is no longer in REQUESTED state
+
+  /api/v1/admin/reconciliation:
+    get:
+      summary: Run the full R01-R23 ledger reconciliation now (manual trigger)
+      tags: [Finance]
+      description: >
+        Runs all checks, persists a reconciliation_runs row, and alerts on
+        failure via ALERT_WEBHOOK_URL (or records NO_CHANNEL). Same engine as
+        the hourly CRON run.
+      responses:
+        '200':
+          description: Reconciliation outcome with per-check violations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [ok, checked_at, checks, run_id, alert_status]
+                    properties:
+                      ok:
+                        type: boolean
+                      checked_at:
+                        type: string
+                      run_id:
+                        type: string
+                      alert_status:
+                        type: string
+                        enum: [NOT_NEEDED, SENT, FAILED, NO_CHANNEL]
+                      checks:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, name, ok, violations, violation_count]
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            ok:
+                              type: boolean
+                            violations:
+                              type: array
+                              items:
+                                type: object
+                            violation_count:
+                              type: integer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/reconciliation-runs:
+    get:
+      summary: Reconciliation run history (latest 100) with last CRON status
+      tags: [Finance]
+      responses:
+        '200':
+          description: Past runs, the latest CRON run, and alert channel state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [runs, last_cron, alert_channel_configured]
+                    properties:
+                      runs:
+                        type: array
+                        items:
+                          type: object
+                      last_cron:
+                        type: object
+                        nullable: true
+                      alert_channel_configured:
+                        type: boolean
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/reserve-holds:
+    get:
+      summary: List rolling-reserve holds, optionally for one seller
+      tags: [Finance]
+      parameters:
+        - name: partner_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Restrict rows to one partner; omit for all holds (latest 500).
+      responses:
+        '200':
+          description: Reserve hold rows with seller name and releasable flag
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/trial-balance:
+    get:
+      summary: Trial balance grouped by operating entity and account
+      tags: [Finance]
+      parameters:
+        - name: entity_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Restrict rows to one operating entity; omit for all entities.
+      responses:
+        '200':
+          description: Per-account debit, credit and balance rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/journal:
+    get:
+      summary: Journal entries, optionally for one order (latest 500)
+      tags: [Finance]
+      parameters:
+        - name: order_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Restrict rows to one order; omit for the latest entries.
+      responses:
+        '200':
+          description: Newest-first journal entry rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/finance/payouts/{id}/transferred:
+    post:
+      summary: Record the manual bank transfer reference for an APPROVED payout
+      tags: [Finance]
+      description: >
+        Payouts are wired manually at a bank; this call moves the payout from
+        APPROVED to TRANSFERRED with the transfer reference.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payout id in APPROVED status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bank_transfer_ref]
+              properties:
+                bank_transfer_ref:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: Payout marked TRANSFERRED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '409':
+          description: PAYOUT_NOT_APPROVED when the payout is not APPROVED
+
+  /api/v1/admin/orders/{id}/refund:
+    post:
+      summary: Manual admin refund of order lines and/or shipping shares
+      tags: [Finance]
+      description: >
+        Runs the shared refund engine with reason code ADMIN:{reason} and writes
+        a MANUAL_REFUND audit row. Accepts an optional X-Idempotency-Key header.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order id to refund.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 200
+                lines:
+                  type: array
+                  description: Item lines to refund; empty means shipping-only refund.
+                  items:
+                    type: object
+                    required: [order_item_id, quantity]
+                    properties:
+                      order_item_id:
+                        type: string
+                      quantity:
+                        type: number
+                shipping_sub_order_ids:
+                  type: array
+                  description: Sub-orders whose shipping share is refunded.
+                  items:
+                    type: string
+                restock:
+                  type: boolean
+                  description: Restock refunded quantities when true.
+      responses:
+        '200':
+          description: Refund engine result (replay flag, refund row, order status, warnings)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [replay, refund, orderStatus]
+                    properties:
+                      replay:
+                        type: boolean
+                      refund:
+                        type: object
+                      orderStatus:
+                        type: string
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+        '400':
+          description: NOTHING_TO_REFUND when neither lines nor shipping shares are given
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+
+  /api/v1/admin/sub-orders/{id}/delivered:
+    post:
+      summary: Manually mark a shipped sub-order as delivered with evidence
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Sub-order id in SHIPPED or IN_TRANSIT status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence]
+              properties:
+                evidence:
+                  type: string
+                  maxLength: 300
+                  description: Delivery proof such as the carrier tracking result.
+      responses:
+        '200':
+          description: Sub-order marked DELIVERED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '409':
+          description: NOT_IN_TRANSIT when the sub-order is not shipped

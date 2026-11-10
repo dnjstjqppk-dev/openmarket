@@ -15,6 +15,7 @@ import { requireAuth, requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, forbidden, HttpError, str } from '../lib/http.js';
 import { assertFeatureEnabled } from '../services/feature-flags.js';
 import { newId } from '../lib/ids.js';
+import { auditStatement } from '../lib/ledger.js';
 
 const SHIPPABLE_SUB_ORDER = ['PAYMENT_CONFIRMED', 'PREPARING'];
 const TRACKING_RE = /^[A-Za-z0-9-]{6,40}$/;
@@ -52,7 +53,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
 
   // 1. Create a supplier PO for a paid sub-order (POST /api/v1/supplier-orders)
   if (p === '/api/v1/supplier-orders' && request.method === 'POST') {
-    const { partnerId } = await requireSourcingActor(request, env);
+    const { caller, partnerId } = await requireSourcingActor(request, env);
     await assertFeatureEnabled(env, 'auto_supplier_po');
     const body = await readJson(request);
 
@@ -111,6 +112,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
       VALUES (?, ?, ?, ?, ?, 'DROPSHIP', 'REQUESTED', ?, 'KRW', 0, NULL)
     `).bind(sordId, poNo, sup.id, sub.id, idempotencyKey, totalCost));
     await env.DB.batch(stmts);
+    await auditStatement(env, caller, { action: 'SUPPLIER_PO_CREATE', targetType: 'supplier_order', targetId: sordId, after: { po_no: poNo, sub_order_id: sub.id, supplier_id: sup.id, total_supply_cost: totalCost }, request }).run();
 
     return json(corsHeaders, {
       success: true,
@@ -122,7 +124,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   // 2. List POs — a seller sees only POs for its own sub-orders.
   if ((p === '/api/v1/supplier-orders' || p === '/api/v1/admin/supplier-orders') && request.method === 'GET') {
     if (p === '/api/v1/admin/supplier-orders') await requireAdmin(request, env);
-    const { partnerId } = await requireSourcingActor(request, env);
+    const { caller, partnerId } = await requireSourcingActor(request, env);
     const { results } = await env.DB.prepare(`
       SELECT so.*, s.name AS supplier_name, sub.sub_order_no
       FROM supplier_orders so
@@ -137,7 +139,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   // 3. Record the supplier's answer (POST /api/v1/supplier-orders/:id/respond)
   const respM = p.match(/^\/api\/v1\/supplier-orders\/([^/]+)\/respond$/);
   if (respM && request.method === 'POST') {
-    const { partnerId } = await requireSourcingActor(request, env);
+    const { caller, partnerId } = await requireSourcingActor(request, env);
     const body = await readJson(request);
     const action = String(body.action || '').toUpperCase();
     if (!['ACCEPT', 'REJECT'].includes(action)) throw bad('INVALID_ACTION', 'action은 ACCEPT 또는 REJECT 여야 합니다.');
@@ -151,6 +153,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
       WHERE id = ? AND status = 'REQUESTED'
     `).bind(newStatus, action === 'REJECT' ? reason : null, po.id).run();
     if (r.meta.changes !== 1) throw conflict('NOT_REQUESTED', `발주 대기 상태에서만 응답할 수 있습니다. (현재: ${po.status})`);
+    await auditStatement(env, caller, { action: 'SUPPLIER_PO_RESPOND', targetType: 'supplier_order', targetId: po.id, before: { status: 'REQUESTED' }, after: { status: newStatus, reason: action === 'REJECT' ? reason : null }, request }).run();
 
     return json(corsHeaders, {
       success: true, order_id: po.id, po_no: po.po_no, status: newStatus,
@@ -161,7 +164,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
   // 4. Register the supplier / 3PL shipment (POST /api/v1/supplier-orders/:id/dispatch)
   const dispM = p.match(/^\/api\/v1\/supplier-orders\/([^/]+)\/dispatch$/);
   if (dispM && request.method === 'POST') {
-    const { partnerId } = await requireSourcingActor(request, env);
+    const { caller, partnerId } = await requireSourcingActor(request, env);
     await assertFeatureEnabled(env, 'fulfillment_3pl');
     const body = await readJson(request);
     const carrierCode = str(body.carrier_code, { max: 40 }) || 'CJ대한통운';
@@ -194,6 +197,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
     if (r[0].meta.changes !== 1) {
       throw conflict('SUB_ORDER_NOT_SHIPPABLE', `결제 완료·출고 전 상태의 주문만 출고 처리할 수 있습니다. (현재: ${po.sub_status})`);
     }
+    await auditStatement(env, caller, { action: 'SUPPLIER_PO_DISPATCH', targetType: 'supplier_order', targetId: po.id, before: { status: 'ACCEPTED' }, after: { status: 'IN_TRANSIT', carrier_code: carrierCode, tracking_number: trackingNumber }, request }).run();
     return json(corsHeaders, {
       success: true, po_no: po.po_no, status: 'IN_TRANSIT', carrier_code: carrierCode, tracking_number: trackingNumber,
       message: '출고 처리 및 고객 주문 송장 등록 완료'
@@ -202,7 +206,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
 
   // 5. Manual supplier stock / supply-price sync (POST /api/v1/sync/supplier-inventory)
   if (p === '/api/v1/sync/supplier-inventory' && request.method === 'POST') {
-    const { partnerId } = await requireSourcingActor(request, env);
+    const { caller, partnerId } = await requireSourcingActor(request, env);
     await assertFeatureEnabled(env, 'stock_sync');
     const body = await readJson(request);
     const skuId = str(body.sku_id, { field: 'sku_id', max: 80, required: true });
@@ -257,6 +261,7 @@ export async function handleSupplier3plRoutes(request, url, env, corsHeaders) {
       throw conflict('STOCK_CHANGED', '그 사이 주문이 발생해 재고가 변경되었습니다. 다시 시도해 주세요.');
     }
 
+    await auditStatement(env, caller, { action: 'SUPPLIER_INVENTORY_SYNC', targetType: 'sku', targetId: sku.id, before: { stock: oldStock, supply_price: oldPrice }, after: { stock: newStock, supply_price: newPrice, sync_status: syncStatus }, request }).run();
     return json(corsHeaders, {
       success: true, sync_status: syncStatus, alert_message: alertMsg,
       data: { sku_id: sku.id, old_stock: oldStock, new_stock: newStock, old_price: oldPrice, new_price: newPrice }

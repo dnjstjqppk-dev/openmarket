@@ -6,6 +6,7 @@ const BLOCKED_HOSTS = new Set([
   '127.0.0.1',
   '0.0.0.0',
   '::1',
+  '::',
   '169.254.169.254',             // AWS / Cloud metadata service
   'metadata.google.internal',     // GCP metadata
   'instance-data',                // Cloud instance metadata
@@ -31,6 +32,31 @@ function isPrivateIp(ip) {
   return false;
 }
 
+// Normalizes a WHATWG hostname for block-list comparison: Node keeps IPv6
+// brackets in `hostname` ("[::1]" !== "::1"), and DNS names may carry a
+// trailing root dot. Returns lowercase without brackets / trailing dot.
+export function normalizeHost(hostname) {
+  let h = String(hostname || '').toLowerCase();
+  if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+  if (h.endsWith('.') && h.length > 1) h = h.slice(0, -1);
+  return h;
+}
+
+function isBlockedIpv6(host) {
+  // host must already be normalized (no brackets, lowercase)
+  if (!host.includes(':')) return false;
+  if (host === '::1' || host === '::') return true;
+  // IPv4-mapped / translated (::ffff:1.2.3.4, ::ffff:0:1.2.3.4): judge the embedded IPv4
+  const v4 = host.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (v4 && isPrivateIp(v4[1])) return true;
+  // Unique-local fc00::/7, link-local fe80::/10
+  if (/^f[c-d][0-9a-f]/i.test(host.replace(/^:/, ''))) return true;
+  if (/^fe[89ab][0-9a-f]/i.test(host.replace(/^:/, ''))) return true;
+  // Any other literal IPv6 (global unicast, documentation, multicast, ...) is
+  // not a crawl target either: fail closed rather than allowlisting the world.
+  return true;
+}
+
 export function validateProductUrl(rawUrl) {
   if (!rawUrl || typeof rawUrl !== 'string') {
     return { valid: false, error: 'URL을 입력해 주세요.' };
@@ -47,7 +73,7 @@ export function validateProductUrl(rawUrl) {
     return { valid: false, error: 'HTTP 및 HTTPS 프로토콜만 수집 가능합니다.' };
   }
 
-  const host = parsed.hostname.toLowerCase();
+  const host = normalizeHost(parsed.hostname);
 
   if (BLOCKED_HOSTS.has(host) || host.endsWith('.internal') || host.endsWith('.local') || host.endsWith('.arpa')) {
     return { valid: false, error: `보안 정책에 따라 사설 호스트(${host}) 접근이 차단되었습니다. (SSRF 방어)` };
@@ -55,6 +81,10 @@ export function validateProductUrl(rawUrl) {
 
   if (isPrivateIp(host)) {
     return { valid: false, error: `내부 사설 IP 대역(${host})에 대한 상품 수집은 금지되어 있습니다. (SSRF 방어)` };
+  }
+
+  if (isBlockedIpv6(host)) {
+    return { valid: false, error: `보안 정책에 따라 IP 리터럴(${host}) 접근이 차단되었습니다. (SSRF 방어)` };
   }
 
   const cleanDomain = host.replace(/^www\./, '');

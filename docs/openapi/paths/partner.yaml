@@ -9,6 +9,46 @@
 # PUT|POST /api/v1/partner/orders/{id}/shipment below.
 paths:
   /api/v1/partner/products:
+    get:
+      summary: List the seller's own products with SKU rows
+      tags: [Partner]
+      description: >
+        One row per product-SKU join (a product with N SKUs appears N times).
+        Requires APPROVED status.
+      responses:
+        '200':
+          description: Product/SKU rows with option summary and quality score
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  business_name:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [option_summary, quality_score]
+                      properties:
+                        option_summary:
+                          type: string
+                          description: '"key:value / ..." from option_combination_json, or 기본.'
+                        quality_score:
+                          type: integer
+        '403':
+          description: PARTNER_NOT_APPROVED when status is not APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
     post:
       summary: Register a product as DRAFT/PENDING with its first SKU
       tags: [Partner]
@@ -433,3 +473,763 @@ paths:
                       type: object
                   data:
                     type: object
+
+  /api/v1/partner/orders:
+    get:
+      summary: My seller sub-orders with items (newest first, max 500)
+      tags: [Partner]
+      description: Recipient/PII fields are access-logged for fulfilment.
+      responses:
+        '200':
+          description: Sub-orders with order_items[] attached
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/metrics:
+    get:
+      summary: Dashboard counters, weekly GMV and fulfillment gauges (all live)
+      tags: [Partner]
+      description: Gauges are null until measurable — never invented.
+      responses:
+        '200':
+          description: Live metrics bundle (flat, no data envelope)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, products_count, orders_count, weekly_gmv]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  business_name:
+                    type: string
+                  products_count:
+                    type: integer
+                  orders_count:
+                    type: integer
+                  total_sales_amount:
+                    type: integer
+                  to_ship_count:
+                    type: integer
+                  settlement_expected_amount:
+                    type: integer
+                  waiting_qna_count:
+                    type: integer
+                  open_claims_count:
+                    type: integer
+                  pending_review_count:
+                    type: integer
+                  weekly_gmv:
+                    type: array
+                    maxItems: 7
+                    description: Seven UTC-day {day, amount} buckets, oldest first.
+                    items:
+                      type: object
+                      required: [day, amount]
+                      properties:
+                        day:
+                          type: string
+                        amount:
+                          type: integer
+                  wow_pct:
+                    type: number
+                    nullable: true
+                    description: Week-over-week change, null when the prior week is empty.
+                  ship_on_time_rate:
+                    type: number
+                    nullable: true
+                    description: Share shipped within 24h, null until shipments exist.
+                  avg_delivery_days:
+                    type: number
+                    nullable: true
+                  claim_rate_pct:
+                    type: number
+                    nullable: true
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/profile:
+    get:
+      summary: Read the seller's own profile and payout settings
+      tags: [Partner]
+      description: >
+        Available before approval (no 403 PARTNER_NOT_APPROVED gate). The bank
+        account number is masked ("****1234"); echoing the masked value back in
+        PUT is not treated as a change.
+      responses:
+        '200':
+          description: Profile bundle with masked payout account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  data:
+                    type: object
+                    required: [id, business_name, status]
+                    properties:
+                      id:
+                        type: string
+                      business_name:
+                        type: string
+                      business_reg_number:
+                        type: string
+                      status:
+                        type: string
+                        example: APPROVED
+                      sales_model:
+                        type: string
+                      commission_rate:
+                        type: number
+                      bank_code:
+                        type: string
+                      bank_account_number:
+                        type: string
+                        nullable: true
+                        description: Masked ("****1234") or null.
+                      bank_account_holder:
+                        type: string
+                      payout_account_verified:
+                        type: boolean
+                      payout_change_pending:
+                        type: boolean
+                      settlement_cycle:
+                        type: string
+                      return_shipping_address:
+                        type: string
+                      customer_service_phone:
+                        type: string
+                      base_shipping_fee:
+                        type: integer
+                      free_shipping_threshold:
+                        type: integer
+                      return_shipping_fee:
+                        type: integer
+                        nullable: true
+                        description: One-way return courier fee; falls back to base_shipping_fee.
+        '401':
+          description: Missing or expired JWT, or not a ROLE_PARTNER session
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+    put:
+      summary: Update shop settings and request payout-account changes
+      tags: [Partner]
+      description: >
+        PATCH is accepted as an alias of PUT. Requires APPROVED status
+        (403 PARTNER_NOT_APPROVED otherwise). Payout account changes are queued
+        for operator verification (payout_change_pending) and never applied
+        directly. business_name is locked (409 BUSINESS_NAME_LOCKED).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settlement_cycle:
+                  type: string
+                  enum: [WEEKLY, BIWEEKLY, MONTHLY]
+                return_shipping_address:
+                  type: string
+                  maxLength: 200
+                customer_service_phone:
+                  type: string
+                  maxLength: 30
+                base_shipping_fee:
+                  type: integer
+                  minimum: 0
+                  maximum: 100000
+                free_shipping_threshold:
+                  type: integer
+                  minimum: 0
+                  maximum: 10000000
+                return_shipping_fee:
+                  type: integer
+                  minimum: 0
+                  maximum: 100000
+                  nullable: true
+                bank_code:
+                  type: string
+                  maxLength: 20
+                bank_account_number:
+                  type: string
+                  maxLength: 30
+                  description: Masked echo ("****1234") is ignored, not queued.
+                bank_account_holder:
+                  type: string
+                  maxLength: 50
+      responses:
+        '200':
+          description: Settings saved; payout change queued when bank fields changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, payout_change_pending]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  payout_change_pending:
+                    type: boolean
+        '403':
+          description: PARTNER_NOT_APPROVED when status is not APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: BUSINESS_NAME_LOCKED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/products/{id}:
+    put:
+      summary: Update a product's content, price and operation model
+      tags: [Partner]
+      description: >
+        PATCH is accepted as an alias of PUT. Only the seller's own products
+        (404 otherwise). Changing title, thumbnail or description_html sends an
+        ACTIVE/APPROVED product back to DRAFT/PENDING for re-review. Price
+        fields follow the same contract as registration (sale, orig defaulting
+        to current lowest prices) and propagate to all SKUs.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                description_html:
+                  type: string
+                  maxLength: 200000
+                thumbnail_url:
+                  type: string
+                category_slug:
+                  type: string
+                  description: Active category slug or id (alias category_id).
+                sale_price:
+                  type: integer
+                  minimum: 100
+                  maximum: 100000000
+                  description: Aliases price and lowest_sale_price are accepted.
+                original_price:
+                  type: integer
+                  description: Defaults to current lowest prices when omitted.
+                hs_code:
+                  type: string
+                country_origin:
+                  type: string
+                custody_type:
+                  type: string
+                  enum: [FULL_MANAGED, SEMI_MANAGED]
+                supply_price:
+                  type: integer
+                  nullable: true
+                  minimum: 0
+                  maximum: 100000000
+                brand:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: Product updated; re-review flagged when content changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [product_id, title, sale_price, original_price, review_status]
+                    properties:
+                      product_id:
+                        type: string
+                      title:
+                        type: string
+                      sale_price:
+                        type: integer
+                      original_price:
+                        type: integer
+                      review_status:
+                        type: string
+        '400':
+          description: INVALID_CUSTODY or invalid price inputs
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not the seller's own product
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/products/{id}/price:
+    put:
+      summary: Update a product's lowest prices across all its SKUs
+      tags: [Partner]
+      description: >
+        PATCH is accepted as an alias of PUT. Only the seller's own products
+        (404 otherwise). Does not trigger re-review.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sale_price:
+                  type: integer
+                  minimum: 100
+                  maximum: 100000000
+                  description: Aliases price and lowest_sale_price are accepted.
+                original_price:
+                  type: integer
+                  description: Defaults to current lowest prices when omitted.
+      responses:
+        '200':
+          description: Prices updated on the product and all its SKUs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, product_id, lowest_sale_price, lowest_original_price]
+                properties:
+                  success:
+                    type: boolean
+                  product_id:
+                    type: string
+                  lowest_sale_price:
+                    type: integer
+                  lowest_original_price:
+                    type: integer
+        '404':
+          description: Not the seller's own product
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/products/{id}/stock:
+    put:
+      summary: Set a SKU's stock absolutely with optimistic concurrency
+      tags: [Partner]
+      description: >
+        PATCH is accepted as an alias of PUT. stock_quantity is an absolute
+        target, not a delta. sku_id selects the SKU (defaults to the product's
+        first SKU by sku_code); only the seller's own SKUs (403 otherwise). A
+        concurrent checkout between read and write fails with
+        409 STOCK_CHANGED. Every adjustment is ledgered in inventory_ledger.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product id, or a SKU id (sku_id in the body takes precedence).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_quantity]
+              properties:
+                stock_quantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                sku_id:
+                  type: string
+      responses:
+        '200':
+          description: Stock set and ledgered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, product_id, sku_id, stock_quantity, previous_stock, delta]
+                properties:
+                  success:
+                    type: boolean
+                  product_id:
+                    type: string
+                  sku_id:
+                    type: string
+                  stock_quantity:
+                    type: integer
+                  previous_stock:
+                    type: integer
+                  delta:
+                    type: integer
+        '403':
+          description: Not the seller's own SKU
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: STOCK_CHANGED when stock moved since the read
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/orders/{id}/prepare:
+    post:
+      summary: Confirm a paid sub-order and start preparation
+      tags: [Partner]
+      description: >
+        Transitions the seller's own sub-order from PAYMENT_CONFIRMED to
+        PREPARING; anything else is 409 NOT_CONFIRMABLE. Ships later via
+        PUT /api/v1/partner/orders/{id}/shipment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Sub-order id.
+      responses:
+        '200':
+          description: Sub-order transitioned to PREPARING
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, status]
+                properties:
+                  success:
+                    type: boolean
+                  status:
+                    type: string
+                    example: PREPARING
+        '409':
+          description: NOT_CONFIRMABLE (wrong status or not the seller's order)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/qna:
+    get:
+      summary: List product questions addressed to the seller
+      tags: [Partner]
+      description: Each row carries its product_title. Requires APPROVED status.
+      responses:
+        '200':
+          description: Q&A rows for the seller's products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '403':
+          description: PARTNER_NOT_APPROVED when status is not APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/qna/{id}/answer:
+    post:
+      summary: Answer one product question
+      tags: [Partner]
+      description: >
+        Sets the answer and transitions the question to ANSWERED. Only the
+        seller's own questions (404 otherwise).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Q&A id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '200':
+          description: Answer recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, qna_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  qna_id:
+                    type: string
+                  status:
+                    type: string
+                    example: ANSWERED
+        '404':
+          description: Not the seller's own question
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/returns:
+    get:
+      summary: List return/exchange claims on the seller's sub-orders
+      tags: [Partner]
+      description: Each row carries order/sub-order totals and the customer identity. Requires APPROVED status.
+      responses:
+        '200':
+          description: Claim rows for the seller's sub-orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '403':
+          description: PARTNER_NOT_APPROVED when status is not APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/returns/{id}/reship:
+    post:
+      summary: Register the exchange replacement's waybill (re-ships it)
+      tags: [Partner]
+      description: >
+        Only EXCHANGE claims in APPROVED/AWAITING_RESHIPMENT (409
+        NOT_AWAITING_RESHIPMENT otherwise). Replacement stock moves out
+        ledgered; return_received=true also restocks the returned option. The
+        sub-order re-enters delivery as SHIPPED with the new waybill. A
+        batch-assertion guards against double submit.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Claim id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrier, tracking_number]
+              properties:
+                carrier:
+                  type: string
+                  maxLength: 40
+                  description: Alias carrier_code is accepted.
+                tracking_number:
+                  type: string
+                  description: Must match ^[A-Za-z0-9-]{6,40}$.
+                return_received:
+                  type: boolean
+                  description: True restocks the returned option ledgered.
+      responses:
+        '200':
+          description: Replacement shipped, claim RESHIPPED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, claim_id, exchange_status, sub_order_status]
+                properties:
+                  success:
+                    type: boolean
+                  claim_id:
+                    type: string
+                  exchange_status:
+                    type: string
+                    example: RESHIPPED
+                  sub_order_status:
+                    type: string
+                    example: SHIPPED
+        '400':
+          description: INVALID_TRACKING
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Not a claim on the seller's own sub-order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: NOT_AWAITING_RESHIPMENT, NO_EXCHANGE_ITEMS or EXCHANGE_OUT_OF_STOCK
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/returns/{id}:
+    put:
+      summary: Approve (refund) or reject a return/exchange claim
+      tags: [Partner]
+      description: >
+        POST and the /status suffix are accepted as aliases of
+        PUT /api/v1/partner/returns/{id}. Only REQUESTED claims on the seller's
+        own sub-orders. decision APPROVE/APPROVED/REFUNDED approves, REJECT/REJECTED
+        rejects (notes required). EXCHANGE approvals stop at
+        APPROVED/AWAITING_RESHIPMENT with next_action pointing at POST
+        /api/v1/partner/returns/{id}/reship; return approvals refund immediately
+        (status REFUNDED) with the O14 fault-based return_fee. fault may only be
+        shifted to CUSTOMER with a written reason (notes). returnless=true
+        approves without restocking.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Claim id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  description: APPROVE (aliases APPROVED, REFUNDED) or REJECT (alias REJECTED). Alias status is accepted.
+                notes:
+                  type: string
+                  maxLength: 500
+                  description: Required for REJECT and CUSTOMER fault overrides. Alias comment is accepted.
+                fault:
+                  type: string
+                  enum: [CUSTOMER, SELLER]
+                returnless:
+                  type: boolean
+                restock:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Claim rejected, exchange approved, or return refunded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, claim_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  claim_id:
+                    type: string
+                  status:
+                    type: string
+                    example: REFUNDED
+                    description: REJECTED, APPROVED (exchange) or REFUNDED (return).
+                  exchange_status:
+                    type: string
+                    example: AWAITING_RESHIPMENT
+                  next_action:
+                    type: string
+                  fault:
+                    type: string
+                  return_fee:
+                    type: integer
+                  refund:
+                    type: object
+        '400':
+          description: INVALID_DECISION, INVALID_FAULT, REASON_REQUIRED or FAULT_REASON_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Not a claim on the seller's own sub-order
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: CLAIM_ALREADY_PROCESSED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'

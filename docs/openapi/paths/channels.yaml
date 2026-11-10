@@ -1,0 +1,677 @@
+# Multichannel reference directories. Verified against the gateway
+# implementation (apps/cloudflare-gateway/src/routes/multichannel.js).
+# These feed the partner dispatch-po / fulfill forms (P0-05/06): static
+# connector-registry data, so the seller picks a real supplier and carrier
+# instead of the previously hardcoded single-field bodies.
+paths:
+  /api/v1/channels/suppliers:
+    get:
+      summary: B2B supplier directory for the dispatch-po form
+      tags: [Channels]
+      responses:
+        '200':
+          description: Registered domestic-B2B suppliers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+
+  /api/v1/channels/carriers:
+    get:
+      summary: 3PL carrier directory for the fulfill form
+      tags: [Channels]
+      responses:
+        '200':
+          description: Carriers of the 3PL logistics connector
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                        name:
+                          type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+
+  /api/v1/channels/platforms:
+    get:
+      summary: Commerce platform directory with live-integration flags
+      tags: [Channels]
+      security: []
+      responses:
+        '200':
+          description: Platforms ordered by type and name (probe: count 18)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        country_code:
+                          type: string
+                        platform_type:
+                          type: string
+                        auth_type:
+                          type: string
+                        channel_count:
+                          type: integer
+                          description: Number of sales channels on this platform.
+                        api_integrated:
+                          type: boolean
+                          description: True only when a live connector is registered.
+
+  /api/v1/channels/sales-channels:
+    get:
+      summary: Active sales channels ordered by commission
+      tags: [Channels]
+      security: []
+      responses:
+        '200':
+          description: Active channels with platform columns joined (probe: count 7)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        platform_id:
+                          type: string
+                        channel_code:
+                          type: string
+                        channel_name:
+                          type: string
+                        commission_bps:
+                          type: integer
+                        currency:
+                          type: string
+                        platform_name:
+                          type: string
+                        country_code:
+                          type: string
+                        auth_type:
+                          type: string
+
+  /api/v1/channels/credentials:
+    get:
+      summary: Seller's stored platform credentials (masked)
+      tags: [Channels]
+      responses:
+        '200':
+          description: Credentials newest-first, API keys masked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        platform_id:
+                          type: string
+                        credential_name:
+                          type: string
+                        api_key_masked:
+                          type: string
+                        seller_account_id:
+                          type: string
+                          nullable: true
+                        is_sandbox:
+                          type: integer
+                        status:
+                          type: string
+                        last_verified_at:
+                          type: string
+                          nullable: true
+                        platform_name:
+                          type: string
+                        auth_type:
+                          type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+    post:
+      summary: Store (or replace) a platform API credential, sealed at rest
+      tags: [Channels]
+      description: Upserts on (partner, platform, sandbox); secrets are AES-GCM sealed and never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform_id, api_key]
+              properties:
+                platform_id:
+                  type: string
+                  maxLength: 80
+                credential_name:
+                  type: string
+                  maxLength: 100
+                  description: Defaults to the Korean label for "default account".
+                api_key:
+                  type: string
+                  maxLength: 500
+                secret_key:
+                  type: string
+                  maxLength: 2000
+                seller_account_id:
+                  type: string
+                  maxLength: 120
+                is_sandbox:
+                  type: boolean
+      responses:
+        '201':
+          description: Credential sealed and stored with status CONFIGURED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+        '404':
+          description: Unknown commerce platform id
+
+  /api/v1/channels/credentials/{id}/verify:
+    post:
+      summary: Verify a stored credential against the live platform API
+      tags: [Channels]
+      description: Only a live connector may mark a credential VERIFIED; otherwise verified:false is returned without a real call.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification outcome (verified:false until a real integration exists)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, verified, status]
+                properties:
+                  success:
+                    type: boolean
+                  verified:
+                    type: boolean
+                  status:
+                    type: string
+                  simulated:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+        '404':
+          description: Credential not found for this seller
+
+  /api/v1/channels/pricing/calculate:
+    post:
+      summary: Pure-computation global price calculator (no side effects)
+      tags: [Channels]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wholesale_cost]
+              properties:
+                wholesale_cost:
+                  type: integer
+                  description: Supply cost, a positive safe integer.
+                currency:
+                  type: string
+                  description: Defaults to KRW.
+                target_margin_bps:
+                  type: integer
+                  description: Defaults to 2000.
+                channel_code:
+                  type: string
+                  description: Defaults to NAVER_SMARTSTORE.
+                weight_kg:
+                  type: number
+                  description: Defaults to 0.5.
+                is_crossborder:
+                  type: boolean
+                origin_country:
+                  type: string
+                  description: Defaults to CN.
+                min_margin_krw:
+                  type: integer
+                  description: Defaults to 3000.
+                rounding_unit:
+                  type: integer
+                  description: Defaults to 100.
+      responses:
+        '200':
+          description: Priced quote with cost, fee and result breakdowns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [input, cost_breakdown, fees_breakdown, pricing_result]
+                    properties:
+                      input:
+                        type: object
+                      cost_breakdown:
+                        type: object
+                        properties:
+                          supply_cost_krw:
+                            type: number
+                          international_shipping_krw:
+                            type: number
+                          domestic_shipping_krw:
+                            type: number
+                          customs_duty_krw:
+                            type: number
+                          vat_krw:
+                            type: number
+                          total_landed_cost_krw:
+                            type: number
+                      fees_breakdown:
+                        type: object
+                        properties:
+                          channel_commission_krw:
+                            type: number
+                          channel_commission_rate_bps:
+                            type: number
+                          pg_fee_krw:
+                            type: number
+                          return_reserve_krw:
+                            type: number
+                      pricing_result:
+                        type: object
+                        properties:
+                          sale_price_krw:
+                            type: number
+                          original_price_krw:
+                            type: number
+                          net_profit_krw:
+                            type: number
+                          realized_margin_rate_bps:
+                            type: number
+                          is_loss_risk:
+                            type: boolean
+        '400':
+          description: INVALID_NUMBER when wholesale_cost is not a positive integer
+
+  /api/v1/channels/listings/publish:
+    post:
+      summary: Publish an ACTIVE own product to an external channel
+      tags: [Channels]
+      description: Requires feature marketplace_listing_publish. Real stock only; a simulated publish stays DRAFT and writes no external id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, sales_channel_id]
+              properties:
+                product_id:
+                  type: string
+                  maxLength: 80
+                sales_channel_id:
+                  type: string
+                  maxLength: 80
+                sale_price:
+                  type: integer
+                  description: Defaults to the product lowest sale price.
+                original_price:
+                  type: integer
+                  description: Defaults to the product lowest original price.
+      responses:
+        '200':
+          description: Publish outcome with listing status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, simulated, status, listing_id]
+                properties:
+                  success:
+                    type: boolean
+                  simulated:
+                    type: boolean
+                  status:
+                    type: string
+                  listing_id:
+                    type: string
+                  external_product_id:
+                    type: string
+                    nullable: true
+                  channel_name:
+                    type: string
+                  message:
+                    type: string
+                    nullable: true
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED in this environment
+        '404':
+          description: Product or sales channel not found
+        '409':
+          description: PRODUCT_NOT_ACTIVE, or CREDENTIAL_REQUIRED when no credential exists
+        '501':
+          description: CONNECTOR_NOT_INTEGRATED in production without simulation
+
+  /api/v1/channels/listings:
+    get:
+      summary: Seller's channel listings (newest 100)
+      tags: [Channels]
+      responses:
+        '200':
+          description: Listings with channel and product titles joined
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+
+  /api/v1/channels/orders/sync:
+    post:
+      summary: Collect external orders from a channel into channel_orders
+      tags: [Channels]
+      description: Requires feature marketplace_order_sync. Commission is computed half-up from commission_bps; simulated imports are prefixed SIM-.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sales_channel_id]
+              properties:
+                sales_channel_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '200':
+          description: Collection outcome with import count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, simulated, channel_name, imported_orders_count]
+                properties:
+                  success:
+                    type: boolean
+                  simulated:
+                    type: boolean
+                  channel_name:
+                    type: string
+                  imported_orders_count:
+                    type: integer
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED in this environment
+        '404':
+          description: Sales channel not found
+        '501':
+          description: CONNECTOR_NOT_INTEGRATED in production without simulation
+
+  /api/v1/channels/orders:
+    get:
+      summary: Seller's collected external orders (newest 100)
+      tags: [Channels]
+      responses:
+        '200':
+          description: Channel orders with channel name and code joined
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved
+
+  /api/v1/channels/orders/{id}/dispatch-po:
+    post:
+      summary: Place a B2B supplier purchase order for an external order
+      tags: [Channels]
+      description: Requires feature supplier_order_manual. Supply cost is entered, never estimated; only COLLECTED/CONFIRMED orders dispatch.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id, total_cost_krw]
+              properties:
+                supplier_id:
+                  type: string
+                  maxLength: 80
+                  description: Connector registry id of a domestic B2B supplier.
+                total_cost_krw:
+                  type: integer
+                  description: Entered supply-cost total, a positive safe integer.
+      responses:
+        '200':
+          description: PO dispatched, order moved to PO_DISPATCHED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, simulated, status, total_cost_krw]
+                properties:
+                  success:
+                    type: boolean
+                  simulated:
+                    type: boolean
+                  b2b_order_id:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                  total_cost_krw:
+                    type: integer
+                  message:
+                    type: string
+        '400':
+          description: PO_DISPATCH_FAILED when the supplier call fails
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED in this environment
+        '404':
+          description: External channel order not found
+        '409':
+          description: NOT_DISPATCHABLE status, or ALREADY_DISPATCHED on retry
+        '501':
+          description: CONNECTOR_NOT_INTEGRATED in production without simulation
+
+  /api/v1/channels/orders/{id}/fulfill:
+    post:
+      summary: Register the carrier waybill and push it to the channel
+      tags: [Channels]
+      description: Requires feature fulfillment_3pl. The tracking number comes from the carrier; only COLLECTED/CONFIRMED/PO_DISPATCHED orders ship.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                carrier_code:
+                  type: string
+                  description: Defaults to CJ_LOGISTICS.
+                tracking_number:
+                  type: string
+                  description: Carrier-issued waybill, 6-40 alphanumerics/dashes.
+      responses:
+        '200':
+          description: Order shipped with carrier tracking link
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, simulated, status, tracking_number, carrier_name, tracking_url]
+                properties:
+                  success:
+                    type: boolean
+                  simulated:
+                    type: boolean
+                  status:
+                    type: string
+                  tracking_number:
+                    type: string
+                  carrier_name:
+                    type: string
+                  tracking_url:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: UNKNOWN_CARRIER, TRACKING_REQUIRED or SHIPMENT_PUSH_FAILED
+        '401':
+          description: Missing or expired partner JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED in this environment
+        '404':
+          description: External channel order not found
+        '409':
+          description: NOT_SHIPPABLE when the order is already shipped or closed
+        '501':
+          description: CONNECTOR_NOT_INTEGRATED in production without simulation
+
+  /api/v1/channels/webhooks/{platform}:
+    post:
+      summary: Inbound platform webhook (refused until signed)
+      tags: [Channels]
+      description: Always refused with 501 until a per-platform signature verifier exists; nothing unauthenticated is written.
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '501':
+          description: WEBHOOK_NOT_INTEGRATED with the platform echoed back

@@ -1,0 +1,322 @@
+# Onboarding paths (partner applications, business validation).
+# Verified against the gateway implementation (apps/cloudflare-gateway/src/routes/onboarding.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/onboarding/validate-business:
+    post:
+      summary: Validate a Korean business registration number (checksum or NTS lookup)
+      tags: [Onboarding]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business_reg_number:
+                  type: string
+                  description: Aliases registration_number and brn are accepted.
+      responses:
+        '200':
+          description: Checksum passed; verification is CHECKSUM_ONLY unless NTS_API_KEY is configured and answers (NTS_OPEN_API)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, valid]
+                properties:
+                  success:
+                    type: boolean
+                  valid:
+                    type: boolean
+                  business_status:
+                    type: string
+                    nullable: true
+                  tax_type:
+                    type: string
+                    nullable: true
+                  verification:
+                    type: string
+                    enum: [CHECKSUM_ONLY, NTS_OPEN_API]
+                  formatted:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: Invalid BRN (wrong length or checksum mismatch); body carries valid false and reason
+
+  /api/v1/partner-applications:
+    post:
+      summary: File a seller application (creates account + PENDING partner)
+      tags: [Onboarding]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, contact_name, phone, business_name, representative_name, business_reg_number, bank_code, bank_account_number, bank_account_holder, customer_service_phone, return_shipping_address, agree_seller_terms, agree_privacy]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                password:
+                  type: string
+                  description: Must satisfy the account password policy.
+                contact_name:
+                  type: string
+                  maxLength: 50
+                  description: Alias full_name is accepted.
+                phone:
+                  type: string
+                  maxLength: 20
+                  description: Korean phone, e.g. 010-1234-5678.
+                business_name:
+                  type: string
+                  maxLength: 100
+                representative_name:
+                  type: string
+                  maxLength: 50
+                business_reg_number:
+                  type: string
+                mail_order_reg_number:
+                  type: string
+                  maxLength: 50
+                  description: Required unless mail_order_exempt_reason is given.
+                mail_order_exempt_reason:
+                  type: string
+                  maxLength: 200
+                bank_code:
+                  type: string
+                  maxLength: 10
+                bank_account_number:
+                  type: string
+                  maxLength: 30
+                bank_account_holder:
+                  type: string
+                  maxLength: 50
+                customer_service_phone:
+                  type: string
+                  maxLength: 20
+                return_shipping_address:
+                  type: string
+                  maxLength: 300
+                agree_seller_terms:
+                  type: boolean
+                  description: Must be true.
+                agree_privacy:
+                  type: boolean
+                  description: Must be true.
+      responses:
+        '201':
+          description: Application saved; session token issued for document upload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [token, partner, required_documents]
+                    properties:
+                      token:
+                        type: string
+                      partner:
+                        type: object
+                      required_documents:
+                        type: array
+                        items:
+                          type: string
+        '400':
+          description: CONSENT_REQUIRED, INVALID_EMAIL, INVALID_PHONE, MAIL_ORDER_REQUIRED or INVALID_ACCOUNT
+        '409':
+          description: EMAIL_TAKEN, BRN_EXISTS or APPLICATION_EXISTS
+
+  /api/v1/partner/application:
+    get:
+      summary: Read the applicant's own application status and documents
+      tags: [Onboarding]
+      responses:
+        '200':
+          description: Application view with required/missing documents and editable flag
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    description: partner_id, business fields, status/kyc_status, required_documents, missing_documents, documents, editable.
+        '401':
+          description: Missing or expired JWT, or not a partner
+        '404':
+          description: No application on file for this partner
+
+  /api/v1/partner/application/documents:
+    post:
+      summary: Attach an uploaded private file as a KYB document
+      tags: [Onboarding]
+      description: Only the applicant's own PRIVATE upload (kyb folder) can be attached; re-attaching a required type supersedes the prior SUBMITTED row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doc_type, file_id]
+              properties:
+                doc_type:
+                  type: string
+                  enum: [BUSINESS_REGISTRATION, MAIL_ORDER_REGISTRATION, BANK_ACCOUNT_COPY, OTHER]
+                file_id:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Document attached; returns the refreshed application view
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_DOC_TYPE or INVALID_FILE
+        '401':
+          description: Missing or expired JWT, or not a partner
+        '409':
+          description: APPLICATION_LOCKED when the application is under or past review
+
+  /api/v1/partner/application/submit:
+    post:
+      summary: Submit the application for operator review
+      tags: [Onboarding]
+      responses:
+        '200':
+          description: Review requested; returns the refreshed application view
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '401':
+          description: Missing or expired JWT, or not a partner
+        '409':
+          description: DOCUMENTS_MISSING (with missing_documents) or APPLICATION_LOCKED
+
+  /api/v1/admin/partner-applications:
+    get:
+      summary: Operator review queue for seller applications
+      tags: [Onboarding]
+      parameters:
+        - name: kyc_status
+          in: query
+          schema:
+            type: string
+            default: SUBMITTED
+          description: KYC status filter, or ALL; capped at 200 rows.
+      responses:
+        '200':
+          description: Application views enriched with contact and bank details
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/partner-applications/{id}/review:
+    post:
+      summary: Approve, reject or request resubmission of an application (admin)
+      tags: [Onboarding]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVE, REJECT, REQUEST_RESUBMIT]
+                note:
+                  type: string
+                  maxLength: 1000
+                  description: Shown to the applicant; required for REJECT and REQUEST_RESUBMIT.
+                confirm_documents_checked:
+                  type: boolean
+                  description: Must be true for APPROVE.
+                business_status_evidence:
+                  type: string
+                  maxLength: 300
+                  description: Required for APPROVE (e.g. NTS lookup result).
+                commission_rate:
+                  type: number
+                  description: Required for APPROVE, 0-50 percent.
+                rejected_document_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Decision applied; APPROVE carries a payout-account-verification next_step
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                  next_step:
+                    type: string
+                    nullable: true
+        '400':
+          description: INVALID_DECISION, NOTE_REQUIRED, CONFIRM_REQUIRED or INVALID_COMMISSION
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Application not found
+        '409':
+          description: NOT_SUBMITTED or DOCUMENTS_MISSING

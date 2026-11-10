@@ -1,0 +1,699 @@
+# Auth paths (buyer/seller core). Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/auth.js). JWT lifetime is 12h
+# (expiresIn 43200); ADMIN logins additionally enforce IP allowlist + TOTP.
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Sign in with email + password (role-selected session)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                password:
+                  type: string
+                role:
+                  type: string
+                  description: CUSTOMER (default), PARTNER, ADMIN or a ROLE_* alias.
+                otp:
+                  type: string
+                  description: TOTP code when an ADMIN account has 2FA enabled.
+                recovery_code:
+                  type: string
+      responses:
+        '200':
+          description: Session issued (also mirrored under data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, role, token, user]
+                properties:
+                  success:
+                    type: boolean
+                  role:
+                    type: string
+                    enum: [ROLE_CUSTOMER, ROLE_PARTNER, ROLE_ADMIN]
+                  token:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    description: JWT lifetime in seconds (43200).
+                  user:
+                    type: object
+                  customer_id:
+                    type: string
+                    description: Present for ROLE_CUSTOMER.
+                  partner_id:
+                    type: string
+                    description: Present for ROLE_PARTNER.
+                  partner:
+                    type: object
+        '400':
+          description: CREDENTIALS_REQUIRED when email or password is missing
+        '401':
+          description: Invalid credentials, or OTP_REQUIRED / OTP_INVALID for ADMIN 2FA
+        '403':
+          description: ADMIN_IP_NOT_ALLOWED or PARTNER_PROFILE_MISSING
+
+  /api/v1/auth/register:
+    post:
+      summary: Register a customer account (consents stored atomically)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, full_name, phone, agree_terms, agree_privacy]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                password:
+                  type: string
+                  description: 10+ chars, 3 of 4 classes (see password policy).
+                full_name:
+                  type: string
+                  maxLength: 50
+                  description: Alias name is accepted.
+                phone:
+                  type: string
+                  description: Korean mobile, e.g. 010-1234-5678.
+                agree_terms:
+                  type: boolean
+                  description: Must be true (TERMS_OF_SERVICE history row).
+                agree_privacy:
+                  type: boolean
+                  description: Must be true (PRIVACY_POLICY history row).
+                agree_marketing:
+                  type: boolean
+                  description: Optional MARKETING history row when boolean.
+                terms_version:
+                  type: string
+                  maxLength: 40
+      responses:
+        '201':
+          description: Account created, session issued (also mirrored under data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, role, token, customer_id, user]
+                properties:
+                  success:
+                    type: boolean
+                  role:
+                    type: string
+                    enum: [ROLE_CUSTOMER]
+                  token:
+                    type: string
+                  customer_id:
+                    type: string
+                  user:
+                    type: object
+                  welcome_credit:
+                    type: integer
+                    description: Signup credit when an operator entity is active, else 0.
+                  expiresIn:
+                    type: integer
+        '400':
+          description: CONSENT_REQUIRED, INVALID_EMAIL or INVALID_PHONE
+        '409':
+          description: EMAIL_TAKEN
+
+  /api/v1/auth/me:
+    get:
+      summary: Current session profile with balances and latest consents
+      tags: [Auth]
+      description: GET /api/v1/auth/profile is an alias of this route.
+      responses:
+        '200':
+          description: Profile bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [user, credit_balance, available_coupons, wishlist_count, consents]
+                    properties:
+                      user:
+                        type: object
+                      partner_id:
+                        type: string
+                        nullable: true
+                      credit_balance:
+                        type: integer
+                      available_coupons:
+                        type: integer
+                      wishlist_count:
+                        type: integer
+                      consents:
+                        type: array
+                        description: Latest row per consent_type from user_consents.
+                        items:
+                          type: object
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/auth/profile:
+    put:
+      summary: Update profile, password or marketing consent (revokes other sessions on password change)
+      tags: [Auth]
+      description: PATCH is accepted as an alias; clients use PUT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name:
+                  type: string
+                  maxLength: 50
+                phone:
+                  type: string
+                  maxLength: 20
+                current_password:
+                  type: string
+                  description: Required together with new_password.
+                new_password:
+                  type: string
+                  description: 10+ chars, 3 of 4 classes (see password policy). Rotates token_version.
+                agree_marketing:
+                  type: boolean
+                  description: Appends a MARKETING consent history row when boolean.
+                terms_version:
+                  type: string
+                  maxLength: 40
+      responses:
+        '200':
+          description: Profile updated; token is present only when the password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [user]
+                    properties:
+                      user:
+                        type: object
+                      token:
+                        type: string
+                        description: Fresh JWT when the password changed, otherwise absent.
+        '400':
+          description: CURRENT_PASSWORD_MISMATCH or WEAK_PASSWORD
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/auth/privacy/export:
+    get:
+      summary: Export everything held about the caller (data-subject access)
+      tags: [Auth]
+      responses:
+        '200':
+          description: Personal-data document (access is audit-logged)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [generated_at, account, addresses, orders, credits, reviews, questions, support_inquiries, wishlist, consents, retention_policy]
+                    properties:
+                      generated_at:
+                        type: string
+                        format: date-time
+                      account:
+                        type: object
+                      addresses:
+                        type: array
+                        items:
+                          type: object
+                      orders:
+                        type: array
+                        items:
+                          type: object
+                      credits:
+                        type: array
+                        items:
+                          type: object
+                      reviews:
+                        type: array
+                        items:
+                          type: object
+                      questions:
+                        type: array
+                        items:
+                          type: object
+                      support_inquiries:
+                        type: array
+                        items:
+                          type: object
+                      wishlist:
+                        type: array
+                        items:
+                          type: object
+                      consents:
+                        type: array
+                        items:
+                          type: object
+                      retention_policy:
+                        type: object
+                        properties:
+                          orders_days_after_withdrawal:
+                            type: integer
+                          inquiries_days_after_withdrawal:
+                            type: integer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ROLE_CUSTOMER only
+
+  /api/v1/auth/withdraw/precheck:
+    get:
+      summary: Check whether self-service withdrawal is currently possible
+      tags: [Auth]
+      responses:
+        '200':
+          description: Withdrawal eligibility with blockers and credit balance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [can_withdraw, blockers, credit_balance]
+                    properties:
+                      can_withdraw:
+                        type: boolean
+                      blockers:
+                        type: array
+                        items:
+                          type: object
+                          required: [code, count, message]
+                          properties:
+                            code:
+                              type: string
+                              enum: [UNPAID_ORDER, ORDER_IN_PROGRESS, CLAIM_IN_PROGRESS, REFUND_IN_PROGRESS]
+                            count:
+                              type: integer
+                            message:
+                              type: string
+                      credit_balance:
+                        type: integer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ROLE_CUSTOMER only
+
+  /api/v1/auth/withdraw:
+    post:
+      summary: Withdraw the customer account (pseudonymised, credit forfeited)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm, password]
+              properties:
+                confirm:
+                  type: boolean
+                  description: Must be true.
+                password:
+                  type: string
+                acknowledge_credit_forfeit:
+                  type: boolean
+                  description: Required true when a credit balance remains.
+      responses:
+        '200':
+          description: Withdrawal completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [withdrawn, credit_forfeited, order_records_retained_days]
+                    properties:
+                      withdrawn:
+                        type: boolean
+                      credit_forfeited:
+                        type: integer
+                      order_records_retained_days:
+                        type: integer
+        '400':
+          description: CONFIRM_REQUIRED or CURRENT_PASSWORD_MISMATCH
+        '401':
+          description: Missing or expired JWT
+        '409':
+          description: WITHDRAWAL_NOT_SELF_SERVICE for seller/operator accounts, WITHDRAWAL_BLOCKED, CREDIT_FORFEIT_CONSENT_REQUIRED or ALREADY_WITHDRAWN
+
+  /api/v1/auth/logout-all:
+    post:
+      summary: Revoke all sessions by rotating token_version
+      tags: [Auth]
+      responses:
+        '200':
+          description: Logged out on every device
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Request a password-reset mail (identical answer for unknown addresses)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+      responses:
+        '200':
+          description: Reset requested; token is valid 30 minutes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, email_delivery]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  email_delivery:
+                    type: string
+                    enum: [SENT, NOT_INTEGRATED]
+                  dev_reset_token:
+                    type: string
+                    description: Raw reset token, development only.
+        '400':
+          description: REQUIRED when email is missing
+        '503':
+          description: EMAIL_SEND_FAILED when the mail provider call fails
+
+  /api/v1/auth/reset-password:
+    post:
+      summary: Set a new password with a reset token (single use, revokes sessions)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                  maxLength: 200
+                new_password:
+                  type: string
+                  description: 10+ chars, 3 of 4 classes (see password policy).
+      responses:
+        '200':
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: INVALID_TOKEN (unknown, expired or already used) or WEAK_PASSWORD
+
+  /api/v1/auth/send-verification:
+    post:
+      summary: Send (or re-send) the email-verification mail
+      tags: [Auth]
+      responses:
+        '200':
+          description: Verification requested; token is valid 24 hours
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, email_delivery]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  email_delivery:
+                    type: string
+                    enum: [SENT, NOT_INTEGRATED]
+                  dev_verification_token:
+                    type: string
+                    description: Raw verification token, development only when no mail provider.
+        '401':
+          description: Missing or expired JWT
+        '503':
+          description: EMAIL_SEND_FAILED when the mail provider call fails
+
+  /api/v1/auth/verify-email:
+    post:
+      summary: Confirm an email address with a verification token
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: INVALID_TOKEN (unknown or expired)
+
+  /api/v1/auth/social-login:
+    post:
+      summary: Legacy social-login stub (disabled, use Kakao OAuth routes)
+      tags: [Auth]
+      security: []
+      responses:
+        '501':
+          description: SOCIAL_LOGIN_NOT_INTEGRATED, always
+
+  /api/v1/auth/social/kakao/start:
+    get:
+      summary: Start Kakao OAuth login (redirects to Kakao authorize)
+      tags: [Auth]
+      security: []
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: SPA-generated CSRF token, 8-256 URL-safe chars, echoed back untouched.
+      responses:
+        '302':
+          description: Redirect to Kakao authorize with account_email scope
+        '400':
+          description: INVALID_STATE when the state parameter is malformed
+        '501':
+          description: SOCIAL_LOGIN_NOT_INTEGRATED when Kakao credentials are unconfigured
+
+  /api/v1/auth/social/kakao/callback:
+    get:
+      summary: Kakao OAuth callback (redirects to the storefront login page)
+      tags: [Auth]
+      security: []
+      description: Success lands on /login?social_code=<one-time>&state=...; failures on /login?social_error=<CODE>&state=... The JWT itself never travels in a URL.
+      responses:
+        '302':
+          description: Redirect to the storefront login page with social_code or social_error (OAUTH_DENIED, OAUTH_EXCHANGE_FAILED, OAUTH_PROFILE_FAILED, OAUTH_EMAIL_REQUIRED, EMAIL_TAKEN, ACCOUNT_DISABLED, OAUTH_PROVIDER_ERROR)
+        '501':
+          description: SOCIAL_LOGIN_NOT_INTEGRATED when Kakao credentials are unconfigured
+
+  /api/v1/auth/social/kakao/exchange:
+    post:
+      summary: Exchange a one-time Kakao login code for a JWT (single use, 5 minutes)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Session issued for the linked or newly created customer account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, token, customer_id, user]
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  customer_id:
+                    type: string
+                  user:
+                    type: object
+        '400':
+          description: INVALID_LOGIN_CODE (unknown, expired, already used or disabled account)
+
+  /api/v1/auth/2fa/setup:
+    post:
+      summary: Start operator TOTP enrolment (returns the secret once)
+      tags: [Auth]
+      responses:
+        '200':
+          description: Pending TOTP secret staged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [secret, otpauth_uri]
+                    properties:
+                      secret:
+                        type: string
+                      otpauth_uri:
+                        type: string
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ROLE_ADMIN only
+        '409':
+          description: MFA_ALREADY_ENABLED
+
+  /api/v1/auth/2fa/enable:
+    post:
+      summary: Confirm TOTP enrolment with a code (returns recovery codes once)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: Current 6-digit TOTP code.
+      responses:
+        '200':
+          description: 2FA enabled; all other sessions revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [token, recovery_codes]
+                    properties:
+                      token:
+                        type: string
+                        description: Fresh MFA-flagged JWT.
+                      recovery_codes:
+                        type: array
+                        items:
+                          type: string
+                        description: 10 one-time codes, shown once.
+        '400':
+          description: OTP_INVALID
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ROLE_ADMIN only
+        '409':
+          description: MFA_ALREADY_ENABLED or MFA_SETUP_NOT_STARTED

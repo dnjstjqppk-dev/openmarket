@@ -47,7 +47,11 @@ export async function handlePaymentRoutes(request, url, env, corsHeaders) {
     let sandbox = false;
     if (mode === 'live') {
       if (!paymentKey) throw new HttpError(400, 'MISSING_PAYMENT_KEY', 'paymentKey 누락');
-      verified = await pgGetPayment(env, paymentKey); // the webhook body itself is never trusted
+      // P1-C05: garbage keys must not burn a Toss API call each (cost +
+      // latency oracle). Only well-formed keys reach the authoritative lookup.
+      if (/^[A-Za-z0-9_-]{5,200}$/.test(paymentKey)) {
+        verified = await pgGetPayment(env, paymentKey); // the webhook body itself is never trusted
+      }
     } else {
       requireMachineSecret(request, env, 'PAYMENT_WEBHOOK_SECRET', 'X-Webhook-Secret');
       verified = { paymentKey, orderId: data.orderId, totalAmount: data.totalAmount, status: data.status, method: 'SANDBOX' };
@@ -74,7 +78,12 @@ export async function handlePaymentRoutes(request, url, env, corsHeaders) {
       if (String(e.message).includes('UNIQUE')) return json(corsHeaders, { success: true, duplicate: true });
       throw e;
     }
-    return json(corsHeaders, { success: true, outcome });
+    // P1-C05: the live webhook is unauthenticated (Toss webhooks are not
+    // signed), so the response must not oracle paymentKey validity back to
+    // the caller. Detail stays in the payment_events row for operators; the
+    // sandbox path requires a machine secret and keeps its outcome.
+    if (sandbox) return json(corsHeaders, { success: true, outcome });
+    return json(corsHeaders, { success: true });
   }
 
   return null;

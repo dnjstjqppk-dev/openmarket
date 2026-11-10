@@ -7,6 +7,12 @@ function read(k: string): string | null {
   try { return localStorage.getItem(k) } catch { return null }
 }
 
+/** Auth-only headers for FormData uploads (the browser sets the multipart boundary). */
+export const getPartnerAuthHeaders = (): Record<string, string> => {
+  const token = getPartnerToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 /** Seller identity is the JWT; the partner id is display-only and never sent as a credential. */
 export const getPartnerId = (): string => read(KEYS.id) || ''
 export const getPartnerName = (): string => read(KEYS.name) || ''

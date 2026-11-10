@@ -18,13 +18,17 @@ export function listMigrations() {
 
 export function createDatabase({ seedFiles = [] } = {}) {
   const db = new DatabaseSync(':memory:');
+  // Cloudflare D1 enforces foreign keys on every connection, so enable enforcement
+  // BEFORE migrations and seeds: the test database must reject the same orphan
+  // writes production rejects (P-N01 dev/test parity; migrations carry
+  // PRAGMA defer_foreign_keys where a rebuild needs it).
+  db.exec('PRAGMA foreign_keys = ON;');
   for (const mf of listMigrations()) {
     db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, mf), 'utf-8'));
   }
   for (const sf of seedFiles) {
     db.exec(fs.readFileSync(path.resolve(ROOT, sf), 'utf-8'));
   }
-  db.exec('PRAGMA foreign_keys = ON;');
   return db;
 }
 

@@ -22,6 +22,7 @@ const RULES = [
   R(null, /^\/api\/v1\/auth\//, null),                                   // own account, 2FA enrolment
   R(null, /^\/api\/v1\/admin\/admin-users(\/|$)/, 'admin.manage'),
   R(null, /^\/api\/v1\/admin\/privacy\//, 'privacy.audit'),
+  R(null, /^\/api\/v1\/admin\/audit-log/, 'privacy.audit'),
   R(null, /^\/api\/v1\/admin\/business-entities(\/|$)/, 'business.read', 'business.manage'),
   R(null, /^\/api\/v1\/admin\/partners\/[^/]+\/payout-account$/, 'finance.payout'),
   R(null, /^\/api\/v1\/admin\/(finance|reconciliation|ledgers?)(\/|$)/, 'finance.read', 'finance.payout'),

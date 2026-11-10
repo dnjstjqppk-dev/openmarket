@@ -7,6 +7,7 @@ import { assertFeatureEnabled, isFeatureEnabled } from '../services/feature-flag
 import { requireAuth, requireApprovedPartner, requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str, intParam } from '../lib/http.js';
 import { priceFields, resolveCategory } from './partner.js';
+import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { newId } from '../lib/ids.js';
 
 export async function handleProductImportRoutes(request, url, env, corsHeaders) {
@@ -207,7 +208,7 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     const categoryId = await resolveCategory(env, merged);
     const thumbUrl = str(merged.thumbnail_url, { field: '대표 이미지', max: 500, required: true });
     if (!/^https:\/\//.test(thumbUrl) && !thumbUrl.startsWith('/api/v1/storage/file/')) throw bad('INVALID_IMAGE_URL', '이미지는 https URL 또는 업로드 파일이어야 합니다.');
-    const descHtml = str(merged.description_html, { max: 200000 }) || `<p>${title}</p>`;
+    const descHtml = sanitizeHtml(str(merged.description_html, { max: 200000 }) || `<p>${title}</p>`);
     const brand = str(body.brand ?? preview.product?.brand, { max: 100 }) || 'GLB IMPORT';
     const wholesaleCost = intParam(body.wholesale_cost ?? preview.pricing?.wholesale_cost_krw ?? Math.round(salePrice * 0.7), { min: 0, max: 100_000_000, field: '공급원가' });
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { stripToSafeHtml } from '../utils/stripHtml';
 
 // Quick-fill presets are a development aid and hidden in production builds.
 const isDev = (import.meta as any).env?.DEV === true;
@@ -113,6 +114,9 @@ const successMsg = ref('');
 
 // Extracted data
 const result = ref<CrawlResult | null>(null);
+// Crawl output comes from untrusted third-party pages: strip active content
+// before v-html even though the server also sanitizes (C-N01).
+const safeDescriptionHtml = computed(() => stripToSafeHtml(result.value?.product.description_html || ''));
 const editedTitle = ref('');
 const editedSalePrice = ref<number | null>(null);
 const aiInfo = ref<AiEnhancement | null>(null);
@@ -662,7 +666,7 @@ onMounted(() => {
               <label class="block text-xs font-bold text-slate-700">상세 설명 요약 (XSS 소독 완료)</label>
               <div
                 class="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 max-h-32 overflow-y-auto leading-relaxed prose prose-sm"
-                v-html="result.product.description_html"
+                v-html="safeDescriptionHtml"
               ></div>
             </div>
           </div>

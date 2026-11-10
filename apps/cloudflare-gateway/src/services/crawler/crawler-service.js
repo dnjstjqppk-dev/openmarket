@@ -20,21 +20,52 @@ export async function crawlAndExtractProduct({ url, htmlOverride = null, pricing
     };
   }
 
-  // 2. Fetch Page HTML (or use htmlOverride for sandbox/testing)
+  // 2. Fetch Page HTML (or use htmlOverride for sandbox/testing).
+  // Redirects are followed manually (max 3) and EVERY hop is re-validated:
+  // an auto-followed Location to 169.254.169.254 / localhost would bypass the
+  // SSRF check above (P1-C01).
   let html = htmlOverride;
   if (!html) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(urlCheck.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; OLMOA-SupplierBot/3.0; +https://olmoa.com/bot)',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
-        },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      let currentUrl = urlCheck.url;
+      let res = null;
+      for (let hop = 0; hop <= 3; hop++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
+          res = await fetch(currentUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; OLMOA-SupplierBot/3.0; +https://olmoa.com/bot)',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+            },
+            signal: controller.signal,
+            redirect: 'manual'
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        if (res.status >= 300 && res.status < 400) {
+          if (hop === 3) {
+            return { success: false, error_code: 'TOO_MANY_REDIRECTS', error: '리다이렉트가 너무 많습니다.' };
+          }
+          const next = res.headers.get('location');
+          if (!next) {
+            return { success: false, error_code: 'HTTP_FETCH_FAILED', error: `원격 서버 응답 오류 (HTTP ${res.status} ${res.statusText})` };
+          }
+          let absolute;
+          try { absolute = new URL(next, currentUrl).href; } catch {
+            return { success: false, error_code: 'SSRF_OR_INVALID_URL', error: '리다이렉트 주소가 올바르지 않습니다.' };
+          }
+          const hopCheck = validateProductUrl(absolute);
+          if (!hopCheck.valid) {
+            return { success: false, error_code: 'SSRF_OR_INVALID_URL', error: hopCheck.error };
+          }
+          currentUrl = hopCheck.url;
+          continue;
+        }
+        break;
+      }
 
       if (!res.ok) {
         return {

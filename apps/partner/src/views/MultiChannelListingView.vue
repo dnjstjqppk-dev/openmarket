@@ -183,35 +183,109 @@ async function handleSyncOrders(channelId: string) {
   }
 }
 
-async function handleDispatchPo(orderId: string) {
+// Dispatch PO modal state
+const showDispatchModal = ref(false);
+const dispatchOrderId = ref('');
+const suppliers = ref<{ id: string; name: string }[]>([]);
+const dispatchSupplierId = ref('');
+const dispatchTotalCost = ref<number | null>(null);
+const isDispatching = ref(false);
+
+// Fulfill modal state
+const showFulfillModal = ref(false);
+const fulfillOrderId = ref('');
+const carriers = ref<{ code: string; name: string }[]>([]);
+const fulfillCarrierCode = ref('');
+const fulfillTrackingNumber = ref('');
+const isFulfilling = ref(false);
+
+async function openDispatchModal(orderId: string) {
+  dispatchOrderId.value = orderId;
+  dispatchTotalCost.value = null;
+  errorMsg.value = '';
   try {
-    const res = await fetch(`${API_BASE}/api/v1/channels/orders/${orderId}/dispatch-po`, {
+    const res = await fetch(`${API_BASE}/api/v1/channels/suppliers`, { headers: getPartnerHeaders() });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '공급사 목록 조회에 실패했습니다.');
+    suppliers.value = data.data || [];
+    dispatchSupplierId.value = suppliers.value[0]?.id || '';
+    showDispatchModal.value = true;
+  } catch (err: any) {
+    errorMsg.value = err.message || '공급사 목록 조회 중 오류 발생';
+  }
+}
+
+async function handleDispatchPo() {
+  if (!dispatchSupplierId.value) {
+    errorMsg.value = '공급사를 선택해 주세요.';
+    return;
+  }
+  const cost = Number(dispatchTotalCost.value);
+  if (!Number.isSafeInteger(cost) || cost <= 0) {
+    errorMsg.value = '공급원가 합계는 1 이상의 정수로 입력해 주세요.';
+    return;
+  }
+  isDispatching.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/channels/orders/${dispatchOrderId.value}/dispatch-po`, {
       method: 'POST',
       headers: getPartnerHeaders(),
-      body: JSON.stringify({ supplier_id: 'domeggook_domeme' })
+      body: JSON.stringify({ supplier_id: dispatchSupplierId.value, total_cost_krw: cost })
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || '공급사 발주 실패');
     successMsg.value = data.message || '공급업체 발주가 완료되었습니다.';
+    showDispatchModal.value = false;
     loadData();
   } catch (err: any) {
     errorMsg.value = err.message || '발주 중 오류 발생';
+  } finally {
+    isDispatching.value = false;
   }
 }
 
-async function handleFulfill(orderId: string) {
+async function openFulfillModal(orderId: string) {
+  fulfillOrderId.value = orderId;
+  fulfillTrackingNumber.value = '';
+  errorMsg.value = '';
   try {
-    const res = await fetch(`${API_BASE}/api/v1/channels/orders/${orderId}/fulfill`, {
+    const res = await fetch(`${API_BASE}/api/v1/channels/carriers`, { headers: getPartnerHeaders() });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '택배사 목록 조회에 실패했습니다.');
+    carriers.value = data.data || [];
+    fulfillCarrierCode.value = carriers.value[0]?.code || '';
+    showFulfillModal.value = true;
+  } catch (err: any) {
+    errorMsg.value = err.message || '택배사 목록 조회 중 오류 발생';
+  }
+}
+
+async function handleFulfill() {
+  if (!fulfillCarrierCode.value) {
+    errorMsg.value = '택배사를 선택해 주세요.';
+    return;
+  }
+  const tracking = fulfillTrackingNumber.value.trim();
+  if (!/^[A-Za-z0-9-]{6,40}$/.test(tracking)) {
+    errorMsg.value = '택배사에서 발급받은 운송장 번호(영문·숫자·- 6~40자)를 입력해 주세요.';
+    return;
+  }
+  isFulfilling.value = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/channels/orders/${fulfillOrderId.value}/fulfill`, {
       method: 'POST',
       headers: getPartnerHeaders(),
-      body: JSON.stringify({ carrier_code: 'CJ_LOGISTICS' })
+      body: JSON.stringify({ carrier_code: fulfillCarrierCode.value, tracking_number: tracking })
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || '출고 송장 전송 실패');
     successMsg.value = data.message || '3PL 운송장 연동이 완료되었습니다.';
+    showFulfillModal.value = false;
     loadData();
   } catch (err: any) {
     errorMsg.value = err.message || '출고 처리 실패';
+  } finally {
+    isFulfilling.value = false;
   }
 }
 
@@ -456,14 +530,14 @@ onMounted(() => {
               <td class="px-3 py-2.5 text-center space-x-1">
                 <button
                   v-if="ord.order_status === 'COLLECTED'"
-                  @click="handleDispatchPo(ord.id)"
+                  @click="openDispatchModal(ord.id)"
                   class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold cursor-pointer"
                 >
                   B2B 발주
                 </button>
                 <button
                   v-if="ord.order_status === 'PO_DISPATCHED'"
-                  @click="handleFulfill(ord.id)"
+                  @click="openFulfillModal(ord.id)"
                   class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer"
                 >
                   3PL 출고·송장연동
@@ -601,6 +675,62 @@ onMounted(() => {
         <div class="flex justify-end gap-2 pt-2 border-t">
           <button @click="showCredModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
           <button @click="handleSaveCredential" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer">저장 및 연동</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dispatch PO modal -->
+    <div v-if="showDispatchModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="font-bold text-slate-900">B2B 공급사 발주</h3>
+          <button @click="showDispatchModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">공급사 선택</label>
+          <select v-model="dispatchSupplierId" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">공급원가 합계 (원)</label>
+          <input v-model.number="dispatchTotalCost" type="number" min="1" step="1" placeholder="예: 12000"
+            class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold" />
+          <p class="text-[11px] text-slate-400 mt-1">실제 공급원가를 입력해 주세요. 추정치로 발주할 수 없습니다.</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t">
+          <button @click="showDispatchModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleDispatchPo" :disabled="isDispatching" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDispatching ? '발주 중...' : '발주 실행' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fulfill modal -->
+    <div v-if="showFulfillModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="font-bold text-slate-900">3PL 출고·송장 연동</h3>
+          <button @click="showFulfillModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">택배사 선택</label>
+          <select v-model="fulfillCarrierCode" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+            <option v-for="c in carriers" :key="c.code" :value="c.code">{{ c.name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">운송장 번호</label>
+          <input v-model="fulfillTrackingNumber" type="text" placeholder="택배사 발급 운송장 번호"
+            class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
+          <p class="text-[11px] text-slate-400 mt-1">운송장 번호는 택배사에서 발급받아야 합니다. 시스템이 임의로 만들지 않습니다.</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t">
+          <button @click="showFulfillModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleFulfill" :disabled="isFulfilling" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isFulfilling ? '전송 중...' : '송장 전송' }}</button>
         </div>
       </div>
     </div>

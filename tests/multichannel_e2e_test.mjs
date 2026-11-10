@@ -443,4 +443,22 @@ await t.test('6. Production: connector actions answer 501 and persist nothing', 
   assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM channel_listings').get().c, 0);
 });
 
+// Test 7: supplier + carrier directories for the dispatch/fulfill forms (P0-05/06)
+await t.test('7. Supplier and carrier directories feed the dispatch forms', async () => {
+  const env = { JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu', ENVIRONMENT: 'development', CONNECTOR_SIMULATION: 'true', PAYMENT_MODE: 'sandbox' };
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env });
+  const ptLogin = await g.call('/api/v1/auth/login', { method: 'POST', body: { email: 'seller@temu-supply.com', password: 'DevPass!2026#', role: 'PARTNER' } });
+  const ptToken = ptLogin.json.token;
+  const anon = await g.call('/api/v1/channels/suppliers');
+  assert.equal(anon.status, 401);
+  const sup = await g.call('/api/v1/channels/suppliers', { token: ptToken });
+  assert.equal(sup.status, 200);
+  assert.ok(sup.json.data.some((s) => s.id === 'domeggook_domeme' && s.name), 'B2B supplier listed with name');
+  assert.ok(sup.json.data.every((s) => s.id && s.name), 'every supplier has id + name');
+  const car = await g.call('/api/v1/channels/carriers', { token: ptToken });
+  assert.equal(car.status, 200);
+  assert.ok(car.json.data.some((c) => c.code === 'CJ_LOGISTICS' && c.name), 'CJ carrier listed with name');
+  assert.ok(car.json.data.every((c) => c.code && c.name), 'every carrier has code + name');
+});
+
 t.finish();

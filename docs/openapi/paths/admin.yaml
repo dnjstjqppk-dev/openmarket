@@ -274,3 +274,1093 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/dashboard:
+    get:
+      summary: Operator dashboard metrics (GMV, counts, open claims, pending payouts)
+      tags: [Admin]
+      description: GET /api/v1/admin/metrics is an alias of this route. GMV sums paid non-sandbox orders.
+      responses:
+        '200':
+          description: Metrics bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, metrics]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  metrics:
+                    type: object
+                    properties:
+                      total_products:
+                        type: integer
+                      total_orders:
+                        type: integer
+                      total_gmv_amount:
+                        type: integer
+                      total_partners:
+                        type: integer
+                      total_users:
+                        type: integer
+                      out_of_stock_skus:
+                        type: integer
+                      open_claims:
+                        type: integer
+                      pending_settlements_count:
+                        type: integer
+                      pending_settlements_amount:
+                        type: integer
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/reviews:
+    get:
+      summary: List product reviews for moderation (latest 100)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Reviews with product title and reviewer email
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/reviews/{id}:
+    delete:
+      summary: Delete a product review (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Review deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Review not found
+
+  /api/v1/admin/users:
+    get:
+      summary: List users with order counts (latest 100, PII view logged)
+      tags: [Admin]
+      responses:
+        '200':
+          description: User rows with order_count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/privacy/access-log:
+    get:
+      summary: Query PII access log (who viewed, exported or destroyed personal data)
+      tags: [Admin]
+      parameters:
+        - name: actor_user_id
+          in: query
+          schema:
+            type: string
+        - name: subject_id
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Access-log rows with parsed subject_ids
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/audit-log:
+    get:
+      summary: Query the operator audit trail (admin_audit_log, newest first)
+      tags: [Admin]
+      description: >
+        P1-A13: filtered read access to the append-only operator audit log.
+        Requires the privacy.audit permission (SUPER_ADMIN, PRIVACY_OFFICER).
+      parameters:
+        - name: actor_user_id
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: target_type
+          in: query
+          schema:
+            type: string
+        - name: target_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Audit rows with id, actor_user_id, actor_role, action, target_type, target_id, before_json, after_json, ip, created_at
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: ADMIN_PERMISSION_DENIED without the privacy.audit permission
+
+  /api/v1/admin/partners:
+    get:
+      summary: List partners with owner contact and product counts (PII view logged)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Partner rows with email, full_name, phone and product_count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/products:
+    get:
+      summary: List all products with partner, category, SKU and stock rollups (latest 150)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Product rows with business_name, category_name, sku_count and total_stock
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/products/{id}/status:
+    put:
+      summary: Set product sales status (audited)
+      tags: [Admin]
+      description: PATCH is accepted as an alias of this route. Clients use PUT.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, HIDDEN, DELETED]
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, product_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  product_id:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          description: INVALID_STATUS when status is not ACTIVE, HIDDEN or DELETED
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Product not found
+        '409':
+          description: REVIEW_REQUIRED when activating an unapproved product
+
+  /api/v1/admin/products/{id}/review:
+    post:
+      summary: Approve or reject a product listing review (audited)
+      tags: [Admin]
+      description: PUT is accepted as an alias of this route. Clients use POST. APPROVE sets review_status APPROVED and status ACTIVE; REJECT sets REJECTED and DRAFT.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVE, REJECT]
+                note:
+                  type: string
+                  maxLength: 500
+                  description: Required when decision is REJECT.
+      responses:
+        '200':
+          description: Review decision applied
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, product_id, review_status, status]
+                properties:
+                  success:
+                    type: boolean
+                  product_id:
+                    type: string
+                  review_status:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          description: INVALID_DECISION or REASON_REQUIRED when a REJECT has no note
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Product not found
+
+  /api/v1/admin/partners/{id}/payout-account:
+    post:
+      summary: Verify a payout account or rule on a pending account-change request (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  description: VERIFY_CURRENT, APPROVE, or anything else to reject the pending change.
+                verification_evidence:
+                  type: string
+                  maxLength: 300
+                  description: Real-name verification evidence; required for VERIFY_CURRENT and APPROVE.
+      responses:
+        '200':
+          description: Decision applied (payout_account_verified or applied flag)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+                  payout_account_verified:
+                    type: boolean
+                  applied:
+                    type: boolean
+        '400':
+          description: EVIDENCE_REQUIRED when verification evidence is missing
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Partner not found
+        '409':
+          description: NO_PENDING_CHANGE when no account-change request is waiting
+
+  /api/v1/admin/orders:
+    get:
+      summary: List orders with sub-orders and items (latest 50, PII view logged)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Order rows with buyer_email and nested sub_orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/ledger:
+    get:
+      summary: List settlement ledger rows with partner and sub-order context
+      tags: [Admin]
+      description: GET /api/v1/admin/ledgers is an alias of this route.
+      responses:
+        '200':
+          description: Settlement rows with business_name, sub_order_no and sub_order_status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/settlements/{id}/approve:
+    post:
+      summary: Approve a single settlement payout (retired)
+      tags: [Admin]
+      deprecated: true
+      description: Retired. Create seller-level payouts via POST /api/v1/admin/finance/payouts instead.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '410':
+          description: USE_PAYOUT_ENGINE — per-settlement approval was removed
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/claims:
+    get:
+      summary: List claims and disputes with order and customer context
+      tags: [Admin]
+      responses:
+        '200':
+          description: Claim rows with order_no and customer_email
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/claims/{id}:
+    put:
+      summary: Rule on a REQUESTED claim — refund via the refund engine or reject (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  description: APPROVE to refund, REJECT (or REJECTED) to decline; status is accepted as an alias.
+                status:
+                  type: string
+                notes:
+                  type: string
+                  maxLength: 500
+                  description: Required when rejecting.
+                restock:
+                  type: boolean
+                  description: Defaults to true; returnless approvals skip restock.
+                returnless:
+                  type: boolean
+      responses:
+        '200':
+          description: Claim ruled (REJECTED, or REFUNDED with refund object)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, claim_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  claim_id:
+                    type: string
+                  status:
+                    type: string
+                  refund:
+                    type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Refund approval needs the orders.refund permission
+        '404':
+          description: Claim not found
+        '409':
+          description: CLAIM_ALREADY_PROCESSED, or UNSUPPORTED for non-RETURN refund approvals
+
+  /api/v1/admin/banners:
+    get:
+      summary: List promotion banners ordered for display
+      tags: [Admin]
+      responses:
+        '200':
+          description: Banner rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+    post:
+      summary: Create a promotion banner (audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                subtitle:
+                  type: string
+                badge_text:
+                  type: string
+                image_url:
+                  type: string
+                link_url:
+                  type: string
+                bg_gradient:
+                  type: string
+                display_order:
+                  type: integer
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: Banner created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/banners/{id}:
+    put:
+      summary: Update a promotion banner (audited)
+      tags: [Admin]
+      description: PATCH is accepted as an alias of this route. Clients use PUT.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                subtitle:
+                  type: string
+                badge_text:
+                  type: string
+                bg_gradient:
+                  type: string
+                link_url:
+                  type: string
+                display_order:
+                  type: integer
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Banner updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Banner not found
+    delete:
+      summary: Delete a promotion banner (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Banner deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Banner not found
+
+  /api/v1/admin/notifications:
+    get:
+      summary: List sent notifications with recipient context (latest 100)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Notification rows with user_email and user_name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+    post:
+      summary: Broadcast a notification to all active customers or one user (audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target:
+                  type: string
+                  description: ALL (default) or a single user id.
+                title:
+                  type: string
+                message:
+                  type: string
+                type:
+                  type: string
+                  enum: [ORDER_STATUS, DISCOUNT, CREDIT_GRANTED, SYSTEM]
+                action_url:
+                  type: string
+                  description: link_url is accepted as an alias.
+      responses:
+        '201':
+          description: Broadcast recorded with recipient count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, broadcast_count, message]
+                properties:
+                  success:
+                    type: boolean
+                  broadcast_count:
+                    type: integer
+                  message:
+                    type: string
+        '400':
+          description: Title and message are required
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/coupons:
+    get:
+      summary: List coupons
+      tags: [Admin]
+      responses:
+        '200':
+          description: Coupon rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+    post:
+      summary: Create a coupon (audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, title]
+              properties:
+                code:
+                  type: string
+                  description: Uppercased before insert.
+                title:
+                  type: string
+                discount_type:
+                  type: string
+                  enum: [FIXED_AMOUNT, PERCENT]
+                discount_value:
+                  type: integer
+                  description: Positive safe integer; at most 90 for PERCENT.
+                min_order_amount:
+                  type: number
+                max_discount_amount:
+                  type: number
+                expires_at:
+                  type: string
+                  description: Defaults to 30 days out (YYYY-MM-DD).
+      responses:
+        '201':
+          description: Coupon created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Code and title are required; INVALID_DISCOUNT for a bad discount_value
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/coupons/{id}:
+    delete:
+      summary: Deactivate a coupon, preserving usage history (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Coupon deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/categories:
+    get:
+      summary: List categories with product counts
+      tags: [Admin]
+      responses:
+        '200':
+          description: Category rows with product_count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+    post:
+      summary: Create a category (audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                  description: Defaults to a slugified name.
+                id:
+                  type: string
+                parent_id:
+                  type: string
+                  description: Present for a depth-1 child, null for a root.
+                sort_order:
+                  type: integer
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: Category name is required
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/categories/{id}:
+    delete:
+      summary: Delete an unused category (audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '409':
+          description: CATEGORY_IN_USE when products or child categories reference it
+
+  /api/v1/admin/admin-users:
+    get:
+      summary: List operator accounts with MFA state (SUPER_ADMIN only)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Operator rows with mfa_enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Requires the admin.manage permission (SUPER_ADMIN)
+    post:
+      summary: Create an operator account with a role (SUPER_ADMIN only, audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, admin_role, password, full_name]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                admin_role:
+                  type: string
+                  enum: [SUPER_ADMIN, FINANCE, OPERATIONS, CS, PRIVACY_OFFICER]
+                password:
+                  type: string
+                  description: Must pass the account password policy.
+                full_name:
+                  type: string
+                  maxLength: 50
+                phone:
+                  type: string
+                  maxLength: 20
+      responses:
+        '201':
+          description: Operator created (2FA setup required at first login)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_EMAIL, INVALID_ADMIN_ROLE or a password-policy violation
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Requires the admin.manage permission (SUPER_ADMIN)
+        '409':
+          description: EMAIL_TAKEN
+
+  /api/v1/admin/admin-users/{id}:
+    put:
+      summary: Change an operator role, active state or reset 2FA (SUPER_ADMIN only, audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                admin_role:
+                  type: string
+                  enum: [SUPER_ADMIN, FINANCE, OPERATIONS, CS, PRIVACY_OFFICER]
+                is_active:
+                  type: boolean
+                reset_2fa:
+                  type: boolean
+                  description: Clears TOTP secrets and recovery codes when true.
+      responses:
+        '200':
+          description: Operator updated (sessions revoked) or unchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_ADMIN_ROLE
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Requires the admin.manage permission (SUPER_ADMIN)
+        '404':
+          description: Operator account not found
+        '409':
+          description: SELF_LOCKOUT or LAST_SUPER_ADMIN

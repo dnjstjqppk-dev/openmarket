@@ -1,0 +1,553 @@
+# Ops paths (business entities, feature flags, client-error telemetry).
+# Verified against the gateway implementation (routes/business.js, feature-flags.js, client-errors.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/business-info:
+    get:
+      summary: Public operator legal disclosure (전자상거래법 business info)
+      tags: [Ops]
+      security: []
+      description: >
+        Returns the ACTIVE PLATFORM_OPERATOR entity's public disclosure fields.
+        When no operator is active the call still returns 200 with
+        configured false and data null. Loaded once per page session by the
+        storefront footer.
+      responses:
+        '200':
+          description: Disclosure bundle, or unconfigured marker
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, configured, data]
+                properties:
+                  success:
+                    type: boolean
+                  configured:
+                    type: boolean
+                  data:
+                    type: object
+                    nullable: true
+                    properties:
+                      entity_type:
+                        type: string
+                        enum: [INDIVIDUAL, CORPORATION]
+                      legal_name:
+                        type: string
+                      representative_name:
+                        type: string
+                      business_reg_number:
+                        type: string
+                      corporate_reg_number:
+                        type: string
+                        nullable: true
+                      mail_order_reg_number:
+                        type: string
+                      address:
+                        type: string
+                      cs_phone:
+                        type: string
+                      cs_email:
+                        type: string
+                      privacy_officer_name:
+                        type: string
+                      privacy_officer_email:
+                        type: string
+                      hosting_provider:
+                        type: string
+                      escrow_service_ref:
+                        type: string
+                      operating_from:
+                        type: string
+
+  /api/v1/admin/business-entities:
+    get:
+      summary: List all operating business entities (oldest first)
+      tags: [Ops]
+      responses:
+        '200':
+          description: Every business entity row including DRAFT and RETIRED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+    post:
+      summary: Register a business entity as DRAFT
+      tags: [Ops]
+      description: >
+        Legal identity is validated up front (10-digit BRN checksum,
+        13-digit corporate number for corporations) but the row starts as
+        DRAFT and takes effect only via POST .../{id}/activate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_type]
+              properties:
+                entity_type:
+                  type: string
+                  enum: [INDIVIDUAL, CORPORATION]
+                legal_name:
+                  type: string
+                representative_name:
+                  type: string
+                business_reg_number:
+                  type: string
+                  description: 10-digit number with NTS check digit.
+                corporate_reg_number:
+                  type: string
+                  description: 13-digit number, required for CORPORATION.
+                tax_type:
+                  type: string
+                  description: Defaults to GENERAL.
+                role:
+                  type: string
+                  description: AFFILIATE or PLATFORM_OPERATOR (default).
+                mail_order_reg_number:
+                  type: string
+                address:
+                  type: string
+                cs_phone:
+                  type: string
+                cs_email:
+                  type: string
+                privacy_officer_name:
+                  type: string
+                privacy_officer_email:
+                  type: string
+                hosting_provider:
+                  type: string
+                pg_provider:
+                  type: string
+                pg_merchant_ref:
+                  type: string
+                escrow_service_ref:
+                  type: string
+                settlement_bank_ref:
+                  type: string
+                terms_version:
+                  type: string
+      responses:
+        '201':
+          description: DRAFT entity created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_ENTITY_TYPE, REQUIRED, INVALID_BRN or INVALID_CRN
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '409':
+          description: BRN_EXISTS when the registration number is already stored
+
+  /api/v1/admin/business-entities/{id}:
+    put:
+      summary: Update a business entity (legal fields only while DRAFT)
+      tags: [Ops]
+      description: >
+        PATCH is accepted as an alias of this operation. DRAFT rows accept
+        legal and operational changes; ACTIVE rows accept operational changes
+        only (legal edits return 409 LEGAL_FIELDS_LOCKED); RETIRED rows are
+        immutable (409 ENTITY_RETIRED). No client calls this route yet; PUT is
+        documented as the canonical spelling per the codebase convention.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: business_entities row id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entity_type:
+                  type: string
+                legal_name:
+                  type: string
+                representative_name:
+                  type: string
+                business_reg_number:
+                  type: string
+                corporate_reg_number:
+                  type: string
+                tax_type:
+                  type: string
+                mail_order_reg_number:
+                  type: string
+                address:
+                  type: string
+                cs_phone:
+                  type: string
+                cs_email:
+                  type: string
+                privacy_officer_name:
+                  type: string
+                privacy_officer_email:
+                  type: string
+                hosting_provider:
+                  type: string
+                pg_provider:
+                  type: string
+                pg_merchant_ref:
+                  type: string
+                escrow_service_ref:
+                  type: string
+                settlement_bank_ref:
+                  type: string
+                terms_version:
+                  type: string
+      responses:
+        '200':
+          description: Updated entity row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: NO_CHANGES when the body carries no updatable fields, or INVALID_BRN
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown business entity id
+        '409':
+          description: ENTITY_RETIRED or LEGAL_FIELDS_LOCKED
+
+  /api/v1/admin/business-entities/{id}/obligations:
+    get:
+      summary: Open obligations still attributed to one entity
+      tags: [Ops]
+      description: >
+        Unpaid orders, open fulfilment, refundable balances, seller payables,
+        open purchase orders and claims, plus per-account journal balances.
+        Used by the admin console before an operator switch-over.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: business_entities row id.
+      responses:
+        '200':
+          description: Obligation snapshot for the entity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, entity_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  entity_id:
+                    type: string
+                  data:
+                    type: object
+                    required: [unpaid_orders, open_fulfilment_sub_orders, refundable_to_customers, seller_payables, open_purchase_orders, open_claims, journal_balances]
+                    properties:
+                      unpaid_orders:
+                        type: object
+                      open_fulfilment_sub_orders:
+                        type: integer
+                      refundable_to_customers:
+                        type: object
+                      seller_payables:
+                        type: object
+                      open_purchase_orders:
+                        type: integer
+                      open_claims:
+                        type: integer
+                      journal_balances:
+                        type: array
+                        items:
+                          type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown business entity id
+
+  /api/v1/admin/business-entities/{id}/events:
+    get:
+      summary: Event history of one business entity (oldest first)
+      tags: [Ops]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: business_entities row id.
+      responses:
+        '200':
+          description: CREATED / UPDATED / ACTIVATED / RETIRED event rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown business entity id
+
+  /api/v1/admin/business-entities/{id}/activate:
+    post:
+      summary: Switch the platform operator to a DRAFT entity
+      tags: [Ops]
+      description: >
+        New orders, settlements and journal rows are attributed to the new
+        entity from this moment; history stays with the retired entity (DB
+        trigger enforced). DIRECT partners are re-pointed to the new entity.
+        Returns the predecessor's open obligations for separate handling.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: DRAFT business_entities row id to activate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_legal_review]
+              properties:
+                confirm_legal_review:
+                  type: boolean
+                  description: Must be true (tax/legal/PG contract review done).
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Switch-over completed with predecessor obligations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [active_entity_id, retired_entity_id, effective_at, predecessor_open_obligations, note]
+                    properties:
+                      active_entity_id:
+                        type: string
+                      retired_entity_id:
+                        type: string
+                        nullable: true
+                      effective_at:
+                        type: string
+                      predecessor_open_obligations:
+                        type: object
+                        nullable: true
+                      note:
+                        type: string
+        '400':
+          description: ENTITY_INCOMPLETE (with missing list) or LEGAL_REVIEW_CONFIRMATION_REQUIRED
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown business entity id
+        '409':
+          description: ENTITY_NOT_DRAFT when the entity is not awaiting activation
+
+  /api/v1/admin/feature-flags:
+    get:
+      summary: List all feature flags with state and credential status
+      tags: [Ops]
+      description: Admin route. Returns every feature_flags row ordered by category, risk_level and key.
+      responses:
+        '200':
+          description: Feature flag list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Feature flag row (key, name, category, is_enabled, risk_level, requires_credential, credential_configured).
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/feature-flags/{key}/toggle:
+    post:
+      summary: Switch a feature flag ON or OFF with an audit entry
+      tags: [Ops]
+      description: Admin route. Sets is_enabled for the flag key and writes a feature_flag_audit_logs row (actor, reason, IP). Returns unchanged: true when the flag already holds the requested state.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_enabled]
+              properties:
+                is_enabled:
+                  type: boolean
+                reason:
+                  type: string
+                  description: Audit reason. Defaults to operator manual control note.
+      responses:
+        '200':
+          description: Flag state set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    description: Toggle result (previous_state, current_state, flag) or {unchanged: true, flag}.
+        '400':
+          description: IS_ENABLED_REQUIRED when is_enabled is missing
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+        '404':
+          description: Feature flag key not found
+
+  /api/v1/feature-flags/public:
+    get:
+      summary: Public feature capability summary (shape live-verified)
+      tags: [Ops]
+      security: []
+      description: Public route, no authentication. Returns a per-key map of feature name, enabled state and credential status.
+      responses:
+        '200':
+          description: Feature capability map
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, features]
+                properties:
+                  success:
+                    type: boolean
+                  features:
+                    type: object
+                    description: Map of flag key to capability entry.
+                    additionalProperties:
+                      type: object
+                      required: [name, is_enabled, requires_credential, credential_configured]
+                      properties:
+                        name:
+                          type: string
+                        is_enabled:
+                          type: boolean
+                        requires_credential:
+                          type: boolean
+                        credential_configured:
+                          type: boolean
+
+  /api/v1/client-errors:
+    post:
+      summary: Report a client-side error (public telemetry)
+      tags: [Ops]
+      security: []
+      description: SPAs report window.onerror / unhandledrejection here. Events go to the Worker log stream only, never the database; request body is capped at 4KB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                app:
+                  type: string
+                  maxLength: 20
+                  description: storefront, partner or admin; anything else is logged as unknown.
+                kind:
+                  type: string
+                  maxLength: 60
+                message:
+                  type: string
+                  maxLength: 500
+                url:
+                  type: string
+                  maxLength: 200
+                  description: Page where the error happened.
+      responses:
+        '204':
+          description: Event logged, no content
+        '400':
+          description: Missing message
+        '405':
+          description: Non-POST method

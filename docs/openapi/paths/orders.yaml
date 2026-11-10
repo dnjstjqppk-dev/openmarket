@@ -1,0 +1,575 @@
+# Buyer order paths. Verified against the gateway implementation
+# (apps/cloudflare-gateway/src/routes/orders.js + services/orders.js).
+# POST /api/v1/orders is a checkout alias (already covered in storefront.yaml).
+# Money rule: the server re-prices every line; clients never send amounts.
+paths:
+  /api/v1/orders/quote:
+    post:
+      summary: Exact server-side totals for the checkout screen (no writes)
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [sku_id, quantity]
+                    properties:
+                      sku_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                user_coupon_id:
+                  type: string
+                  description: Or coupon_code; must be unused, active and unexpired.
+                coupon_code:
+                  type: string
+                use_credit_amount:
+                  type: integer
+                  minimum: 0
+                  description: Alias use_credits; capped by balance and payable amount.
+                pccc:
+                  type: string
+                  description: P + 12 digits when cross-border SKUs are included.
+      responses:
+        '200':
+          description: Quote totals grouped per seller sub-order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [total_goods_amount, total_shipping_amount, total_pay_amount, sub_orders]
+                    properties:
+                      total_goods_amount:
+                        type: integer
+                      volume_discount_amount:
+                        type: integer
+                      coupon_discount_amount:
+                        type: integer
+                      credit_used_amount:
+                        type: integer
+                      total_shipping_amount:
+                        type: integer
+                      total_pay_amount:
+                        type: integer
+                      currency:
+                        type: string
+                      sub_orders:
+                        type: array
+                        items:
+                          type: object
+        '401':
+          description: Missing or expired customer JWT
+        '503':
+          description: OPERATOR_NOT_CONFIGURED when no active business entity exists
+
+  /api/v1/orders:
+    get:
+      summary: My orders, newest first (full bundles)
+      tags: [Orders]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ADMIN only; customers always see their own orders.
+      responses:
+        '200':
+          description: Order bundles (same shape as the detail route, without claims/refunds)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/orders/{id}:
+    get:
+      summary: Order detail with seller sub-orders, claims and refunds
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order id or order_no.
+      responses:
+        '200':
+          description: Bundle with sub_orders[], claims[] and refunds[]
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [sub_orders, claims, refunds]
+                    properties:
+                      sub_orders:
+                        type: array
+                        items:
+                          type: object
+                      claims:
+                        type: array
+                        items:
+                          type: object
+                      refunds:
+                        type: array
+                        items:
+                          type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Another customer's order (ADMIN bypasses)
+        '404':
+          description: Unknown order
+
+  /api/v1/orders/{id}/cancel:
+    post:
+      summary: Cancel a whole order (refund when already paid)
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancellation + refund summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, order_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  order_id:
+                    type: string
+                  status:
+                    type: string
+                  refund:
+                    type: object
+                    nullable: true
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT
+        '409':
+          description: Already shipped sub-orders block whole-order cancel
+
+  /api/v1/orders/{id}/sub-orders/{subId}/cancel:
+    post:
+      summary: Cancel one seller sub-order (partial cancel + refund)
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: subId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  description: Partial lines; omitted = the whole sub-order.
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Partial cancel result (replay=true on idempotency hit)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, status]
+                properties:
+                  success:
+                    type: boolean
+                  status:
+                    type: string
+                  refund:
+                    type: object
+                  partial:
+                    type: boolean
+                  replay:
+                    type: boolean
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/orders/{id}/confirm:
+    post:
+      summary: Confirm purchase for delivered sub-orders (releases escrow)
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Confirmation + reward credit (also mirrored under data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, order_id, confirmed_sub_orders, status]
+                properties:
+                  success:
+                    type: boolean
+                  order_id:
+                    type: string
+                  confirmed_sub_orders:
+                    type: integer
+                  reward_credit:
+                    type: integer
+                  status:
+                    type: string
+                  data:
+                    type: object
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired customer JWT
+
+  /api/v1/orders/{id}/tracking:
+    get:
+      summary: Per-seller shipment tracking events for an order
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tracking timelines (carrier_api is NOT_INTEGRATED)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, order_id, tracking]
+                properties:
+                  success:
+                    type: boolean
+                  order_id:
+                    type: string
+                  order_no:
+                    type: string
+                  payment_status:
+                    type: string
+                  tracking:
+                    type: array
+                    items:
+                      type: object
+                      required: [sub_order_id, events]
+                      properties:
+                        sub_order_id:
+                          type: string
+                        partner_name:
+                          type: string
+                        carrier_code:
+                          type: string
+                          nullable: true
+                        tracking_number:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                        events:
+                          type: array
+                          items:
+                            type: object
+                  carrier_api:
+                    type: string
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown order
+
+  /api/v1/orders/{id}/claims:
+    post:
+      summary: Request a return, exchange or price adjustment
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                claim_type:
+                  type: string
+                  enum: [RETURN, EXCHANGE, PRICE_ADJUSTMENT]
+                  description: Alias type; PRICE_MATCH maps to PRICE_ADJUSTMENT. Default RETURN.
+                sub_order_id:
+                  type: string
+                  description: Required for RETURN/EXCHANGE unless the order has one sub-order.
+                reason:
+                  type: string
+                  maxLength: 500
+                reason_code:
+                  type: string
+                  description: Decides who pays the return courier (see claims service).
+                items:
+                  type: array
+                  description: Partial lines; omitted = all refundable lines of the sub-order.
+                  items:
+                    type: object
+                notes:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Claim accepted (RETURN/EXCHANGE pay out on seller approval)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, claim_id, claim_type, status]
+                properties:
+                  success:
+                    type: boolean
+                  claim_id:
+                    type: string
+                  claim_type:
+                    type: string
+                  status:
+                    type: string
+                  estimated_refund_amount:
+                    type: integer
+                  estimated_return_fee:
+                    type: integer
+                  message:
+                    type: string
+        '401':
+          description: Missing or expired JWT
+        '409':
+          description: NOT_RETURNABLE, WINDOW_EXPIRED, CLAIM_ALREADY_OPEN or NO_PRICE_DROP
+
+  /api/v1/orders/cron/auto-confirm:
+    post:
+      summary: Admin trigger for delivered-order auto-confirm sweep
+      tags: [Orders]
+      description: Scheduler hook; the Worker cron calls the service directly.
+      responses:
+        '200':
+          description: Sweep result with confirmed count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, confirmed_count]
+                properties:
+                  success:
+                    type: boolean
+                  confirmed_count:
+                    type: integer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ADMIN role required
+
+  /api/v1/orders/cron/expire:
+    post:
+      summary: Admin trigger for stale-order expiry sweep
+      tags: [Orders]
+      description: Scheduler hook; the Worker cron calls the service directly.
+      responses:
+        '200':
+          description: Sweep result with expired count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, expired_count]
+                properties:
+                  success:
+                    type: boolean
+                  expired_count:
+                    type: integer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: ADMIN role required
+
+  /api/v1/orders/{id}/commercial-invoice:
+    get:
+      summary: Cross-border commercial invoice and packing manifest (draft)
+      tags: [Orders]
+      description: Owner customer or ADMIN only; id accepts the order id or order_no. Fail-closed 422 when customs/recipient fields are missing.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Draft invoice bundle for buyer records and internal reference
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [invoice_number, order_id, currency, exporter, consignee, summary, line_items]
+                    properties:
+                      invoice_number:
+                        type: string
+                      issue_date:
+                        type: string
+                      order_id:
+                        type: string
+                      order_no:
+                        type: string
+                      incoterms:
+                        type: string
+                      currency:
+                        type: string
+                      fx_rate_applied:
+                        type: number
+                      fx_rate_source:
+                        type: string
+                      exporter:
+                        type: object
+                      consignee:
+                        type: object
+                      summary:
+                        type: object
+                        properties:
+                          total_items:
+                            type: integer
+                          total_customs_value_usd:
+                            type: number
+                          total_customs_value_krw:
+                            type: number
+                          declaration_status:
+                            type: string
+                          customs_submission_verified:
+                            type: boolean
+                      line_items:
+                        type: array
+                        items:
+                          type: object
+                      customs_declaration_statement:
+                        type: string
+        '401':
+          description: Missing customer JWT or admin session
+        '403':
+          description: Order belongs to another customer
+        '404':
+          description: Order not found (plain error plus order_id echo)
+        '422':
+          description: INCOMPLETE_CUSTOMS_DATA with missing_fields list
+
+  /api/v1/orders/{id}/late-delivery-claim:
+    post:
+      summary: Claim store-credit compensation for late sub-orders
+      tags: [Orders]
+      description: Owner customer only; pays 5300 KRW credit per uncompensated sub-order past its promised date. Idempotent per sub-order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compensation granted with sub-order count and total
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [order_id, compensated_sub_orders, compensation_amount]
+                    properties:
+                      order_id:
+                        type: string
+                      compensated_sub_orders:
+                        type: integer
+                      compensation_amount:
+                        type: integer
+        '401':
+          description: Missing or expired customer JWT
+        '403':
+          description: Order belongs to another customer
+        '404':
+          description: Order not found
+        '409':
+          description: NOT_LATE when nothing is overdue, ALREADY_COMPENSATED on retry

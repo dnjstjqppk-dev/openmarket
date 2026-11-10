@@ -1,6 +1,8 @@
 // apps/cloudflare-gateway/src/routes/catalog.js
 // OLMOA Catalog Engine: Categories Tree Rollup, Products, Honest Partner Dispatch & Quality Score
 
+import { notFound, HttpError } from '../lib/http.js';
+
 export function computeServerQualityScore(product) {
   if (!product) return 0;
   let score = 0;
@@ -76,12 +78,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       'SELECT * FROM categories WHERE slug = ? OR id = ? LIMIT 1'
     ).bind(slug, slug).first();
 
-    if (!category) {
-      return new Response(JSON.stringify({ error: 'Category not found', slug }), {
-        status: 404,
-        headers: corsHeaders
-      });
-    }
+    if (!category) throw new HttpError(404, 'NOT_FOUND', 'Category not found', { slug });
 
     const { results: subcategories } = await env.DB.prepare(
       'SELECT id, name, slug, sort_order FROM categories WHERE parent_id = ? ORDER BY sort_order ASC'
@@ -213,9 +210,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
        WHERE p.id = ?`
     ).bind(prodId).first();
 
-    if (!product) {
-      return new Response(JSON.stringify({ error: 'Product not found', product_id: prodId }), { status: 404, headers: corsHeaders });
-    }
+    if (!product) throw new HttpError(404, 'NOT_FOUND', 'Product not found', { product_id: prodId });
 
     const buyBoxAnalysis = {
       product_id: product.id,
@@ -274,12 +269,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
        WHERE p.id = ?`
     ).bind(prodId).first();
 
-    if (!product) {
-      return new Response(JSON.stringify({ error: 'Product not found' }), {
-        status: 404,
-        headers: corsHeaders
-      });
-    }
+    if (!product) throw notFound('Product not found');
 
     const { results: skus } = await env.DB.prepare(
       'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sale_price ASC'
@@ -350,9 +340,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     ).bind(partnerId).first();
 
     // Only sellers that passed onboarding review have a public store (pending, rejected and suspended ones do not).
-    if (!partner || partner.status !== 'APPROVED') {
-      return new Response(JSON.stringify({ error: 'Partner store not found' }), { status: 404, headers: corsHeaders });
-    }
+    if (!partner || partner.status !== 'APPROVED') throw notFound('Partner store not found');
 
     const { results: products } = await env.DB.prepare(
       `SELECT p.*,
@@ -425,7 +413,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   const actM = url.pathname.match(/^\/api\/v1\/products\/([^/]+)\/live-activity$/);
   if (actM && request.method === 'GET') {
     const prod = await env.DB.prepare("SELECT id, total_sold_count FROM products WHERE id = ? AND status = 'ACTIVE'").bind(actM[1]).first();
-    if (!prod) return new Response(JSON.stringify({ success: false, error: '상품을 찾을 수 없습니다.' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!prod) throw notFound('상품을 찾을 수 없습니다.');
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
     const sold24h = await env.DB.prepare(
       `SELECT COALESCE(SUM(i.quantity - i.refunded_quantity), 0) AS q FROM order_items i

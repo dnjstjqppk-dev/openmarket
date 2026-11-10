@@ -14,7 +14,7 @@ import { auditStatement } from '../lib/ledger.js';
 import { hashPassword } from '../utils/crypto-auth.js';
 import { normalizeBrn } from './business.js';
 import { validatePassword } from './auth.js';
-import { logPiiView } from '../services/privacy.js';
+import { logPiiView, maskLast4 } from '../services/privacy.js';
 
 export function validateKoreanBrnChecksum(rawBrn) {
   const clean = String(rawBrn || '').replace(/[^0-9]/g, '');
@@ -214,7 +214,7 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     for (const pt of results) {
       const v = await applicationView(env, pt);
       out.push({ ...v, contact_email: pt.contact_email, contact_name: pt.contact_name, contact_phone: pt.contact_phone,
-        bank_code: pt.bank_code, bank_account_number: pt.bank_account_number, bank_account_holder: pt.bank_account_holder,
+        bank_code: pt.bank_code, bank_account_number: maskLast4(pt.bank_account_number), bank_account_holder: pt.bank_account_holder,
         customer_service_phone: pt.customer_service_phone, return_shipping_address: pt.return_shipping_address });
     }
     await logPiiView(env, admin, 'admin.partner-applications', 'user', results.map((r) => r.owner_user_id), 'contact,bank_account,representative_name', request);

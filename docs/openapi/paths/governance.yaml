@@ -1,0 +1,193 @@
+# Governance paths (control tower, FDS, disputes).
+# Verified against the gateway implementation (routes/global-governance.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/admin/control-tower:
+    get:
+      summary: Central operations control-tower overview (admin)
+      tags: [Governance]
+      responses:
+        '200':
+          description: GMV, orders, escrow, disputes and system health snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [total_gmv_krw, total_orders, system_health, timestamp]
+                    properties:
+                      total_gmv_krw:
+                        type: number
+                      total_orders:
+                        type: integer
+                      cross_border_pccc_orders:
+                        type: integer
+                      escrow_protected_balance_krw:
+                        type: number
+                      pending_settlement_count:
+                        type: integer
+                      open_disputes_count:
+                        type: integer
+                      customs_bottleneck_alerts:
+                        type: integer
+                      regional_nodes:
+                        type: array
+                        items:
+                          type: object
+                      edge_regions:
+                        type: array
+                        items:
+                          type: object
+                      system_health:
+                        type: object
+                        description: d1_database, customs_unipass_api, global_fx_synchronizer, fds_engine.
+                      timestamp:
+                        type: string
+                        format: date-time
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/fds/overview:
+    get:
+      summary: Fraud-detection-system status and active rules (admin)
+      tags: [Governance]
+      responses:
+        '200':
+          description: FDS status (NOT_ENFORCED_AT_CHECKOUT) with the active rule table
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [status, active_rules]
+                    properties:
+                      status:
+                        type: string
+                      blocked_attempts_24h:
+                        type: integer
+                        nullable: true
+                      challenged_3ds_24h:
+                        type: integer
+                        nullable: true
+                      active_rules:
+                        type: array
+                        items:
+                          type: object
+                          description: id, code, name, severity, status, hit_count_24h, enforcement.
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/fds/evaluate:
+    post:
+      summary: Evaluate transaction risk against FDS rules (admin)
+      tags: [Governance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount_krw:
+                  type: number
+                ip_country:
+                  type: string
+                  default: KR
+                card_country:
+                  type: string
+                  default: KR
+                shipping_country:
+                  type: string
+                  default: KR
+                failed_attempts_10m:
+                  type: number
+      responses:
+        '200':
+          description: Risk score with BLOCK / CHALLENGE_3DS / ALLOW decision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  data:
+                    type: object
+                    required: [risk_score, decision, triggered_rules, evaluated_at]
+                    properties:
+                      risk_score:
+                        type: integer
+                      decision:
+                        type: string
+                        enum: [BLOCK, CHALLENGE_3DS, ALLOW]
+                      triggered_rules:
+                        type: array
+                        items:
+                          type: string
+                      evaluated_at:
+                        type: string
+                        format: date-time
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/disputes:
+    get:
+      summary: List 3-party disputes for the arbitration tribunal (admin)
+      tags: [Governance]
+      responses:
+        '200':
+          description: Latest 50 returns joined with order fields
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/disputes/{id}/arbitrate:
+    post:
+      summary: Arbitrate a dispute (retired; use the claim engine)
+      tags: [Governance]
+      deprecated: true
+      description: Always returns 410 USE_CLAIM_ENGINE. Rulings go through PUT /api/v1/admin/claims/:id with decision APPROVE or REJECT, which executes the real refund.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '410':
+          description: USE_CLAIM_ENGINE with a pointer to PUT /api/v1/admin/claims/:id
+        '401':
+          description: Missing or expired JWT, or not an admin

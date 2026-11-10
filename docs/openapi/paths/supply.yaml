@@ -1,0 +1,1103 @@
+# Supply-chain paths (suppliers, purchase orders, supplier-orders, sync, integrations).
+# Verified against the gateway implementation (routes/suppliers.js, supplier-3pl.js, integrations.js)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/admin/suppliers:
+    get:
+      summary: List suppliers with sourcing stats
+      tags: [Supply]
+      responses:
+        '200':
+          description: Supplier list with active mapping and open PO counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Supplier row plus active_mappings and open_pos counts.
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+    post:
+      summary: Register a supplier (manual-dispatch B2B sourcing)
+      tags: [Supply]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                business_reg_number:
+                  type: string
+                  maxLength: 20
+                contact_name:
+                  type: string
+                  maxLength: 50
+                contact_phone:
+                  type: string
+                  maxLength: 30
+                contact_email:
+                  type: string
+                  maxLength: 254
+                contract_ref:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Supplier created and audited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    description: Created supplier row (id, name, contacts, contract_ref).
+        '400':
+          description: Validation error (name is required)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/suppliers/{id}/mappings:
+    get:
+      summary: List SKU sourcing mappings for a supplier with margins
+      tags: [Supply]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Supplier id.
+      responses:
+        '200':
+          description: Mappings with sale_price, margin_amount and product titles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Mapping row plus sku_code, sale_price, product_title, product_id and margin_amount (sale_price - unit_cost).
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown supplier id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/suppliers/{id}:
+    put:
+      summary: Update supplier contact, contract or status
+      tags: [Supply]
+      description: PATCH is accepted as an alias of PUT. api_integration_status cannot be changed here (409 API_STATUS_MANAGED_BY_ENGINEERING).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Supplier id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                contact_name:
+                  type: string
+                contact_phone:
+                  type: string
+                contact_email:
+                  type: string
+                contract_ref:
+                  type: string
+                status:
+                  type: string
+                  enum: [ACTIVE, SUSPENDED, TERMINATED]
+      responses:
+        '200':
+          description: Supplier updated and audited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown supplier id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: API_STATUS_MANAGED_BY_ENGINEERING when api_integration_status is changed
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/supplier-mappings:
+    post:
+      summary: Link a DIRECT-store SKU to a supplier with unit cost
+      tags: [Supply]
+      description: Deactivates the previous active mapping for the SKU. resale_authorized=true requires authorization_evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id, supplier_id, supplier_sku_code, unit_cost]
+              properties:
+                sku_id:
+                  type: string
+                supplier_id:
+                  type: string
+                supplier_sku_code:
+                  type: string
+                  maxLength: 100
+                unit_cost:
+                  type: integer
+                  minimum: 0
+                fulfillment_mode:
+                  type: string
+                  enum: [DROP_SHIP, SELF_SHIP]
+                  default: DROP_SHIP
+                resale_authorized:
+                  type: boolean
+                image_use_authorized:
+                  type: boolean
+                authorization_evidence:
+                  type: string
+                  maxLength: 500
+                  description: Contract number or document link; required when resale_authorized is true.
+                valid_until:
+                  type: string
+                  maxLength: 30
+      responses:
+        '201':
+          description: Mapping created with margin computation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [id, sku_id, unit_cost, sale_price, margin_amount, below_cost]
+                    properties:
+                      id:
+                        type: string
+                      sku_id:
+                        type: string
+                      unit_cost:
+                        type: integer
+                      sale_price:
+                        type: integer
+                      margin_amount:
+                        type: integer
+                      below_cost:
+                        type: boolean
+                        description: True when sale_price is below unit_cost.
+        '400':
+          description: EVIDENCE_REQUIRED or invalid unit_cost
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown SKU or no ACTIVE supplier
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: NOT_DIRECT_SKU when the SKU is not a DIRECT-store product
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/purchase-orders:
+    get:
+      summary: List manual-dispatch purchase orders with items
+      tags: [Supply]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, SENT, CONFIRMED, FAILED, SHIPPED, CANCELLED]
+      responses:
+        '200':
+          description: Purchase orders with line items; supplier_api is always NOT_INTEGRATED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data, supplier_api]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: PO row plus supplier_name, sub_order_no, order_no, recipient and an items array.
+                  supplier_api:
+                    type: string
+                    enum: [NOT_INTEGRATED]
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/purchase-orders/{id}/status:
+    put:
+      summary: Transition a purchase order to its next status
+      tags: [Supply]
+      description: >
+        POST is accepted as an alias of PUT (admin console uses PUT). Legal
+        transitions: DRAFT to SENT/CANCELLED, SENT to CONFIRMED/FAILED/CANCELLED,
+        CONFIRMED to SHIPPED/FAILED, FAILED to SENT/CANCELLED. SHIPPED on a
+        DROP_SHIP PO requires tracking_number and ships the sub-order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Purchase order id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [SENT, CONFIRMED, FAILED, SHIPPED, CANCELLED]
+                supplier_order_ref:
+                  type: string
+                  maxLength: 100
+                failure_reason:
+                  type: string
+                  maxLength: 300
+                tracking_number:
+                  type: string
+                  maxLength: 40
+                  description: Required when SHIPPED on a DROP_SHIP PO.
+                carrier:
+                  type: string
+                  maxLength: 40
+                  default: CJ대한통운
+      responses:
+        '200':
+          description: Status transitioned and audited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, status]
+                properties:
+                  success:
+                    type: boolean
+                  status:
+                    type: string
+                  next_action:
+                    type: string
+                    description: Present on FAILED with re-order or cancel/refund guidance.
+        '400':
+          description: Missing tracking_number for DROP_SHIP SHIPPED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown purchase order id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: ILLEGAL_PO_TRANSITION
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/partners/{id}/sales-model:
+    put:
+      summary: Switch a partner between MARKETPLACE and DIRECT sales models
+      tags: [Supply]
+      description: >
+        POST is accepted as an alias of PUT. DIRECT requires an active operator
+        entity; the switch is blocked while the partner has open sub-orders.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Partner id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sales_model:
+                  type: string
+                  enum: [DIRECT, MARKETPLACE]
+                  description: Anything other than DIRECT maps to MARKETPLACE.
+      responses:
+        '200':
+          description: Sales model switched and audited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, partner_id, sales_model]
+                properties:
+                  success:
+                    type: boolean
+                  partner_id:
+                    type: string
+                  sales_model:
+                    type: string
+                    enum: [DIRECT, MARKETPLACE]
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown partner id
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: OPERATOR_NOT_CONFIGURED or OPEN_ORDERS_EXIST
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/supplier-orders:
+    get:
+      summary: List 3PL supplier orders (seller sees own POs only)
+      tags: [Supply]
+      description: Approved sellers see only POs raised for their own sub-orders. Admins use GET /api/v1/admin/supplier-orders.
+      responses:
+        '200':
+          description: Supplier orders with supplier and sub-order numbers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Supplier order row plus supplier_name and sub_order_no.
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+    post:
+      summary: Raise a supplier PO for a paid sub-order (idempotent)
+      tags: [Supply]
+      description: >
+        Requires the auto_supplier_po feature flag. The default idempotency key
+        sub-order + supplier makes double clicks replay; there is no supplier API
+        integration, so dispatch means recorded, not transmitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sub_order_id, supplier_id]
+              properties:
+                sub_order_id:
+                  type: string
+                  maxLength: 80
+                  description: Must be PAYMENT_CONFIRMED or PREPARING.
+                supplier_id:
+                  type: string
+                  maxLength: 80
+                  description: Must be an ACTIVE supplier.
+                idempotency_key:
+                  type: string
+                  maxLength: 120
+      responses:
+        '201':
+          description: PO created in REQUESTED status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  is_idempotent_replay:
+                    type: boolean
+                    description: True when an existing PO for the key is returned.
+                  data:
+                    type: object
+                    description: PO summary (id, po_no, supplier, total_supply_cost, status, supplier_api) or the full replayed row.
+        '400':
+          description: SUPPLY_PRICE_MISSING or NO_ITEMS
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown sub-order or supplier (other sellers' sub-orders 404)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: SUB_ORDER_NOT_PAYABLE, SUPPLIER_INACTIVE, PO_ALREADY_EXISTS or IDEMPOTENCY_KEY_REUSED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/supplier-orders:
+    get:
+      summary: List all 3PL supplier orders (operators)
+      tags: [Supply]
+      responses:
+        '200':
+          description: Supplier orders across all sellers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Supplier order row plus supplier_name and sub_order_no.
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/supplier-orders/{id}/respond:
+    post:
+      summary: Record the supplier accept or reject answer
+      tags: [Supply]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Supplier order id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [ACCEPT, REJECT]
+                reason:
+                  type: string
+                  maxLength: 300
+                  description: Required when action is REJECT.
+      responses:
+        '200':
+          description: Answer recorded, PO moved to ACCEPTED or REJECTED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, order_id, po_no, status]
+                properties:
+                  success:
+                    type: boolean
+                  order_id:
+                    type: string
+                  po_no:
+                    type: string
+                  status:
+                    type: string
+                    enum: [ACCEPTED, REJECTED]
+                  message:
+                    type: string
+        '400':
+          description: INVALID_ACTION or REASON_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown PO (other sellers' POs 404)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: NOT_REQUESTED when the PO already left REQUESTED
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/supplier-orders/{id}/dispatch:
+    post:
+      summary: Register the supplier or 3PL shipment for an accepted PO
+      tags: [Supply]
+      description: Requires the fulfillment_3pl feature flag. Ships the sub-order (PAYMENT_CONFIRMED/PREPARING to SHIPPED) as the guarding write.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Supplier order id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tracking_number]
+              properties:
+                carrier_code:
+                  type: string
+                  maxLength: 40
+                  default: CJ대한통운
+                tracking_number:
+                  type: string
+                  description: 6-40 chars, letters/digits/hyphens.
+      responses:
+        '200':
+          description: Sub-order shipped and PO moved to IN_TRANSIT
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, po_no, status, carrier_code, tracking_number]
+                properties:
+                  success:
+                    type: boolean
+                  po_no:
+                    type: string
+                  status:
+                    type: string
+                    enum: [IN_TRANSIT]
+                  carrier_code:
+                    type: string
+                  tracking_number:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: INVALID_TRACKING
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown PO (other sellers' POs 404)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: PO_NOT_ACCEPTED or SUB_ORDER_NOT_SHIPPABLE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/sync/supplier-inventory:
+    post:
+      summary: Manually sync supplier stock or supply price for a SKU
+      tags: [Supply]
+      description: Requires the stock_sync flag (auto_pricing too when new_price is set). Stock writes go to inventory_ledger; a 20%+ price jump raises PRICE_JUMP_ALERT, zero stock reports OUT_OF_STOCK.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id, supplier_id]
+              properties:
+                sku_id:
+                  type: string
+                  maxLength: 80
+                supplier_id:
+                  type: string
+                  maxLength: 80
+                new_stock:
+                  type: integer
+                  minimum: 0
+                new_price:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Sync applied and logged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, sync_status, data]
+                properties:
+                  success:
+                    type: boolean
+                  sync_status:
+                    type: string
+                    enum: [SUCCESS, PRICE_JUMP_ALERT, OUT_OF_STOCK]
+                  alert_message:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+                    required: [sku_id, old_stock, new_stock, old_price, new_price]
+                    properties:
+                      sku_id:
+                        type: string
+                      old_stock:
+                        type: integer
+                      new_stock:
+                        type: integer
+                        nullable: true
+                      old_price:
+                        type: integer
+                        nullable: true
+                      new_price:
+                        type: integer
+                        nullable: true
+        '400':
+          description: NOTHING_TO_SYNC or INVALID_NUMBER
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown SKU or supplier (other sellers' SKUs 404)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: STOCK_CHANGED when an order moved stock concurrently
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/integrations/health:
+    get:
+      summary: Supplier and 3PL integration counters (no external probing)
+      tags: [Supply]
+      responses:
+        '200':
+          description: Integration core metrics snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, service, supplier_api_live_count, metrics]
+                properties:
+                  success:
+                    type: boolean
+                  service:
+                    type: string
+                  supplier_api_live_count:
+                    type: integer
+                  note:
+                    type: string
+                    nullable: true
+                    description: Manual-record notice when no supplier API is live.
+                  metrics:
+                    type: object
+                    required: [total_import_jobs, published_products, active_supplier_orders, registered_suppliers]
+                    properties:
+                      total_import_jobs:
+                        type: integer
+                      published_products:
+                        type: integer
+                      active_supplier_orders:
+                        type: integer
+                      registered_suppliers:
+                        type: integer
+        '401':
+          description: Missing or expired JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: PARTNER_NOT_APPROVED for unapproved sellers
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/sync/logs:
+    get:
+      summary: List supplier inventory sync logs
+      tags: [Supply]
+      description: GET /api/v1/sync/logs is an alias of this route (both require ROLE_ADMIN).
+      responses:
+        '200':
+          description: Latest 100 sync log rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/integrations/pricescanner/feed:
+    get:
+      summary: Authenticated product feed for PriceScanner
+      tags: [Supply]
+      description: Keyed by X-Integration-Key header (or Bearer token), not the session JWT.
+      security: []
+      parameters:
+        - name: X-Integration-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: PriceScanner feed key (PRICESCANNER_API_KEY).
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: updated_after
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Only products updated at or after this timestamp.
+      responses:
+        '200':
+          description: Paginated feed items with pagination metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, provider, integration, pagination, count, items, data]
+                properties:
+                  success:
+                    type: boolean
+                  provider:
+                    type: string
+                  integration:
+                    type: string
+                  pagination:
+                    type: object
+                    required: [page, limit, total, has_more]
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      has_more:
+                        type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      description: Feed row (partner, product, sku, prices in KRW, stock, shipping, product_url, last_updated).
+                  data:
+                    type: object
+        '401':
+          description: Missing or invalid X-Integration-Key
+
+  /api/v1/integrations/selbym/status:
+    get:
+      summary: Selbym connector boundary and agreement status (public)
+      tags: [Supply]
+      security: []
+      responses:
+        '200':
+          description: Static connector status, live-verified via probe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, brand, integration, status]
+                properties:
+                  success:
+                    type: boolean
+                  brand:
+                    type: string
+                  integration:
+                    type: string
+                  status:
+                    type: string
+                  direct_crawling_allowed:
+                    type: boolean
+                  compliance_policy:
+                    type: string
+                  adapter_ready:
+                    type: boolean
+                  supported_protocols:
+                    type: array
+                    items:
+                      type: string
+                  data_isolation:
+                    type: string
+                  data:
+                    type: object
+
+  /api/v1/admin/logistics/consolidate:
+    post:
+      summary: Consolidate sub-orders into one outbound parcel
+      tags: [Supply]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sub_order_ids, consolidated_tracking_number, hub_id]
+              properties:
+                sub_order_ids:
+                  type: array
+                  minItems: 2
+                  maxItems: 200
+                  items:
+                    type: string
+                  description: 2-200 sub-orders, each PAYMENT_CONFIRMED or PREPARING.
+                consolidated_tracking_number:
+                  type: string
+                  maxLength: 50
+                  description: 6-40 chars, letters/digits/hyphens.
+                hub_id:
+                  type: string
+                  maxLength: 50
+      responses:
+        '200':
+          description: Sub-orders flagged CONSOLIDATED with hub and tracking number
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: INSUFFICIENT_SUB_ORDERS, BATCH_LIMIT_EXCEEDED or INVALID_TRACKING
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown sub-order id in the batch
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: NOT_CONSOLIDATABLE when a sub-order already left shippable status
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'

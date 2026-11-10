@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
 const metrics = ref({
@@ -9,8 +9,29 @@ const metrics = ref({
   settlementExpected: 0
 });
 
+interface GmvBucket { day: string; amount: number; }
+const weeklyGmv = ref<GmvBucket[]>([]);
+const wowPct = ref<number | null>(null);
+const shipOnTime = ref<number | null>(null);
+const avgDays = ref<number | null>(null);
+const claimRate = ref<number | null>(null);
+
 const recentOrders = ref<any[]>([]);
 const loading = ref(true);
+
+const maxGmv = computed(() => Math.max(1, ...weeklyGmv.value.map((b) => b.amount)));
+const point = (i: number) => {
+  const x = 20 + (i * 440) / 6;
+  const y = 100 - ((weeklyGmv.value[i]?.amount || 0) / maxGmv.value) * 75;
+  return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+};
+const linePath = computed(() => weeklyGmv.value.map((_, i) => `${i === 0 ? 'M' : 'L'} ${point(i).x} ${point(i).y}`).join(' '));
+const areaPath = computed(() => weeklyGmv.value.length ? `${linePath.value} L 460 110 L 20 110 Z` : '');
+const dayLabel = (day: string) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  return `${d.getUTCMonth() + 1}.${d.getUTCDate()} (${'일월화수목금토'[d.getUTCDay()]})`;
+};
+const isToday = (day: string) => day === new Date().toISOString().slice(0, 10);
 
 onMounted(async () => {
   try {
@@ -24,7 +45,12 @@ onMounted(async () => {
       metrics.value.totalProducts = metJson.products_count || 0;
       metrics.value.ordersCount = metJson.orders_count || 0;
       metrics.value.totalSales = metJson.total_sales_amount || 0;
-      metrics.value.settlementExpected = Math.round(metrics.value.totalSales * 0.9);
+      metrics.value.settlementExpected = metJson.settlement_expected_amount || 0;
+      weeklyGmv.value = Array.isArray(metJson.weekly_gmv) ? metJson.weekly_gmv : [];
+      wowPct.value = typeof metJson.wow_pct === 'number' ? metJson.wow_pct : null;
+      shipOnTime.value = typeof metJson.ship_on_time_rate === 'number' ? metJson.ship_on_time_rate : null;
+      avgDays.value = typeof metJson.avg_delivery_days === 'number' ? metJson.avg_delivery_days : null;
+      claimRate.value = typeof metJson.claim_rate_pct === 'number' ? metJson.claim_rate_pct : null;
     }
 
     const ordJson = await ordRes.json();
@@ -73,7 +99,7 @@ onMounted(async () => {
         <div class="text-[10px] text-emerald-600 font-semibold mt-1">에스크로 확정 매출</div>
       </div>
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs font-semibold text-slate-500 mb-1">정산 예정 금액 (수수료 10% 제외)</div>
+        <div class="text-xs font-semibold text-slate-500 mb-1">정산 예정 금액 (조정 반영 실지급액)</div>
         <div class="text-2xl font-bold text-emerald-600">₩{{ metrics.settlementExpected.toLocaleString() }}</div>
         <div class="text-[10px] text-slate-400 mt-1">월 2회 정산 자동 지급</div>
       </div>
@@ -90,8 +116,12 @@ onMounted(async () => {
             </h2>
             <p class="text-[11px] text-slate-400">일별 주문 금액 및 D1 에스크로 정산 확정액</p>
           </div>
-          <span class="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            전주 대비 +18.4% ▲
+          <span v-if="wowPct === null" class="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+            전주 대비 집계 중
+          </span>
+          <span v-else class="text-xs font-black px-2.5 py-1 rounded-full border"
+            :class="wowPct >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-rose-600 bg-rose-50 border-rose-200'">
+            전주 대비 {{ wowPct >= 0 ? '+' : '' }}{{ wowPct }}% {{ wowPct >= 0 ? '▲' : '▼' }}
           </span>
         </div>
 
@@ -110,35 +140,19 @@ onMounted(async () => {
             <line x1="0" y1="110" x2="500" y2="110" stroke="#E2E8F0" stroke-width="1" />
 
             <!-- Area Path -->
-            <path
-              d="M 20 95 Q 90 75 160 55 T 300 45 T 440 25 L 480 30 L 480 110 L 20 110 Z"
-              fill="url(#gmvGradient)"
-            />
+            <path :d="areaPath" fill="url(#gmvGradient)" />
             <!-- Line Path -->
-            <path
-              d="M 20 95 Q 90 75 160 55 T 300 45 T 440 25 L 480 30"
-              fill="none"
-              stroke="#4F46E5"
-              stroke-width="3"
-              stroke-linecap="round"
-            />
+            <path :d="linePath" fill="none" stroke="#4F46E5" stroke-width="3" stroke-linecap="round" />
             <!-- Data Points -->
-            <circle cx="20" cy="95" r="4" fill="#4F46E5" stroke="#FFFFFF" stroke-width="2" />
-            <circle cx="160" cy="55" r="4" fill="#4F46E5" stroke="#FFFFFF" stroke-width="2" />
-            <circle cx="300" cy="45" r="4" fill="#4F46E5" stroke="#FFFFFF" stroke-width="2" />
-            <circle cx="440" cy="25" r="5" fill="#FF5000" stroke="#FFFFFF" stroke-width="2" />
-            <circle cx="480" cy="30" r="4" fill="#4F46E5" stroke="#FFFFFF" stroke-width="2" />
+            <circle v-for="(_, i) in weeklyGmv" :key="weeklyGmv[i].day" :cx="point(i).x" :cy="point(i).y" r="4"
+              :fill="i === weeklyGmv.length - 1 ? '#FF5000' : '#4F46E5'" stroke="#FFFFFF" stroke-width="2" />
           </svg>
         </div>
 
         <div class="flex justify-between text-[11px] font-bold text-slate-400 px-2 border-t pt-2">
-          <span>10.24 (월)</span>
-          <span>10.25 (화)</span>
-          <span>10.26 (수)</span>
-          <span>10.27 (목)</span>
-          <span>10.28 (금)</span>
-          <span>10.29 (토)</span>
-          <span class="text-indigo-600 font-black">오늘 (10.30)</span>
+          <span v-for="b in weeklyGmv" :key="b.day" :class="isToday(b.day) ? 'text-indigo-600 font-black' : ''">
+            {{ isToday(b.day) ? '오늘 ' : '' }}({{ dayLabel(b.day) }})
+          </span>
         </div>
       </div>
 
@@ -153,30 +167,33 @@ onMounted(async () => {
           <div>
             <div class="flex justify-between text-xs font-bold mb-1">
               <span class="text-slate-700">24시간 내 당일 출고율</span>
-              <span class="text-emerald-600 font-black">98.5% (우수)</span>
+              <span v-if="shipOnTime === null" class="text-slate-400 font-bold">집계 중</span>
+              <span v-else class="text-emerald-600 font-black">{{ shipOnTime }}%</span>
             </div>
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-emerald-500 h-full rounded-full" style="width: 98.5%"></div>
+              <div class="bg-emerald-500 h-full rounded-full" :style="`width: ${shipOnTime ?? 0}%`"></div>
             </div>
           </div>
 
           <div>
             <div class="flex justify-between text-xs font-bold mb-1">
               <span class="text-slate-700">평균 배송 소요일</span>
-              <span class="text-indigo-600 font-black">1.8일 (우수)</span>
+              <span v-if="avgDays === null" class="text-slate-400 font-bold">집계 중</span>
+              <span v-else class="text-indigo-600 font-black">{{ avgDays }}일</span>
             </div>
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-indigo-500 h-full rounded-full" style="width: 92%"></div>
+              <div class="bg-indigo-500 h-full rounded-full" :style="`width: ${avgDays === null ? 0 : Math.min(100, (avgDays / 7) * 100)}%`"></div>
             </div>
           </div>
 
           <div>
             <div class="flex justify-between text-xs font-bold mb-1">
               <span class="text-slate-700">반품 및 클레임율</span>
-              <span class="text-amber-600 font-black">0.4% (정상)</span>
+              <span v-if="claimRate === null" class="text-slate-400 font-bold">집계 중</span>
+              <span v-else class="text-amber-600 font-black">{{ claimRate }}%</span>
             </div>
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-amber-400 h-full rounded-full" style="width: 15%"></div>
+              <div class="bg-amber-400 h-full rounded-full" :style="`width: ${claimRate ?? 0}%`"></div>
             </div>
           </div>
         </div>

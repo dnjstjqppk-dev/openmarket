@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { API_BASE_URL, getPartnerHeaders } from '../config'
+import { API_BASE_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
 
 const products = ref<any[]>([])
 const loading = ref(true)
@@ -68,7 +68,7 @@ const handleFileUpload = async (event: Event, isEdit = false) => {
 
     const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
       method: 'POST',
-      headers: getPartnerHeaders(),
+      headers: getPartnerAuthHeaders(),
       body: formData
     })
     const json = await res.json()
@@ -106,7 +106,7 @@ const handleDetailImageUpload = async (event: Event, isEdit = false) => {
 
     const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, {
       method: 'POST',
-      headers: getPartnerHeaders(),
+      headers: getPartnerAuthHeaders(),
       body: formData
     })
     const json = await res.json()

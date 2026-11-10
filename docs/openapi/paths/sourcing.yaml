@@ -1,0 +1,552 @@
+# Sourcing paths (URL imports, sample QC, IPR reports).
+# Verified against the gateway implementation (routes/product-imports.js, temu-ops.js sampling/IPR blocks)
+# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# tests/openapi_reconciliation_test.mjs.
+paths:
+  /api/v1/imports/crawl:
+    post:
+      summary: Crawl a supplier URL and create an ANALYZED import job
+      tags: [Sourcing]
+      description: Approved-partner route gated by the url_crawler feature flag. Extracts product, pricing and image data, stores a product_import_jobs row (status ANALYZED) plus up to 10 product_import_assets rows, and returns the crawl preview with its job_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  description: Supplier product page URL to crawl.
+                html_override:
+                  type: string
+                  description: Optional raw HTML to parse instead of fetching the URL.
+                pricing_rule:
+                  type: object
+                  description: Margin/FX rule applied to the calculated KRW pricing.
+                supplier_id:
+                  type: string
+      responses:
+        '201':
+          description: Crawl preview stored as an import job
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, job_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  job_id:
+                    type: string
+                  data:
+                    type: object
+                    description: Crawl preview (domain, quality_score, product, pricing, variants) with job_id attached.
+        '400':
+          description: URL_REQUIRED, or the crawler error_code when extraction fails
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED when url_crawler is OFF
+
+  /api/v1/imports/jobs:
+    get:
+      summary: List my product import jobs (latest 50)
+      tags: [Sourcing]
+      description: Approved-partner route. Returns the caller's product_import_jobs rows newest-first with the published product title when present.
+      responses:
+        '200':
+          description: Import job list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: id, source_url, domain, status, quality_score, published_product_id, created_at, published_title.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved
+
+  /api/v1/imports/{id}/ai-enhance:
+    post:
+      summary: AI-localize an import job preview into Korean
+      tags: [Sourcing]
+      description: Approved-partner route gated by the ai_translation feature flag. Translates the job preview title/summary (VERTEX_AI when a key is configured, else the RULE_BASED_LOCALIZER), stores an ai_product_enhancements row, and rewrites the job preview.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Enhancement stored, preview updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, job_id, data]
+                properties:
+                  success:
+                    type: boolean
+                  job_id:
+                    type: string
+                  data:
+                    type: object
+                    description: original_title, translated_title, enhanced_summary, bullets, provider, live_external_api_status plus updated_preview.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED when ai_translation is OFF
+        '404':
+          description: Import job not found for this partner
+
+  /api/v1/imports/{id}:
+    get:
+      summary: Get one import job with its parsed preview
+      tags: [Sourcing]
+      description: Approved-partner route. Returns the full product_import_jobs row plus the parsed preview object.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Import job detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    description: Import job row with a parsed preview object.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved
+        '404':
+          description: Import job not found for this partner
+
+  /api/v1/imports/{id}/publish:
+    post:
+      summary: Publish a crawled job into the catalog as DRAFT/PENDING
+      tags: [Sourcing]
+      description: Approved-partner route. Same contract as seller registration (validated title, prices, category, https thumbnail; stock defaults to 0): inserts a DRAFT/PENDING product with SKUs, a source_products row, supplier mappings when the job has a supplier, then marks the job PUBLISHED. An operator review is required before sale.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  description: Defaults to the preview product title.
+                sale_price:
+                  type: integer
+                  description: Defaults to the preview calculated sale price.
+                original_price:
+                  type: integer
+                  description: Defaults to the preview calculated original price.
+                category_id:
+                  type: string
+                category_slug:
+                  type: string
+                  description: Category id or active slug (one is required).
+                thumbnail_url:
+                  type: string
+                  maxLength: 500
+                  description: https:// URL or /api/v1/storage/file/ path. Defaults to the preview thumbnail.
+                description_html:
+                  type: string
+                  maxLength: 200000
+                brand:
+                  type: string
+                  maxLength: 100
+                wholesale_cost:
+                  type: integer
+                  description: KRW unit cost. Defaults to preview cost or 70% of sale price.
+                variants:
+                  type: array
+                  description: SKU variants; defaults to preview variants or a single default option.
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Product registered as DRAFT/PENDING
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, product_id, sku_count, status, review_status]
+                properties:
+                  success:
+                    type: boolean
+                  product_id:
+                    type: string
+                  sku_count:
+                    type: integer
+                  status:
+                    type: string
+                    enum: [DRAFT]
+                  review_status:
+                    type: string
+                    enum: [PENDING]
+                  message:
+                    type: string
+        '400':
+          description: ALREADY_PUBLISHED or a field validation error
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved
+        '404':
+          description: Import job not found for this partner
+        '409':
+          description: SKU_CODE_TAKEN
+
+  /api/v1/imports/bulk:
+    post:
+      summary: Crawl up to 50 supplier URLs in one batch
+      tags: [Sourcing]
+      description: Approved-partner route gated by the bulk_crawler feature flag. Crawls each URL, stores one product_import_jobs row per URL (ANALYZED or FAILED), and returns per-URL outcomes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                pricing_rule:
+                  type: object
+                  description: Margin/FX rule applied to every URL in the batch.
+      responses:
+        '201':
+          description: Batch crawled, one job row per URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, total_requested, successful, failed, data]
+                properties:
+                  success:
+                    type: boolean
+                  total_requested:
+                    type: integer
+                  successful:
+                    type: integer
+                  failed:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: job_id, url, status, quality_score, title, error.
+        '400':
+          description: URLS_REQUIRED or BATCH_LIMIT_EXCEEDED
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner not approved, or FEATURE_DISABLED when bulk_crawler is OFF
+
+  /api/v1/admin/imports/jobs:
+    get:
+      summary: Monitor all import jobs across partners (latest 100)
+      tags: [Sourcing]
+      description: Admin route. Returns every product_import_jobs row newest-first with partner_name and published_title.
+      responses:
+        '200':
+          description: All import jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Import job row plus partner_name and published_title.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/partner/sample-qc:
+    get:
+      summary: List my factory sample QC requests
+      tags: [Sourcing]
+      description: Partner route. Returns the caller's sample_qc_requests rows newest-first.
+      responses:
+        '200':
+          description: Sample QC request list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner role required
+    post:
+      summary: Submit a factory sample for QC inspection
+      tags: [Sourcing]
+      description: Partner route. Creates a sample_qc_requests row in IN_INSPECTION status; product_id is optional but must be the caller's own product when given.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_title, sample_tracking_no]
+              properties:
+                product_id:
+                  type: string
+                  description: Optional; must belong to the caller.
+                product_title:
+                  type: string
+                  maxLength: 200
+                sample_tracking_no:
+                  type: string
+                  maxLength: 40
+                carrier:
+                  type: string
+                  maxLength: 40
+                  default: CJ대한통운
+      responses:
+        '201':
+          description: Sample QC request created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [id, status]
+                    properties:
+                      id:
+                        type: string
+                      status:
+                        type: string
+                        enum: [IN_INSPECTION]
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Partner role required, or product is not the caller's own
+
+  /api/v1/admin/sample-qc:
+    get:
+      summary: List all sample QC requests with partner names
+      tags: [Sourcing]
+      description: Admin route. Returns every sample_qc_requests row newest-first with business_name.
+      responses:
+        '200':
+          description: All sample QC requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Sample QC row plus business_name.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/sample-qc/{id}/inspect:
+    post:
+      summary: Record an inspection decision on a sample QC request
+      tags: [Sourcing]
+      description: Admin route. Sets status to the decision (only from IN_INSPECTION) with inspector notes, and writes a SAMPLE_QC_INSPECT audit entry.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, inspector_notes]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVED, REJECTED, CONDITIONAL]
+                inspector_notes:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Inspection decision recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [id, status, inspector_notes]
+                    properties:
+                      id:
+                        type: string
+                      status:
+                        type: string
+                      inspector_notes:
+                        type: string
+        '400':
+          description: INVALID_DECISION
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+        '409':
+          description: NOT_IN_INSPECTION when the request is not awaiting inspection
+
+  /api/v1/ipr/report:
+    post:
+      summary: File an IPR infringement report for operator review
+      tags: [Sourcing]
+      description: Authenticated route (any role). Records an ipr_takedown_reports row in SUBMITTED status; products are never hidden by an unverified report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_product_id, reporter_name, brand_name, evidence_url]
+              properties:
+                target_product_id:
+                  type: string
+                  maxLength: 100
+                  description: Must be an existing product id.
+                reporter_name:
+                  type: string
+                  maxLength: 100
+                brand_name:
+                  type: string
+                  maxLength: 100
+                infringement_type:
+                  type: string
+                  enum: [COUNTERFEIT, TRADEMARK, COPYRIGHT, DESIGN, PATENT]
+                  default: COUNTERFEIT
+                evidence_url:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: IPR report submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    required: [report_id, status]
+                    properties:
+                      report_id:
+                        type: string
+                      status:
+                        type: string
+                        enum: [SUBMITTED]
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Target product not found
+
+  /api/v1/admin/ipr-reports:
+    get:
+      summary: List all IPR reports with product context
+      tags: [Sourcing]
+      description: Admin route. Returns every ipr_takedown_reports row newest-first with product_title and partner_id.
+      responses:
+        '200':
+          description: All IPR reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: IPR report row plus product_title and partner_id.
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required

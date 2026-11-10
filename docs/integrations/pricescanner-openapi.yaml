@@ -4,7 +4,11 @@ info:
   version: 1.0.0
   description: >
     Official product catalog and price sync API for certified price comparison engines (PriceScanner)
-    and external partner integrations with multi-tenant isolation.
+    and external partner integrations with multi-tenant isolation. Reconciled 2026-11-10 against the
+    gateway implementation (apps/cloudflare-gateway/src/routes/integrations.js): query parameters are
+    `page` / `limit` (`per_page` alias) / `updated_after`, pagination is
+    `{page, per_page, limit, total, total_pages, has_more}`, and the feed Cache-Control is
+    `public, max-age=60, s-maxage=60`.
 servers:
   - url: https://olmoa-api.dnjstjqppk.workers.dev
     description: Production Cloudflare Gateway
@@ -13,8 +17,11 @@ paths:
     get:
       summary: Retrieve Paginated Active Product Feed
       description: >
-        Returns active products with latest selling prices, deep links, and category metadata.
-        Supports incremental sync via the `since` query parameter.
+        Returns one row per SKU of ACTIVE products from APPROVED partners, with latest selling
+        prices, deep links, and category metadata. Supports incremental sync via the `updated_after`
+        query parameter (rows with `updated_at >= updated_after`; the `total` applies the same
+        filter). `total` counts matching products (not SKU rows); `items` lists SKU rows, so a page
+        of `limit` SKU rows may span fewer products when products carry multiple SKUs.
       security:
         - IntegrationKeyAuth: []
       parameters:
@@ -24,22 +31,32 @@ paths:
           schema:
             type: integer
             default: 1
+            minimum: 1
           description: Page number (1-indexed)
-        - name: page_size
+        - name: limit
           in: query
           required: false
           schema:
             type: integer
             default: 50
+            minimum: 1
             maximum: 100
-          description: Number of items per page
-        - name: since
+          description: Number of SKU rows per page
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          description: Alias of `limit`
+        - name: updated_after
           in: query
           required: false
           schema:
             type: string
-            format: date-time
-          description: Incremental timestamp filter (ISO 8601)
+          description: Incremental filter; only rows with updated_at >= this value (same timestamp format as the stored updated_at)
       responses:
         '200':
           description: Product feed retrieved successfully
@@ -47,17 +64,35 @@ paths:
             Cache-Control:
               schema:
                 type: string
-              example: public, max-age=60, s-maxage=300
+              example: public, max-age=60, s-maxage=60
           content:
             application/json:
               schema:
                 type: object
+                required: [success, provider, integration, pagination, count, items, data]
                 properties:
                   success:
                     type: boolean
                     example: true
+                  provider:
+                    type: string
+                    example: OLMOA Open Market
+                  integration:
+                    type: string
+                    example: PriceScanner Feed Engine v1
+                  pagination:
+                    $ref: '#/components/schemas/FeedPagination'
+                  count:
+                    type: integer
+                    description: Number of SKU rows in this page
+                    example: 50
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FeedProduct'
                   data:
                     type: object
+                    required: [items, pagination]
                     properties:
                       items:
                         type: array
@@ -83,22 +118,38 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [success, brand, integration, status, direct_crawling_allowed, data]
                 properties:
                   success:
                     type: boolean
                     example: true
+                  brand:
+                    type: string
+                    example: OLMOA
+                  integration:
+                    type: string
+                    example: Selbym External Connector
+                  status:
+                    type: string
+                    example: AWAITING_COMMERCIAL_AGREEMENT
+                  direct_crawling_allowed:
+                    type: boolean
+                    example: false
+                  compliance_policy:
+                    type: string
+                  adapter_ready:
+                    type: boolean
+                    example: true
+                  supported_protocols:
+                    type: array
+                    items:
+                      type: string
+                    example: [REST_WEBHOOK, JSON_FEED_SYNC]
+                  data_isolation:
+                    type: string
                   data:
                     type: object
-                    properties:
-                      integration:
-                        type: string
-                        example: selbym
-                      status:
-                        type: string
-                        example: AWAITING_COMMERCIAL_AGREEMENT
-                      direct_crawling_allowed:
-                        type: boolean
-                        example: false
+                    description: Same status object repeated under data.
 
 components:
   securitySchemes:
@@ -106,54 +157,92 @@ components:
       type: apiKey
       in: header
       name: X-Integration-Key
-      description: Pre-shared integration key for verified aggregators
+      description: >
+        Pre-shared integration key for verified aggregators (server key must be at least 24
+        characters; `Authorization: Bearer <key>` is accepted as an equivalent).
   schemas:
     FeedProduct:
       type: object
+      description: One SKU row of an ACTIVE product from an APPROVED partner.
+      required: [partner_id, product_id, sku_id, title, sale_price, currency, stock_status]
       properties:
-        id:
+        partner_id:
           type: string
-          example: prod_001
-        title:
-          type: string
-          example: 초경량 방수 바람막이 자켓
-        sale_price:
-          type: integer
-          example: 28900
-        original_price:
-          type: integer
-          example: 45000
-        category_slug:
-          type: string
-          example: mens-fashion
-        category_name:
-          type: string
-          example: 남성 패션
-        image_url:
-          type: string
-          format: uri
-        deep_link:
-          type: string
-          format: uri
-          example: https://openmarket.dnjstjqppk.workers.dev/product/prod_001?ref=pricescanner
-        updated_at:
-          type: string
-          format: date-time
+          example: pt_001
         partner_name:
           type: string
           example: Global Direct Logistics Ltd.
-        status:
+        product_id:
           type: string
-          example: ACTIVE
+          example: prod_001
+        sku_id:
+          type: string
+          example: sku_001a
+        sku_code:
+          type: string
+          example: SKU-001-A
+        title:
+          type: string
+          example: 초경량 방수 바람막이 자켓
+        category:
+          type: string
+          example: 남성 패션
+        options:
+          type: object
+          description: Parsed option_combination_json of the SKU.
+          example: { 색상: 블랙 }
+        image_url:
+          type: string
+          format: uri
+        original_price:
+          type: integer
+          example: 45000
+        sale_price:
+          type: integer
+          example: 28900
+        currency:
+          type: string
+          example: KRW
+        stock_status:
+          type: string
+          enum: [IN_STOCK, OUT_OF_STOCK]
+        stock_quantity:
+          type: integer
+          example: 120
+        shipping_fee:
+          type: integer
+          example: 3000
+        free_shipping_threshold:
+          type: integer
+          example: 30000
+        product_url:
+          type: string
+          format: uri
+          example: https://openmarket.dnjstjqppk.workers.dev/product/prod_001
+        last_updated:
+          type: string
+          format: date-time
     FeedPagination:
       type: object
+      required: [page, per_page, limit, total, total_pages, has_more]
       properties:
         page:
           type: integer
           example: 1
-        page_size:
+        per_page:
           type: integer
           example: 50
+        limit:
+          type: integer
+          description: Same as per_page (legacy name kept for compatibility).
+          example: 50
+        total:
+          type: integer
+          description: Matching ACTIVE products from APPROVED partners (updated_after filter applied).
+          example: 62
+        total_pages:
+          type: integer
+          example: 2
         has_more:
           type: boolean
           example: false
@@ -164,8 +253,14 @@ components:
         application/json:
           schema:
             type: object
+            required: [success, code, error]
             properties:
+              success:
+                type: boolean
+                example: false
+              code:
+                type: string
+                example: UNAUTHENTICATED
               error:
                 type: string
-                example: Unauthorized integration key
-
+                example: Valid X-Integration-Key required for PriceScanner feed.

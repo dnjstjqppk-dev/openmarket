@@ -3,6 +3,7 @@
 import { requireCustomer, requireAdmin, authenticate } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
+import { auditStatement } from '../lib/ledger.js';
 
 // OLMOA Extended Features: Autocomplete (with Synonyms), Flash Sales, Reviews, Q&A, Coupons, Credits, Wishlist & Support
 
@@ -155,9 +156,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       if (dup) throw conflict('REVIEW_EXISTS', '이미 이 주문에 대한 리뷰를 작성했습니다.');
       const me = await env.DB.prepare('SELECT full_name FROM users WHERE id = ?').bind(customerId).first();
       const maskedName = me && me.full_name ? me.full_name.slice(0, 1) + '*'.repeat(Math.max(1, me.full_name.length - 1)) : '구매자';
-      if (!contentText) {
-        return new Response(JSON.stringify({ error: '리뷰 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-      }
+      if (!contentText) throw bad('CONTENT_REQUIRED', '리뷰 내용을 입력해 주세요.');
       const revId = newId('rev');
       // The buyer must choose the rating; nothing is filled in on their behalf.
       const ratingVal = Number(b.rating);
@@ -195,9 +194,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     if (request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
       const customerId = (await requireCustomer(request, env)).userId;
-      if (!b.question || !b.question.trim()) {
-        return new Response(JSON.stringify({ error: '문의 내용을 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-      }
+      if (!b.question || !b.question.trim()) throw bad('QUESTION_REQUIRED', '문의 내용을 입력해 주세요.');
       const prod = await env.DB.prepare('SELECT partner_id FROM products WHERE id = ?').bind(prodId).first();
       if (!prod) throw notFound('상품을 찾을 수 없습니다.');
       const qnaId = newId('qna');
@@ -241,9 +238,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const customerId = (await requireCustomer(request, env)).userId;
     const codeOrId = (b.coupon_id || b.code || '').trim();
     const coupon = codeOrId ? await env.DB.prepare('SELECT * FROM coupons WHERE (id = ? OR UPPER(code) = UPPER(?)) AND is_active = 1 AND expires_at > ?').bind(codeOrId, codeOrId, sqlNow()).first() : null;
-    if (!coupon) {
-      return new Response(JSON.stringify({ error: '유효하지 않은 쿠폰 코드입니다.' }), { status: 404, headers: corsHeaders });
-    }
+    if (!coupon) throw notFound('유효하지 않은 쿠폰 코드입니다.');
     await env.DB.prepare('INSERT OR IGNORE INTO user_coupons (id, user_id, coupon_id, is_used) VALUES (?, ?, ?, 0)').bind(newId('uc'), customerId, coupon.id).run();
     return new Response(JSON.stringify({ success: true, coupon, data: coupon, message: '쿠폰이 쿠폰함에 발급되었습니다.' }), { headers: corsHeaders });
   }
@@ -282,7 +277,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       const b = await request.json().catch(() => ({}));
       const prodId = b.product_id;
       const cid = customerId;
-      if (!prodId) return new Response(JSON.stringify({ error: 'product_id required' }), { status: 400, headers: corsHeaders });
+      if (!prodId) throw bad('PRODUCT_REQUIRED', 'product_id required');
       const existing = await env.DB.prepare('SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?').bind(cid, prodId).first();
       if (existing) {
         await env.DB.prepare('DELETE FROM wishlists WHERE id = ?').bind(existing.id).run();
@@ -315,9 +310,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     if (request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
       const msgText = (b.content || b.message || '').trim();
-      if (!b.subject || !msgText) {
-        return new Response(JSON.stringify({ error: '문의 제목과 내용을 모두 입력해 주세요.' }), { status: 400, headers: corsHeaders });
-      }
+      if (!b.subject || !msgText) throw bad('INQUIRY_REQUIRED', '문의 제목과 내용을 모두 입력해 주세요.');
       const inqId = newId('inq');
       const cat = ['DELIVERY', 'REFUND_RETURN', 'PRICE_MATCH', 'PAYMENT', 'PARTNER_JOIN', 'OTHER'].includes(b.category) ? b.category : 'OTHER';
       await env.DB.prepare(
@@ -354,15 +347,14 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       const b = await request.json().catch(() => ({}));
       const recipientName = (b.recipient_name || b.name || '').trim();
       const phone = (b.phone || '').trim();
-      const postalCode = (b.postal_code || b.zip || '00000').trim();
+      const postalCode = (b.postal_code || b.zip || '').trim();
       const addressLine1 = (b.address_line1 || b.address || '').trim();
       const addressLine2 = (b.address_line2 || b.detail_address || '').trim();
       const isDefault = b.is_default ? 1 : 0;
       const note = (b.delivery_note || b.note || '').trim();
 
-      if (!recipientName || !phone || !addressLine1) {
-        return new Response(JSON.stringify({ error: '수령인, 연락처, 주소는 필수 입력 항목입니다.' }), { status: 400, headers: corsHeaders });
-      }
+      if (!recipientName || !phone || !addressLine1) throw bad('ADDRESS_REQUIRED', '수령인, 연락처, 주소는 필수 입력 항목입니다.');
+      if (!/^\d{5}$/.test(postalCode)) throw bad('INVALID_POSTAL_CODE', '우편번호는 5자리 숫자여야 합니다.');
 
       const addrId = newId('addr');
       if (isDefault) {
@@ -396,9 +388,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const customerId = (await requireCustomer(request, env)).userId;
     if (url.pathname.endsWith('/default') && (request.method === 'PUT' || request.method === 'POST')) {
       const exists = await env.DB.prepare('SELECT id FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).first();
-      if (!exists) {
-        return new Response(JSON.stringify({ error: 'Address not found or unauthorized' }), { status: 404, headers: corsHeaders });
-      }
+      if (!exists) throw notFound('Address not found or unauthorized');
       if (env.DB.batch) {
         await env.DB.batch([
           env.DB.prepare('UPDATE user_addresses SET is_default = 0 WHERE user_id = ?').bind(customerId),
@@ -412,9 +402,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
     if (request.method === 'DELETE') {
       const exists = await env.DB.prepare('SELECT id FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).first();
-      if (!exists) {
-        return new Response(JSON.stringify({ error: 'Address not found or unauthorized' }), { status: 404, headers: corsHeaders });
-      }
+      if (!exists) throw notFound('Address not found or unauthorized');
       await env.DB.prepare('DELETE FROM user_addresses WHERE id = ? AND user_id = ?').bind(addrId, customerId).run();
       return new Response(JSON.stringify({ success: true, message: '배송지가 삭제되었습니다.' }), { headers: corsHeaders });
     }
@@ -424,17 +412,20 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/notifications') {
     const customerId = (await requireCustomer(request, env)).userId;
     if (request.method === 'GET') {
+      const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+      const perPage = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '20', 10) || 20));
+      const total = await env.DB.prepare('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ?').bind(customerId).first('c') || 0;
+      const unreadCount = await env.DB.prepare('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND is_read = 0').bind(customerId).first('c') || 0;
       const { results } = await env.DB.prepare(
-        'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20'
-      ).bind(customerId).all();
-      const unreadCount = results.filter(n => Number(n.is_read) === 0).length;
-      return new Response(JSON.stringify({ success: true, unread_count: unreadCount, count: results.length, data: results }), { headers: corsHeaders });
+        'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+      ).bind(customerId, perPage, (page - 1) * perPage).all();
+      return new Response(JSON.stringify({ success: true, unread_count: Number(unreadCount) || 0, count: results.length, pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data: results }), { headers: corsHeaders });
     }
   }
 
   // 12-1. External Real-time Dispatcher (SMS / Kakao AlimTalk / Email)
   if (url.pathname === '/api/v1/notifications/dispatch' && request.method === 'POST') {
-    await requireAdmin(request, env);
+    const dispatchAdmin = await requireAdmin(request, env);
     const body = await readJson(request);
     const channel = (body.channel || 'ALIMTALK').toUpperCase();
     const recipient = String(body.recipient || body.phone || body.email || '').trim();
@@ -442,9 +433,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const title = String(body.title || 'OLMOA 알림').trim();
     const content = String(body.content || body.message || '올모아 주문 알림입니다.').trim();
 
-    if (!recipient) {
-      return new Response(JSON.stringify({ error: 'recipient is required for dispatch' }), { status: 400, headers: corsHeaders });
-    }
+    if (!recipient) throw bad('RECIPIENT_REQUIRED', 'recipient is required for dispatch');
 
     const logId = newId('dlv');
     let provider = 'SOLAPI';
@@ -484,6 +473,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       `INSERT INTO notification_delivery_logs (id, channel, recipient, template_code, title, content, status, provider, provider_msg_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(logId, channel, recipient, templateCode, title, content, status, provider, providerMsgId).run();
+    await auditStatement(env, dispatchAdmin, { action: 'SMS_DISPATCH', targetType: 'notification_delivery', targetId: logId, after: { channel, template_code: templateCode, status, provider }, request }).run();
 
     return new Response(JSON.stringify({
       success: true,
