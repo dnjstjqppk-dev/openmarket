@@ -212,9 +212,15 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   if (!Number.isSafeInteger(requestedCredit) || requestedCredit < 0) throw bad('INVALID_CREDIT', '적립금 사용 금액이 올바르지 않습니다.');
   let credit = 0;
   if (requestedCredit > 0) {
+    // NEW-P0-02: credits are verified-user money with a floor and a cap, so a
+    // throwaway account can never 0-won an order (min 30,000원 goods, max 20% of
+    // net goods excluding shipping).
+    const viewer = await env.DB.prepare('SELECT email_verified FROM users WHERE id = ?').bind(principal.userId).first();
+    if (!viewer || Number(viewer.email_verified) !== 1) throw new HttpError(403, 'CREDIT_UNVERIFIED', '이메일 인증 후 적립금을 사용할 수 있습니다.');
+    if (goodsAfterVolume < 30000) throw conflict('CREDIT_MIN_ORDER', '적립금은 상품 주문금액 30,000원 이상부터 사용할 수 있습니다.');
     const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount_delta), 0) AS b FROM user_credits WHERE user_id = ?').bind(principal.userId).first('b');
     if (requestedCredit > bal) throw conflict('CREDIT_INSUFFICIENT', `적립금 잔액(${bal}원)이 부족합니다.`);
-    credit = Math.min(requestedCredit, payableBeforeCredit);
+    credit = Math.min(requestedCredit, Math.max(0, Math.floor((goodsAfterVolume - coupon) * 0.20)), payableBeforeCredit);
   }
   const creditWeights = [...allItems.map((it) => it.net), ...subs.map((s) => s.shipping)];
   const creditAllocs = allocate(credit, creditWeights);
@@ -437,7 +443,7 @@ export async function releaseUnpaidOrder(env, orderRef, target) {
     st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(b.order.applied_user_coupon_id, b.order.id));
   }
   if (b.order.credit_used_amount > 0) {
-    st.push(creditStatement(env, { userId: b.order.customer_id, amount: b.order.credit_used_amount, reason: target === 'EXPIRED' ? '결제 시간 만료 적립금 복원' : '결제 전 취소 적립금 복원', referenceId: b.order.id }));
+    st.push(creditStatement(env, { userId: b.order.customer_id, amount: b.order.credit_used_amount, reason: target === 'EXPIRED' ? '결제 시간 만료 적립금 복원' : '결제 전 취소 적립금 복원', referenceId: `restore:${b.order.id}` }));
   }
   await runBatch(env, st);
 }

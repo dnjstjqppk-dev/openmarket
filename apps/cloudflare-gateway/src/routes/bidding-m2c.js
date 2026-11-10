@@ -256,7 +256,7 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
     if (accept) {
       batch.push(
         env.DB.prepare(
-          `UPDATE product_skus SET sale_price = ? WHERE product_id = ? AND (? IS NULL OR id = ?)`
+          `UPDATE product_skus SET sale_price = ?, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ? AND (? IS NULL OR id = ?)`
         ).bind(nego.suggested_target_price, nego.product_id, nego.sku_id, nego.sku_id),
         env.DB.prepare(
           `UPDATE products SET lowest_sale_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`

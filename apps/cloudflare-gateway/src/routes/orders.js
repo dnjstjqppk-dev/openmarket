@@ -175,24 +175,36 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     if (type === 'PRICE_ADJUSTMENT') {
       if (!['PAID', 'PARTIAL_REFUNDED'].includes(b.order.payment_status) || !b.order.paid_at) throw conflict('NOT_ELIGIBLE', '결제 완료된 주문만 신청할 수 있습니다.');
       if (b.order.paid_at < sqlNow(-PRICE_ADJUST_WINDOW_DAYS * 86400000)) throw conflict('WINDOW_EXPIRED', `결제 후 ${PRICE_ADJUST_WINDOW_DAYS}일이 지나 신청할 수 없습니다.`);
-      let diff = 0;
+      // NEW-P0-01 anti-gaming gates: a crash price (seller-set 100-won bait) is excluded,
+      // and a lowered price must have been stable for 24h before a claim is accepted.
+      const lines = [];
       for (const it of b.items) {
-        const cur = await env.DB.prepare('SELECT sale_price FROM product_skus WHERE id = ?').bind(it.sku_id).first('sale_price');
+        const row = await env.DB.prepare('SELECT sale_price, price_updated_at FROM product_skus WHERE id = ?').bind(it.sku_id).first();
         const remaining = it.quantity - it.refunded_quantity;
-        const curUnit = cur - Math.floor((cur * it.volume_discount_pct * 100 + 5000) / 10000);
-        if (cur !== null && curUnit < it.unit_price && remaining > 0) diff += (it.unit_price - curUnit) * remaining;
+        if (!row || row.sale_price === null || remaining <= 0) continue;
+        const curUnit = row.sale_price - Math.floor((row.sale_price * it.volume_discount_pct * 100 + 5000) / 10000);
+        const unitDiff = it.unit_price - curUnit;
+        if (unitDiff <= 0) continue;
+        if (curUnit < it.unit_price * 0.7) {
+          throw conflict('PRICE_DROP_SUSPECT', '판매가 급락 건은 자동 보상 대상이 아닙니다. 고객센터 심사 후 처리됩니다.');
+        }
+        if (!row.price_updated_at || row.price_updated_at > sqlNow(-24 * 3600 * 1000)) {
+          throw conflict('PRICE_HOLD_PERIOD', '인하된 가격이 24시간 유지된 뒤에 보상 신청이 가능합니다.');
+        }
+        lines.push({ order_item_id: it.id, sub_order_id: it.sub_order_id, qty: remaining, unit_diff: unitDiff, line_diff: unitDiff * remaining });
       }
+      const diff = lines.reduce((a, l) => a + l.line_diff, 0);
       if (diff <= 0) throw conflict('NO_PRICE_DROP', '구매 이후 판매가 인하가 확인되지 않습니다.');
+      // Approval-gated: freeze a per-line snapshot and pay NOTHING until an admin approves
+      // (PUT /api/v1/admin/claims/:id), which caps the grant and charges the sellers.
       try {
-        await env.DB.batch([
-          env.DB.prepare(`INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, processed_by, processed_at)
-                          VALUES (?, ?, ?, 'PRICE_ADJUSTMENT', ?, 'REFUNDED', ?, '판매가 인하 차액 적립', 'system', CURRENT_TIMESTAMP)`).bind(claimId, b.order.id, me.userId, reason, diff),
-          ...grantCreditStatements(env, { userId: me.userId, amount: diff, reason: '최저가 보상 차액 적립', referenceId: claimId, entityId: b.order.operator_entity_id, txnType: 'PRICE_ADJUSTMENT' })
-        ]);
+        await env.DB.prepare(`INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, items_json)
+                        VALUES (?, ?, ?, 'PRICE_ADJUSTMENT', ?, 'REQUESTED', ?, ?, ?)`)
+          .bind(claimId, b.order.id, me.userId, reason, diff, `최저가 보상 심사 대기: 예상 차액 ${diff.toLocaleString()}원 (승인 시 상한 적용)`, JSON.stringify(lines)).run();
       } catch (e) {
-        throw mapDbError(e) ? conflict('ALREADY_ADJUSTED', '이 주문은 이미 최저가 보상을 받았습니다.') : e;
+        throw mapDbError(e) ? conflict('ALREADY_ADJUSTED', '이 주문은 이미 최저가 보상 신청되었습니다.') : e;
       }
-      const data = { claim_id: claimId, claim_type: type, status: 'REFUNDED', refund_amount: diff };
+      const data = { claim_id: claimId, claim_type: type, status: 'REQUESTED', refund_amount: diff };
       return json(corsHeaders, { success: true, ...data, data }, 201);
     }
 

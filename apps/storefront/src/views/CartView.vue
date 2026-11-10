@@ -7,8 +7,10 @@
 //    not enough stock) are shown here instead of only at checkout.
 //  - signed out: the summary is labelled an estimate.
 // Removed: "공장 직발송 파격 할인" (the list-price gap is the seller's own list price, not an OLMOA discount),
-// "올모아 100% 고객 안심 보장제", "30일 최저가 차액 자동 보상" (the real rule is a one-time credit on request when
-// the same option's price drops within 30 days), the "최대 85% 할인 ... 빠른 배송이 보장되는" recommendation title
+// "올모아 100% 고객 안심 보장제", "30일 최저가 차액 자동 보상" (the real rule: one request per order
+// when the same option's price drops within 30 days, held 24h+, no crash pricing; paid only after
+// admin approval, capped at 10% of paid amount max 10,000원, charged to the sellers), the removed
+// "최대 85% 할인 ... 빠른 배송이 보장되는" recommendation title
 // and its HOT badges. That recommendation block also never rendered (it read the campaign response as an array).
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'

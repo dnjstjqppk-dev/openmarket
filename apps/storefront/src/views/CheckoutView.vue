@@ -324,7 +324,7 @@ async function submitOrder() {
             <OmSelect v-model="selectedUserCouponId" label="쿠폰" :options="couponOptions" :disabled="!coupons.length" />
             <div>
               <div class="flex items-end gap-2">
-                <div class="flex-1"><OmInput v-model="creditToUse" label="적립금" type="number" min="0" :max="creditBalance" step="1" :help="`보유 ${won(creditBalance)}`" :disabled="!creditBalance" /></div>
+                <div class="flex-1"><OmInput v-model="creditToUse" label="적립금" type="number" min="0" :max="creditBalance" step="1" :help="`보유 ${won(creditBalance)} (인증 회원·3만원 이상·상품가의 20%까지)`" :disabled="!creditBalance" /></div>
                 <OmButton class="mb-6" variant="outline" :disabled="!creditBalance" @click="creditToUse = creditBalance">전액</OmButton>
               </div>
             </div>

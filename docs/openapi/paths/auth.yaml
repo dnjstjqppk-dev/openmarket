@@ -124,7 +124,7 @@ paths:
                     type: object
                   welcome_credit:
                     type: integer
-                    description: Signup credit when an operator entity is active, else 0.
+                    description: Always 0 at signup; the welcome grant lands on verify-email after address confirmation.
                   expiresIn:
                     type: integer
         '400':
@@ -528,7 +528,7 @@ paths:
                   maxLength: 200
       responses:
         '200':
-          description: Email verified
+          description: Email verified; first verification also grants the one-time welcome credit
           content:
             application/json:
               schema:
@@ -539,6 +539,9 @@ paths:
                     type: boolean
                   message:
                     type: string
+                  welcome_credit_granted:
+                    type: integer
+                    description: 10000 on first verification when an operator entity is active, else 0.
         '400':
           description: INVALID_TOKEN (unknown or expired)
 

@@ -216,7 +216,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (prodM[2] === 'price') {
       await env.DB.batch([
         env.DB.prepare('UPDATE products SET lowest_sale_price = ?, lowest_original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(sale, orig, product.id),
-        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
       ]);
       return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig });
     }
@@ -238,7 +238,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       ).bind(title, b.description_html !== undefined ? sanitizeHtml(str(b.description_html, { max: 200000 })) : product.description_html,
         b.thumbnail_url || product.thumbnail_url, catId, orig, sale, b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
         custody, supply, brand, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
-      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
     ]);
     return json(corsHeaders, {
       success: true, message: contentChanged ? '상세 내용이 변경되어 재심사 후 노출됩니다.' : '상품 정보가 수정되었습니다.',

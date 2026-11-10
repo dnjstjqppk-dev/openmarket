@@ -388,11 +388,15 @@ await t.test('I17 price adjustment: only on a real price drop, once per order', 
   const o = (await I.checkout(c1, [{ sku_id: m2.id, quantity: 1 }])).json;
   await I.pay(c1, o);
   assert.equal((await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } })).status, 409);
-  I.db.prepare('UPDATE product_skus SET sale_price = sale_price - 1000 WHERE id = ?').run(m2.id);
+  // NEW-P0-01: the drop must sit on the price clock for 24h (direct UPDATE here
+  // simulates a seller cut from long ago; partner/bidding PUTs stamp now).
+  I.db.prepare('UPDATE product_skus SET sale_price = sale_price - 1000, price_updated_at = ? WHERE id = ?').run('2020-01-01 00:00:00', m2.id);
   const cr0 = I.credit('u_customer_001');
   const a = await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } });
   assert.equal(a.status, 201, a.text);
-  assert.equal(I.credit('u_customer_001') - cr0, 1000);
+  assert.equal(a.json.status, 'REQUESTED');
+  assert.equal(a.json.refund_amount, 1000);
+  assert.equal(I.credit('u_customer_001') - cr0, 0);
   assert.equal((await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } })).status, 409);
   I.db.prepare('UPDATE product_skus SET sale_price = sale_price + 1000 WHERE id = ?').run(m2.id);
 });
@@ -695,6 +699,15 @@ const NEW_PW = 'Withdraw!2026#ok';
 const reg = await P.call('/api/v1/auth/register', { method: 'POST', body: { email: 'leaver@example.com', full_name: '김탈퇴', phone: '010-9999-0000', password: NEW_PW, agree_terms: true, agree_privacy: true } });
 const leaverId = reg.json.customer_id;
 let leaverTok = reg.json.token;
+// NEW-P0-02: the welcome grant lands on verification, not registration.
+{
+  const { sha256Hex } = await import('../apps/cloudflare-gateway/src/utils/crypto-auth.js');
+  const ltok = 'verify-leaver-001';
+  P.db.prepare('INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)').run('evt_leaver_001', leaverId, await sha256Hex(ltok), '2999-01-01T00:00:00.000Z');
+  const lv = await P.call('/api/v1/auth/verify-email', { method: 'POST', body: { token: ltok } });
+  assert.equal(lv.status, 200, lv.text);
+  assert.equal(lv.json.welcome_credit_granted, 10000);
+}
 let leaverOrder;
 
 await t.test('I36 withdrawal: blocked while an order is open, needs credit-forfeit consent, then pseudonymises and revokes', async () => {

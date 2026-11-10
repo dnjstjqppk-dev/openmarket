@@ -2,7 +2,8 @@
 // Buyer policy pages (PHASE 2 redesign). Every number here is a server rule, with its source:
 //   배송 지연 보상 5,300원         routes/temu-ops.js LATE_COMPENSATION_KRW (sub-order past estimated_delivery_date)
 //   기본 배송비 3,000 / 30,000원    services/orders.js defaults; each seller sets its own (partners.base_shipping_fee, …)
-//   판매가 인하 차액 30일, 주문당 1회  routes/orders.js PRICE_ADJUST_WINDOW_DAYS, ALREADY_ADJUSTED
+//   판매가 인하 차액 30일, 주문당 1회, 인하가 24시간 유지·급락 제외, 관리자 승인 후 지급,
+//     결제액 10%·최대 1만원 상한·판매자 정산 차감  routes/orders.js + admin.js claims PUT
 //   구매확정 1% 적립(직접 확정 시)     services/orders.js applyBps(paid, 100), 0 on auto-confirm
 // The previous version promised a 90-day free return with free courier pickup, "100% escrow", and named a
 // corporation ("주식회사 올모아글로벌") although the operator entity is configurable and currently not a

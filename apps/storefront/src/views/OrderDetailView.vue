@@ -233,7 +233,7 @@ async function handleConfirmOrder() {
 
 async function handlePriceAdjust() {
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, { type: 'PRICE_ADJUSTMENT' })
-  say(ok ? `판매가 인하 차액 ${won(json.refund_amount)}이 적립금으로 지급되었습니다.` : (json.error || '보상 대상이 아닙니다.'), ok ? 'ok' : 'warn')
+  say(ok ? `차액 보상 신청이 접수되었습니다. 예상 ${won(json.refund_amount)} (관리자 승인 후 지급)` : (json.error || '보상 대상이 아닙니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()
 }
 

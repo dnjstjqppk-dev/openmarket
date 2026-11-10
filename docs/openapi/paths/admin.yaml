@@ -783,7 +783,7 @@ paths:
 
   /api/v1/admin/claims/{id}:
     put:
-      summary: Rule on a REQUESTED claim — refund via the refund engine or reject (audited)
+      summary: Rule on a REQUESTED claim — refund via the refund engine, price-adjust grant, or reject (audited)
       tags: [Admin]
       parameters:
         - name: id
@@ -814,7 +814,7 @@ paths:
                   type: boolean
       responses:
         '200':
-          description: Claim ruled (REJECTED, or REFUNDED with refund object)
+          description: Claim ruled (REJECTED; RETURN yields REFUNDED with refund object; PRICE_ADJUSTMENT yields REFUNDED with granted credit capped at 10% of paid max 10000원, charged to seller settlements)
           content:
             application/json:
               schema:

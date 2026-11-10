@@ -252,7 +252,7 @@ paths:
                 use_credit_amount:
                   type: integer
                   minimum: 0
-                  description: Alias use_credits is accepted.
+                  description: Alias use_credits is accepted. Verified users only (403 CREDIT_UNVERIFIED), 30000원+ goods (409 CREDIT_MIN_ORDER), clamped to 20% of net goods.
                 idempotency_key:
                   type: string
                   description: Body fallback for X-Idempotency-Key.
@@ -306,8 +306,14 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: CREDIT_UNVERIFIED (email verification required to spend credits)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: STOCK_INSUFFICIENT, PRODUCT_NOT_ON_SALE, DIRECT_SKU_NOT_SOURCEABLE
+          description: STOCK_INSUFFICIENT, PRODUCT_NOT_ON_SALE, DIRECT_SKU_NOT_SOURCEABLE, CREDIT_MIN_ORDER, CREDIT_INSUFFICIENT
           content:
             application/json:
               schema:

@@ -95,7 +95,6 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     if (exists) throw conflict('EMAIL_TAKEN', '이미 등록된 이메일입니다.');
     const userId = newId('usr');
     const hash = await hashPassword(body.password);
-    const operator = await getActiveOperator(env);
     const termsVersion = str(body.terms_version, { max: 40 }) || null;
     const st = [
       env.DB.prepare(`INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active) VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`)
@@ -109,9 +108,8 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
             .bind(newId('cns'), userId, 'MARKETING', body.agree_marketing ? 1 : 0, termsVersion)]
         : [])
     ];
-    if (operator) {
-      st.push(...grantCreditStatements(env, { userId, amount: WELCOME_CREDIT, reason: '신규 가입 웰컴 적립금', referenceId: `welcome:${userId}`, entityId: operator.id, txnType: 'WELCOME_CREDIT' }));
-    }
+    // NEW-P0-02: no credit at signup. The welcome grant moves to email verification
+    // (verify-email below) so throwaway accounts cannot fund orders.
     try {
       await env.DB.batch(st);
     } catch (e) {
@@ -120,7 +118,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
     const token = await issueToken(env, user, null);
-    const payload = { role: 'ROLE_CUSTOMER', token, customer_id: userId, user: publicUser(user), welcome_credit: operator ? WELCOME_CREDIT : 0, expiresIn: 43200 };
+    const payload = { role: 'ROLE_CUSTOMER', token, customer_id: userId, user: publicUser(user), welcome_credit: 0, expiresIn: 43200 };
     return json(corsHeaders, { success: true, message: '회원가입이 완료되었습니다.', ...payload, data: payload }, 201);
   }
 
@@ -270,7 +268,24 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(row.user_id),
       env.DB.prepare('UPDATE email_verification_tokens SET verified_at = CURRENT_TIMESTAMP WHERE id = ?').bind(row.id)
     ]);
-    return json(corsHeaders, { success: true, message: '이메일이 인증되었습니다.' });
+    // NEW-P0-02: the welcome grant lands here — once per user, after verification.
+    // The SELECT-then-INSERT races under concurrency; ux_user_credits_user_reference
+    // collapses the loser into UNIQUE, which is success-with-zero (already granted).
+    let welcomeGranted = 0;
+    const operator = await getActiveOperator(env);
+    if (operator) {
+      const dup = await env.DB.prepare('SELECT id FROM user_credits WHERE user_id = ? AND reference_id = ?')
+        .bind(row.user_id, `welcome:${row.user_id}`).first();
+      if (!dup) {
+        try {
+          await env.DB.batch(grantCreditStatements(env, { userId: row.user_id, amount: WELCOME_CREDIT, reason: '신규 가입 웰컴 적립금(이메일 인증)', referenceId: `welcome:${row.user_id}`, entityId: operator.id, txnType: 'WELCOME_CREDIT' }));
+          welcomeGranted = WELCOME_CREDIT;
+        } catch (e) {
+          if (!String(e && e.message || '').includes('UNIQUE')) throw e;
+        }
+      }
+    }
+    return json(corsHeaders, { success: true, message: '이메일이 인증되었습니다.', welcome_credit_granted: welcomeGranted });
   }
 
   if (p === '/api/v1/auth/social-login' && request.method === 'POST') {

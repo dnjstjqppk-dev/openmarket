@@ -7,8 +7,8 @@ import { readJson, json, bad, conflict, forbidden, notFound, str } from '../lib/
 import { hashPassword } from '../utils/crypto-auth.js';
 import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
-import { auditStatement } from '../lib/ledger.js';
-import { refundOrder, loadOrderBundle } from '../services/orders.js';
+import { auditStatement, grantCreditStatements } from '../lib/ledger.js';
+import { refundOrder, loadOrderBundle, mapDbError } from '../services/orders.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
@@ -305,6 +305,48 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         audit('CLAIM_REJECT', 'claim', clmId, claim, { note })
       ]);
       return json(corsHeaders, { success: true, claim_id: clmId, status: 'REJECTED' });
+    }
+    if (claim.claim_type === 'PRICE_ADJUSTMENT') {
+      // NEW-P0-01: approval releases a CAPPED grant and charges the sellers' settlements.
+      // Concurrent double-approves collapse on ux_user_credits_user_reference (same
+      // referenceId) and surface as CLAIM_ALREADY_PROCESSED instead of a double payout.
+      if (!hasPermission(admin.adminRole, 'orders.refund')) throw forbidden('환불 승인 권한이 없습니다. (필요 권한: orders.refund)');
+      const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(claim.order_id).first();
+      if (!order) throw notFound('주문을 찾을 수 없습니다.');
+      const snap = JSON.parse(claim.items_json || '[]');
+      const rawTotal = snap.reduce((a, l) => a + (Number(l.line_diff) || 0), 0);
+      const cap = Math.min(Math.floor((order.total_pay_amount || 0) * 0.10), 10000);
+      const grant = Math.min(rawTotal, cap);
+      const st = [];
+      if (grant > 0) {
+        // Pro-rate the capped grant across sub-orders by snapshot share (largest remainder).
+        // Subs without a settlement row (DIRECT sales) stay an operator cost.
+        const subs = {};
+        for (const l of snap) subs[l.sub_order_id] = (subs[l.sub_order_id] || 0) + l.line_diff;
+        const shares = Object.keys(subs).map((id) => ({ id, exact: (grant * subs[id]) / rawTotal }));
+        let assigned = 0;
+        for (const s of shares) { s.floor = Math.floor(s.exact); assigned += s.floor; }
+        shares.sort((a, b) => (b.exact - b.floor) - (a.exact - a.floor));
+        for (let i = 0; i < grant - assigned; i++) shares[i % shares.length].floor += 1;
+        st.push(...grantCreditStatements(env, { userId: claim.user_id, amount: grant, reason: '최저가 보상 차액 적립(관리자 승인)', referenceId: clmId, entityId: order.operator_entity_id, txnType: 'PRICE_ADJUSTMENT' }));
+        for (const s of shares) {
+          if (s.floor <= 0) continue;
+          const stl = await env.DB.prepare('SELECT id, partner_id FROM settlements WHERE sub_order_id = ?').bind(s.id).first();
+          if (!stl) continue;
+          st.push(env.DB.prepare(
+            `INSERT INTO settlement_adjustments (id, settlement_id, partner_id, gross_delta, commission_delta, shipping_delta, net_delta, reason)
+             VALUES (?, ?, ?, 0, 0, 0, ?, ?)`
+          ).bind(newId('adj'), stl.id, stl.partner_id, -s.floor, `PRICE_ADJUSTMENT_CLAIM:${clmId}`));
+        }
+      }
+      st.push(env.DB.prepare("UPDATE returns SET status = 'REFUNDED', refund_amount = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'").bind(grant, admin.userId, clmId));
+      st.push(audit('CLAIM_PRICE_ADJUST', 'claim', clmId, claim, { granted: grant, capped_from: rawTotal }));
+      try {
+        await env.DB.batch(st);
+      } catch (e) {
+        throw mapDbError(e) ? conflict('CLAIM_ALREADY_PROCESSED', `이미 처리된 클레임입니다. (${clmId})`) : e;
+      }
+      return json(corsHeaders, { success: true, claim_id: clmId, status: 'REFUNDED', granted: grant });
     }
     if (claim.claim_type !== 'RETURN') throw conflict('UNSUPPORTED', '반품(RETURN) 클레임만 환불 승인할 수 있습니다.');
     // Approve moves money via refundOrder — require the refund privilege, not just orders.manage.

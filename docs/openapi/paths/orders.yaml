@@ -385,7 +385,7 @@ paths:
                   maxLength: 500
       responses:
         '201':
-          description: Claim accepted (RETURN/EXCHANGE pay out on seller approval)
+          description: Claim accepted as REQUESTED (nothing paid yet; RETURN/EXCHANGE pay out on approval, PRICE_ADJUSTMENT on admin approval with cap)
           content:
             application/json:
               schema:
@@ -409,7 +409,7 @@ paths:
         '401':
           description: Missing or expired JWT
         '409':
-          description: NOT_RETURNABLE, WINDOW_EXPIRED, CLAIM_ALREADY_OPEN or NO_PRICE_DROP
+          description: NOT_RETURNABLE, WINDOW_EXPIRED, CLAIM_ALREADY_OPEN, NO_PRICE_DROP, PRICE_HOLD_PERIOD, PRICE_DROP_SUSPECT or ALREADY_ADJUSTED
 
   /api/v1/orders/cron/auto-confirm:
     post:

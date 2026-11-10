@@ -10,15 +10,18 @@ const claims = ref<any[]>([])
 const taxInvoices = ref<any[]>([])
 const loading = ref(true)
 const actionMsg = ref('')
+const loadError = ref('')
 
 const loadLedgers = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const [res, claimRes, taxRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/admin/ledgers`, { headers: getAdminHeaders() }),
       fetch(`${API_BASE_URL}/api/v1/admin/claims`, { headers: getAdminHeaders() }),
       fetch(`${API_BASE_URL}/api/v1/finance/tax-invoices`, { headers: getAdminHeaders() }).catch(() => null)
     ])
+    if (!res.ok || !claimRes.ok) throw new Error(`원장 조회 실패 (HTTP ${res.status}/${claimRes.status})`)
     const json = await res.json()
     const claimJson = await claimRes.json()
     if (json.success) {
@@ -34,17 +37,24 @@ const loadLedgers = async () => {
     }
   } catch (e) {
     console.error(e)
+    loadError.value = '원장을 불러오지 못했습니다. 빈 표는 정산 완료가 아닙니다 — 다시 시도해 주세요.'
   } finally {
     loading.value = false
   }
 }
 
-const approveSettlement = async (_settlementId: string) => {
+// P1-A11: this button never approved anything — it navigates to the payout desk,
+// carrying the partner so the pending payout is preselected there.
+const approveSettlement = async (s: any) => {
   // Individual settlement approval was replaced by per-seller payouts (with post-payout refund deductions).
-  router.push('/reconciliation')
+  router.push({ path: '/reconciliation', query: s?.partner_id ? { partner_id: s.partner_id } : {} })
 }
 
-const resolveClaim = async (claimId: string, status: string) => {
+const resolveClaim = async (claimId: string, status: string, refundAmount?: number) => {
+  if (status !== 'REJECTED') {
+    const amt = Number(refundAmount || 0).toLocaleString()
+    if (!window.confirm(`클레임 ${claimId} (환불 ₩${amt}) 승인 시 실제 환불이 실행됩니다. 계속할까요?`)) return
+  }
   let body: any = { decision: 'APPROVE' }
   if (status === 'REJECTED') {
     const notes = window.prompt('거절 사유를 입력하세요 (필수, 감사 로그에 기록됩니다)', '')?.trim()
@@ -70,6 +80,18 @@ onMounted(loadLedgers)
       {{ actionMsg }}
     </div>
 
+    <div v-if="loadError" role="alert" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex flex-wrap items-center justify-between gap-3">
+      <span>{{ loadError }}</span>
+      <button @click="loadLedgers" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
+        다시 시도
+      </button>
+    </div>
+
+    <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
+      <i class="fa-solid fa-spinner fa-spin mr-2"></i>원장을 불러오는 중입니다...
+    </div>
+
+    <div v-if="!loading && !loadError" class="space-y-8">
     <div>
       <h2 class="text-xl font-black text-gray-900 mb-1">Partner Settlement Ledger & Escrow Payout Approval</h2>
       <p class="text-xs text-gray-500 mb-4">Approve pending partner settlements to release escrow payouts</p>
@@ -101,10 +123,10 @@ onMounted(loadLedgers)
                 </span>
                 <button
                   v-if="s.settlement_status === 'ELIGIBLE_FOR_PAYOUT'"
-                  @click="approveSettlement(s.id)"
+                  @click="approveSettlement(s)"
                   class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold cursor-pointer"
                 >
-                  Approve Payout
+                  지급 화면으로 이동
                 </button>
               </td>
             </tr>
@@ -139,11 +161,11 @@ onMounted(loadLedgers)
               <td class="py-3 px-5 flex items-center gap-2">
                 <span class="px-2 py-0.5 rounded bg-gray-100 font-bold">{{ cl.status }}</span>
                 <button
-                  v-if="cl.status === 'REQUESTED' && cl.claim_type === 'RETURN'"
-                  @click="resolveClaim(cl.id, 'APPROVED')"
+                  v-if="cl.status === 'REQUESTED' && (cl.claim_type === 'RETURN' || cl.claim_type === 'PRICE_ADJUSTMENT')"
+                  @click="resolveClaim(cl.id, 'APPROVED', cl.refund_amount)"
                   class="px-2.5 py-1 rounded bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
                 >
-                  Approve Refund
+                  {{ cl.claim_type === 'PRICE_ADJUSTMENT' ? 'Approve Credit' : 'Approve Refund' }}
                 </button>
                 <span v-else-if="cl.status === 'REQUESTED' && cl.claim_type === 'EXCHANGE'" class="text-[10px] text-gray-400 font-bold">
                   판매자 승인·재출고 건
@@ -233,6 +255,7 @@ onMounted(loadLedgers)
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </div>
 </template>

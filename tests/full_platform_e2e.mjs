@@ -76,7 +76,14 @@ await t.test('08 registration with consents grants a journaled welcome credit', 
   assert.equal(bad.status, 400);
   const r = await g.call('/api/v1/auth/register', { method: 'POST', body: { email: 'new1@example.com', password: 'Strong!Pass2026', full_name: '신규고객', phone: '010-1111-2222', agree_terms: true, agree_privacy: true } });
   assert.equal(r.status, 201, r.text);
-  assert.equal(r.json.welcome_credit, 10000);
+  // NEW-P0-02: nothing at signup; the welcome grant lands on email verification.
+  assert.equal(r.json.welcome_credit, 0);
+  const { sha256Hex } = await import('../apps/cloudflare-gateway/src/utils/crypto-auth.js');
+  const vtok = 'verify-e2e-new1';
+  g.db.prepare('INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)').run('evt_e2e_new1', r.json.customer_id, await sha256Hex(vtok), '2999-01-01T00:00:00.000Z');
+  const v = await g.call('/api/v1/auth/verify-email', { method: 'POST', body: { token: vtok } });
+  assert.equal(v.status, 200, v.text);
+  assert.equal(v.json.welcome_credit_granted, 10000);
   const me = await g.call('/api/v1/auth/me', { token: r.json.token });
   assert.equal(me.json.data.credit_balance, 10000);
   assert.equal((await g.call('/api/v1/auth/register', { method: 'POST', body: { email: 'new1@example.com', password: 'Strong!Pass2026', full_name: 'x', phone: '010-1111-2222', agree_terms: true, agree_privacy: true } })).status, 409);
