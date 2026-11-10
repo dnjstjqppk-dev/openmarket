@@ -67,6 +67,10 @@ const pcccResult = ref<{ verified: boolean; message: string; ok: boolean } | nul
 const pcccChecking = ref(false)
 const pcccFormatOk = computed(() => /^P\d{12}$/.test(pccc.value.trim().toUpperCase()))
 watch(pccc, () => { pcccResult.value = null })
+// S-N01: cross-border lines (catalog flag via cart, server-confirmed via quote)
+// make PCCC mandatory instead of opt-in; the server enforces PCCC_REQUIRED too.
+const pcccRequired = computed(() => quote.value?.requires_pccc === true || lines.value.some((l) => Number(l.requires_pccc) === 1))
+watch(pcccRequired, (req) => { if (req) needsCustoms.value = true }, { immediate: true })
 async function validatePccc() {
   pcccChecking.value = true
   try {
@@ -302,7 +306,7 @@ async function submitOrder() {
         <!-- customs -->
         <section class="rounded-lg border border-line bg-surface p-5" aria-labelledby="sec-customs">
           <h2 id="sec-customs" class="sr-only">해외직구 통관 정보</h2>
-          <OmCheckbox v-model="needsCustoms" label="해외직구 상품이 포함되어 있습니다" description="개인통관고유부호가 필요합니다. 관부가세는 결제 금액에 포함되지 않으며 부과 시 통관 단계에서 따로 안내됩니다." />
+          <OmCheckbox v-model="needsCustoms" :disabled="pcccRequired" label="해외직구 상품이 포함되어 있습니다" :description="pcccRequired ? '주문 상품에 해외직구 상품이 포함되어 개인통관고유부호가 필수입니다. 관부가세는 결제 금액에 포함되지 않으며 부과 시 통관 단계에서 따로 안내됩니다.' : '개인통관고유부호가 필요합니다. 관부가세는 결제 금액에 포함되지 않으며 부과 시 통관 단계에서 따로 안내됩니다.'" />
           <div v-if="needsCustoms" class="mt-4 flex items-start gap-2">
             <div class="flex-1"><OmInput v-model="pccc" label="개인통관고유부호" required maxlength="13" placeholder="P로 시작하는 13자리" :error="showErrors && !pcccFormatOk ? 'P로 시작하는 13자리를 입력해 주세요' : null" /></div>
             <OmButton class="mt-6" variant="outline" :loading="pcccChecking" :disabled="!pcccFormatOk" @click="validatePccc">확인</OmButton>

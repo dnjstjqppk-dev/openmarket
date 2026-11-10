@@ -27,6 +27,7 @@ export interface CartItem {
   business_name?: string;
   base_shipping_fee?: number;
   free_shipping_threshold?: number;
+  requires_pccc?: number;
 }
 
 export interface PartnerCartGroup {
@@ -128,6 +129,7 @@ export const useCartStore = defineStore('cart', () => {
       existing.quantity = Math.min(existing.quantity + quantity, maxStock);
       existing.price = Number(sku.sale_price ?? existing.price);
       existing.stock_quantity = sku.stock_quantity != null ? Number(sku.stock_quantity) : existing.stock_quantity;
+      if (product.requires_pccc != null) existing.requires_pccc = Number(product.requires_pccc);
     } else {
       items.value.push({
         sku_id: sku.id,
@@ -142,7 +144,8 @@ export const useCartStore = defineStore('cart', () => {
         partner_id: product.partner_id,
         business_name: product.business_name || product.partner_name || '',
         base_shipping_fee: product.base_shipping_fee ?? undefined,
-        free_shipping_threshold: product.free_shipping_threshold ?? undefined
+        free_shipping_threshold: product.free_shipping_threshold ?? undefined,
+        requires_pccc: product.requires_pccc != null ? Number(product.requires_pccc) : undefined
       });
     }
     const s = new Set(unselected.value); s.delete(sku.id); unselected.value = s;

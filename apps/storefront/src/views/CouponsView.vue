@@ -16,7 +16,7 @@ const loadWallet = async () => {
   loadError.value = null
   try {
     const [cRes, crRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`),
+      fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } }),
       fetch(`${API_BASE_URL}/api/v1/credits?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     ])
     const cJson = await cRes.json().catch(() => null)

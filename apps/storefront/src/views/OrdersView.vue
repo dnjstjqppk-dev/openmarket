@@ -184,9 +184,11 @@ const confirmPurchase = async (orderId: string) => {
     if (json.success) {
       actionMsg.value = `🎉 구매확정이 완료되었습니다! +₩${Number(json.data.reward_credit || 0).toLocaleString()} (1%) 올모아 적립금이 지급되었습니다.`
       await loadOrders()
+    } else {
+      actionMsg.value = `⚠️ 구매확정 실패: ${json.error || '다시 시도해 주세요.'}`
     }
   } catch (e) {
-    console.error(e)
+    actionMsg.value = '⚠️ 구매확정 요청 중 네트워크 오류가 발생했습니다.'
   }
 }
 
@@ -503,7 +505,7 @@ onMounted(loadOrders)
                 <!-- If tracking number exists for this item -->
                 <div v-if="item.tracking_number" class="pt-1 flex items-center gap-2 text-xs">
                   <span class="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-100 text-[11px]">
-                    🚚 {{ item.carrier || 'CJ대한통운' }} {{ item.tracking_number }}
+                    🚚 {{ item.carrier || '택배사 미정' }} {{ item.tracking_number }}
                   </span>
                   <button
                     @click="openTracking(order, item)"
@@ -525,7 +527,7 @@ onMounted(loadOrders)
                 class="px-3 py-1.5 rounded-xl border border-gray-300 hover:border-[#FF5000] text-gray-700 hover:text-[#FF5000] text-xs font-bold transition inline-flex items-center gap-1"
               >
                 <i class="fa-solid fa-pen-to-square text-[#FF5000]"></i>
-                <span>리뷰 쓰기 (+100P)</span>
+                <span>리뷰 쓰기</span>
               </RouterLink>
             </div>
           </div>

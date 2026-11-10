@@ -1,3 +1,24 @@
+<script setup lang="ts">
+// Operator identity and escrow facts come from /business-info (never hardcoded:
+// the operator entity is configurable). Final wording requires legal review.
+import { ref, onMounted } from 'vue'
+import { API_BASE_URL } from '../config'
+
+const companyName = ref('올모아')
+const escrowRef = ref<string | null>(null)
+onMounted(() => {
+  fetch(`${API_BASE_URL}/api/v1/business-info`)
+    .then((r) => r.json())
+    .then((j) => {
+      if (j?.configured && j.data) {
+        companyName.value = j.data.legal_name || '올모아'
+        escrowRef.value = j.data.escrow_service_ref || null
+      }
+    })
+    .catch(() => {})
+})
+</script>
+
 <template>
   <div class="max-w-4xl mx-auto bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm space-y-6 text-slate-700 text-xs sm:text-sm leading-relaxed">
     <div role="note" class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">본 문서는 법률 검토 전 초안이며 일부 내용은 실제 서비스 정책과 다를 수 있습니다. 정식 서비스 개시 전 확정됩니다.</div>
@@ -9,7 +30,7 @@
 
     <section class="space-y-2">
       <h2 class="text-base font-bold text-slate-900">제1조 (목적)</h2>
-      <p>본 약관은 (주)올모아(이하 "회사")가 운영하는 OLMOA 글로벌 전자상거래 플랫폼(이하 "몰")에서 제공하는 전자상거래 관련 서비스(이하 "서비스")를 이용함에 있어 몰과 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+      <p>본 약관은 {{ companyName }}(이하 "회사")가 운영하는 OLMOA 글로벌 전자상거래 플랫폼(이하 "몰")에서 제공하는 전자상거래 관련 서비스(이하 "서비스")를 이용함에 있어 몰과 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
     </section>
 
     <section class="space-y-2">
@@ -26,7 +47,9 @@
 
     <section class="space-y-2">
       <h2 class="text-base font-bold text-slate-900">제4조 (계약의 성립 및 결제)</h2>
-      <p>이용자가 구매 신청을 완료하고 대금 결제를 이행함으로써 주문 계약이 성립하며, 회사는 에스크로 시스템을 통하여 구매자의 결제 대금을 안전하게 보호합니다.</p>
+      <p>이용자가 구매 신청을 완료하고 대금 결제를 이행함으로써 주문 계약이 성립합니다.</p>
+      <p v-if="escrowRef">회사는 {{ escrowRef }} 구매안전서비스에 가입되어 있으며, 자세한 내용은 <router-link to="/policy/escrow" class="font-bold text-orange-600 hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있습니다.</p>
+      <p v-else>구매안전서비스(에스크로) 가입 여부는 <router-link to="/policy/escrow" class="font-bold text-orange-600 hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있으며, 미가입 상태에서는 본 조항의 에스크로 보호가 적용되지 않습니다.</p>
     </section>
 
     <section class="space-y-2">

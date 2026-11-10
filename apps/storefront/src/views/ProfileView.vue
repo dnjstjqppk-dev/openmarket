@@ -58,10 +58,13 @@ const loadUserProfile = async () => {
     if (json.success && json.data) {
       userInfo.value = json.data.user || {}
       formName.value = userInfo.value.full_name || auth.user?.name || ''
-      formPhone.value = userInfo.value.phone || '010-0000-0000'
+      formPhone.value = userInfo.value.phone || ''
       stats.value.credit_balance = json.data.credit_balance || 0
       stats.value.available_coupons = json.data.available_coupons || 0
       stats.value.wishlist_count = json.data.wishlist_count || 0
+      const consents = Array.isArray(json.data.consents) ? json.data.consents : []
+      const mkt = consents.find((c: any) => c.consent_type === 'MARKETING')
+      if (mkt) notifyMarketing.value = Number(mkt.consented) === 1
     }
   } catch (e: any) {
     console.error('Failed to load profile:', e)
@@ -86,7 +89,8 @@ const saveProfile = async () => {
       },
       body: JSON.stringify({
         full_name: formName.value.trim(),
-        phone: formPhone.value.trim()
+        phone: formPhone.value.trim(),
+        agree_marketing: notifyMarketing.value
       })
     })
     const json = await res.json()
@@ -111,8 +115,9 @@ const saveProfile = async () => {
 
 const handlePasswordChange = async () => {
   pwError.value = ''
-  if (!newPassword.value || newPassword.value.length < 6) {
-    pwError.value = '새 비밀번호는 최소 6자 이상이어야 합니다.'
+  const pwClasses = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(newPassword.value)).length
+  if (!newPassword.value || newPassword.value.length < 10 || newPassword.value.length > 128 || pwClasses < 3) {
+    pwError.value = '새 비밀번호는 10자 이상 128자 이하, 영문 대/소문자·숫자·특수문자 중 3종류 이상이어야 합니다.'
     return
   }
   if (newPassword.value !== confirmPassword.value) {
@@ -221,7 +226,7 @@ const submitWithdraw = async () => {
 }
 
 const formatDate = (dStr?: string) => {
-  if (!dStr) return '2026.01.01'
+  if (!dStr) return '-'
   const d = new Date(dStr)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
@@ -257,7 +262,7 @@ onMounted(() => {
             <div class="flex items-center gap-2 mb-1">
               <h1 class="text-xl sm:text-2xl font-black tracking-tight">{{ userInfo.full_name || auth.user?.name || '구매 고객' }}</h1>
             </div>
-            <p class="text-xs text-gray-300 font-mono">{{ userInfo.email || 'customer@olmoa.com' }}</p>
+            <p class="text-xs text-gray-300 font-mono">{{ userInfo.email || '-' }}</p>
             <p class="text-[11px] text-gray-400 mt-1">가입일: {{ formatDate(userInfo.created_at) }}</p>
           </div>
         </div>
@@ -375,11 +380,12 @@ onMounted(() => {
 
           <div>
             <label class="block font-bold text-gray-700 mb-1">휴대전화번호</label>
+            <span v-if="!formPhone" class="text-[10px] text-gray-400 block mb-1">주문·배송 안내를 위해 휴대폰 번호를 등록해 주세요.</span>
             <input
               v-model="formPhone"
               type="text"
               required
-              placeholder="010-0000-0000"
+              placeholder="010-1234-5678"
               class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
             />
           </div>
@@ -387,8 +393,8 @@ onMounted(() => {
           <!-- Notification Checkboxes -->
           <div class="pt-2 border-t border-gray-100 space-y-2">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="notifySms" class="rounded text-[#FF5000] focus:ring-0" />
-              <span class="text-gray-700 font-medium">주문 및 배송 현황 SMS 알림 수신 동의 (필수)</span>
+              <input type="checkbox" v-model="notifySms" disabled checked class="rounded text-[#FF5000] focus:ring-0 disabled:opacity-70" />
+              <span class="text-gray-700 font-medium">주문 및 배송 현황 SMS 안내 (주문 처리에 필수이며 항상 발송됩니다)</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" v-model="notifyMarketing" class="rounded text-[#FF5000] focus:ring-0" />

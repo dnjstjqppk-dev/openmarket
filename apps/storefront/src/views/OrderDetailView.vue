@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 
 const route = useRoute()
+const router = useRouter()
 const locale = useLocaleStore()
 const order = ref<any>(null)
 const claims = ref<any[]>([])
@@ -161,6 +162,9 @@ const loadMilestoneTracking = async (subOrderId: string) => {
     const res = await fetch(`${API_BASE_URL}/api/v1/logistics/tracking/${encodeURIComponent(subOrderId)}`, { headers: { ...authHeader() } })
     const json = await res.json()
     if (json.success) trackingInfo.value = json.data
+    else say(json.error || '배송 조회를 불러오지 못했습니다.', 'warn')
+  } catch {
+    say('배송 조회를 불러오지 못했습니다.', 'warn')
   } finally {
     loadingTracking.value = false
   }
@@ -237,6 +241,54 @@ async function handleLateDeliveryClaim() {
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/late-delivery-claim`)
   say(ok ? `배송 지연 보상 ${won(json.data.compensation_amount)}이 적립금으로 지급되었습니다.` : (json.error || '보상 대상이 아닙니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()
+}
+
+const resuming = ref(false)
+function loadTossSdk(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).TossPayments) return resolve((window as any).TossPayments)
+    const s = document.createElement('script')
+    s.src = 'https://js.tosspayments.com/v1/payment'
+    s.onload = () => resolve((window as any).TossPayments)
+    s.onerror = () => reject(new Error('결제 모듈을 불러오지 못했습니다.'))
+    document.head.appendChild(s)
+  })
+}
+// S-N02: resume payment on the existing READY order with its own order_no/amount.
+// A failed attempt leaves the order READY with stock/coupon held, so retrying the
+// same order (never a duplicate order) is the only correct recovery.
+async function resumePayment() {
+  if (!order.value || order.value.payment_status !== 'READY' || resuming.value) return
+  resuming.value = true
+  try {
+    const cfgRes = await fetch(`${API_BASE_URL}/api/v1/payments/config`)
+    const cfg = await cfgRes.json().catch(() => null)
+    if (cfg?.mode === 'SANDBOX_SIMULATOR') {
+      const key = `sandbox_${newIdempotencyKey('pay').replace(/[^A-Za-z0-9_-]/g, '')}`
+      await router.push({ path: '/payments/success', query: { orderId: order.value.order_no, paymentKey: key, amount: String(order.value.total_pay_amount), simulator: '1' } })
+      return
+    }
+    if (cfg?.mode === 'TOSS' && cfg?.client_key) {
+      const TossPayments = await loadTossSdk()
+      const toss = TossPayments(cfg.client_key)
+      const items = order.value.items || []
+      const first = items[0]?.product_title || items[0]?.title || '주문 상품'
+      await toss.requestPayment('카드', {
+        amount: order.value.total_pay_amount,
+        orderId: order.value.order_no,
+        orderName: items.length > 1 ? `${first} 외 ${items.length - 1}건` : first,
+        customerName: order.value.recipient_name,
+        successUrl: `${window.location.origin}/payments/success`,
+        failUrl: `${window.location.origin}/payments/fail`
+      })
+      return
+    }
+    say('결제 수단이 연동되지 않았습니다.', 'warn')
+  } catch (e: any) {
+    say(e?.message || '결제를 다시 시작하지 못했습니다.', 'warn')
+  } finally {
+    resuming.value = false
+  }
 }
 
 async function openClaim(sub: any) {
@@ -358,6 +410,8 @@ onMounted(loadOrderDetail)
         <button v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)" @click="openCashReceiptModal" class="px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
           <i class="fa-solid fa-receipt mr-1"></i>현금영수증 신청/조회
         </button>
+        <button v-if="order.payment_status === 'READY'" :disabled="busy || resuming" @click="resumePayment" data-testid="resume-payment"
+          class="px-4 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black">{{ resuming ? '결제창 여는 중...' : '결제 계속하기' }}</button>
         <span v-if="order.payment_status === 'READY'" class="text-[11px] text-amber-700 self-center">결제가 완료되지 않은 주문입니다. 결제 기한이 지나면 자동 취소됩니다.</span>
       </div>
 
@@ -507,7 +561,7 @@ onMounted(loadOrderDetail)
                 <!-- Tracking Number & Carrier Badge -->
                 <div v-if="item.tracking_number" class="flex flex-wrap items-center gap-2 pt-1">
                   <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold">
-                    🚚 {{ item.carrier || 'CJ대한통운' }} • {{ item.tracking_number }}
+                    🚚 {{ item.carrier || '택배사 미정' }} • {{ item.tracking_number }}
                   </span>
                   <button
                     @click="copyTracking(item.tracking_number)"

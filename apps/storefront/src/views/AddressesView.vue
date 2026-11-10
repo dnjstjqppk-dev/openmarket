@@ -87,6 +87,10 @@ const handleCreateAddress = async () => {
     alert('수령인, 연락처, 도로명 주소는 필수입니다.')
     return
   }
+  if (!/^\d{5}$/.test(form.value.postal_code.trim())) {
+    alert('우편번호 5자리를 입력해 주세요.')
+    return
+  }
 
   submitting.value = true
   try {
@@ -100,7 +104,7 @@ const handleCreateAddress = async () => {
       body: JSON.stringify({
         recipient_name: form.value.recipient_name.trim(),
         phone: form.value.phone.trim(),
-        postal_code: form.value.postal_code.trim() || '00000',
+        postal_code: form.value.postal_code.trim(),
         address_line1: form.value.address_line1.trim(),
         address_line2: form.value.address_line2.trim(),
         delivery_note: form.value.delivery_note,
@@ -275,10 +279,13 @@ onMounted(loadAddresses)
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">우편번호</label>
+            <label class="block font-bold text-gray-700 mb-1">우편번호 *</label>
             <input
               v-model="form.postal_code"
+              required
               type="text"
+              inputmode="numeric"
+              maxlength="5"
               placeholder="06236"
               class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
             />

@@ -112,7 +112,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   for (const l of lines) {
     const s = await env.DB.prepare(
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
-              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status,
+              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc,
               pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
@@ -145,7 +145,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const pct = volumeDiscountPct(l.quantity);
     const unitPrice = s.sale_price - applyBps(s.sale_price, pct * 100);
     resolved.push({
-      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, salesModel: s.sales_model,
+      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
       title: s.prod_title, optionSummary, baseUnitPrice: s.sale_price, unitPrice, volumePct: pct,
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
       volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
@@ -154,6 +154,10 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       bps: s.commission_rate_bps ?? Math.round(Number(s.commission_rate || 10) * 100)
     });
   }
+
+  // S-N01: any cross-border line makes PCCC mandatory (customs clearance).
+  const orderRequiresPccc = resolved.some((it) => it.requiresPccc);
+  if (orderRequiresPccc && !rawPccc && !dryRun) throw bad('PCCC_REQUIRED', '해외직구 상품이 포함되어 개인통관고유부호(PCCC)가 필요합니다.');
 
   // 2. Split by seller, shipping per seller policy
   const orderId = newId('ord');
@@ -226,8 +230,8 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   if (dryRun) {
     return { quote: {
       total_goods_amount: goodsBase, volume_discount_amount: volumeTotal, coupon_discount_amount: coupon, credit_used_amount: credit,
-      total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW',
-      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct })) }))
+      total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW', requires_pccc: orderRequiresPccc,
+      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
     } };
   }
 

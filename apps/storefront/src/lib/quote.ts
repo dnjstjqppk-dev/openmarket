@@ -12,6 +12,7 @@ export interface QuoteLine {
   quantity: number
   line_total: number
   volume_discount_pct: number
+  requires_pccc: boolean
 }
 export interface QuoteSubOrder {
   partner_id: string
@@ -28,6 +29,7 @@ export interface Quote {
   total_shipping_amount: number
   total_pay_amount: number
   currency: string
+  requires_pccc: boolean
   sub_orders: QuoteSubOrder[]
 }
 export interface QuoteRequest {
