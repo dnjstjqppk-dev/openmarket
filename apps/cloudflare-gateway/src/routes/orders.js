@@ -105,7 +105,9 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const { b } = await ownedBundle(request, env, ordId);
     const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(b.order.id).all();
     const { results: refunds } = await env.DB.prepare("SELECT id, sub_order_id, reason_code, pg_amount, credit_amount, status, created_at, completed_at FROM refunds WHERE order_id = ? ORDER BY created_at").bind(b.order.id).all();
-    return json(corsHeaders, { success: true, data: { ...presentOrder(b), claims, refunds } });
+    // NEW-07: the real PG method of the capturing transaction (powers the cash-receipt hint).
+    const pay = await env.DB.prepare("SELECT method FROM payment_transactions WHERE order_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1").bind(b.order.id).first();
+    return json(corsHeaders, { success: true, data: { ...presentOrder(b), payment_method: pay ? pay.method : null, claims, refunds } });
   }
 
   if (action === 'cancel' && request.method === 'POST') {

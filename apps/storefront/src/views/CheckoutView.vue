@@ -127,7 +127,15 @@ function requestQuote() {
 watch([selectedUserCouponId, creditAmount], requestQuote)
 onBeforeUnmount(() => { ctrl?.abort(); if (timer) clearTimeout(timer) })
 
-const paymentConfig = ref<{ mode: string; client_key: string | null; is_test_key: boolean | null; message?: string } | null>(null)
+const paymentConfig = ref<{ mode: string; client_key: string | null; api_client_key?: string | null; widget_client_key?: string | null; is_test_key: boolean | null; message?: string } | null>(null)
+// NEW-07: buyer-chosen Toss v1 method (was hardcoded to 카드).
+const payMethod = ref<'카드' | '계좌이체' | '가상계좌' | '토스페이'>('카드')
+const PAY_METHODS = [
+  { value: '카드', label: '신용·체크카드' },
+  { value: '계좌이체', label: '실시간 계좌이체' },
+  { value: '가상계좌', label: '가상계좌(무통장)' },
+  { value: '토스페이', label: '토스페이' }
+] as const
 const sideLoading = ref(true)
 onMounted(async () => {
   requestQuote()
@@ -222,11 +230,13 @@ async function submitOrder() {
       const key = `sandbox_${newIdempotencyKey('pay').replace(/[^A-Za-z0-9_-]/g, '')}`
       return router.push({ path: '/payments/success', query: { orderId: order.order_no, paymentKey: key, amount: String(order.total_pay_amount), simulator: '1' } })
     }
-    if (mode === 'TOSS' && paymentConfig.value?.client_key) {
+    // NEW-08: web uses the v1 API-integration key, never the widget key.
+    const apiKey = paymentConfig.value?.api_client_key || paymentConfig.value?.client_key
+    if (mode === 'TOSS' && apiKey) {
       const TossPayments = await loadTossSdk()
-      const toss = TossPayments(paymentConfig.value.client_key)
+      const toss = TossPayments(apiKey)
       const first = lines.value[0]
-      await toss.requestPayment('카드', {
+      await toss.requestPayment(payMethod.value, {
         amount: order.total_pay_amount,
         orderId: order.order_no,
         orderName: lines.value.length > 1 ? `${first.title} 외 ${lines.value.length - 1}건` : first.title,
@@ -352,7 +362,16 @@ async function submitOrder() {
         <div class="mt-4 rounded-md bg-surface-2 p-3 text-xs">
           <p class="font-semibold text-ink">결제 수단</p>
           <p v-if="!paymentConfig" class="mt-1 text-ink-muted">확인 중…</p>
-          <p v-else-if="paymentConfig.mode === 'TOSS'" class="mt-1 text-ink-muted">토스페이먼츠 카드·간편결제<OmBadge v-if="paymentConfig.is_test_key" tone="warning" class="ml-1">테스트 키 · 실제 청구 없음</OmBadge></p>
+          <div v-else-if="paymentConfig.mode === 'TOSS'" class="mt-1">
+            <p class="text-ink-muted">토스페이먼츠<OmBadge v-if="paymentConfig.is_test_key" tone="warning" class="ml-1">테스트 키 · 실제 청구 없음</OmBadge></p>
+            <div class="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="결제 수단 선택">
+              <label v-for="m in PAY_METHODS" :key="m.value" class="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface px-2 py-2">
+                <input v-model="payMethod" type="radio" name="pay-method" :value="m.value" class="accent-primary" />
+                <span class="text-ink">{{ m.label }}</span>
+              </label>
+            </div>
+            <p v-if="payMethod === '계좌이체' || payMethod === '가상계좌'" class="mt-2 text-ink-muted">계좌이체·가상계좌 결제는 결제 완료 후 주문 상세에서 현금영수증을 신청할 수 있습니다.</p>
+          </div>
           <p v-else-if="paymentConfig.mode === 'SANDBOX_SIMULATOR'" class="mt-1 font-medium text-warning">개발용 결제 시뮬레이터 — 실제 결제가 발생하지 않습니다.</p>
           <p v-else class="mt-1 font-medium text-danger">{{ paymentConfig.message || '결제 수단이 연동되지 않았습니다.' }}</p>
         </div>

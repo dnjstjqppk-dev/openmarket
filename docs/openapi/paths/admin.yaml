@@ -1364,3 +1364,96 @@ paths:
           description: Operator account not found
         '409':
           description: SELF_LOCKOUT or LAST_SUPER_ADMIN
+
+  /api/v1/admin/inquiries:
+    get:
+      summary: NEW-09. List customer 1:1 inquiries (paginated, filterable by status)
+      tags: [Admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, ANSWERED, CLOSED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Newest-first inquiries with customer email and pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, pagination, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  pagination:
+                    type: object
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.read permission
+
+  /api/v1/admin/inquiries/{id}/reply:
+    post:
+      summary: NEW-09. Register an operator answer on a customer inquiry
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer:
+                  type: string
+                  maxLength: 10000
+                close:
+                  type: boolean
+                  description: Mark the inquiry CLOSED together with the answer.
+      responses:
+        '200':
+          description: Answer registered (status ANSWERED, or CLOSED with close=true)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, inquiry_id, status]
+                properties:
+                  success:
+                    type: boolean
+                  inquiry_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [ANSWERED, CLOSED]
+        '400':
+          description: Missing answer
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.manage permission
+        '404':
+          description: Unknown inquiry id
+        '409':
+          description: INQUIRY_CLOSED when the inquiry is already closed

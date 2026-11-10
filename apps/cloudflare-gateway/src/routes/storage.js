@@ -89,8 +89,16 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
       }
     }
 
+    // NEW-06: the D1-embedded fallback cannot hold big rows (D1 row limit ~2MB),
+    // so without an R2 binding only small files are accepted - honestly.
+    const r2bucket = env.STORAGE_BUCKET || env.R2 || env.BUCKET || null;
     const byteSize = fileBytes.byteLength;
-    if (byteSize > 10 * 1024 * 1024) throw bad('FILE_TOO_LARGE', 'File size exceeds 10MB limit');
+    const maxBytes = r2bucket ? 10 * 1024 * 1024 : 1 * 1024 * 1024;
+    if (byteSize > maxBytes) {
+      throw bad('FILE_TOO_LARGE', r2bucket
+        ? 'File size exceeds 10MB limit'
+        : 'R2 스토리지가 연결되지 않아 1MB 이하 파일만 업로드할 수 있습니다. 관리자에게 R2 버킷 연결을 요청하세요.');
+    }
 
     const extMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
     const ext = extMatch ? extMatch[1].toLowerCase() : (mimeType === 'image/webp' ? 'webp' : 'png');
@@ -101,10 +109,9 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
 
     let storageBackend = 'D1_EMBEDDED';
     // 1. Cloudflare R2 Bucket Upload (if R2 binding is present)
-    if (env.R2 || env.BUCKET) {
+    if (r2bucket) {
       try {
-        const bucket = env.R2 || env.BUCKET;
-        await bucket.put(fileId, fileBytes, {
+        await r2bucket.put(fileId, fileBytes, {
           httpMetadata: { contentType: mimeType }
         });
         storageBackend = 'R2_BUCKET';
@@ -166,9 +173,9 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
     }
 
     // A. Check R2 Bucket first
-    if (env.R2 || env.BUCKET) {
+    if (env.STORAGE_BUCKET || env.R2 || env.BUCKET) {
       try {
-        const bucket = env.R2 || env.BUCKET;
+        const bucket = env.STORAGE_BUCKET || env.R2 || env.BUCKET;
         const object = await bucket.get(fileKey);
         if (object) {
           const headers = new Headers();

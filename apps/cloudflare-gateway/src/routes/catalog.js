@@ -335,8 +335,9 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   // 5. Public Partner Mini-Shop Storefront Endpoint (GET /api/v1/partners/:id/store)
   if (url.pathname.match(/^\/api\/v1\/partners\/[^\/]+\/store$/) && request.method === 'GET') {
     const partnerId = url.pathname.split('/')[4];
+    // NEW-10: the public store discloses the seller's legal identity (or null when unregistered).
     const partner = await env.DB.prepare(
-      'SELECT id, business_name, business_reg_number, status, base_shipping_fee, free_shipping_threshold, created_at FROM partners WHERE id = ?'
+      'SELECT id, business_name, business_reg_number, representative_name, business_address, customer_service_phone, cs_email, mail_order_reg_number, status, base_shipping_fee, free_shipping_threshold, created_at FROM partners WHERE id = ?'
     ).bind(partnerId).first();
 
     // Only sellers that passed onboarding review have a public store (pending, rejected and suspended ones do not).

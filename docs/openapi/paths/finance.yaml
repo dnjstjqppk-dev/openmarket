@@ -114,6 +114,16 @@ paths:
     get:
       summary: List tax invoice and cash receipt rows (operator, latest 100)
       tags: [Finance]
+      parameters:
+        - name: invoice_type
+          in: query
+          schema:
+            type: string
+            enum: [CASH_RECEIPT, TAX_INVOICE_PURCHASE, TAX_INVOICE_SALES]
+        - name: partner_id
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: Newest-first invoice rows with masked buyer identifiers
@@ -237,6 +247,156 @@ paths:
           description: Not an admin session
         '404':
           description: Unknown cash receipt id
+        '409':
+          description: NOT_REQUESTED when the row is no longer in REQUESTED state
+
+  /api/v1/admin/finance/tax-invoices:
+    post:
+      summary: NEW-15. Create a seller commission tax invoice draft for a settlement period
+      tags: [Finance]
+      description: >
+        Amounts are server-computed from the partner's accrued settlements in
+        the period (never client-supplied). One row per partner+period via a
+        partial unique index; the operator issues the invoice in Hometax and
+        records the approval number with /issue.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [partner_id, period_start, period_end]
+              properties:
+                partner_id:
+                  type: string
+                period_start:
+                  type: string
+                  description: YYYY-MM-DD, first day of the settlement period.
+                period_end:
+                  type: string
+                  description: YYYY-MM-DD, last day of the settlement period.
+      responses:
+        '201':
+          description: Commission tax invoice draft created in REQUESTED state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '400':
+          description: INVALID_PERIOD when the period shape is wrong
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown partner id
+        '409':
+          description: NO_COMMISSION when nothing accrued, DUPLICATE_PERIOD on re-create
+
+  /api/v1/admin/finance/tax-invoices/{id}/issue:
+    post:
+      summary: NEW-15. Record a commission tax invoice issuance with the real approval number
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: tax_invoices row id (invoice_type TAX_INVOICE_SALES).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hometax_approval_no]
+              properties:
+                hometax_approval_no:
+                  type: string
+                  maxLength: 40
+                memo:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: Invoice marked ISSUED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, id, issue_status]
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+                  issue_status:
+                    type: string
+                    enum: [ISSUED]
+        '400':
+          description: INVALID_APPROVAL_NO when the approval number shape is wrong
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown commission tax invoice id
+        '409':
+          description: NOT_REQUESTED when the row is no longer in REQUESTED state
+
+  /api/v1/admin/finance/tax-invoices/{id}/fail:
+    post:
+      summary: NEW-15. Mark a commission tax invoice as failed with a reason
+      tags: [Finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: tax_invoices row id (invoice_type TAX_INVOICE_SALES).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: Invoice marked FAILED
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, id, issue_status]
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+                  issue_status:
+                    type: string
+                    enum: [FAILED]
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '404':
+          description: Unknown commission tax invoice id
         '409':
           description: NOT_REQUESTED when the row is no longer in REQUESTED state
 

@@ -33,6 +33,30 @@ export async function resolveCategory(env, body, fallback) {
   return cat.id;
 }
 
+
+// NEW-11: product notice (상품정보제공고시) key-value payload. Accepts an object
+// or its JSON string; returns the canonical JSON string or null (not entered).
+// Anything malformed is a 400, never a silent drop or a default table.
+function parseNoticeInfo(value) {
+  if (value === undefined || value === null || value === '') return null;
+  let obj = value;
+  if (typeof obj === 'string') {
+    try { obj = JSON.parse(obj); } catch { throw bad('INVALID_NOTICE_INFO', '상품정보제공고시 형식이 올바르지 않습니다.'); }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw bad('INVALID_NOTICE_INFO', '상품정보제공고시는 항목명-내용 쌍이어야 합니다.');
+  const keys = Object.keys(obj);
+  if (keys.length > 50) throw bad('INVALID_NOTICE_INFO', '고시 항목은 50개를 넘을 수 없습니다.');
+  const clean = {};
+  for (const k of keys) {
+    const key = String(k).trim();
+    const val = String(obj[k] ?? '').trim();
+    if (!key || !val) throw bad('INVALID_NOTICE_INFO', '고시 항목명과 내용을 모두 입력해 주세요.');
+    if (key.length > 200 || val.length > 200) throw bad('INVALID_NOTICE_INFO', '고시 항목은 각 200자 이내로 입력해 주세요.');
+    clean[key] = val;
+  }
+  return JSON.stringify(clean);
+}
+
 export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
   if (!p.startsWith('/api/v1/partner')) return null;
@@ -54,6 +78,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         payout_change_pending: Boolean(partner.payout_change_request_json),
         settlement_cycle: partner.settlement_cycle, return_shipping_address: partner.return_shipping_address,
         customer_service_phone: partner.customer_service_phone, base_shipping_fee: partner.base_shipping_fee, free_shipping_threshold: partner.free_shipping_threshold,
+        representative_name: partner.representative_name, mail_order_reg_number: partner.mail_order_reg_number,
+        business_address: partner.business_address, cs_email: partner.cs_email,
         return_shipping_fee: partner.return_shipping_fee ?? partner.base_shipping_fee
       }
     });
@@ -67,11 +93,17 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const b = await readJson(request);
     const fee = b.base_shipping_fee !== undefined ? intParam(b.base_shipping_fee, { min: 0, max: 100000, field: '기본 배송비' }) : partner.base_shipping_fee;
     const threshold = b.free_shipping_threshold !== undefined ? intParam(b.free_shipping_threshold, { min: 0, max: 10_000_000, field: '무료배송 기준' }) : partner.free_shipping_threshold;
+    // NEW-10: business address + CS email are seller-editable identity fields.
+    const businessAddr = b.business_address !== undefined ? str(b.business_address, { field: '사업장 주소', max: 300 }) : partner.business_address;
+    const csEmail = b.cs_email !== undefined ? str(b.cs_email, { field: '고객센터 이메일', max: 254 }).toLowerCase() : partner.cs_email;
+    if (csEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(csEmail)) throw bad('INVALID_EMAIL', '고객센터 이메일 형식이 올바르지 않습니다.');
+    if (b.representative_name && b.representative_name !== partner.representative_name) throw conflict('REPRESENTATIVE_LOCKED', '대표자명 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.');
+    if (b.mail_order_reg_number && b.mail_order_reg_number !== partner.mail_order_reg_number) throw conflict('MAIL_ORDER_LOCKED', '통신판매업 신고번호 변경은 재심사가 필요합니다. 고객센터로 요청해 주세요.');
     const st = [env.DB.prepare(
-      `UPDATE partners SET settlement_cycle = ?, return_shipping_address = ?, customer_service_phone = ?, base_shipping_fee = ?, free_shipping_threshold = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      `UPDATE partners SET settlement_cycle = ?, return_shipping_address = ?, customer_service_phone = ?, business_address = ?, cs_email = ?, base_shipping_fee = ?, free_shipping_threshold = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
     ).bind(['WEEKLY', 'BIWEEKLY', 'MONTHLY'].includes(b.settlement_cycle) ? b.settlement_cycle : partner.settlement_cycle,
       b.return_shipping_address !== undefined ? str(b.return_shipping_address, { max: 200 }) : partner.return_shipping_address,
-      b.customer_service_phone !== undefined ? str(b.customer_service_phone, { max: 30 }) : partner.customer_service_phone, fee, threshold, partnerId)];
+      b.customer_service_phone !== undefined ? str(b.customer_service_phone, { max: 30 }) : partner.customer_service_phone, businessAddr, csEmail, fee, threshold, partnerId)];
     if (b.return_shipping_fee !== undefined) {
       // O14: one-way return courier fee withheld on customer-fault returns (shown to buyers before they request a return).
       const rf = b.return_shipping_fee === null ? null : intParam(b.return_shipping_fee, { min: 0, max: 100000, field: '반품 배송비(편도)' });
@@ -92,6 +124,16 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (b.business_name && b.business_name !== partner.business_name) throw conflict('BUSINESS_NAME_LOCKED', '상호 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.');
     await env.DB.batch(st);
     return json(corsHeaders, { success: true, message: payoutChange ? '설정이 저장되었습니다. 정산 계좌 변경은 운영자 실명 확인 후 반영됩니다.' : '설정이 저장되었습니다.', payout_change_pending: payoutChange });
+  }
+
+  // NEW-15: the seller's own commission tax invoices (shown on the settlement screen).
+  if (p === '/api/v1/partner/tax-invoices' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT id, invoice_type, partner_id, supply_amount, vat_amount, total_amount, issue_status,
+              hometax_approval_no, item_title, period_start, period_end, issued_at, created_at
+       FROM tax_invoices WHERE partner_id = ? AND invoice_type = 'TAX_INVOICE_SALES' ORDER BY created_at DESC LIMIT 100`
+    ).bind(partnerId).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
   if (p === '/api/v1/partner/products' && request.method === 'GET') {
@@ -115,6 +157,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
     const supply = b.supply_price !== undefined && b.supply_price !== null ? intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' }) : null;
     const brand = str(b.brand, { max: 100 }) || null;
+    // NEW-11/12: notice table + KC certification (optional at registration; operator reviews them).
+    const noticeJson = parseNoticeInfo(b.notice_info_json);
+    const kcCertified = b.kc_certified === true || b.kc_certified === 1 ? 1 : 0;
+    const kcNumber = str(b.kc_cert_number, { max: 60 }) || null;
+    if (kcCertified === 1 && !kcNumber) throw bad('KC_NUMBER_REQUIRED', 'KC 인증 대상 상품은 인증번호를 입력해야 합니다.');
     const thumb = str(b.thumbnail_url, { field: '대표 이미지', max: 500, required: true });
     if (!/^https:\/\//.test(thumb) && !thumb.startsWith('/api/v1/storage/file/')) throw bad('INVALID_IMAGE_URL', '이미지는 https URL 또는 업로드 파일이어야 합니다.');
     const prodId = newId('prod');
@@ -129,11 +176,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         env.DB.prepare(
           `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status,
              hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location,
-             custody_type, supply_price, brand)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             custody_type, supply_price, brand, notice_info_json, kc_certified, kc_cert_number)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(prodId, partnerId, catId, title, thumb, sanitizeHtml(str(b.description_html, { max: 200000 }) || `<p>${title}</p>`), orig, sale,
           str(b.hs_code, { max: 12 }) || null, str(b.country_origin, { max: 2 }).toUpperCase() || 'KR', pkg[0], pkg[1], pkg[2], pkg[3], volWeight, str(b.warehouse_location, { max: 50 }) || null,
-          custody, supply, brand),
+          custody, supply, brand, noticeJson, kcCertified, kcNumber),
         env.DB.prepare(
           `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?)`
@@ -225,19 +272,26 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
     const supply = b.supply_price !== undefined ? (b.supply_price === null ? null : intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' })) : product.supply_price;
     const brand = b.brand !== undefined ? (str(b.brand, { max: 100 }) || null) : product.brand;
+    // NEW-11/12: notice + KC edits re-trigger operator review (legal display must be verified).
+    const noticeUpd = b.notice_info_json !== undefined ? parseNoticeInfo(b.notice_info_json) : product.notice_info_json;
+    const kcUpd = b.kc_certified !== undefined ? (b.kc_certified === true || b.kc_certified === 1 ? 1 : 0) : product.kc_certified;
+    const kcNumUpd = b.kc_cert_number !== undefined ? (str(b.kc_cert_number, { max: 60 }) || null) : product.kc_cert_number;
+    if (kcUpd === 1 && !kcNumUpd) throw bad('KC_NUMBER_REQUIRED', 'KC 인증 대상 상품은 인증번호를 입력해야 합니다.');
     const descChanged = b.description_html !== undefined && b.description_html !== product.description_html;
-    const contentChanged = descChanged || title !== product.title || (b.thumbnail_url && b.thumbnail_url !== product.thumbnail_url);
+    const legalChanged = noticeUpd !== product.notice_info_json || kcUpd !== product.kc_certified || kcNumUpd !== product.kc_cert_number;
+    const contentChanged = descChanged || title !== product.title || (b.thumbnail_url && b.thumbnail_url !== product.thumbnail_url) || legalChanged;
     const catId = b.category_id || b.category_slug ? await resolveCategory(env, b) : product.category_id;
     await env.DB.batch([
       env.DB.prepare(
         `UPDATE products SET title = ?, description_html = ?, thumbnail_url = ?, category_id = ?, lowest_original_price = ?, lowest_sale_price = ?,
            hs_code = ?, country_origin = ?, custody_type = ?, supply_price = ?, brand = ?,
+           notice_info_json = ?, kc_certified = ?, kc_cert_number = ?,
            review_status = CASE WHEN ? = 1 AND review_status = 'APPROVED' THEN 'PENDING' ELSE review_status END,
            status = CASE WHEN ? = 1 AND status = 'ACTIVE' THEN 'DRAFT' ELSE status END, updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND partner_id = ?`
       ).bind(title, b.description_html !== undefined ? sanitizeHtml(str(b.description_html, { max: 200000 })) : product.description_html,
         b.thumbnail_url || product.thumbnail_url, catId, orig, sale, b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
-        custody, supply, brand, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
+        custody, supply, brand, noticeUpd, kcUpd, kcNumUpd, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
         env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
     ]);
     return json(corsHeaders, {

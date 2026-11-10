@@ -818,7 +818,9 @@ const APP_PW = 'SellerApply!2026';
 const application = (over = {}) => ({
   email: 'newseller@example.com', password: APP_PW, contact_name: '신청 담당', phone: '010-2222-3333', business_name: '새판매자상회', representative_name: '대표 이름',
   business_reg_number: brnOf('123456789'), mail_order_reg_number: '제2026-서울강남-0001호', bank_code: '004', bank_account_number: '123-456-789012', bank_account_holder: '새판매자상회',
-  customer_service_phone: '02-123-4567', return_shipping_address: '서울특별시 강남구 반품로 1', agree_seller_terms: true, agree_privacy: true, ...over
+  customer_service_phone: '02-123-4567', return_shipping_address: '서울특별시 강남구 반품로 1',
+  business_address: '서울특별시 강남구 사업로 2', cs_email: 'cs@newseller.example.com',
+  agree_seller_terms: true, agree_privacy: true, ...over
 });
 const upload = (token, folder = 'kyb', type = 'application/pdf') => O.call('/api/v1/storage/upload', { method: 'POST', token, body: { file_name: 'doc.pdf', content_type: type, folder, file_data: Buffer.from('%PDF-1.4 test').toString('base64') } });
 let appTok; let appPartnerId;

@@ -75,6 +75,8 @@ const m = computed(() => store.value?.metrics || {})
             </div>
             <dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-ink-muted sm:grid-cols-[auto_1fr]">
               <template v-if="store.partner.business_number"><dt class="text-ink-subtle">사업자등록번호</dt><dd>{{ store.partner.business_number }}</dd></template>
+              <template v-if="store.partner.representative_name"><dt class="text-ink-subtle">대표자명</dt><dd>{{ store.partner.representative_name }}</dd></template>
+              <template v-if="store.partner.mail_order_reg_number"><dt class="text-ink-subtle">통신판매업 신고번호</dt><dd>{{ store.partner.mail_order_reg_number }}</dd></template>
               <dt class="text-ink-subtle">배송비</dt>
               <dd>
                 {{ Number(policy.base_fee) === 0 ? '무료' : locale.formatPrice(policy.base_fee ?? 3000) }}
@@ -107,6 +109,20 @@ const m = computed(() => store.value?.metrics || {})
         <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           <ProductCard v-for="(p, i) in products" :key="p.id" :product="p" :eager="i < 5" />
         </div>
+      </section>
+
+      <!-- NEW-10: seller legal identity (electronic commerce disclosure). Missing values say so. -->
+      <section class="mt-8 rounded-xl border border-line bg-surface p-5 sm:p-6" aria-labelledby="store-seller-info">
+        <h2 id="store-seller-info" class="mb-4 text-xl font-bold text-ink">판매자 정보</h2>
+        <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">상호</dt><dd class="text-right text-ink">{{ store.partner.company_name }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">대표자명</dt><dd class="text-right text-ink">{{ store.partner.representative_name || '미등록' }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">사업자등록번호</dt><dd class="text-right text-ink">{{ store.partner.business_number || '미등록' }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">통신판매업 신고번호</dt><dd class="text-right text-ink">{{ store.partner.mail_order_reg_number || '미등록' }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">사업장 주소</dt><dd class="text-right text-ink">{{ store.partner.business_address || '미등록' }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">고객센터 전화</dt><dd class="text-right text-ink">{{ store.partner.customer_service_phone || '미등록' }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-line-divider py-2 sm:col-span-2"><dt class="text-ink-subtle">고객센터 이메일</dt><dd class="text-right text-ink">{{ store.partner.cs_email || '미등록' }}</dd></div>
+        </dl>
       </section>
     </template>
   </div>

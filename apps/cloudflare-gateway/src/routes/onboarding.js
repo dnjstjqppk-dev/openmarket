@@ -55,6 +55,7 @@ async function applicationView(env, partner) {
   return {
     partner_id: partner.id, business_name: partner.business_name, business_reg_number: partner.business_reg_number,
     representative_name: partner.representative_name, mail_order_reg_number: partner.mail_order_reg_number, mail_order_exempt_reason: partner.mail_order_exempt_reason,
+    business_address: partner.business_address, cs_email: partner.cs_email,
     status: partner.status, kyc_status: partner.kyc_status, review_note: partner.review_note,
     applied_at: partner.applied_at, submitted_at: partner.submitted_at, reviewed_at: partner.reviewed_at,
     required_documents: required, missing_documents: required.filter((t) => !live.some((d) => d.doc_type === t)),
@@ -130,6 +131,10 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     const holder = str(b.bank_account_holder, { field: '예금주', max: 50, required: true });
     const csPhone = str(b.customer_service_phone, { field: '고객센터 번호', max: 20, required: true });
     const returnAddr = str(b.return_shipping_address, { field: '반품 주소', max: 300, required: true });
+    // NEW-10: the public store must name a real business address + CS email (no fake defaults).
+    const businessAddr = str(b.business_address, { field: '사업장 주소', max: 300, required: true });
+    const csEmail = str(b.cs_email, { field: '고객센터 이메일', max: 254, required: true }).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(csEmail)) throw bad('INVALID_EMAIL', '고객센터 이메일 형식이 올바르지 않습니다.');
     if (b.agree_seller_terms !== true || b.agree_privacy !== true) throw bad('CONSENT_REQUIRED', '판매자 이용약관과 개인정보 수집·이용에 동의해 주세요.');
 
     if (await env.DB.prepare('SELECT id FROM users WHERE LOWER(email) = ?').bind(email).first()) throw conflict('EMAIL_TAKEN', '이미 등록된 이메일입니다.');
@@ -144,9 +149,10 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
         env.DB.prepare(
           `INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, representative_name, mail_order_reg_number, mail_order_exempt_reason,
                                  bank_code, bank_account_number, bank_account_holder, customer_service_phone, return_shipping_address,
+                                 business_address, cs_email,
                                  status, kyc_status, sales_model, payout_account_verified, applied_at, seller_terms_version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'DRAFT', 'MARKETPLACE', 0, CURRENT_TIMESTAMP, ?)`
-        ).bind(partnerId, userId, businessName, brn, representative, mailOrder, exempt, bankCode, account, holder, csPhone, returnAddr, SELLER_TERMS_VERSION)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'DRAFT', 'MARKETPLACE', 0, CURRENT_TIMESTAMP, ?)`
+        ).bind(partnerId, userId, businessName, brn, representative, mailOrder, exempt, bankCode, account, holder, csPhone, returnAddr, businessAddr, csEmail, SELLER_TERMS_VERSION)
       ]);
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) throw conflict('APPLICATION_EXISTS', '이미 등록된 이메일 또는 사업자등록번호입니다.');
@@ -215,7 +221,8 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
       const v = await applicationView(env, pt);
       out.push({ ...v, contact_email: pt.contact_email, contact_name: pt.contact_name, contact_phone: pt.contact_phone,
         bank_code: pt.bank_code, bank_account_number: maskLast4(pt.bank_account_number), bank_account_holder: pt.bank_account_holder,
-        customer_service_phone: pt.customer_service_phone, return_shipping_address: pt.return_shipping_address });
+        customer_service_phone: pt.customer_service_phone, return_shipping_address: pt.return_shipping_address,
+        business_address: pt.business_address, cs_email: pt.cs_email });
     }
     await logPiiView(env, admin, 'admin.partner-applications', 'user', results.map((r) => r.owner_user_id), 'contact,bank_account,representative_name', request);
     return json(corsHeaders, { success: true, count: out.length, data: out });

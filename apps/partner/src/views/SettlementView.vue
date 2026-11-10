@@ -6,6 +6,10 @@ const settlements = ref<any[]>([])
 const summary = ref<any>({ gross_sales: 0, total_commission: 0, net_payout: 0, paid_amount: 0, pending_amount: 0 })
 const loading = ref(true)
 const loadError = ref('')
+// NEW-15: commission tax invoices issued for this seller.
+const taxInvoices = ref<any[]>([])
+const taxLoading = ref(false)
+const taxError = ref('')
 
 const loadSettlements = async () => {
   loading.value = true
@@ -58,7 +62,30 @@ const settlementLabel = (status: string) =>
   status === 'HOLD' ? '보류' :
   status === 'CANCELLED' ? '취소' : (status || '-')
 
-onMounted(loadSettlements)
+const loadTaxInvoices = async () => {
+  taxLoading.value = true
+  taxError.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/tax-invoices`, {
+      headers: getPartnerHeaders()
+    })
+    const json = await res.json()
+    if (!res.ok || !json.success) throw new Error(json.error || '세금계산서 내역을 불러오지 못했습니다.')
+    taxInvoices.value = json.data || []
+  } catch (e: any) {
+    taxError.value = e?.message || '세금계산서 내역을 불러오지 못했습니다. 다시 시도해 주세요.'
+  } finally {
+    taxLoading.value = false
+  }
+}
+
+const invoiceLabel = (status: string) =>
+  status === 'ISSUED' ? '발행 완료' :
+  status === 'REQUESTED' ? '발행 대기' :
+  status === 'FAILED' ? '발행 실패' :
+  status === 'CANCELLED' ? '취소' : (status || '-')
+
+onMounted(() => { loadSettlements(); loadTaxInvoices() })
 </script>
 
 <template>
@@ -155,6 +182,48 @@ onMounted(loadSettlements)
                   {{ settlementLabel(s.settlement_status) }}
                 </span>
               </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- NEW-15: commission tax invoices for this seller -->
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
+        <div class="px-5 pt-4 pb-2">
+          <h3 class="text-sm font-black text-gray-900">수수료 세금계산서</h3>
+          <p class="text-[11px] text-gray-500">정산 기간별 플랫폼 수수료에 대해 운영자가 발행한 세금계산서입니다.</p>
+        </div>
+        <div v-if="taxLoading" class="p-8 text-center text-xs text-gray-500 font-bold">세금계산서 내역을 불러오는 중입니다...</div>
+        <div v-else-if="taxError" class="p-8 text-center">
+          <p class="text-xs text-red-600 font-bold">{{ taxError }}</p>
+          <button @click="loadTaxInvoices" class="mt-3 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
+        </div>
+        <div v-else-if="taxInvoices.length === 0" class="p-8 text-center text-xs text-gray-400">발행된 수수료 세금계산서가 없습니다.</div>
+        <table v-else class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
+              <th class="py-3.5 px-5 font-bold">정산 기간</th>
+              <th class="py-3.5 px-5 font-bold">공급가액</th>
+              <th class="py-3.5 px-5 font-bold">부가세</th>
+              <th class="py-3.5 px-5 font-bold">합계</th>
+              <th class="py-3.5 px-5 font-bold">상태</th>
+              <th class="py-3.5 px-5 font-bold">국세청 승인번호</th>
+              <th class="py-3.5 px-5 font-bold">발행일</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="t in taxInvoices" :key="t.id" class="hover:bg-gray-50">
+              <td class="py-3.5 px-5 font-mono text-gray-600">{{ t.period_start }} ~ {{ t.period_end }}</td>
+              <td class="py-3.5 px-5 font-bold">₩{{ Number(t.supply_amount || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5">₩{{ Number(t.vat_amount || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5 font-black">₩{{ Number(t.total_amount || 0).toLocaleString() }}</td>
+              <td class="py-3.5 px-5">
+                <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-black', t.issue_status === 'ISSUED' ? 'bg-emerald-50 text-emerald-700' : t.issue_status === 'FAILED' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700']">
+                  {{ invoiceLabel(t.issue_status) }}
+                </span>
+              </td>
+              <td class="py-3.5 px-5 font-mono text-gray-600">{{ t.hometax_approval_no || '-' }}</td>
+              <td class="py-3.5 px-5 text-gray-600">{{ t.issued_at ? String(t.issued_at).slice(0, 10) : '-' }}</td>
             </tr>
           </tbody>
         </table>

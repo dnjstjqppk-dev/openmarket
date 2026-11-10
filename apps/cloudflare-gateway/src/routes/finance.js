@@ -268,8 +268,82 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
   // Operator list (permission finance.read via the admin-policy rule for /api/v1/finance/).
   if (p === '/api/v1/finance/tax-invoices' && request.method === 'GET') {
     await requireAdmin(request, env);
-    const { results } = await env.DB.prepare('SELECT * FROM tax_invoices ORDER BY created_at DESC LIMIT 100').all();
+    const fType = url.searchParams.get('invoice_type');
+    const fPartner = url.searchParams.get('partner_id');
+    const conds = [];
+    const keys = [];
+    if (fType && ['CASH_RECEIPT', 'TAX_INVOICE_PURCHASE', 'TAX_INVOICE_SALES'].includes(fType)) { conds.push('invoice_type = ?'); keys.push(fType); }
+    if (fPartner) { conds.push('partner_id = ?'); keys.push(fPartner); }
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM tax_invoices ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 100`
+    ).bind(...keys).all();
     return json(corsHeaders, { success: true, count: results.length, data: results.map(maskReceipt) });
+  }
+
+  // NEW-15: seller commission tax invoice for a settlement period. Amounts are
+  // server-computed from accrued settlements; the operator issues the invoice
+  // in Hometax and records the real approval number via /issue below.
+  if (p === '/api/v1/admin/finance/tax-invoices' && request.method === 'POST') {
+    const admin = await requireAdmin(request, env);
+    const b = await readJson(request);
+    const partnerId = str(b.partner_id, { field: 'partner_id', max: 80, required: true });
+    const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(partnerId).first();
+    if (!partner) throw notFound('입점사를 찾을 수 없습니다.');
+    const periodStart = str(b.period_start, { field: 'period_start', max: 10, required: true });
+    const periodEnd = str(b.period_end, { field: 'period_end', max: 10, required: true });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodStart > periodEnd) {
+      throw bad('INVALID_PERIOD', '정산 기간(YYYY-MM-DD)이 올바르지 않습니다.');
+    }
+    const agg = await env.DB.prepare(
+      `SELECT COALESCE(SUM(commission_amount),0) AS commission, COUNT(*) AS n FROM settlements
+       WHERE partner_id = ? AND substr(created_at,1,10) BETWEEN ? AND ? AND status != 'CANCELLED'`
+    ).bind(partnerId, periodStart, periodEnd).first();
+    const total = Number(agg.commission) || 0;
+    if (total <= 0) throw conflict('NO_COMMISSION', '해당 기간에 발생한 수수료가 없어 세금계산서를 만들 수 없습니다.');
+    const supply = Math.round(total / 1.1); // assumes the commission is VAT-inclusive, like the cash-receipt path
+    const operator = await getActiveOperator(env);
+    const invId = newId('txi');
+    try {
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO tax_invoices (id, invoice_type, partner_id, buyer_identifier, identifier_type, supply_amount, vat_amount, total_amount,
+             issue_status, item_title, issuer_entity_id, period_start, period_end)
+           VALUES (?, 'TAX_INVOICE_SALES', ?, ?, 'BUSINESS_REG_NO', ?, ?, ?, 'REQUESTED', ?, ?, ?, ?)`
+        ).bind(invId, partnerId, partner.business_reg_number, supply, total - supply, total,
+          `${periodStart}~${periodEnd} 플랫폼 수수료`, operator?.id || null, periodStart, periodEnd),
+        auditStatement(env, admin, { action: 'TAX_INVOICE_CREATE', targetType: 'tax_invoice', targetId: invId, after: { partner_id: partnerId, period_start: periodStart, period_end: periodEnd, total_amount: total }, request })
+      ]);
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw conflict('DUPLICATE_PERIOD', '해당 기간의 세금계산서가 이미 존재합니다.');
+      throw e;
+    }
+    return json(corsHeaders, {
+      success: true, message: '수수료 세금계산서 초안이 생성되었습니다. 홈택스 발행 후 승인번호를 등록해 주세요.',
+      data: { id: invId, partner_id: partnerId, period_start: periodStart, period_end: periodEnd, supply_amount: supply, vat_amount: total - supply, total_amount: total, issue_status: 'REQUESTED', settlements_count: Number(agg.n) || 0 }
+    }, 201);
+  }
+
+  const tiIssueM = p.match(/^\/api\/v1\/admin\/finance\/tax-invoices\/([^/]+)\/(issue|fail)$/);
+  if (tiIssueM && request.method === 'POST') {
+    const admin = await requireAdmin(request, env);
+    const b = await readJson(request);
+    const row = await env.DB.prepare("SELECT * FROM tax_invoices WHERE id = ? AND invoice_type = 'TAX_INVOICE_SALES'").bind(tiIssueM[1]).first();
+    if (!row) throw notFound('수수료 세금계산서를 찾을 수 없습니다.');
+    if (row.issue_status !== 'REQUESTED') throw conflict('NOT_REQUESTED', `발행 대기 상태에서만 처리할 수 있습니다. (현재: ${row.issue_status})`);
+    const issuing = tiIssueM[2] === 'issue';
+    let upd;
+    if (issuing) {
+      const approval = str(b.hometax_approval_no, { field: '국세청 승인번호', max: 40, required: true });
+      if (!/^[0-9A-Za-z-]{6,40}$/.test(approval)) throw bad('INVALID_APPROVAL_NO', '승인번호 형식이 올바르지 않습니다.');
+      upd = env.DB.prepare("UPDATE tax_invoices SET issue_status = 'ISSUED', hometax_approval_no = ?, issued_at = CURRENT_TIMESTAMP, memo = ? WHERE id = ? AND issue_status = 'REQUESTED'")
+        .bind(approval, str(b.memo, { max: 300 }) || null, row.id);
+    } else {
+      upd = env.DB.prepare("UPDATE tax_invoices SET issue_status = 'FAILED', memo = ? WHERE id = ? AND issue_status = 'REQUESTED'")
+        .bind(str(b.reason, { field: '사유', max: 300, required: true }), row.id);
+    }
+    const r = await env.DB.batch([upd, auditStatement(env, admin, { action: issuing ? 'TAX_INVOICE_ISSUE' : 'TAX_INVOICE_FAIL', targetType: 'tax_invoice', targetId: row.id, before: { issue_status: row.issue_status }, request })]);
+    if (r[0].meta.changes !== 1) throw conflict('NOT_REQUESTED', '다른 운영자가 먼저 처리했습니다.');
+    return json(corsHeaders, { success: true, id: row.id, issue_status: issuing ? 'ISSUED' : 'FAILED' });
   }
 
   // Operator records the issuance done in the PG console / 홈택스, with the real approval number.

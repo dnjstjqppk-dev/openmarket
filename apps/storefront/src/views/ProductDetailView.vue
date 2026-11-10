@@ -198,6 +198,17 @@ const tabs = computed(() => [
   { key: 'qna', label: '문의', count: qnaCount.value },
   { key: 'shipping', label: '배송·교환·반품' }
 ])
+// NEW-11: product notice table (empty when the seller has not entered it).
+const noticeEntries = computed<[string, string][]>(() => {
+  const raw = product.value?.notice_info_json
+  if (!raw) return []
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return []
+    return Object.entries(obj).map(([k, v]): [string, string] => [String(k), String(v ?? '')]).filter(([k, v]) => k !== '' && v !== '')
+  } catch { return [] }
+})
+const kcCertified = computed(() => Number(product.value?.kc_certified) === 1)
 const crumbs = computed(() => [
   { label: '홈', to: '/' },
   ...(product.value?.category_slug ? [{ label: product.value.category_name, to: `/category/${product.value.category_slug}` }] : []),
@@ -338,6 +349,7 @@ watch(() => route.params.slug, load, { immediate: true })
             <dt>판매자</dt><dd class="text-ink">{{ sellerName || '판매자 정보 없음' }}</dd>
             <template v-if="product.business_reg_number"><dt>사업자등록번호</dt><dd class="text-ink">{{ product.business_reg_number }}</dd></template>
             <template v-if="product.country_origin"><dt>원산지</dt><dd class="text-ink">{{ product.country_origin }}</dd></template>
+            <template v-if="kcCertified"><dt>KC 인증</dt><dd class="text-ink">인증 대상 상품{{ product.kc_cert_number ? ` (${product.kc_cert_number})` : '' }}</dd></template>
           </dl>
         </div>
       </div>
@@ -347,6 +359,19 @@ watch(() => route.params.slug, load, { immediate: true })
         <OmTabs v-model="tab" :tabs="tabs" full />
         <div class="py-6">
           <div v-if="tab === 'detail'">
+            <!-- NEW-11: product notice table; '상세페이지 참조' when the seller has not entered it. -->
+            <section class="mx-auto mb-8 max-w-3xl" aria-labelledby="notice-info-heading">
+              <h3 id="notice-info-heading" class="mb-2 text-md font-bold text-ink">상품정보제공고시</h3>
+              <table v-if="noticeEntries.length" class="w-full border-collapse text-sm">
+                <tbody>
+                  <tr v-for="[k, v] in noticeEntries" :key="k" class="border-t border-line-divider">
+                    <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">{{ k }}</th>
+                    <td class="px-3 py-2 text-ink">{{ v }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-else class="text-sm text-ink-muted">상세페이지 참조</p>
+            </section>
             <!-- eslint-disable-next-line vue/no-v-html -- seller HTML, active content stripped above -->
             <div v-if="descriptionHtml.trim()" class="om-prose mx-auto max-w-3xl text-md leading-relaxed text-ink [&_img]:mx-auto [&_img]:h-auto [&_img]:max-w-full" v-html="descriptionHtml" />
             <OmEmptyState v-else compact title="판매자가 등록한 상세 설명이 없습니다" />

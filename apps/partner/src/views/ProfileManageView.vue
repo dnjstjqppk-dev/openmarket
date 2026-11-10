@@ -6,6 +6,10 @@ interface PartnerProfile {
   id: string;
   business_name: string;
   business_reg_number: string;
+  representative_name: string;
+  mail_order_reg_number: string;
+  business_address: string;
+  cs_email: string;
   commission_rate: number;
   bank_code: string;
   bank_account_number: string;
@@ -23,6 +27,10 @@ const profile = ref<PartnerProfile>({
   id: '',
   business_name: '',
   business_reg_number: '',
+  representative_name: '',
+  mail_order_reg_number: '',
+  business_address: '',
+  cs_email: '',
   commission_rate: 10,
   bank_code: '004',
   bank_account_number: '',
@@ -75,6 +83,7 @@ function settingsPayload() {
   const p = profile.value;
   const body: Record<string, unknown> = {
     settlement_cycle: p.settlement_cycle, return_shipping_address: p.return_shipping_address, customer_service_phone: p.customer_service_phone,
+    business_address: p.business_address, cs_email: p.cs_email,
     base_shipping_fee: p.base_shipping_fee, free_shipping_threshold: p.free_shipping_threshold, return_shipping_fee: p.return_shipping_fee
   };
   const b = loadedBank.value;
@@ -156,10 +165,44 @@ onMounted(loadProfile);
             />
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">고객센터 전화번호</label>
+            <label class="block font-bold text-slate-700 mb-1">대표자명</label>
+            <input
+              v-model="profile.representative_name"
+              disabled
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 text-slate-400"
+            />
+            <p class="mt-1 text-[11px] text-slate-400">대표자명 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.</p>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">통신판매업 신고번호</label>
+            <input
+              v-model="profile.mail_order_reg_number"
+              disabled
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 text-slate-400 font-mono"
+            />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block font-bold text-slate-700 mb-1">사업장 주소 (스토어 공개)</label>
+            <input
+              v-model="profile.business_address"
+              placeholder="예: 서울특별시 강남구 사업로 2"
+              class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">고객센터 전화번호 (스토어 공개)</label>
             <input
               v-model="profile.customer_service_phone"
               placeholder="예: 02-1588-0000"
+              class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">고객센터 이메일 (스토어 공개)</label>
+            <input
+              v-model="profile.cs_email"
+              type="email"
+              placeholder="예: cs@example.com"
               class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>

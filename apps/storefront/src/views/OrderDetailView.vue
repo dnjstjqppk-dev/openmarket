@@ -244,6 +244,9 @@ async function handleLateDeliveryClaim() {
 }
 
 const resuming = ref(false)
+// NEW-07: resume with the buyer's chosen Toss v1 method (was hardcoded to 카드).
+const resumeMethod = ref('카드')
+const RESUME_METHODS = ['카드', '계좌이체', '가상계좌', '토스페이']
 function loadTossSdk(): Promise<any> {
   return new Promise((resolve, reject) => {
     if ((window as any).TossPayments) return resolve((window as any).TossPayments)
@@ -268,12 +271,14 @@ async function resumePayment() {
       await router.push({ path: '/payments/success', query: { orderId: order.value.order_no, paymentKey: key, amount: String(order.value.total_pay_amount), simulator: '1' } })
       return
     }
-    if (cfg?.mode === 'TOSS' && cfg?.client_key) {
+    // NEW-08: web uses the v1 API-integration key, never the widget key.
+    const apiKey = cfg?.api_client_key || cfg?.client_key
+    if (cfg?.mode === 'TOSS' && apiKey) {
       const TossPayments = await loadTossSdk()
-      const toss = TossPayments(cfg.client_key)
+      const toss = TossPayments(apiKey)
       const items = order.value.items || []
       const first = items[0]?.product_title || items[0]?.title || '주문 상품'
-      await toss.requestPayment('카드', {
+      await toss.requestPayment(resumeMethod.value, {
         amount: order.value.total_pay_amount,
         orderId: order.value.order_no,
         orderName: items.length > 1 ? `${first} 외 ${items.length - 1}건` : first,
@@ -359,6 +364,7 @@ onMounted(loadOrderDetail)
         </div>
         <div class="text-left sm:text-right text-xs text-gray-600 space-y-0.5">
           <div>결제수단 결제액 <strong class="text-lg text-gray-900">{{ won(order.total_pay_amount) }}</strong></div>
+          <div v-if="order.payment_method">결제 수단 {{ order.payment_method }}</div>
           <div v-if="order.credit_used_amount">적립금 사용 {{ won(order.credit_used_amount) }}</div>
           <div v-if="order.refunded_pg_amount || order.refunded_credit_amount" class="text-[#E60023] font-bold">환불 {{ won(order.refunded_pg_amount) }} · 적립금 {{ won(order.refunded_credit_amount) }}</div>
           <div v-if="order.payment_status === 'READY'" class="text-amber-700 font-bold">결제 기한 {{ order.payment_expires_at }} (UTC)</div>
@@ -410,6 +416,11 @@ onMounted(loadOrderDetail)
         <button v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)" @click="openCashReceiptModal" class="px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
           <i class="fa-solid fa-receipt mr-1"></i>현금영수증 신청/조회
         </button>
+        <span v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status) && order.payment_method && !['가상계좌', '계좌이체', 'TRANSFER', 'VIRTUAL_ACCOUNT'].includes(String(order.payment_method).toUpperCase())" class="text-[11px] text-slate-500 self-center">카드 결제는 카드 매출전표가 증빙이며 현금영수증 대상이 아닙니다.</span>
+        <label v-if="order.payment_status === 'READY'" class="inline-flex items-center gap-1 text-xs text-slate-600">결제 수단
+          <select v-model="resumeMethod" :disabled="busy || resuming" class="h-8 px-2 rounded-full border border-gray-300 text-xs font-bold" aria-label="결제 수단 선택">
+            <option v-for="m in RESUME_METHODS" :key="m" :value="m">{{ m }}</option>
+          </select></label>
         <button v-if="order.payment_status === 'READY'" :disabled="busy || resuming" @click="resumePayment" data-testid="resume-payment"
           class="px-4 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black">{{ resuming ? '결제창 여는 중...' : '결제 계속하기' }}</button>
         <span v-if="order.payment_status === 'READY'" class="text-[11px] text-amber-700 self-center">결제가 완료되지 않은 주문입니다. 결제 기한이 지나면 자동 취소됩니다.</span>

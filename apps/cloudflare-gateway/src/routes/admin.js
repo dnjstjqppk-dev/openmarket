@@ -498,6 +498,40 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
+  // 10b. NEW-09: customer 1:1 inquiries - list + reply (previously no operator path existed).
+  if (url.pathname === '/api/v1/admin/inquiries' && request.method === 'GET') {
+    const inqStatus = (url.searchParams.get('status') || '').toUpperCase();
+    const inqPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const inqPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
+    const inqWhere = ['OPEN', 'ANSWERED', 'CLOSED'].includes(inqStatus) ? 'WHERE i.status = ?' : '';
+    const inqKeys = inqWhere ? [inqStatus] : [];
+    const inqTotal = await env.DB.prepare(`SELECT COUNT(*) AS c FROM support_inquiries i ${inqWhere}`).bind(...inqKeys).first('c') || 0;
+    const { results } = await env.DB.prepare(
+      `SELECT i.*, u.email AS customer_email, u.full_name AS customer_name
+       FROM support_inquiries i LEFT JOIN users u ON u.id = i.user_id
+       ${inqWhere} ORDER BY i.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...inqKeys, inqPerPage, (inqPage - 1) * inqPerPage).all();
+    await logPiiView(env, admin, 'admin.inquiries', 'inquiry', results.map((r) => r.id), 'customer_email', request);
+    return json(corsHeaders, { success: true, count: results.length, pagination: { page: inqPage, per_page: inqPerPage, total: Number(inqTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(inqTotal) || 0) / inqPerPage)) }, data: results });
+  }
+
+  const inqReplyM = url.pathname.match(/^\/api\/v1\/admin\/inquiries\/([^/]+)\/reply$/);
+  if (inqReplyM && request.method === 'POST') {
+    if (!hasPermission(admin.adminRole, 'orders.manage')) throw forbidden('문의 답변 권한이 없습니다. (필요 권한: orders.manage)');
+    const inq = await env.DB.prepare('SELECT * FROM support_inquiries WHERE id = ?').bind(inqReplyM[1]).first();
+    if (!inq) throw notFound('문의를 찾을 수 없습니다.');
+    if (inq.status === 'CLOSED') throw conflict('INQUIRY_CLOSED', '종결된 문의에는 답변할 수 없습니다.');
+    const inqBody = await readJson(request);
+    const answer = str(inqBody.answer, { field: '답변', max: 10000, required: true });
+    const close = inqBody.close === true;
+    const nextStatus = close ? 'CLOSED' : 'ANSWERED';
+    await env.DB.batch([
+      env.DB.prepare('UPDATE support_inquiries SET answer = ?, status = ? WHERE id = ?').bind(answer, nextStatus, inq.id),
+      audit('INQUIRY_REPLY', 'inquiry', inq.id, { status: inq.status }, { status: nextStatus })
+    ]);
+    return json(corsHeaders, { success: true, inquiry_id: inq.id, status: nextStatus });
+  }
+
   // 11. Admin Coupon Management
   if (url.pathname === '/api/v1/admin/coupons' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all();

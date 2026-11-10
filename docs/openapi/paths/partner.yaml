@@ -474,6 +474,32 @@ paths:
                   data:
                     type: object
 
+  /api/v1/partner/tax-invoices:
+    get:
+      summary: NEW-15. The seller's own commission tax invoices (newest first)
+      tags: [Partner]
+      responses:
+        '200':
+          description: Commission tax invoice rows with issue status and approval numbers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not a seller session
+
   /api/v1/partner/orders:
     get:
       summary: My seller sub-orders with items (newest first, max 500)

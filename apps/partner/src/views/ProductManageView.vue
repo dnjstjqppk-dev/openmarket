@@ -41,10 +41,32 @@ const newProd = ref({
   package_height_cm: null as number | null,
   package_weight_kg: null as number | null,
   thumbnail_url: '',
-  description_html: defaultDescriptionTemplate
+  description_html: defaultDescriptionTemplate,
+  // NEW-11/12: notice rows (key/value) + KC certification. Nothing pre-filled.
+  notice_rows: [{ key: '', value: '' }] as { key: string; value: string }[],
+  kc_certified: false,
+  kc_cert_number: ''
 })
 
 const editingProd = ref<any>(null)
+
+// NEW-11: key/value rows -> notice object (null when nothing entered).
+const noticeRowsToJson = (rows: { key: string; value: string }[]) => {
+  const obj: Record<string, string> = {}
+  for (const r of rows || []) {
+    const k = (r.key || '').trim()
+    const v = (r.value || '').trim()
+    if (k && v) obj[k] = v
+  }
+  return Object.keys(obj).length ? obj : null
+}
+const noticeJsonToRows = (raw: any) => {
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const rows = Object.entries(obj || {}).map(([key, value]) => ({ key: String(key), value: String(value ?? '') }))
+    return rows.length ? rows : [{ key: '', value: '' }]
+  } catch { return [{ key: '', value: '' }] }
+}
 
 const categories = ref<any[]>([])
 const loadCategories = async () => {
@@ -83,7 +105,9 @@ const handleFileUpload = async (event: Event, isEdit = false) => {
       } else {
         newProd.value.thumbnail_url = json.data.public_url
       }
-      toast.value = '✓ 썸네일 이미지가 R2 클라우드 스토리지에 성공적으로 업로드되었습니다.'
+      // NEW-06: report the real backend (R2 only when the API used it).
+      const backend = json.data.storage_backend === 'R2_BUCKET' ? 'R2 클라우드 스토리지' : '내장 스토리지'
+      toast.value = `✓ 썸네일 이미지가 ${backend}에 업로드되었습니다.`
       setTimeout(() => { toast.value = '' }, 3000)
     }
   } catch (e) {
@@ -196,14 +220,21 @@ const createNewProduct = async () => {
     alert('카테고리를 선택해 주세요.')
     return
   }
+  if (newProd.value.kc_certified && !newProd.value.kc_cert_number.trim()) {
+    alert('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
+    return
+  }
   try {
+    const { notice_rows, ...rest } = newProd.value
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products`, {
       method: 'POST',
       headers: getPartnerHeaders(),
       body: JSON.stringify({
-        ...newProd.value,
+        ...rest,
         price: newProd.value.sale_price,
-        description_html: newProd.value.description_html || defaultDescriptionTemplate
+        description_html: newProd.value.description_html || defaultDescriptionTemplate,
+        notice_info_json: noticeRowsToJson(notice_rows),
+        kc_cert_number: newProd.value.kc_cert_number.trim() || null
       })
     })
     const json = await res.json()
@@ -238,18 +269,30 @@ const openEditModal = (p: any) => {
     package_height_cm: p.package_height_cm ?? null,
     package_weight_kg: p.package_weight_kg ?? null,
     thumbnail_url: p.thumbnail_url,
-    description_html: p.description_html || defaultDescriptionTemplate
+    description_html: p.description_html || defaultDescriptionTemplate,
+    notice_rows: noticeJsonToRows(p.notice_info_json),
+    kc_certified: Number(p.kc_certified) === 1,
+    kc_cert_number: p.kc_cert_number || ''
   }
   showEditModal.value = true
 }
 
 const updateExistingProduct = async () => {
   if (!editingProd.value || !editingProd.value.id) return
+  if (editingProd.value.kc_certified && !(editingProd.value.kc_cert_number || '').trim()) {
+    alert('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
+    return
+  }
   try {
+    const { notice_rows, ...rest } = editingProd.value
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products/${editingProd.value.id}`, {
       method: 'PUT',
       headers: getPartnerHeaders(),
-      body: JSON.stringify(editingProd.value)
+      body: JSON.stringify({
+        ...rest,
+        notice_info_json: noticeRowsToJson(notice_rows),
+        kc_cert_number: (editingProd.value.kc_cert_number || '').trim() || null
+      })
     })
     const json = await res.json()
     if (json.success) {
@@ -329,7 +372,7 @@ onMounted(() => { loadProducts(); loadCategories() })
             보완 권장 (이미지/상세설명 40자 이상 입력 시 랭킹 가산)
           </span>
         </div>
-        <span class="text-[11px] text-gray-500 font-medium">HS코드 + 대표이미지 + 고시정보 입력 완료 시 상품 상세 신뢰도 및 품질점수 가점</span>
+        <span class="text-[11px] text-gray-500 font-medium">HS코드 + 대표이미지 입력 완료 시 상품 상세 신뢰도 및 품질점수 가점 (고시정보·KC인증은 법적 표시 항목으로 별도 심사)</span>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -408,9 +451,26 @@ onMounted(() => { loadProducts(); loadCategories() })
         </div>
       </div>
 
+      <!-- NEW-11/12: 상품정보제공고시 + KC 인증 (법적 표시, 심사 대상) -->
+      <div class="p-4 rounded-xl bg-amber-50/60 border border-amber-200 text-xs space-y-3">
+        <div class="font-black text-gray-900 text-sm">상품정보제공고시 <span class="font-normal text-gray-500 text-[11px]">미입력 시 스토어프론트에 '상세페이지 참조'로 표시됩니다.</span></div>
+        <div v-for="(row, i) in newProd.notice_rows" :key="i" class="flex gap-2">
+          <input v-model="row.key" placeholder="항목명 (예: 제조국)" maxlength="200" class="w-40 h-9 px-3 rounded-lg border border-gray-300" />
+          <input v-model="row.value" placeholder="내용 (예: 대한민국)" maxlength="200" class="flex-1 h-9 px-3 rounded-lg border border-gray-300" />
+          <button type="button" @click="newProd.notice_rows.splice(i, 1)" :disabled="newProd.notice_rows.length <= 1" class="px-2.5 rounded-lg border border-gray-300 font-bold disabled:opacity-40">삭제</button>
+        </div>
+        <button type="button" @click="newProd.notice_rows.push({ key: '', value: '' })" class="px-3 py-1.5 rounded-lg border border-dashed border-gray-400 font-bold text-gray-700">+ 고시 항목 추가</button>
+        <div class="pt-2 border-t border-amber-200 space-y-2">
+          <label class="flex items-center gap-2 font-bold text-gray-800">
+            <input v-model="newProd.kc_certified" type="checkbox" class="h-4 w-4" /> KC 인증 대상 상품
+          </label>
+          <input v-if="newProd.kc_certified" v-model="newProd.kc_cert_number" placeholder="KC 인증번호 (필수)" maxlength="60" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+      </div>
+
       <!-- 썸네일 이미지 업로드 -->
       <div class="p-4 rounded-xl bg-orange-50/60 border border-orange-200 text-xs space-y-2">
-        <label class="block font-bold text-gray-800">대표 썸네일 이미지 (Cloudflare R2 스토리지 업로드)</label>
+        <label class="block font-bold text-gray-800">대표 썸네일 이미지 (이미지 스토리지 업로드)</label>
         <div class="flex items-center gap-4">
           <img v-if="newProd.thumbnail_url" :src="newProd.thumbnail_url" class="w-16 h-16 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
           <div v-else class="w-16 h-16 rounded-xl bg-white border border-dashed border-gray-300 shrink-0 flex items-center justify-center text-gray-300 text-xl">🖼</div>
@@ -418,7 +478,7 @@ onMounted(() => { loadProducts(); loadCategories() })
             <input type="file" accept="image/*" @change="(e) => handleFileUpload(e, false)" class="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#FF5000] file:text-white file:cursor-pointer text-gray-600" />
             <div class="text-[11px] text-gray-500 font-mono truncate max-w-md">URL: {{ newProd.thumbnail_url }}</div>
           </div>
-          <span v-if="uploadingImage" class="text-xs font-bold text-[#FF5000] animate-pulse">R2 업로드 중...</span>
+          <span v-if="uploadingImage" class="text-xs font-bold text-[#FF5000] animate-pulse">업로드 중...</span>
         </div>
       </div>
 
@@ -451,7 +511,7 @@ onMounted(() => { loadProducts(); loadCategories() })
           class="w-full p-3 rounded-lg border border-gray-300 bg-white font-mono text-xs focus:border-[#FF5000] focus:outline-none"
         ></textarea>
         <span v-if="uploadingDetailImage" class="text-xs font-bold text-indigo-600 animate-pulse block">
-          고화질 상세 이미지 R2 업로드 및 본문 자동 삽입 중...
+          고화질 상세 이미지 업로드 및 본문 자동 삽입 중...
         </span>
       </div>
 
@@ -502,6 +562,23 @@ onMounted(() => { loadProducts(); loadCategories() })
         </div>
       </div>
 
+      <!-- NEW-11/12: 상품정보제공고시 + KC 인증 (수정 시 재심사) -->
+      <div class="p-4 rounded-xl bg-amber-50/60 border border-amber-200 text-xs space-y-3">
+        <div class="font-black text-gray-900 text-sm">상품정보제공고시 <span class="font-normal text-gray-500 text-[11px]">미입력 시 스토어프론트에 '상세페이지 참조'로 표시됩니다.</span></div>
+        <div v-for="(row, i) in editingProd.notice_rows" :key="i" class="flex gap-2">
+          <input v-model="row.key" placeholder="항목명 (예: 제조국)" maxlength="200" class="w-40 h-9 px-3 rounded-lg border border-gray-300" />
+          <input v-model="row.value" placeholder="내용 (예: 대한민국)" maxlength="200" class="flex-1 h-9 px-3 rounded-lg border border-gray-300" />
+          <button type="button" @click="editingProd.notice_rows.splice(i, 1)" :disabled="editingProd.notice_rows.length <= 1" class="px-2.5 rounded-lg border border-gray-300 font-bold disabled:opacity-40">삭제</button>
+        </div>
+        <button type="button" @click="editingProd.notice_rows.push({ key: '', value: '' })" class="px-3 py-1.5 rounded-lg border border-dashed border-gray-400 font-bold text-gray-700">+ 고시 항목 추가</button>
+        <div class="pt-2 border-t border-amber-200 space-y-2">
+          <label class="flex items-center gap-2 font-bold text-gray-800">
+            <input v-model="editingProd.kc_certified" type="checkbox" class="h-4 w-4" /> KC 인증 대상 상품
+          </label>
+          <input v-if="editingProd.kc_certified" v-model="editingProd.kc_cert_number" placeholder="KC 인증번호 (필수)" maxlength="60" class="w-full h-9 px-3 rounded-lg border border-gray-300" />
+        </div>
+      </div>
+
       <!-- 썸네일 수정 -->
       <div class="p-3.5 rounded-xl bg-gray-50 border border-gray-200 text-xs space-y-2">
         <label class="block font-bold text-gray-800">대표 썸네일 이미지</label>
@@ -543,7 +620,7 @@ onMounted(() => { loadProducts(); loadCategories() })
           class="w-full p-3 rounded-lg border border-indigo-300 bg-white font-mono text-xs focus:border-indigo-600 focus:outline-none"
         ></textarea>
         <span v-if="uploadingDetailImage" class="text-xs font-bold text-indigo-600 animate-pulse block">
-          고화질 상세 이미지 R2 업로드 및 본문 자동 삽입 중...
+          고화질 상세 이미지 업로드 및 본문 자동 삽입 중...
         </span>
       </div>
 
@@ -586,12 +663,12 @@ onMounted(() => { loadProducts(); loadCategories() })
             </td>
             <td class="py-3 px-5">
               <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono font-bold text-[10px] mr-1">
-                {{ p.country_origin || 'KR' }}
+                {{ p.country_origin || '미입력' }}
               </span>
-              <span class="font-mono text-gray-600 text-[11px]">HS:{{ p.hs_code || '6109.10' }}</span>
+              <span class="font-mono text-gray-600 text-[11px]">HS:{{ p.hs_code || '미입력' }}</span>
             </td>
             <td class="py-3 px-5">
-              <div class="font-semibold text-gray-700 text-[11px]">{{ p.warehouse_location || 'INCHEON_FBO' }}</div>
+              <div class="font-semibold text-gray-700 text-[11px]">{{ p.warehouse_location || '미입력' }}</div>
               <div class="text-[10px] text-gray-400">Vol: {{ p.volumetric_weight_kg ?? '-' }}kg</div>
             </td>
             <td class="py-3 px-5 text-center">

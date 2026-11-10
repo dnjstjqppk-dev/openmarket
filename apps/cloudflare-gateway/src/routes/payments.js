@@ -19,6 +19,10 @@ export async function handlePaymentRoutes(request, url, env, corsHeaders) {
       provider: mode === 'TOSS' ? 'TOSS_PAYMENTS' : null,
       mode,
       client_key: mode === 'TOSS' ? (env.TOSS_CLIENT_KEY || null) : null,
+      // NEW-08: web (v1 API integration) and mobile (payment widget) are issued
+      // DIFFERENT Toss client keys. Each client must use its own key.
+      api_client_key: mode === 'TOSS' ? (env.TOSS_CLIENT_KEY || null) : null,
+      widget_client_key: mode === 'TOSS' ? (env.TOSS_WIDGET_CLIENT_KEY || null) : null,
       is_test_key: mode === 'TOSS' ? String(env.TOSS_CLIENT_KEY || '').startsWith('test_') : null,
       message: mode === 'DISABLED' ? 'PG 계약/키 미설정으로 결제가 비활성화되어 있습니다.' : undefined
     });

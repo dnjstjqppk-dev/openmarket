@@ -30,7 +30,15 @@ paths:
                   client_key:
                     type: string
                     nullable: true
-                    description: Toss client key when mode is TOSS, else null.
+                    description: Legacy alias of api_client_key (kept for old clients).
+                  api_client_key:
+                    type: string
+                    nullable: true
+                    description: NEW-08. Toss v1 API-integration key for the web checkout (TOSS_CLIENT_KEY). Null unless mode is TOSS.
+                  widget_client_key:
+                    type: string
+                    nullable: true
+                    description: NEW-08. Toss payment-widget key for mobile (TOSS_WIDGET_CLIENT_KEY). Null unless mode is TOSS.
                   is_test_key:
                     type: boolean
                     nullable: true

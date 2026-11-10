@@ -30,6 +30,9 @@ const resumeAmount = ref(0)
 const resumeName = ref('')
 const resuming = ref(false)
 const resumeError = ref('')
+// NEW-07: retry with the buyer's chosen Toss v1 method (was hardcoded to 카드).
+const retryMethod = ref('카드')
+const RETRY_METHODS = ['카드', '계좌이체', '가상계좌', '토스페이']
 
 async function loadResumeOrder() {
   if (!orderNo) return
@@ -68,10 +71,12 @@ async function retryPayment() {
       await router.replace({ path: '/payments/success', query: { orderId: orderNo, paymentKey: key, amount: String(resumeAmount.value), simulator: '1' } })
       return
     }
-    if (cfg?.mode === 'TOSS' && cfg?.client_key) {
+    // NEW-08: web uses the v1 API-integration key, never the widget key.
+    const apiKey = cfg?.api_client_key || cfg?.client_key
+    if (cfg?.mode === 'TOSS' && apiKey) {
       const TossPayments = await loadTossSdk()
-      const toss = TossPayments(cfg.client_key)
-      await toss.requestPayment('카드', {
+      const toss = TossPayments(apiKey)
+      await toss.requestPayment(retryMethod.value, {
         amount: resumeAmount.value,
         orderId: orderNo,
         orderName: resumeName.value,
@@ -160,7 +165,14 @@ onBeforeUnmount(() => { if (redirect) clearTimeout(redirect) })
         <h1 class="mt-4 text-xl font-bold text-ink">결제하지 못했습니다</h1>
         <p class="mt-2 text-sm text-ink-muted">{{ message }}</p>
         <p class="mt-1 text-xs text-ink-subtle">결제 대기 주문은 30분 후 자동 취소되며 재고·쿠폰·적립금이 복원됩니다. 장바구니 상품은 그대로 남아 있습니다.</p>
-        <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <div v-if="resumeOrderId" class="mt-6 flex flex-wrap items-center justify-center gap-2">
+          <label class="text-xs text-ink-muted">결제 수단
+            <select v-model="retryMethod" :disabled="resuming" class="ml-1 h-9 rounded-md border border-line bg-surface px-2 text-sm text-ink" aria-label="결제 수단 선택">
+              <option v-for="m in RETRY_METHODS" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="mt-3 flex flex-wrap justify-center gap-2">
           <OmButton v-if="resumeOrderId" variant="primary" :loading="resuming" data-testid="retry-payment" @click="retryPayment">결제 다시 시도</OmButton>
           <OmButton v-if="resumeOrderId" variant="outline" :to="`/orders/${resumeOrderId}`">주문 상세에서 계속하기</OmButton>
           <OmButton v-else variant="outline" to="/orders">주문 내역</OmButton>

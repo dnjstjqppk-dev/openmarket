@@ -67,12 +67,24 @@ async function health(env, corsHeaders) {
   let db = 'DISCONNECTED';
   let products = 0;
   let operatorConfigured = false;
+  // NEW-16: applied schema level (null on databases predating the ledger).
+  let schemaVersion = null;
+  let migrationsApplied = null;
   try {
     products = await env.DB.prepare("SELECT COUNT(*) AS c FROM products WHERE status = 'ACTIVE'").first('c');
     operatorConfigured = Boolean(await env.DB.prepare("SELECT id FROM business_entities WHERE status = 'ACTIVE' AND role = 'PLATFORM_OPERATOR'").first());
     db = 'CONNECTED_D1';
   } catch {
     db = 'ERROR';
+  }
+  if (db === 'CONNECTED_D1') {
+    try {
+      schemaVersion = await env.DB.prepare('SELECT MAX(version) AS v FROM schema_migrations').first('v');
+      migrationsApplied = Number(await env.DB.prepare('SELECT COUNT(*) AS c FROM schema_migrations').first('c')) || 0;
+    } catch {
+      schemaVersion = null;
+      migrationsApplied = null;
+    }
   }
   let payment = 'DISABLED';
   const pm = String(env.PAYMENT_MODE || '').toLowerCase();
@@ -85,6 +97,8 @@ async function health(env, corsHeaders) {
     environment: env.ENVIRONMENT || 'unset',
     databaseStatus: db,
     activeProductsInD1: products,
+    schemaVersion,
+    migrationsApplied,
     readiness: {
       auth_configured: typeof env.JWT_SECRET === 'string' && env.JWT_SECRET.length >= 32,
       operator_entity_active: operatorConfigured,

@@ -52,6 +52,7 @@ const EXPECTED = [
   ['/api/v1/partner/orders/{id}/shipment', 'PUT', 401],
   ['/api/v1/partner/orders/bulk-shipment', 'POST', 401],
   ['/api/v1/partner/settlements', 'GET', 401],
+  ['/api/v1/partner/tax-invoices', 'GET', 401],
   ['/api/v1/storage/upload', 'POST', 401],
   ['/api/v1/admin/partners/{id}/verify', 'PUT', 401],
   ['/api/v1/admin/users/{id}/reset-password', 'POST', 401],
@@ -143,6 +144,8 @@ const EXPECTED = [
   ['/api/v1/admin/users', 'GET', 401],
   ['/api/v1/admin/privacy/access-log', 'GET', 401],
   ['/api/v1/admin/audit-log', 'GET', 401],
+  ['/api/v1/admin/inquiries', 'GET', 401],
+  ['/api/v1/admin/inquiries/{id}/reply', 'POST', 401],
   ['/api/v1/admin/partners', 'GET', 401],
   ['/api/v1/admin/products', 'GET', 401],
   ['/api/v1/admin/products/{id}/status', 'PUT', 401],
@@ -173,6 +176,9 @@ const EXPECTED = [
   ['/api/v1/finance/tax-invoices', 'GET', 401],
   ['/api/v1/admin/finance/cash-receipts/{id}/issue', 'POST', 401],
   ['/api/v1/admin/finance/cash-receipts/{id}/fail', 'POST', 401],
+  ['/api/v1/admin/finance/tax-invoices', 'POST', 401],
+  ['/api/v1/admin/finance/tax-invoices/{id}/issue', 'POST', 401],
+  ['/api/v1/admin/finance/tax-invoices/{id}/fail', 'POST', 401],
   ['/api/v1/admin/reconciliation', 'GET', 401],
   ['/api/v1/admin/finance/reconciliation-runs', 'GET', 401],
   ['/api/v1/admin/finance/reserve-holds', 'GET', 401],
@@ -398,6 +404,9 @@ await t.test('3. documented response shapes match the implementation', async () 
   assert.equal(payCfg.status, 200);
   assert.equal(payCfg.json.mode, 'SANDBOX_SIMULATOR');
   assert.equal(payCfg.json.client_key, null);
+  // NEW-08: split keys for web (v1 API) vs mobile (widget); null outside TOSS mode.
+  assert.equal(payCfg.json.api_client_key, null);
+  assert.equal(payCfg.json.widget_client_key, null);
   // Auth rejects empty credentials with a client error, not a crash.
   const emptyLogin = await g.call('/api/v1/auth/login', { method: 'POST', body: {} });
   assert.equal(emptyLogin.status, 400);

@@ -171,6 +171,8 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1bulk-shipment'
   /api/v1/partner/settlements:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1settlements'
+  /api/v1/partner/tax-invoices:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1tax-invoices'
   /api/v1/partner/orders:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders'
   /api/v1/partner/metrics:
@@ -219,6 +221,10 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1privacy~1access-log'
   /api/v1/admin/audit-log:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1audit-log'
+  /api/v1/admin/inquiries:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries'
+  /api/v1/admin/inquiries/{id}/reply:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries~1{id}~1reply'
   /api/v1/admin/partners:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners'
   /api/v1/admin/products:
@@ -298,6 +304,12 @@ paths:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1issue'
   /api/v1/admin/finance/cash-receipts/{id}/fail:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1fail'
+  /api/v1/admin/finance/tax-invoices:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1tax-invoices'
+  /api/v1/admin/finance/tax-invoices/{id}/issue:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1tax-invoices~1{id}~1issue'
+  /api/v1/admin/finance/tax-invoices/{id}/fail:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1tax-invoices~1{id}~1fail'
   /api/v1/admin/reconciliation:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1reconciliation'
   /api/v1/admin/finance/reconciliation-runs:
