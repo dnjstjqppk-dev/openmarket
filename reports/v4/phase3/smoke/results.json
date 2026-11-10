@@ -1,7 +1,7 @@
 {
   "api": "http://127.0.0.1:8787",
   "logged_in": true,
-  "generated": "2026-11-07T08:36:13.548Z",
+  "generated": "2026-11-09T05:42:37.925Z",
   "results": [
     {
       "app": "storefront",
@@ -19,7 +19,7 @@
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/",
@@ -32,7 +32,7 @@
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/",
@@ -42,11 +42,10 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/",
@@ -60,7 +59,7 @@
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/",
@@ -72,7 +71,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/",
@@ -86,7 +85,7 @@
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/HomeView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/HomeView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -102,8 +101,10 @@
         "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_desktop_1440.png"
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/categories",
@@ -113,7 +114,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/categories",
@@ -123,7 +124,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/categories",
@@ -133,7 +134,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/categories",
@@ -143,7 +144,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/categories",
@@ -153,7 +154,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoriesView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoriesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -170,7 +171,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/category/womens-clothing",
@@ -180,7 +181,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/category/womens-clothing",
@@ -190,7 +191,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/category/womens-clothing",
@@ -200,7 +201,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/category/womens-clothing",
@@ -210,7 +211,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/category/womens-clothing",
@@ -220,7 +221,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CategoryView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CategoryView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -237,7 +238,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/product/prod_001",
@@ -247,7 +248,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/product/prod_001",
@@ -257,7 +258,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/product/prod_001",
@@ -267,7 +268,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/product/prod_001",
@@ -277,7 +278,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/product/prod_001",
@@ -287,7 +288,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProductDetailView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProductDetailView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -304,7 +305,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/cart",
@@ -314,7 +315,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/cart",
@@ -324,7 +325,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/cart",
@@ -334,7 +335,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/cart",
@@ -344,7 +345,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/cart",
@@ -354,7 +355,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CartView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CartView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -371,7 +372,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/checkout",
@@ -381,7 +382,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/checkout",
@@ -391,7 +392,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/checkout",
@@ -401,7 +402,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/checkout",
@@ -411,7 +412,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/checkout",
@@ -421,7 +422,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CheckoutView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CheckoutView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -438,7 +439,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/profile",
@@ -448,7 +449,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/profile",
@@ -458,7 +459,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/profile",
@@ -468,7 +469,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/profile",
@@ -478,7 +479,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/profile",
@@ -488,7 +489,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ProfileView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ProfileView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -505,7 +506,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/orders",
@@ -515,7 +516,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/orders",
@@ -525,7 +526,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/orders",
@@ -535,7 +536,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/orders",
@@ -545,7 +546,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/orders",
@@ -555,7 +556,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrdersView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrdersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -576,7 +577,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/orders/unknown-order",
@@ -590,7 +591,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/orders/unknown-order",
@@ -604,7 +605,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/orders/unknown-order",
@@ -618,7 +619,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/orders/unknown-order",
@@ -632,7 +633,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/orders/unknown-order",
@@ -646,7 +647,7 @@
         "http_errors": [
           "404 API/api/v1/orders/unknown-order"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/OrderDetailView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/OrderDetailView_mobile360_360.png"
       },
       "verdict": "WARN_CONSOLE"
     },
@@ -663,10 +664,10 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/search",
@@ -678,10 +679,10 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/search",
@@ -694,7 +695,7 @@
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/search",
@@ -709,7 +710,7 @@
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/search",
@@ -721,7 +722,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/search",
@@ -736,7 +737,7 @@
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SearchView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SearchView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -753,7 +754,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/login",
@@ -763,7 +764,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/login",
@@ -773,7 +774,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/login",
@@ -783,7 +784,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
@@ -793,7 +794,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/login",
@@ -803,7 +804,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LoginView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -820,7 +821,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/forgot-password",
@@ -830,7 +831,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/forgot-password",
@@ -840,7 +841,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/forgot-password",
@@ -850,7 +851,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/forgot-password",
@@ -860,7 +861,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/forgot-password",
@@ -870,7 +871,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/ForgotPasswordView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/ForgotPasswordView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -887,7 +888,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/register",
@@ -897,7 +898,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/register",
@@ -907,7 +908,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/register",
@@ -917,7 +918,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/register",
@@ -927,7 +928,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/register",
@@ -937,7 +938,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/RegisterView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/RegisterView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -954,7 +955,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/channel/lightning-deals",
@@ -964,7 +965,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/channel/lightning-deals",
@@ -974,7 +975,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/channel/lightning-deals",
@@ -984,7 +985,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/channel/lightning-deals",
@@ -994,7 +995,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/channel/lightning-deals",
@@ -1004,7 +1005,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LightningDealsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LightningDealsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1021,7 +1022,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/channel/best-sellers",
@@ -1031,7 +1032,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/channel/best-sellers",
@@ -1041,7 +1042,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/channel/best-sellers",
@@ -1051,7 +1052,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/channel/best-sellers",
@@ -1061,7 +1062,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/channel/best-sellers",
@@ -1071,7 +1072,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/BestSellersView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/BestSellersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1088,7 +1089,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/coupons",
@@ -1098,7 +1099,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/coupons",
@@ -1108,7 +1109,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/coupons",
@@ -1118,7 +1119,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/coupons",
@@ -1128,7 +1129,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/coupons",
@@ -1138,7 +1139,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/CouponsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/CouponsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1155,7 +1156,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/addresses",
@@ -1165,7 +1166,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/addresses",
@@ -1175,7 +1176,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/addresses",
@@ -1185,7 +1186,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/addresses",
@@ -1195,7 +1196,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/addresses",
@@ -1205,7 +1206,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/AddressesView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/AddressesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1222,7 +1223,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/wishlist",
@@ -1232,7 +1233,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/wishlist",
@@ -1242,7 +1243,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/wishlist",
@@ -1252,7 +1253,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/wishlist",
@@ -1262,7 +1263,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/wishlist",
@@ -1272,7 +1273,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/WishlistView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/WishlistView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1291,7 +1292,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/store/pt_001",
@@ -1305,7 +1306,7 @@
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/store/pt_001",
@@ -1317,7 +1318,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/store/pt_001",
@@ -1331,7 +1332,7 @@
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/store/pt_001",
@@ -1343,7 +1344,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/store/pt_001",
@@ -1357,7 +1358,7 @@
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SellerStoreView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SellerStoreView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1374,7 +1375,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/support",
@@ -1384,7 +1385,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/support",
@@ -1394,7 +1395,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/support",
@@ -1404,7 +1405,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/support",
@@ -1414,7 +1415,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/support",
@@ -1424,7 +1425,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/SupportView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/SupportView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1441,7 +1442,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/policy/shipping",
@@ -1451,7 +1452,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/policy/shipping",
@@ -1461,7 +1462,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/policy/shipping",
@@ -1471,7 +1472,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/policy/shipping",
@@ -1481,7 +1482,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/policy/shipping",
@@ -1491,7 +1492,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PolicyView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PolicyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1508,7 +1509,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/legal/terms",
@@ -1518,7 +1519,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/legal/terms",
@@ -1528,7 +1529,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/legal/terms",
@@ -1538,7 +1539,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/terms",
@@ -1548,7 +1549,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/legal/terms",
@@ -1558,7 +1559,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalTermsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalTermsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1575,7 +1576,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/legal/privacy",
@@ -1585,7 +1586,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/legal/privacy",
@@ -1595,7 +1596,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/legal/privacy",
@@ -1605,7 +1606,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/privacy",
@@ -1615,7 +1616,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/legal/privacy",
@@ -1625,7 +1626,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalPrivacyView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalPrivacyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1646,7 +1647,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/payments/success",
@@ -1660,7 +1661,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/payments/success",
@@ -1674,7 +1675,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/payments/success",
@@ -1688,7 +1689,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/payments/success",
@@ -1702,7 +1703,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/payments/success",
@@ -1716,7 +1717,7 @@
         "http_errors": [
           "400 API/api/v1/payments/confirm"
         ],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_mobile360_360.png"
       },
       "verdict": "WARN_CONSOLE"
     },
@@ -1733,7 +1734,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/payments/fail",
@@ -1743,7 +1744,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/payments/fail",
@@ -1753,7 +1754,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/payments/fail",
@@ -1763,7 +1764,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/payments/fail",
@@ -1773,7 +1774,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/payments/fail",
@@ -1783,7 +1784,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/PaymentResultView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/PaymentResultView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1800,7 +1801,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/legal/refund",
@@ -1810,7 +1811,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/legal/refund",
@@ -1820,7 +1821,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/legal/refund",
@@ -1830,7 +1831,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/refund",
@@ -1840,7 +1841,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/legal/refund",
@@ -1850,7 +1851,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/storefront/LegalRefundView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/storefront/LegalRefundView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1867,7 +1868,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/login",
@@ -1877,7 +1878,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/login",
@@ -1887,7 +1888,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/login",
@@ -1897,7 +1898,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
@@ -1907,7 +1908,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/login",
@@ -1917,7 +1918,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LoginView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1934,7 +1935,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/",
@@ -1944,7 +1945,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/",
@@ -1954,7 +1955,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/",
@@ -1964,7 +1965,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/",
@@ -1974,7 +1975,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/",
@@ -1984,7 +1985,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/DashboardView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/DashboardView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2001,7 +2002,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/products",
@@ -2011,7 +2012,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/products",
@@ -2021,7 +2022,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/products",
@@ -2031,7 +2032,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/products",
@@ -2041,7 +2042,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/products",
@@ -2051,7 +2052,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ProductManageView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ProductManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2068,7 +2069,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/partners",
@@ -2078,7 +2079,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/partners",
@@ -2088,7 +2089,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/partners",
@@ -2098,7 +2099,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/partners",
@@ -2108,7 +2109,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/partners",
@@ -2118,7 +2119,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerVerifyView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerVerifyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2135,7 +2136,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/ledger",
@@ -2145,7 +2146,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/ledger",
@@ -2155,7 +2156,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/ledger",
@@ -2165,7 +2166,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/ledger",
@@ -2175,7 +2176,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/ledger",
@@ -2185,7 +2186,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/LedgerAuditView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/LedgerAuditView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2202,7 +2203,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/orders",
@@ -2212,7 +2213,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/orders",
@@ -2222,7 +2223,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/orders",
@@ -2232,7 +2233,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/orders",
@@ -2242,7 +2243,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/orders",
@@ -2252,7 +2253,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/OrdersView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/OrdersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2269,7 +2270,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/users",
@@ -2279,7 +2280,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/users",
@@ -2289,7 +2290,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/users",
@@ -2299,7 +2300,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/users",
@@ -2309,7 +2310,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/users",
@@ -2319,7 +2320,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/UsersView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/UsersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2336,7 +2337,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/reviews",
@@ -2346,7 +2347,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/reviews",
@@ -2356,7 +2357,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/reviews",
@@ -2366,7 +2367,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/reviews",
@@ -2376,7 +2377,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/reviews",
@@ -2386,7 +2387,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReviewsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReviewsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2403,7 +2404,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/coupons",
@@ -2413,7 +2414,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/coupons",
@@ -2423,7 +2424,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/coupons",
@@ -2433,7 +2434,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/coupons",
@@ -2443,7 +2444,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/coupons",
@@ -2453,7 +2454,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CouponsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CouponsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2470,7 +2471,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/categories",
@@ -2480,7 +2481,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/categories",
@@ -2490,7 +2491,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/categories",
@@ -2500,7 +2501,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/categories",
@@ -2510,7 +2511,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/categories",
@@ -2520,7 +2521,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/CategoriesView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/CategoriesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2537,7 +2538,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/marketing",
@@ -2547,7 +2548,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/marketing",
@@ -2557,7 +2558,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/marketing",
@@ -2567,7 +2568,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/marketing",
@@ -2577,7 +2578,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/marketing",
@@ -2587,7 +2588,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/MarketingView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/MarketingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2604,7 +2605,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/business",
@@ -2614,7 +2615,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/business",
@@ -2624,7 +2625,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/business",
@@ -2634,7 +2635,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/business",
@@ -2644,7 +2645,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/business",
@@ -2654,7 +2655,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/BusinessEntitiesView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/BusinessEntitiesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2671,7 +2672,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/suppliers",
@@ -2681,7 +2682,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/suppliers",
@@ -2691,7 +2692,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/suppliers",
@@ -2701,7 +2702,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/suppliers",
@@ -2711,7 +2712,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/suppliers",
@@ -2721,7 +2722,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SuppliersView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SuppliersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2738,7 +2739,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/supplier-integrations",
@@ -2748,7 +2749,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/supplier-integrations",
@@ -2758,7 +2759,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/supplier-integrations",
@@ -2768,7 +2769,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/supplier-integrations",
@@ -2778,7 +2779,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/supplier-integrations",
@@ -2788,7 +2789,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SupplierIntegrationView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SupplierIntegrationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2805,7 +2806,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/reconciliation",
@@ -2815,7 +2816,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/reconciliation",
@@ -2825,7 +2826,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/reconciliation",
@@ -2835,7 +2836,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/reconciliation",
@@ -2845,7 +2846,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/reconciliation",
@@ -2855,7 +2856,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/ReconciliationView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/ReconciliationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2872,7 +2873,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/partner-applications",
@@ -2882,7 +2883,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/partner-applications",
@@ -2892,7 +2893,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/partner-applications",
@@ -2902,7 +2903,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/partner-applications",
@@ -2912,7 +2913,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/partner-applications",
@@ -2922,7 +2923,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/PartnerApplicationsView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/PartnerApplicationsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -2939,7 +2940,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/security",
@@ -2949,7 +2950,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/security",
@@ -2959,7 +2960,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/security",
@@ -2969,7 +2970,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/security",
@@ -2979,7 +2980,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/security",
@@ -2989,7 +2990,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/admin/SecurityView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/admin/SecurityView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3006,7 +3007,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/login",
@@ -3016,7 +3017,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/login",
@@ -3026,7 +3027,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/login",
@@ -3036,7 +3037,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
@@ -3046,7 +3047,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/login",
@@ -3056,7 +3057,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/LoginView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3073,7 +3074,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/apply",
@@ -3083,7 +3084,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/apply",
@@ -3093,7 +3094,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/apply",
@@ -3103,7 +3104,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/apply",
@@ -3113,7 +3114,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/apply",
@@ -3123,7 +3124,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplyView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3140,7 +3141,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/application",
@@ -3150,7 +3151,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/application",
@@ -3160,7 +3161,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/application",
@@ -3170,7 +3171,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/application",
@@ -3180,7 +3181,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/application",
@@ -3190,7 +3191,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ApplicationView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ApplicationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3207,7 +3208,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/",
@@ -3217,7 +3218,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/",
@@ -3227,7 +3228,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/",
@@ -3237,7 +3238,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/",
@@ -3247,7 +3248,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/",
@@ -3257,7 +3258,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/DashboardView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/DashboardView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3274,11 +3275,11 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/products",
@@ -3289,10 +3290,10 @@
         "console_errors": [],
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/products",
@@ -3302,11 +3303,11 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/products",
@@ -3316,11 +3317,11 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/products",
@@ -3330,11 +3331,11 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/products",
@@ -3344,11 +3345,11 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
         ],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProductManageView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProductManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3365,7 +3366,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/bidding",
@@ -3375,7 +3376,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/bidding",
@@ -3385,7 +3386,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/bidding",
@@ -3395,7 +3396,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/bidding",
@@ -3405,7 +3406,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/bidding",
@@ -3415,7 +3416,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BiddingView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BiddingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3432,7 +3433,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/bulk-upload",
@@ -3442,7 +3443,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/bulk-upload",
@@ -3452,7 +3453,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/bulk-upload",
@@ -3462,7 +3463,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/bulk-upload",
@@ -3472,7 +3473,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/bulk-upload",
@@ -3482,7 +3483,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/BulkUploadView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/BulkUploadView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3499,7 +3500,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/imports",
@@ -3509,7 +3510,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/imports",
@@ -3519,7 +3520,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/imports",
@@ -3529,7 +3530,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/imports",
@@ -3539,7 +3540,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/imports",
@@ -3549,7 +3550,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/UrlImportView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/UrlImportView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3566,7 +3567,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/channels",
@@ -3576,7 +3577,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/channels",
@@ -3586,7 +3587,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/channels",
@@ -3596,7 +3597,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/channels",
@@ -3606,7 +3607,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/channels",
@@ -3616,7 +3617,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/MultiChannelListingView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/MultiChannelListingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3633,7 +3634,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/shipments",
@@ -3643,7 +3644,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/shipments",
@@ -3653,7 +3654,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/shipments",
@@ -3663,7 +3664,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/shipments",
@@ -3673,7 +3674,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/shipments",
@@ -3683,7 +3684,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ShipmentView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ShipmentView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3700,7 +3701,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/returns",
@@ -3710,7 +3711,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/returns",
@@ -3720,7 +3721,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/returns",
@@ -3730,7 +3731,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/returns",
@@ -3740,7 +3741,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/returns",
@@ -3750,7 +3751,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ReturnsManageView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ReturnsManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3767,7 +3768,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/settlements",
@@ -3777,7 +3778,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/settlements",
@@ -3787,7 +3788,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/settlements",
@@ -3797,7 +3798,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/settlements",
@@ -3807,7 +3808,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/settlements",
@@ -3817,7 +3818,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/SettlementView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/SettlementView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3834,7 +3835,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/qna",
@@ -3844,7 +3845,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/qna",
@@ -3854,7 +3855,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/qna",
@@ -3864,7 +3865,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/qna",
@@ -3874,7 +3875,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/qna",
@@ -3884,7 +3885,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/QnaManageView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/QnaManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -3901,7 +3902,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_desktop_1440.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_desktop_1440.png"
       },
       "desktop1280": {
         "final_path": "/profile",
@@ -3911,7 +3912,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_desktop1280_1280.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_desktop1280_1280.png"
       },
       "tablet_landscape": {
         "final_path": "/profile",
@@ -3921,7 +3922,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_tablet_landscape_1024.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_tablet_landscape_1024.png"
       },
       "tablet_portrait": {
         "final_path": "/profile",
@@ -3931,7 +3932,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_tablet_portrait_768.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/profile",
@@ -3941,7 +3942,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_mobile_390.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_mobile_390.png"
       },
       "mobile360": {
         "final_path": "/profile",
@@ -3951,7 +3952,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase3/smoke/partner/ProfileManageView_mobile360_360.png"
+        "screenshot": "reports/v4/phase3/smoke-new/partner/ProfileManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     }
