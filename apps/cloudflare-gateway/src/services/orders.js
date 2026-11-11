@@ -2,11 +2,13 @@
 // Order lifecycle engine: checkout (reservation), payment capture, release (cancel/expire), refunds,
 // purchase confirmation. Every state change is one atomic D1 batch; DB triggers are the last line of defence.
 
-import { HttpError, bad, conflict, notFound, forbidden, unavailable, str } from '../lib/http.js';
+import { HttpError, bad, conflict, notFound, forbidden, unavailable, str, idempotencyKey } from '../lib/http.js';
 import { newId, newOrderNo, newPoNo, sqlNow } from '../lib/ids.js';
 import { allocate, applyBps, proportionalPortion, assertWon } from '../lib/money.js';
-import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator } from '../lib/ledger.js';
-import { pgConfirm, pgCancel } from '../lib/pg.js';
+import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement } from '../lib/ledger.js';
+import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
+import { evaluateCheckoutFds } from './fds.js';
+import { sealPii } from '../lib/pii-crypto.js';
 
 export const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_LINES = 50;
@@ -82,7 +84,8 @@ function parseAddress(body) {
   const a = body.shipping_address || {};
   const recipient = str(body.recipient_name || a.recipient || a.name, { field: '수령인', max: 50, required: true });
   const phone = str(body.recipient_phone || a.phone, { field: '연락처', max: 20, required: true });
-  if (!/^[0-9+\-\s()]{9,20}$/.test(phone)) throw bad('INVALID_PHONE', '연락처 형식이 올바르지 않습니다.');
+  // P2-S12: digits only, starts with 0, 9-11 digits (the old char-class regex passed '+++++++++').
+  if (!/^0\d{8,10}$/.test(String(phone).replace(/\D/g, ''))) throw bad('INVALID_PHONE', '연락처 형식이 올바르지 않습니다.');
   const line1 = str(body.shipping_address_line1 || a.address || a.line1, { field: '주소', max: 200, required: true });
   const line2 = str(body.shipping_address_line2 || a.detail || a.line2, { field: '상세주소', max: 200 });
   const postal = str(body.shipping_postal_code || a.zip || a.postal_code, { field: '우편번호', max: 10, required: true });
@@ -91,9 +94,8 @@ function parseAddress(body) {
   return { recipient, phone, line1, line2, postal, memo };
 }
 
-export async function createOrder(env, principal, body, idemHeader, { dryRun = false } = {}) {
-  const idemKey = idemHeader || body.idempotency_key || null;
-  if (idemKey !== null && !/^[A-Za-z0-9_.:-]{8,100}$/.test(String(idemKey))) throw bad('INVALID_IDEMPOTENCY_KEY', 'X-Idempotency-Key 형식이 올바르지 않습니다.');
+export async function createOrder(env, principal, body, idemHeader, { dryRun = false, ip = null, ipCountry = null } = {}) {
+  const idemKey = idempotencyKey(idemHeader || body.idempotency_key || null);
   if (idemKey && !dryRun) {
     const prev = await env.DB.prepare('SELECT * FROM orders WHERE customer_id = ? AND checkout_idempotency_key = ?').bind(principal.userId, idemKey).first();
     if (prev) return { replay: true, order: prev };
@@ -112,7 +114,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   for (const l of lines) {
     const s = await env.DB.prepare(
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
-              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc,
+              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code,
               pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
@@ -145,7 +147,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const pct = volumeDiscountPct(l.quantity);
     const unitPrice = s.sale_price - applyBps(s.sale_price, pct * 100);
     resolved.push({
-      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
+      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
       title: s.prod_title, optionSummary, baseUnitPrice: s.sale_price, unitPrice, volumePct: pct,
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
       volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
@@ -241,8 +243,24 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     } };
   }
 
-  // 5. Atomic reservation batch
+  // 5. FDS evaluation (Wave E): BLOCK refuses before anything is reserved; REVIEW/ALLOW persist the verdict.
   const now = sqlNow();
+  const fdsPartnerIds = [...new Set(subs.map((s) => s.partnerId))];
+  const fdsOwners = fdsPartnerIds.length
+    ? (await env.DB.prepare(`SELECT owner_user_id o FROM partners WHERE id IN (${fdsPartnerIds.map(() => '?').join(',')})`).bind(...fdsPartnerIds).all()).results
+    : [];
+  const fds = await evaluateCheckoutFds(env, {
+    userId: principal.userId, ip, ipCountry, amountKrw: pgTotal, recipientPhone: addr.phone,
+    ownerIds: fdsOwners.map((r) => r.o).filter(Boolean), partnerIds: fdsPartnerIds,
+    hsCodes: resolved.map((r) => r.hsCode)
+  });
+  if (fds.decision === 'BLOCK') {
+    await auditStatement(env, principal, { action: 'FDS_BLOCK', targetType: 'order_attempt', targetId: orderNo,
+      after: { amount_krw: pgTotal, score: fds.score, rules: fds.rules, ip: ip || null } }).run();
+    throw new HttpError(403, 'FDS_BLOCKED', '이상거래 탐지 정책에 따라 주문이 차단되었습니다. 고객센터로 문의해 주세요.', { triggered_rules: fds.rules, risk_score: fds.score });
+  }
+
+  // 6. Atomic reservation batch
   const expiresAt = sqlNow(PAYMENT_WINDOW_MS);
   const st = [];
   st.push(env.DB.prepare(
@@ -250,12 +268,14 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
        volume_discount_amount, coupon_discount_amount, credit_used_amount, total_pay_amount, currency, payment_status,
        applied_user_coupon_id, checkout_idempotency_key, payment_expires_at, terms_version,
        recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo,
-       pccc, pccc_verified, customs_duty_type, settlement_currency, fx_rate, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 1.0, ?, ?)`
+       pccc, pccc_verified, customs_duty_type, settlement_currency, fx_rate,
+       fds_score, fds_decision, fds_rules_json, fds_decided_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 1.0, ?, ?, ?, ?, ?, ?)`
   ).bind(orderId, orderNo, principal.userId, operator.id, goodsBase, shippingTotal, volumeTotal + coupon + credit,
     volumeTotal, coupon, credit, pgTotal, userCouponId, idemKey, expiresAt, operator.terms_version || null,
     addr.recipient, addr.phone, addr.line1, addr.line2, addr.postal, addr.memo,
-    rawPccc, rawPccc ? 1 : 0, body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU', now, now));
+    await sealPii(env, rawPccc), rawPccc ? 1 : 0, body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU',
+    fds.score, fds.decision, JSON.stringify(fds.rules), now, now, now));
 
   for (const s of subs) {
     st.push(env.DB.prepare(
@@ -330,7 +350,10 @@ async function capturePayment(env, order, pg) {
        is_sandbox = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
   ).bind(pg.paymentKey, pg.provider, pg.receiptUrl || null, pg.sandbox ? 1 : 0, order.id));
   st.push(env.DB.prepare("UPDATE sub_orders SET status = 'PAYMENT_CONFIRMED', updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ? AND status = 'PAYMENT_PENDING'").bind(order.id));
-  st.push(env.DB.prepare("UPDATE settlements SET status = 'PENDING', updated_at = CURRENT_TIMESTAMP WHERE status = 'HOLD' AND sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id));
+  // Wave E: REVIEW orders keep their settlements at HOLD until an operator clears the FDS review.
+  if (order.fds_decision !== 'REVIEW') {
+    st.push(env.DB.prepare("UPDATE settlements SET status = 'PENDING', updated_at = CURRENT_TIMESTAMP WHERE status = 'HOLD' AND sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id));
+  }
 
   // Journal: cash + credit liability + promotion = seller payable + commission + direct revenue
   const lines = [
@@ -379,7 +402,7 @@ async function capturePayment(env, order, pg) {
  * Customer-initiated confirmation after the PG widget returns.
  * If PG approves but our commit fails (e.g. the order expired meanwhile), the PG payment is cancelled (compensation).
  */
-export async function confirmPayment(env, principal, { orderRef, paymentKey, amount }) {
+export async function confirmPayment(env, principal, { orderRef, paymentKey, amount }, { ip = null } = {}) {
   if (typeof paymentKey !== 'string' || paymentKey.length < 8 || paymentKey.length > 200) throw bad('INVALID_PAYMENT_KEY', '결제키가 올바르지 않습니다.');
   if (!Number.isSafeInteger(amount)) throw bad('INVALID_AMOUNT', '결제 금액이 올바르지 않습니다.');
   const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(orderRef, orderRef).first();
@@ -395,6 +418,16 @@ export async function confirmPayment(env, principal, { orderRef, paymentKey, amo
     if (pg.approvedButMismatched) {
       await pgCancel(env, { paymentKey, amount: pg.raw.totalAmount, reason: 'Order/PG mismatch auto-cancel', idempotencyKey: `mismatch_${order.id}`, isSandbox: false }).catch(() => null);
     }
+    // Wave E: every PG rejection is logged (velocity signal for RULE_01). The
+    // attempted key stays out of the UNIQUE payment_key column (NULL + raw JSON).
+    let failProvider = 'UNKNOWN';
+    try { failProvider = paymentMode(env) === 'live' ? 'TOSS' : 'SANDBOX'; } catch { /* keep UNKNOWN */ }
+    await env.DB.prepare(
+      `INSERT INTO payment_transactions (id, order_id, provider, method, amount, currency, status, raw_response_json, failure_code, attempt_ip)
+       VALUES (?, ?, ?, 'UNKNOWN', ?, 'KRW', 'FAILED', ?, ?, ?)`
+    ).bind(newId('ptx'), order.id, failProvider, order.total_pay_amount,
+      JSON.stringify({ attempted_payment_key: String(paymentKey).slice(0, 200), code: pg.code, message: String(pg.message || '').slice(0, 300) }),
+      String(pg.code || 'PG_CONFIRM_REJECTED').slice(0, 80), ip).run().catch(() => null);
     throw new HttpError(402, pg.code, pg.message);
   }
   try {
@@ -571,6 +604,14 @@ export async function refundOrder(env, actor, orderRef, request) {
   // Phase 3: finalize
   const after = await loadOrderBundle(env, o.id);
   const fin = [env.DB.prepare("UPDATE refunds SET status = 'DONE', pg_transaction_key = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?").bind(pgRes.transactionKey, refundId)];
+  // Wave E: any finalized refund voids the receipt basis — unissued requests die
+  // silently, issued receipts wait for the operator's PG-console cancellation.
+  fin.push(env.DB.prepare(
+    `UPDATE tax_invoices SET issue_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, memo = '환불 확정으로 자동 취소(미발행)'
+     WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'REQUESTED'`).bind(o.id));
+  fin.push(env.DB.prepare(
+    `UPDATE tax_invoices SET issue_status = 'CANCEL_REQUIRED', memo = ?
+     WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'ISSUED'`).bind(`환불 ${refundId} 확정 — PG 콘솔 취소 후 cancel-record로 기록`, o.id));
   if (credit > 0) fin.push(creditStatement(env, { userId: o.customer_id, amount: credit, reason: '환불 적립금 복원', referenceId: refundId }));
   if (request.restock) fin.push(...restockStatements(env, o.id, plan.map((p) => ({ it: p.it, qty: p.qty })), request.reasonCode === 'RETURN' ? 'RETURN_RESTOCK' : 'ORDER_CANCEL', `restock:${refundId}`));
 

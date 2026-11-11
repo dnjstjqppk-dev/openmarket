@@ -19,7 +19,10 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.1.0" apply false
+    // Wave G: pinned below 9.x — tosspayments_widget_sdk_flutter 2.3.0's
+    // flutter_inappwebview_android 1.1.3 calls the AGP-9-removed
+    // getDefaultProguardFile('proguard-android.txt'). Lift when Toss ships a fix.
+    id("com.android.application") version "8.13.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
 }
 

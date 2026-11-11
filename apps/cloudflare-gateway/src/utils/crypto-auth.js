@@ -79,7 +79,7 @@ async function hmacKey(secret, usage) {
   return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
 }
 
-export async function signJwt(payload, secretKey, expiresInSec = 60 * 60 * 12) {
+export async function signJwt(payload, secretKey, expiresInSec = 60 * 60) {
   const now = Math.floor(Date.now() / 1000);
   const header = b64urlEncodeString(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = b64urlEncodeString(JSON.stringify({ ...payload, iat: now, exp: now + expiresInSec }));

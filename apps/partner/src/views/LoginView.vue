@@ -25,15 +25,24 @@ const handlePartnerLogin = async () => {
       errorMsg.value = json.error || '로그인에 실패했습니다.'
       return
     }
-    savePartnerSession(json.token, json.partner)
+    savePartnerSession(json.token, json.partner, json.refresh_token)
     if (json.partner.status !== 'APPROVED') { router.replace('/application'); return }
-    const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
-    router.replace(r)
+    router.replace(safeRedirect(typeof route.query.redirect === 'string' ? route.query.redirect : '/'))
   } catch {
     errorMsg.value = '서버에 연결할 수 없습니다.'
   } finally {
     loading.value = false
   }
+}
+
+// P2-T03: post-login redirect stays in-app — single leading slash, no
+// protocol-relative '//', and only known seller routes (query strings allowed).
+const REDIRECT_ALLOWLIST = ['/', '/apply', '/application', '/products', '/bidding', '/bulk-upload', '/imports', '/channels', '/shipments', '/returns', '/settlements', '/qna', '/profile']
+function safeRedirect(raw: string): string {
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/'
+  const path = raw.split('?')[0].split('#')[0]
+  if (!REDIRECT_ALLOWLIST.some((p) => path === p || (p !== '/' && path.startsWith(`${p}/`)))) return '/'
+  return raw
 }
 
 function fillDev(which: 1 | 2) {

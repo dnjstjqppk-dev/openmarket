@@ -1,9 +1,11 @@
 // apps/cloudflare-gateway/src/routes/features.js
 // Customer engagement features. Identity = verified JWT (requireCustomer / authenticate).
 import { requireCustomer, requireAdmin, authenticate } from '../lib/auth.js';
-import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
+import { sha256Hex } from '../utils/crypto-auth.js';
+import { sealPii } from '../lib/pii-crypto.js';
 
 // OLMOA Extended Features: Autocomplete (with Synonyms), Flash Sales, Reviews, Q&A, Coupons, Credits, Wishlist & Support
 
@@ -144,7 +146,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
 
     if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
+      const b = await readJson(request);
       const customerId = (await requireCustomer(request, env)).userId;
       const contentText = (b.content || b.comment || '').trim();
       const purchase = await env.DB.prepare(
@@ -163,12 +165,23 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       if (!Number.isInteger(ratingVal) || ratingVal < 1 || ratingVal > 5) {
         return new Response(JSON.stringify({ success: false, code: 'INVALID_RATING', error: '별점(1~5)을 선택해 주세요.' }), { status: 400, headers: corsHeaders });
       }
+      // P2-SEC-05: review photos render as raw <img src> — https / site-relative
+      // only (no data: blobs, no tracking pixels on other schemes, no giants).
+      let reviewImages = [];
+      if (b.images !== undefined && b.images !== null) {
+        if (!Array.isArray(b.images)) throw bad('INVALID_IMAGE_URL', '리뷰 이미지 목록 형식이 올바르지 않습니다.');
+        try {
+          reviewImages = b.images.slice(0, 10).map((u) => safeUrl(u, { field: '리뷰 이미지', allowRelative: true, required: true }));
+        } catch (e) {
+          throw bad('INVALID_IMAGE_URL', '리뷰 이미지는 https 또는 사이트 상대경로(URL 2000자 이내)만 등록할 수 있습니다.');
+        }
+      }
       await env.DB.prepare(
         `INSERT INTO product_reviews (id, product_id, order_id, user_id, reviewer_name, author_name, sku_option_summary, rating, content, images_json, is_verified_purchase, user_height_cm, user_weight_kg, fit_type)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
       ).bind(
         revId, prodId, purchase.order_id, customerId, maskedName, maskedName, purchase.option_summary, ratingVal,
-        str(contentText, { max: 3000, field: '리뷰' }), JSON.stringify(Array.isArray(b.images) ? b.images.slice(0, 10).map(String) : []),
+        str(contentText, { max: 3000, field: '리뷰' }), JSON.stringify(reviewImages),
         b.user_height_cm ? Math.round(Number(b.user_height_cm)) || null : null, b.user_weight_kg ? Math.round(Number(b.user_weight_kg)) || null : null,
         ['TRUE_TO_SIZE', 'RUNS_SMALL', 'RUNS_LARGE'].includes(b.fit_type) ? b.fit_type : null
       ).run();
@@ -192,7 +205,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return json(corsHeaders, { success: true, count: data.length, data });
     }
     if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
+      const b = await readJson(request);
       const customerId = (await requireCustomer(request, env)).userId;
       if (!b.question || !b.question.trim()) throw bad('QUESTION_REQUIRED', '문의 내용을 입력해 주세요.');
       const prod = await env.DB.prepare('SELECT partner_id FROM products WHERE id = ?').bind(prodId).first();
@@ -234,7 +247,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/coupons/claim' && request.method === 'POST') {
-    const b = await request.json().catch(() => ({}));
+    const b = await readJson(request);
     const customerId = (await requireCustomer(request, env)).userId;
     const codeOrId = (b.coupon_id || b.code || '').trim();
     const coupon = codeOrId ? await env.DB.prepare('SELECT * FROM coupons WHERE (id = ? OR UPPER(code) = UPPER(?)) AND is_active = 1 AND expires_at > ?').bind(codeOrId, codeOrId, sqlNow()).first() : null;
@@ -274,8 +287,9 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
     }
     if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
-      const prodId = b.product_id;
+      const b = await readJson(request);
+      // P2-SEC-04: presence is not enough — cap the id shape before it touches SQL.
+      const prodId = str(b.product_id, { field: 'product_id', max: 64 });
       const cid = customerId;
       if (!prodId) throw bad('PRODUCT_REQUIRED', 'product_id required');
       const existing = await env.DB.prepare('SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?').bind(cid, prodId).first();
@@ -309,7 +323,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
     }
     if (request.method === 'PUT') {
-      const b = await request.json().catch(() => ({}));
+      const b = await readJson(request);
       const items = Array.isArray(b.items) ? b.items : null;
       if (!items) throw bad('ITEMS_REQUIRED', 'items 배열을 보내 주세요.');
       if (items.length > 100) throw bad('CART_TOO_LARGE', '장바구니는 최대 100개 품목까지 저장됩니다.');
@@ -353,7 +367,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
     }
     if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
+      const b = await readJson(request);
       const msgText = (b.content || b.message || '').trim();
       if (!b.subject || !msgText) throw bad('INQUIRY_REQUIRED', '문의 제목과 내용을 모두 입력해 주세요.');
       const inqId = newId('inq');
@@ -389,7 +403,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
     }
     if (request.method === 'POST') {
-      const b = await request.json().catch(() => ({}));
+      const b = await readJson(request);
       const recipientName = (b.recipient_name || b.name || '').trim();
       const phone = (b.phone || '').trim();
       const postalCode = (b.postal_code || b.zip || '').trim();
@@ -520,10 +534,13 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       status = 'NOT_SENT_SENDER_NOT_CONFIGURED';
     }
 
+    // SEC-10: recipient + content are sealed at rest; recipient_hash is the blind
+    // index for withdrawal purge (the exact trimmed recipient string is hashed).
     await env.DB.prepare(
-      `INSERT INTO notification_delivery_logs (id, channel, recipient, template_code, title, content, status, provider, provider_msg_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(logId, channel, recipient, templateCode, title, content, status, provider, providerMsgId).run();
+      `INSERT INTO notification_delivery_logs (id, channel, recipient, recipient_hash, template_code, title, content, status, provider, provider_msg_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(logId, channel, await sealPii(env, recipient), await sha256Hex(recipient), templateCode, title,
+      await sealPii(env, content), status, provider, providerMsgId).run();
     await auditStatement(env, dispatchAdmin, { action: 'SMS_DISPATCH', targetType: 'notification_delivery', targetId: logId, after: { channel, template_code: templateCode, status, provider }, request }).run();
 
     return new Response(JSON.stringify({

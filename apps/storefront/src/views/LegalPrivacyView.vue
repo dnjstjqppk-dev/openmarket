@@ -34,7 +34,11 @@
 
     <section class="space-y-2">
       <h2 class="text-base font-bold text-slate-900">4. 개인정보보호 책임자</h2>
-      <p>개인정보 보호책임자: CPO / privacy@olmoa.com</p>
+      <p v-if="business.info?.privacy_officer_name || business.info?.privacy_officer_email" data-testid="privacy-officer">
+        개인정보 보호책임자: {{ business.info?.privacy_officer_name || '이름 미등록' }} / {{ business.info?.privacy_officer_email || '이메일 미등록' }}
+      </p>
+      <p v-else-if="business.loaded" data-testid="privacy-officer-missing">개인정보 보호책임자 정보가 아직 등록되지 않았습니다. 정식 서비스 개시 전 확정됩니다.</p>
+      <p v-else>개인정보 보호책임자 정보를 불러오는 중입니다…</p>
     </section>
 
     <div class="pt-6 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
@@ -46,4 +50,13 @@
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+// P2-S16: the officer contact comes from /business-info via the shared store (never hardcoded).
+import { onMounted } from 'vue'
+import { useBusinessStore } from '../stores/business'
+
+const business = useBusinessStore()
+onMounted(() => { business.load() })
+</script>
 

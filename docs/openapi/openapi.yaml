@@ -20,6 +20,8 @@ security:
 paths:
   /api/v1/auth/login:
     $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1login'
+  /api/v1/auth/refresh:
+    $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1refresh'
   /api/v1/auth/register:
     $ref: './paths/auth.yaml#/paths/~1api~1v1~1auth~1register'
   /api/v1/auth/me:
@@ -298,6 +300,10 @@ paths:
 
   /api/v1/finance/cash-receipts/request:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1request'
+  /api/v1/finance/cash-receipts:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts'
+  /api/v1/finance/cash-receipts/{id}/cancel:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1{id}~1cancel'
   /api/v1/finance/cash-receipts/{id}:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1{id}'
   /api/v1/finance/tax-invoices:
@@ -306,6 +312,10 @@ paths:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1issue'
   /api/v1/admin/finance/cash-receipts/{id}/fail:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1fail'
+  /api/v1/admin/finance/cash-receipts/{id}/cancel-record:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1cash-receipts~1{id}~1cancel-record'
+  /api/v1/admin/finance/sales-report:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1sales-report'
   /api/v1/admin/finance/tax-invoices:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1tax-invoices'
   /api/v1/admin/finance/tax-invoices/{id}/issue:
@@ -357,6 +367,8 @@ paths:
     $ref: './paths/supply.yaml#/paths/~1api~1v1~1integrations~1health'
   /api/v1/admin/sync/logs:
     $ref: './paths/supply.yaml#/paths/~1api~1v1~1admin~1sync~1logs'
+  /api/v1/sync/logs:
+    $ref: './paths/supply.yaml#/paths/~1api~1v1~1sync~1logs'
   /api/v1/integrations/pricescanner/feed:
     $ref: './paths/supply.yaml#/paths/~1api~1v1~1integrations~1pricescanner~1feed'
   /api/v1/integrations/selbym/status:
@@ -427,6 +439,16 @@ paths:
     $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1overview'
   /api/v1/admin/fds/evaluate:
     $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1evaluate'
+  /api/v1/admin/fds/reviews:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1reviews'
+  /api/v1/admin/fds/reviews/{id}/clear:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1reviews~1{id}~1clear'
+  /api/v1/admin/fds/reviews/{id}/fraud:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1reviews~1{id}~1fraud'
+  /api/v1/admin/fds/prohibited-hs:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1prohibited-hs'
+  /api/v1/admin/fds/prohibited-hs/{id}:
+    $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1fds~1prohibited-hs~1{id}'
   /api/v1/admin/disputes:
     $ref: './paths/governance.yaml#/paths/~1api~1v1~1admin~1disputes'
   /api/v1/admin/disputes/{id}/arbitrate:

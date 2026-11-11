@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Release: the app is an API client — no network permission means no backend. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="customer_app"
+        android:label="올모아"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

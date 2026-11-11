@@ -1,14 +1,14 @@
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 import '@olmoa/ui/styles.css';
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
 import router from './router';
 import App from './App.vue';
 
 const app = createApp(App);
-app.use(createPinia());
+// P2-A10: no pinia — the admin console keeps session in config.ts localStorage
+// helpers and has zero defineStore modules, so no store plugin is registered.
 app.use(router);
-import { API_BASE_URL, getAdminToken, getAdminRole, clearAdminToken } from './config';
+import { API_BASE_URL, getAdminToken, getAdminRole, clearAdminToken, setAdminToken, getAdminRefreshToken, setAdminRefreshToken } from './config';
 // P1-A01: token presence + per-route role check (server still enforces per-call;
 // an unknown role fails open to the server rather than locking operators out).
 router.beforeEach((to) => {
@@ -18,11 +18,53 @@ router.beforeEach((to) => {
   if (roles && roles.length && role && !roles.includes(role)) return { path: '/', query: { denied: to.path } };
   return true;
 });
+// Session refresh (P2-SEC-07): access tokens live 1h. On 401, one single-flight
+// refresh is attempted and the original request retried once; only a failed
+// refresh ends the session. The x-olmoa-retried marker stops refresh loops.
+let refreshInflight: Promise<string | null> | null = null;
+async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshInflight) {
+    refreshInflight = (async () => {
+      try {
+        const rt = getAdminRefreshToken();
+        if (!rt) return null;
+        const res = await nativeFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt })
+        });
+        const data = await res.json().catch(() => ({} as any));
+        if (!res.ok || !data.success || !data.token || !data.refresh_token) return null;
+        setAdminToken(data.token);
+        setAdminRefreshToken(data.refresh_token);
+        return data.token as string;
+      } catch {
+        return null;
+      } finally {
+        refreshInflight = null;
+      }
+    })();
+  }
+  return refreshInflight;
+}
 const nativeFetch = window.fetch.bind(window);
+const NO_REFRESH_PATHS = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/register'];
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const res = await nativeFetch(input, init);
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  if (res.status === 401 && url.startsWith(API_BASE_URL) && !url.includes('/auth/login')) {
+  const initHeaders = new Headers(init?.headers);
+  const skipRefresh = initHeaders.get('x-olmoa-retried') === '1'
+    || input instanceof Request
+    || NO_REFRESH_PATHS.some((p) => url.includes(p));
+  if (res.status === 401 && url.startsWith(API_BASE_URL) && !skipRefresh) {
+    const fresh = await refreshAccessToken();
+    if (fresh) {
+      const merged: Record<string, string> = {};
+      initHeaders.forEach((v, k) => { merged[k] = v; });
+      merged['authorization'] = `Bearer ${fresh}`;
+      merged['x-olmoa-retried'] = '1';
+      return nativeFetch(input, { ...init, headers: merged });
+    }
     clearAdminToken();
     router.push({ path: '/login', query: { expired: '1' } });
   }

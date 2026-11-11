@@ -16,6 +16,8 @@ interface Category {
 const categories = ref<Category[]>([]);
 const loading = ref(true);
 const form = ref({ name: '', slug: '', parent_id: '', sort_order: 0 });
+// P2-A09: create failures surface instead of vanishing.
+const formError = ref('');
 
 async function loadCategories() {
   loading.value = true;
@@ -35,17 +37,22 @@ async function loadCategories() {
 
 async function createCategory() {
   if (!form.value.name.trim()) return;
+  formError.value = '';
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(form.value)
     });
-    if (res.ok) {
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.success !== false) {
       form.value = { name: '', slug: '', parent_id: '', sort_order: 0 };
       await loadCategories();
+    } else {
+      formError.value = json.error || `카테고리 생성에 실패했습니다. (${res.status})`;
     }
-  } catch (_) {
+  } catch (e: any) {
+    formError.value = e?.message || '카테고리 생성 중 네트워크 오류가 발생했습니다.';
   }
 }
 
@@ -81,6 +88,9 @@ onMounted(loadCategories);
       <button @click="createCategory" class="bg-indigo-600 text-white rounded-lg px-3 py-1.5 font-bold hover:bg-indigo-700">
         카테고리 생성
       </button>
+    </div>
+    <div v-if="formError" role="alert" class="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+      {{ formError }}
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">

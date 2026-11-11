@@ -104,8 +104,9 @@ router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('partner_token');
   if (to.meta.requiresAuth && !token) {
     next({ path: '/login', query: { redirect: to.fullPath } });
-  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() && getPartnerStatus() !== 'APPROVED') {
-    // Sellers under review only see their application.
+  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() !== 'APPROVED') {
+    // P2-T02: unknown/empty status also routes to the application (the API
+    // enforces approval per call; this is only the routing hint).
     next({ path: '/application' });
   } else {
     next();

@@ -15,6 +15,7 @@ export interface BusinessInfo {
   cs_email: string
   hosting_provider?: string | null
   privacy_officer_name?: string | null
+  privacy_officer_email?: string | null
   escrow_service_ref?: string | null
 }
 

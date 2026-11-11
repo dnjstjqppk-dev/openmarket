@@ -1,0 +1,7 @@
+# Copy to android/key.properties (git-ignored) and fill in. Generate once:
+#   keytool -genkeypair -v -storetype JKS -keystore olmoa-upload.keystore \
+#     -alias olmoa-upload -keyalg RSA -keysize 2048 -validity 10000
+storeFile=../olmoa-upload.keystore
+storePassword=REPLACE_ME
+keyAlias=olmoa-upload
+keyPassword=REPLACE_ME

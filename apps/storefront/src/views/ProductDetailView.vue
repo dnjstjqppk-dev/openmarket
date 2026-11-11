@@ -6,7 +6,7 @@
 //  - pre-selecting the cheapest SKU and an invented `<id>_sku_def` SKU -> the buyer picks every option
 //  - a client-side volume discount rounded differently from the server -> lib/pricing.ts mirrors the server
 // Prices/discounts/shipping shown here are what the order sheet will charge (the server re-checks everything).
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { Heart, Minus, Plus, Play, ShoppingBag, Star, Store, Truck, RotateCcw, BadgePercent } from 'lucide-vue-next'
 import {
@@ -21,6 +21,7 @@ import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { VOLUME_TIERS, volumeDiscountPct, volumeUnitPrice, DEFAULT_SHIPPING_FEE, DEFAULT_FREE_THRESHOLD } from '../lib/pricing'
 import { API_BASE_URL, authHeader } from '../config'
+import { LATE_COMPENSATION, RETURN_WINDOW_DAYS, PRICE_ADJUST_WINDOW_DAYS, fmtKRW } from '../config/policy'
 
 const route = useRoute()
 const router = useRouter()
@@ -221,6 +222,12 @@ function openTab(k: string) {
 
 // Last, so every ref used by load() already exists when it runs immediately.
 watch(() => route.params.slug, load, { immediate: true })
+// P2-S05: /product/:slug#reviews (e.g. from OrdersView) opens the reviews tab.
+function applyHash() {
+  if (route.hash === '#reviews') openTab('reviews')
+}
+onMounted(applyHash)
+watch(() => route.hash, applyHash)
 </script>
 
 <template>
@@ -290,7 +297,7 @@ watch(() => route.params.slug, load, { immediate: true })
               <dd class="text-ink">{{ VOLUME_TIERS.map((t) => `${t.min}개 이상 ${t.pct}%`).join(' · ') }}</dd>
             </div>
             <div class="flex gap-3"><dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><RotateCcw class="h-4 w-4" aria-hidden="true" />반품</dt>
-              <dd class="text-ink">배송 완료 후 7일 이내 신청 · <RouterLink to="/legal/refund" class="text-ink-muted underline underline-offset-2">자세히</RouterLink></dd>
+              <dd class="text-ink">배송 완료 후 {{ RETURN_WINDOW_DAYS }}일 이내 신청 · <RouterLink to="/legal/refund" class="text-ink-muted underline underline-offset-2">자세히</RouterLink></dd>
             </div>
           </dl>
 
@@ -384,16 +391,16 @@ watch(() => route.params.slug, load, { immediate: true })
               <p class="mt-1 text-ink-muted">
                 이 판매자의 기본 배송비는 {{ Number(shipFee) === 0 ? '무료' : locale.formatPrice(shipFee) }}<template v-if="Number(shipFee) !== 0 && Number(shipThreshold) > 0">이며, 이 판매자 상품을 {{ locale.formatPrice(shipThreshold) }} 이상 구매하면 무료</template>입니다.
                 여러 판매자의 상품을 함께 주문하면 판매자별로 따로 배송·계산됩니다.
-                배송 예정일을 넘기면 주문 상세에서 지연 보상(적립금 5,300원)을 신청할 수 있습니다. <RouterLink to="/policy/shipping" class="underline underline-offset-2">배송 정책</RouterLink>
+                배송 예정일을 넘기면 주문 상세에서 지연 보상(적립금 {{ fmtKRW(LATE_COMPENSATION) }})을 신청할 수 있습니다. <RouterLink to="/policy/shipping" class="underline underline-offset-2">배송 정책</RouterLink>
               </p>
             </section>
             <section>
               <h3 class="font-semibold">교환·반품·환불</h3>
-              <p class="mt-1 text-ink-muted">배송 완료 후 구매확정 전, 7일 이내에 주문 상세에서 신청할 수 있습니다. 단순 변심 반품은 반품 배송비가 부과될 수 있으며 금액은 판매자별로 다릅니다. <RouterLink to="/legal/refund" class="underline underline-offset-2">취소·반품·환불 안내</RouterLink></p>
+              <p class="mt-1 text-ink-muted">배송 완료 후 구매확정 전, {{ RETURN_WINDOW_DAYS }}일 이내에 주문 상세에서 신청할 수 있습니다. 단순 변심 반품은 반품 배송비가 부과될 수 있으며 금액은 판매자별로 다릅니다. <RouterLink to="/legal/refund" class="underline underline-offset-2">취소·반품·환불 안내</RouterLink></p>
             </section>
             <section>
               <h3 class="font-semibold">판매가 인하 차액 보상</h3>
-              <p class="mt-1 text-ink-muted">결제 후 30일 이내 같은 옵션의 판매가가 내려가면 주문당 한 번 차액을 적립금으로 받을 수 있습니다. <RouterLink to="/policy/price-match" class="underline underline-offset-2">자세히</RouterLink></p>
+              <p class="mt-1 text-ink-muted">결제 후 {{ PRICE_ADJUST_WINDOW_DAYS }}일 이내 같은 옵션의 판매가가 내려가면 주문당 한 번 차액을 적립금으로 받을 수 있습니다. <RouterLink to="/policy/price-match" class="underline underline-offset-2">자세히</RouterLink></p>
             </section>
           </div>
         </div>

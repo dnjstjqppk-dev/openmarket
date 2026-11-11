@@ -14,6 +14,8 @@ interface AdminReview {
 
 const reviews = ref<AdminReview[]>([]);
 const loading = ref(true);
+// A-N04: the moderator reads the full text in a modal before deleting.
+const selectedReview = ref<AdminReview | null>(null);
 
 async function loadReviews() {
   loading.value = true;
@@ -81,9 +83,10 @@ onMounted(loadReviews);
             <td class="p-3 text-slate-700">{{ r.product_title || r.product_id }}</td>
             <td class="p-3 font-bold text-slate-900">{{ r.reviewer_name }}</td>
             <td class="p-3 text-amber-500 font-bold">{{ r.rating }} ★</td>
-            <td class="p-3 text-slate-600 max-w-xs truncate">{{ r.content }}</td>
+            <td class="p-3 text-slate-600 max-w-xs truncate" :title="r.content">{{ r.content }}</td>
             <td class="p-3 text-slate-400">{{ new Date(r.created_at).toLocaleString() }}</td>
-            <td class="p-3">
+            <td class="p-3 whitespace-nowrap">
+              <button @click="selectedReview = r" class="text-indigo-600 font-bold hover:underline mr-3">전체보기</button>
               <button @click="deleteReview(r.id)" class="text-rose-600 font-bold hover:underline">삭제</button>
             </td>
           </tr>
@@ -91,6 +94,26 @@ onMounted(loadReviews);
       </table>
       <div v-if="reviews.length === 0" class="p-8 text-center text-slate-400">
         등록된 리뷰가 없습니다.
+      </div>
+    </div>
+
+    <div v-if="selectedReview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="selectedReview = null">
+      <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-3 text-xs">
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-sm font-black text-slate-900">리뷰 전문</h3>
+          <button @click="selectedReview = null" class="text-slate-400 hover:text-slate-700 font-bold">닫기</button>
+        </div>
+        <dl class="space-y-1 text-slate-600">
+          <div><dt class="inline font-bold text-slate-800">상품: </dt><dd class="inline">{{ selectedReview.product_title || selectedReview.product_id }}</dd></div>
+          <div><dt class="inline font-bold text-slate-800">작성자: </dt><dd class="inline">{{ selectedReview.reviewer_name }}</dd></div>
+          <div><dt class="inline font-bold text-slate-800">평점: </dt><dd class="inline text-amber-500 font-bold">{{ selectedReview.rating }} ★</dd></div>
+          <div><dt class="inline font-bold text-slate-800">작성일: </dt><dd class="inline">{{ new Date(selectedReview.created_at).toLocaleString() }}</dd></div>
+        </dl>
+        <p class="whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-200 p-3 text-slate-800">{{ selectedReview.content }}</p>
+        <div class="flex justify-end gap-2">
+          <button @click="selectedReview = null" class="px-4 py-2 rounded-lg border border-slate-300 font-bold hover:bg-slate-50">닫기</button>
+          <button @click="deleteReview(selectedReview.id); selectedReview = null" class="px-4 py-2 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-700">이 리뷰 삭제</button>
+        </div>
       </div>
     </div>
   </div>

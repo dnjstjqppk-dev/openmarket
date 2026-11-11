@@ -1,6 +1,8 @@
 // apps/cloudflare-gateway/src/lib/http.js
 // Uniform JSON responses, typed HTTP errors, CORS allowlist and safe body parsing.
 
+import { reportError } from './sentry.js';
+
 export class HttpError extends Error {
   constructor(status, code, message, extra = {}) {
     super(message || code);
@@ -21,7 +23,7 @@ export function json(corsHeaders, data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: corsHeaders });
 }
 
-export function errorResponse(corsHeaders, err, env) {
+export function errorResponse(corsHeaders, err, env, { request = null, ctx = null } = {}) {
   if (err instanceof HttpError) {
     const res = json(corsHeaders, { success: false, error: err.message, code: err.code, ...err.extra }, err.status);
     if (err.headers) for (const [k, v] of Object.entries(err.headers)) res.headers.set(k, v);
@@ -29,6 +31,11 @@ export function errorResponse(corsHeaders, err, env) {
   }
   const requestId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   console.error(JSON.stringify({ level: 'error', requestId, message: err && err.message, stack: err && err.stack }));
+  // NEW-18: unexpected errors go to Sentry (no-op without SENTRY_DSN); never blocks the response.
+  try {
+    const p = reportError(env, { error: err, request, requestId, ctx });
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch { /* reporting must never break the error path */ }
   const expose = env && env.ENVIRONMENT && env.ENVIRONMENT !== 'production';
   return json(corsHeaders, {
     success: false,
@@ -70,6 +77,7 @@ export function buildCorsHeaders(request, env = {}) {
     'Vary': 'Origin',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json; charset=utf-8'
@@ -82,6 +90,39 @@ export function intParam(value, { min = 0, max = Number.MAX_SAFE_INTEGER, field 
   const n = typeof value === 'number' ? value : (typeof value === 'string' && /^-?\d+$/.test(value.trim()) ? Number(value) : NaN);
   if (!Number.isSafeInteger(n) || n < min || n > max) throw bad('INVALID_INTEGER', `${field} 값이 올바르지 않습니다.`, { field });
   return n;
+}
+
+/** Canonical X-Idempotency-Key shape (P2-P01): one regex for checkout, sub-cancel and payouts. */
+export const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_.:-]{8,100}$/;
+
+/**
+ * Validate an idempotency key. Absent (null/undefined) stays null so callers keep
+ * their "no key" path; a PRESENT malformed key — including '' — is a 400 (P-N02:
+ * never silently downgrade, the client would lose retry protection on a typo).
+ */
+export function idempotencyKey(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value);
+  if (!IDEMPOTENCY_KEY_RE.test(s)) throw bad('INVALID_IDEMPOTENCY_KEY', 'X-Idempotency-Key 형식이 올바르지 않습니다.');
+  return s;
+}
+
+/**
+ * Validate a stored/rendered URL (P2-SEC-04/05). Allows https: absolute URLs and,
+ * when allowRelative, site-relative paths ('/x', never protocol-relative '//x').
+ * Rejects javascript:, data:, http: and other exfiltration/XSS vectors.
+ */
+export function safeUrl(value, { field = 'URL', max = 2000, required = false, allowRelative = false } = {}) {
+  if (value === undefined || value === null || value === '') {
+    if (required) throw bad('REQUIRED', `${field} 항목은 필수입니다.`, { field });
+    return '';
+  }
+  const s = String(value).trim();
+  if (required && !s) throw bad('REQUIRED', `${field} 항목은 필수입니다.`, { field });
+  if (s.length > max) throw bad('TOO_LONG', `${field} 항목이 너무 깁니다.`, { field });
+  const ok = /^https:\/\/[^/\s]+(\/\S*)?$/.test(s) || (allowRelative && /^\/(?!\/)\S*$/.test(s));
+  if (!ok) throw bad('INVALID_URL', `${field} 주소 형식이 올바르지 않습니다. (https: 또는 사이트 상대경로만 허용)`, { field });
+  return s;
 }
 
 export function str(value, { max = 500, field = 'value', required = false } = {}) {

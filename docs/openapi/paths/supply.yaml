@@ -329,8 +329,13 @@ paths:
       description: >
         POST is accepted as an alias of PUT (admin console uses PUT). Legal
         transitions: DRAFT to SENT/CANCELLED, SENT to CONFIRMED/FAILED/CANCELLED,
-        CONFIRMED to SHIPPED/FAILED, FAILED to SENT/CANCELLED. SHIPPED on a
-        DROP_SHIP PO requires tracking_number and ships the sub-order.
+        CONFIRMED to SHIPPED/FAILED, FAILED to SENT/CANCELLED, SHIPPED to
+        RECEIVED (SELF_SHIP only). SHIPPED on a DROP_SHIP PO requires
+        tracking_number and ships the sub-order. Wave E posts purchase
+        journals: DROP_SHIP SHIPPED writes Dr PURCHASE_COST / Cr
+        SUPPLIER_PAYABLE; SELF_SHIP RECEIVED writes Dr INVENTORY_ASSET / Cr
+        SUPPLIER_PAYABLE and adds the received quantities to stock
+        (PURCHASE_RECEIVE ledger rows). Both postings are idempotent per PO.
       parameters:
         - name: id
           in: path
@@ -348,7 +353,7 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [SENT, CONFIRMED, FAILED, SHIPPED, CANCELLED]
+                  enum: [SENT, CONFIRMED, FAILED, SHIPPED, RECEIVED, CANCELLED]
                 supplier_order_ref:
                   type: string
                   maxLength: 100
@@ -904,6 +909,35 @@ paths:
       summary: List supplier inventory sync logs
       tags: [Supply]
       description: GET /api/v1/sync/logs is an alias of this route (both require ROLE_ADMIN).
+      responses:
+        '200':
+          description: Latest 100 sync log rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired admin JWT
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/sync/logs:
+    get:
+      summary: List supplier inventory sync logs (alias)
+      tags: [Supply]
+      description: Alias of GET /api/v1/admin/sync/logs (same handler, same shape, ROLE_ADMIN only).
       responses:
         '200':
           description: Latest 100 sync log rows

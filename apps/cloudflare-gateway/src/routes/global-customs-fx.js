@@ -1,14 +1,18 @@
-import { authenticate } from '../lib/auth.js';
+import { authenticate, requireCustomer } from '../lib/auth.js';
 import { krwPerUnit, krwPerUnitMap } from '../lib/fx.js';
 import { logPiiView } from '../services/privacy.js';
-import { forbidden, notFound, HttpError } from '../lib/http.js';
+import { forbidden, notFound, HttpError, readJson } from '../lib/http.js';
+import { maybeOpenPii } from '../lib/pii-crypto.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
 
 export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHeaders) {
   // 1. Real-Time Personal Customs Clearance Code (PCCC / 개인통관고유부호) Validation
   if (url.pathname === '/api/v1/customs/validate-pccc' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    // P2-SEC-06: the Uni-Pass verdict (when the key is set) is a per-person oracle —
+    // only signed-in buyers may ask, and RL_WRITE bounds the cadence per account.
+    await requireCustomer(request, env);
+    const body = await readJson(request);
     const rawPccc = String(body.pccc || '').trim().toUpperCase();
     const recipientName = String(body.name || body.recipient_name || '').trim();
     const recipientPhone = String(body.phone || body.recipient_phone || '').trim();
@@ -134,13 +138,16 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
 
   // 3. Customs Duty & Tax Calculator (DDP vs DDU)
   if (url.pathname === '/api/v1/customs/estimate-duty' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const totalGoodsKrw = Math.max(0, parseInt(body.goods_amount_krw || body.total_goods_amount || 0, 10));
     const shippingFeeKrw = Math.max(0, parseInt(body.shipping_fee_krw || body.total_shipping_amount || 0, 10));
     const countryOrigin = String(body.country_origin || 'OTHER').toUpperCase();
 
     // KRW per USD from the single-source FX helper (operator table, else reference).
-    const usdRate = (await krwPerUnit(env, 'USD')).rate;
+    // P-N03: the response discloses the rate basis — an exemption decided on a stale
+    // fallback must say so instead of passing as a live quote.
+    const usdFx = await krwPerUnit(env, 'USD');
+    const usdRate = usdFx.rate;
     const totalOrderKrw = totalGoodsKrw + shippingFeeKrw;
     const totalOrderUsd = Math.round((totalOrderKrw / usdRate) * 100) / 100;
 
@@ -173,6 +180,9 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         total_estimated_tax_krw: totalTaxKrw,
         ddp_total_amount_krw: totalOrderKrw + totalTaxKrw,
         ddu_total_amount_krw: totalOrderKrw,
+        fx_rate: usdFx.rate,
+        fx_source: usdFx.source,
+        fx_as_of: usdFx.updated_at,
         explanation: isTaxExempt
           ? `주문 금액($${totalOrderUsd.toFixed(2)})이 소액물품 면세한도($${exemptionThresholdUsd}) 이하이므로 관세 및 부가세가 전액 면제됩니다.`
           : `주문 금액($${totalOrderUsd.toFixed(2)})이 면세한도($${exemptionThresholdUsd})를 초과하여 예상 관부가세(약 ₩${totalTaxKrw.toLocaleString()})가 부과됩니다.`
@@ -182,7 +192,7 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
 
   // 4. Currency Conversion Utility
   if (url.pathname === '/api/v1/fx/convert' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const amount = Number(body.amount || 0);
     const from = String(body.from || 'KRW').toUpperCase();
     const to = String(body.to || 'USD').toUpperCase();
@@ -223,6 +233,8 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     if (isAdmin && order.customer_id) await logPiiView(env, principal, 'admin.commercial-invoice', 'order', [order.id], 'recipient_name,recipient_phone,shipping_address,pccc,customer_email', request);
     if (!isAdmin && order.customer_id !== customerId) throw forbidden('Access denied: You do not have permission to view this order commercial invoice');
 
+    // SEC-10: the owner and the operator read the full PCCC on the invoice; open the sealed value first.
+    order.pccc = await maybeOpenPii(env, order.pccc);
     // Fail-Closed Validation (OM-09): Required customs/recipient information must be present and non-empty
     const missingFields = [];
     if (!order.pccc || !String(order.pccc).trim()) missingFields.push('pccc');

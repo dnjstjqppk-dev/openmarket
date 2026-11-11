@@ -10,10 +10,14 @@ const coupons = ref<any[]>([])
 const creditData = ref<any>({ balance: null, history: [] })
 const claimMsg = ref('')
 const loadError = ref<string | null>(null)
+// P2-S08: skeleton while loading; P2-S10: one claim in flight per coupon.
+const loading = ref(true)
+const claimingId = ref<string | null>(null)
 
 const loadWallet = async () => {
   const cid = auth.user?.id || ''
   loadError.value = null
+  loading.value = true
   try {
     const [cRes, crRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/coupons?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } }),
@@ -27,22 +31,30 @@ const loadWallet = async () => {
     creditData.value = crJson.data || { balance: 0, history: [] }
   } catch (e: any) {
     loadError.value = e?.message || '지갑 정보를 불러오지 못했습니다'
+  } finally {
+    loading.value = false
   }
 }
 
 const claimCoupon = async (couponId: string) => {
-  const cid = auth.user?.id || ''
-  const res = await fetch(`${API_BASE_URL}/api/v1/coupons/claim`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader() },
-    body: JSON.stringify({ customer_id: cid, coupon_id: couponId })
-  })
-  const json = await res.json().catch(() => null)
-  if (res.ok && json?.success) {
-    claimMsg.value = '🎉 Coupon claimed to your account! Ready to apply at Checkout.'
-    await loadWallet()
-  } else {
-    claimMsg.value = `⚠️ ${json?.error || '쿠폰 받기에 실패했습니다.'}`
+  if (claimingId.value) return
+  claimingId.value = couponId
+  try {
+    const cid = auth.user?.id || ''
+    const res = await fetch(`${API_BASE_URL}/api/v1/coupons/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ customer_id: cid, coupon_id: couponId })
+    })
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.success) {
+      claimMsg.value = '🎉 Coupon claimed to your account! Ready to apply at Checkout.'
+      await loadWallet()
+    } else {
+      claimMsg.value = `⚠️ ${json?.error || '쿠폰 받기에 실패했습니다.'}`
+    }
+  } finally {
+    claimingId.value = null
   }
 }
 
@@ -75,7 +87,13 @@ onMounted(loadWallet)
     <!-- Active Coupons -->
     <section>
       <h2 class="text-lg font-black text-gray-900 mb-4">🎟️ Available Promo Coupons</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div v-if="loading" class="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="쿠폰 목록을 불러오는 중">
+        <div v-for="n in 3" :key="n" class="h-44 rounded-2xl bg-gray-100 animate-pulse border border-gray-200"></div>
+      </div>
+      <div v-else-if="!coupons.length && !loadError" class="rounded-2xl border border-gray-200 bg-white p-8 text-center text-xs text-gray-500">
+        사용 가능한 쿠폰이 없습니다.
+      </div>
+      <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div
           v-for="c in coupons"
           :key="c.id"
@@ -96,15 +114,15 @@ onMounted(loadWallet)
           </div>
           <button
             @click="claimCoupon(c.id)"
-            :disabled="Boolean(c.claimed_status)"
+            :disabled="Boolean(c.claimed_status) || claimingId === c.id"
             :class="[
               'mt-4 w-full h-10 rounded-xl text-xs font-black transition-colors cursor-pointer',
               c.claimed_status
                 ? 'bg-gray-100 text-gray-500 cursor-default'
-                : 'bg-[#FF5000] hover:bg-[#E60023] text-white'
+                : 'bg-[#FF5000] hover:bg-[#E60023] text-white disabled:opacity-60'
             ]"
           >
-            {{ c.claimed_status ? `✓ Claimed (${c.claimed_status})` : 'Claim Coupon Now' }}
+            {{ c.claimed_status ? `✓ Claimed (${c.claimed_status})` : claimingId === c.id ? '받는 중…' : 'Claim Coupon Now' }}
           </button>
         </div>
       </div>

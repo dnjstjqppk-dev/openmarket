@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { API_BASE_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
+import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
 
 const products = ref<any[]>([])
 const loading = ref(true)
@@ -691,7 +691,7 @@ onMounted(() => { loadProducts(); loadCategories() })
               <div class="flex items-center justify-center gap-2">
                 <!-- 1. 스토어프론트 상세페이지 바로가기 미리보기 버튼 -->
                 <a
-                  :href="'https://openmarket.dnjstjqppk.workers.dev/products/' + p.id"
+                  :href="`${STOREFRONT_URL}/products/${p.id}`"
                   target="_blank"
                   rel="noopener"
                   class="px-2.5 py-1.5 rounded-lg border border-gray-300 hover:border-[#FF5000] text-gray-700 hover:text-[#FF5000] font-bold text-[11px] flex items-center gap-1 transition"

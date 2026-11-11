@@ -134,11 +134,24 @@ async function loadShipments() {
   }
 }
 
+// T-N04: shipment moves forward only server-side — confirm order + carrier +
+// tracking in a modal before the PUT (single and bulk alike).
+const confirmSingle = ref<{ order: SubOrder; tracking: string } | null>(null);
+const confirmBulk = ref<{ count: number; carrier: string; lines: string[] } | null>(null);
+
 async function saveTracking(order: SubOrder) {
   const tracking = (order.tracking_number || '').trim();
   // T02: tracking is required; nothing auto-generated, no carrier invented.
   if (!tracking) { say('송장번호를 입력해 주세요.', 'err'); return; }
   if (!order.carrier_code) { say('택배사를 선택해 주세요.', 'err'); return; }
+  confirmSingle.value = { order, tracking };
+}
+
+async function doSaveTracking() {
+  const c = confirmSingle.value;
+  if (!c) return;
+  const { order, tracking } = c;
+  confirmSingle.value = null;
   isSaving.value = order.id;
 
   try {
@@ -175,13 +188,21 @@ async function executeBulkShipment() {
     bulkError.value = '택배사를 선택해 주세요.';
     return;
   }
+  confirmBulk.value = { count: selectedIds.value.length, carrier: bulkCarrier.value, lines };
+}
+
+async function doBulkShipment() {
+  const c = confirmBulk.value;
+  if (!c || selectedIds.value.length === 0) return;
+  confirmBulk.value = null;
+  showBulkModal.value = false;
   isBulkSaving.value = true;
 
   try {
     const shipmentsPayload = selectedIds.value.map((id, index) => ({
       sub_order_id: id,
-      carrier: bulkCarrier.value,
-      tracking_number: lines[index]
+      carrier: c.carrier,
+      tracking_number: c.lines[index]
     }));
 
     const res = await fetch(`${API_BASE}/api/v1/partner/orders/bulk-shipment`, {
@@ -197,11 +218,10 @@ async function executeBulkShipment() {
       await loadShipments();
       return;
     }
-    showBulkModal.value = false;
     selectedIds.value = [];
     bulkTrackingInput.value = '';
     await loadShipments();
-    say(`일괄 출고 ${json.updated_count ?? lines.length}건이 등록되었습니다.`);
+    say(`일괄 출고 ${json.updated_count ?? c.lines.length}건이 등록되었습니다.`);
   } catch (e: any) {
     bulkError.value = e?.message || '일괄 출고에 실패했습니다.';
   } finally {
@@ -611,6 +631,59 @@ onMounted(() => {
           </button>
           <button
             @click="executeBulkShipment"
+            :disabled="isBulkSaving"
+            class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md disabled:opacity-50 cursor-pointer"
+          >
+            {{ isBulkSaving ? '출고 처리 중...' : '일괄 출고 확정' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shipment Confirm Modal (T-N04: no un-ship exists — verify before the PUT) -->
+    <div
+      v-if="confirmSingle || confirmBulk"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+    >
+      <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="text-indigo-900 font-black text-lg">출고 정보 확인</h3>
+          <button @click="confirmSingle = null; confirmBulk = null" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
+        </div>
+        <div v-if="confirmSingle" class="space-y-2 text-xs">
+          <div class="flex justify-between"><span class="text-slate-500 font-bold">주문</span><span class="font-mono font-bold">{{ confirmSingle.order.sub_order_no || confirmSingle.order.order_no }}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 font-bold">택배사</span><span class="font-bold">{{ confirmSingle.order.carrier_code }}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 font-bold">송장번호</span><span class="font-mono font-bold">{{ confirmSingle.tracking }}</span></div>
+        </div>
+        <div v-else-if="confirmBulk" class="space-y-2 text-xs">
+          <div class="flex justify-between"><span class="text-slate-500 font-bold">출고 건수</span><span class="font-bold">{{ confirmBulk.count }}건</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 font-bold">택배사</span><span class="font-bold">{{ confirmBulk.carrier }}</span></div>
+          <div>
+            <div class="text-slate-500 font-bold mb-1">송장번호 목록</div>
+            <ul class="max-h-40 overflow-y-auto space-y-0.5 font-mono bg-slate-50 rounded-xl p-2.5 border border-slate-200">
+              <li v-for="(t, i) in confirmBulk.lines" :key="i">{{ i + 1 }}. {{ t }}</li>
+            </ul>
+          </div>
+        </div>
+        <p class="text-[11px] text-amber-700 font-bold">출고 등록 후에는 정정·취소가 불가합니다. 번호를 다시 확인해 주세요.</p>
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <button
+            @click="confirmSingle = null; confirmBulk = null"
+            class="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+          >
+            취소
+          </button>
+          <button
+            v-if="confirmSingle"
+            @click="doSaveTracking"
+            :disabled="isSaving !== null"
+            class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md disabled:opacity-50 cursor-pointer"
+          >
+            {{ isSaving ? '출고 처리 중...' : '출고 확정' }}
+          </button>
+          <button
+            v-else
+            @click="doBulkShipment"
             :disabled="isBulkSaving"
             class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md disabled:opacity-50 cursor-pointer"
           >

@@ -62,7 +62,10 @@ export function otpauthUri(secretB32, account, issuer = 'OLMOA Admin') {
 }
 
 // ---- secret sealing (AES-256-GCM). Key: TOTP_ENCRYPTION_KEY, else derived from JWT_SECRET (rotating it then voids 2FA enrolments).
+// P2-SEC-08: production must set the independent key — a JWT_SECRET compromise must not
+// decrypt every stored TOTP secret. Non-prod keeps the derived fallback for tests/dev.
 async function sealKey(env) {
+  if (env && env.ENVIRONMENT === 'production' && !env.TOTP_ENCRYPTION_KEY) throw new Error('TOTP_KEY_NOT_CONFIGURED');
   const material = env.TOTP_ENCRYPTION_KEY || `${env.JWT_SECRET || ''}::totp-seal-v1`;
   if (!material || material.length < 32) throw new Error('TOTP_KEY_NOT_CONFIGURED');
   const raw = await crypto.subtle.digest('SHA-256', enc.encode(material));

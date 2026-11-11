@@ -146,7 +146,7 @@ export default {
       }
       return json(corsHeaders, { success: false, error: '존재하지 않는 API 경로입니다.', code: 'ROUTE_NOT_FOUND', route: url.pathname }, 404);
     } catch (err) {
-      return errorResponse(corsHeaders, err, env);
+      return errorResponse(corsHeaders, err, env, { request, ctx });
     }
   },
 

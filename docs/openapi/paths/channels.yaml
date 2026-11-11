@@ -625,6 +625,7 @@ paths:
                 tracking_number:
                   type: string
                   description: Carrier-issued waybill, 6-40 alphanumerics/dashes.
+              required: [tracking_number]
       responses:
         '200':
           description: Order shipped with carrier tracking link

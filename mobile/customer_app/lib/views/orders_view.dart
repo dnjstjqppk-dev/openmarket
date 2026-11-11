@@ -4,10 +4,20 @@
 // empty list pretending there are no orders.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../models/order_detail.dart' show orderStatusLabel;
 import '../theme/app_theme.dart';
 import 'login_view.dart';
 import 'order_detail_view.dart';
+
+String _won(num v) => '₩${NumberFormat('#,###').format(v)}';
+
+String _localDateTime(String iso) {
+  final dt = DateTime.tryParse(iso)?.toLocal();
+  if (dt == null) return iso.isEmpty ? '-' : iso;
+  return DateFormat('yyyy-MM-dd HH:mm').format(dt);
+}
 
 class OrdersView extends StatefulWidget {
   const OrdersView({super.key});
@@ -126,7 +136,8 @@ class _OrdersViewState extends State<OrdersView> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            status,
+                            // P2-MOB-07: Korean labels, formatted won, local dates.
+                            orderStatusLabel(status),
                             style: TextStyle(
                               color: cancelled
                                   ? OlmoaColors.danger
@@ -139,11 +150,11 @@ class _OrdersViewState extends State<OrdersView> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Text('결제금액: ₩$amount',
+                    Text('결제금액: ${_won(amount is num ? amount : num.tryParse(amount.toString()) ?? 0)}',
                         style: const TextStyle(
                             fontWeight: FontWeight.w900, fontSize: 15)),
                     const Divider(height: 20),
-                    Text('주문일시: $createdAt',
+                    Text('주문일시: ${_localDateTime(createdAt)}',
                         style: const TextStyle(
                             color: OlmoaColors.stone500, fontSize: 11)),
                     ],

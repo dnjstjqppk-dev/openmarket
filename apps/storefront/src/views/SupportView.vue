@@ -11,6 +11,8 @@ const subject = ref('')
 const message = ref('')
 const submitMsg = ref('')
 const loadError = ref<string | null>(null)
+// P2-S10: block double submit while a request is in flight.
+const submitting = ref(false)
 
 const loadSupport = async () => {
   const cid = auth.user?.id || ''
@@ -32,26 +34,31 @@ const loadSupport = async () => {
 }
 
 const submitInquiry = async () => {
-  if (!subject.value.trim() || !message.value.trim()) return
-  const cid = auth.user?.id || ''
-  const res = await fetch(`${API_BASE_URL}/api/v1/support/inquiries`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader() },
-    body: JSON.stringify({
-      customer_id: cid,
-      category: category.value,
-      subject: subject.value.trim(),
-      message: message.value.trim()
+  if (!subject.value.trim() || !message.value.trim() || submitting.value) return
+  submitting.value = true
+  try {
+    const cid = auth.user?.id || ''
+    const res = await fetch(`${API_BASE_URL}/api/v1/support/inquiries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({
+        customer_id: cid,
+        category: category.value,
+        subject: subject.value.trim(),
+        message: message.value.trim()
+      })
     })
-  })
-  const json: any = await res.json().catch(() => null)
-  if (res.ok && json?.success) {
-    subject.value = ''
-    message.value = ''
-    submitMsg.value = `✓ 1:1 Inquiry (${json.data.id}) registered! Our support team will review it and reply here.`
-    await loadSupport()
-  } else {
-    submitMsg.value = `⚠️ ${json?.error || '문의 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'}`
+    const json: any = await res.json().catch(() => null)
+    if (res.ok && json?.success) {
+      subject.value = ''
+      message.value = ''
+      submitMsg.value = `✓ 1:1 Inquiry (${json.data.id}) registered! Our support team will review it and reply here.`
+      await loadSupport()
+    } else {
+      submitMsg.value = `⚠️ ${json?.error || '문의 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'}`
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -99,7 +106,7 @@ onMounted(loadSupport)
           <textarea v-model="message" required rows="4" placeholder="Include your Order ID if applicable..." class="w-full p-3 rounded-lg border border-gray-300"></textarea>
         </div>
         <p v-if="submitMsg" class="text-xs font-bold text-[#00A862]">{{ submitMsg }}</p>
-        <button type="submit" class="w-full h-11 rounded-full bg-[#FF5000] text-white text-xs font-black cursor-pointer">
+        <button type="submit" :disabled="submitting" class="w-full h-11 rounded-full bg-[#FF5000] text-white text-xs font-black cursor-pointer disabled:opacity-60">
           Send 1:1 Inquiry
         </button>
       </form>

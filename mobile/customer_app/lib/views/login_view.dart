@@ -5,6 +5,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'forgot_password_view.dart';
+import 'register_view.dart';
+import 'verify_email_view.dart';
 
 class LoginView extends StatefulWidget {
   final VoidCallback onSuccess;
@@ -110,6 +113,40 @@ class _LoginViewState extends State<LoginView> {
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15)),
               ),
+            ),
+            const SizedBox(height: 8),
+            // P2-MOB-P1: auth side doors live next to the login form.
+            TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('회원가입')),
+                      body: RegisterView(onSuccess: () {
+                        Navigator.of(context).pop();
+                        widget.onSuccess();
+                      })))),
+              child: const Text('아직 회원이 아니세요? 가입하기'),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('비밀번호 찾기')),
+                          body: const ForgotPasswordView()))),
+                  child: const Text('비밀번호 찾기',
+                      style: TextStyle(fontSize: 12)),
+                ),
+                const Text('·', style: TextStyle(color: Colors.grey)),
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('이메일 인증')),
+                          body: const VerifyEmailView()))),
+                  child: const Text('이메일 인증',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ],
             ),
           ],
         ),

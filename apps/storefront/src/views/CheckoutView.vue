@@ -14,6 +14,7 @@ import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { fetchQuote, type Quote } from '../lib/quote'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
+import { validateKrPhone } from '../utils/phone'
 
 const cart = useCartStore()
 const auth = useAuthStore()
@@ -53,7 +54,7 @@ watch(addressChoice, (id) => {
 const showErrors = ref(false)
 const fieldErrors = computed(() => ({
   name: recipientName.value.trim() ? null : '수령인을 입력해 주세요',
-  phone: /^[0-9+\-\s()]{9,20}$/.test(phone.value) ? null : '연락처를 숫자로 입력해 주세요 (예: 010-1234-5678)',
+  phone: validateKrPhone(phone.value),
   zip: /^\d{5}$/.test(zipCode.value) ? null : '우편번호 5자리를 입력해 주세요',
   address: address.value.trim() ? null : '주소를 입력해 주세요'
 }))
@@ -74,7 +75,7 @@ watch(pcccRequired, (req) => { if (req) needsCustoms.value = true }, { immediate
 async function validatePccc() {
   pcccChecking.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/customs/validate-pccc`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pccc: pccc.value.trim().toUpperCase(), name: recipientName.value, phone: phone.value }) })
+    const res = await fetch(`${API_BASE_URL}/api/v1/customs/validate-pccc`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader() }, body: JSON.stringify({ pccc: pccc.value.trim().toUpperCase(), name: recipientName.value, phone: phone.value }) })
     const json = await res.json().catch(() => ({}))
     pcccResult.value = { ok: res.ok && json.success, verified: Boolean(json.verified), message: json.message || json.error || '확인하지 못했습니다' }
   } catch {
@@ -137,23 +138,43 @@ const PAY_METHODS = [
   { value: '토스페이', label: '토스페이' }
 ] as const
 const sideLoading = ref(true)
-onMounted(async () => {
-  requestQuote()
+// P2-S09: side loads fail loudly (coupon/credit/address/config each report).
+const sideLoadError = ref('')
+async function loadSides() {
+  sideLoading.value = true
+  sideLoadError.value = ''
   const h = { headers: { ...authHeader() } }
+  const failed: string[] = []
+  const grab = async (label: string, url: string, headers: any) => {
+    try {
+      const r = await fetch(url, headers)
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || (j && j.success === false)) throw new Error(j?.error || `HTTP ${r.status}`)
+      return j
+    } catch {
+      failed.push(label)
+      return null
+    }
+  }
   const [c, cr, ad, pc] = await Promise.all([
-    fetch(`${API_BASE_URL}/api/v1/coupons`, h).then((r) => r.json()).catch(() => ({})),
-    fetch(`${API_BASE_URL}/api/v1/credits`, h).then((r) => r.json()).catch(() => ({})),
-    fetch(`${API_BASE_URL}/api/v1/addresses`, h).then((r) => r.json()).catch(() => ({})),
-    fetch(`${API_BASE_URL}/api/v1/payments/config`).then((r) => r.json()).catch(() => null)
+    grab('쿠폰', `${API_BASE_URL}/api/v1/coupons`, h),
+    grab('적립금', `${API_BASE_URL}/api/v1/credits`, h),
+    grab('배송지', `${API_BASE_URL}/api/v1/addresses`, h),
+    grab('결제수단', `${API_BASE_URL}/api/v1/payments/config`, undefined)
   ])
-  coupons.value = Array.isArray(c.data) ? c.data.filter((x: any) => x.is_claimed && !x.is_used) : []
+  coupons.value = Array.isArray(c?.data) ? c.data.filter((x: any) => x.is_claimed && !x.is_used) : []
   creditBalance.value = Number(cr?.data?.balance || 0)
-  if (Array.isArray(ad.data) && ad.data.length) {
+  if (Array.isArray(ad?.data) && ad.data.length) {
     savedAddresses.value = ad.data
     addressChoice.value = (ad.data.find((a: any) => Number(a.is_default) === 1) || ad.data[0]).id
   }
   paymentConfig.value = pc
+  if (failed.length) sideLoadError.value = `${failed.join('·')} 정보를 불러오지 못했습니다. 새로고침 없이 다시 불러올 수 있습니다.`
   sideLoading.value = false
+}
+onMounted(async () => {
+  requestQuote()
+  await loadSides()
 })
 
 // ---- submit -----------------------------------------------------------------------------------------
@@ -267,7 +288,12 @@ async function submitOrder() {
       <OmButton to="/cart" variant="primary" size="sm">장바구니로</OmButton>
     </OmEmptyState>
 
-    <div v-else class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <OmAlert v-if="sideLoadError && !sideLoading" tone="warning" class="mt-6">
+      <span>{{ sideLoadError }}</span>
+      <OmButton size="sm" variant="secondary" class="ml-3" @click="loadSides">다시 불러오기</OmButton>
+    </OmAlert>
+
+    <div v-if="lines.length" class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div class="min-w-0 space-y-5">
         <!-- address -->
         <section class="rounded-lg border border-line bg-surface p-5" aria-labelledby="sec-addr">

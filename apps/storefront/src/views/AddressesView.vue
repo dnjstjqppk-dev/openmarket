@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
+import { validateKrPhone } from '../utils/phone'
 
 const auth = useAuthStore()
 const addresses = ref<any[]>([])
@@ -12,15 +13,17 @@ const submitting = ref(false)
 const msg = ref('')
 const errorMsg = ref('')
 
-const form = ref({
+const blankForm = () => ({
   recipient_name: auth.user?.name || '',
-  phone: '010-',
+  phone: '',
   postal_code: '',
   address_line1: '',
   address_line2: '',
   delivery_note: '문 앞에 놓아주세요',
   is_default: false
 })
+// S-N03: no '010-' prefill (an untouched field used to store the prefix itself).
+const form = ref(blankForm())
 
 const deliveryNoteOptions = [
   '문 앞에 놓아주세요',
@@ -49,42 +52,60 @@ const loadAddresses = async () => {
   }
 }
 
+// P2-S01: card actions fail loudly with a retry of the same action.
+const actionError = ref('')
+let lastAction: (() => Promise<void>) | null = null
+const retryAction = async () => {
+  if (!lastAction) return
+  actionError.value = ''
+  await lastAction()
+}
+
 const setDefault = async (addrId: string) => {
+  lastAction = () => setDefault(addrId)
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}/default`, {
       method: 'PUT',
       headers: { ...authHeader() }
     })
-    const json = await res.json()
-    if (json.success) {
-      msg.value = '✓ 기본 배송지로 변경되었습니다.'
-      await loadAddresses()
-      setTimeout(() => (msg.value = ''), 2500)
-    }
-  } catch {}
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success) throw new Error(json.error || `기본 배송지 변경 실패 (${res.status})`)
+    msg.value = '✓ 기본 배송지로 변경되었습니다.'
+    lastAction = null
+    await loadAddresses()
+    setTimeout(() => (msg.value = ''), 2500)
+  } catch (e: any) {
+    actionError.value = e?.message || '기본 배송지 변경에 실패했습니다.'
+  }
 }
 
 const deleteAddress = async (addrId: string) => {
   if (!confirm('해당 배송지를 삭제하시겠습니까?')) return
+  lastAction = () => deleteAddress(addrId)
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}`, {
       method: 'DELETE',
       headers: { ...authHeader() }
     })
-    const json = await res.json()
-    if (json.success) {
-      msg.value = '✓ 배송지가 삭제되었습니다.'
-      await loadAddresses()
-      setTimeout(() => (msg.value = ''), 2500)
-    }
-  } catch {}
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success) throw new Error(json.error || `배송지 삭제 실패 (${res.status})`)
+    msg.value = '✓ 배송지가 삭제되었습니다.'
+    lastAction = null
+    await loadAddresses()
+    setTimeout(() => (msg.value = ''), 2500)
+  } catch (e: any) {
+    actionError.value = e?.message || '배송지 삭제에 실패했습니다.'
+  }
 }
 
 const handleCreateAddress = async () => {
   if (!form.value.recipient_name || !form.value.phone || !form.value.address_line1) {
     alert('수령인, 연락처, 도로명 주소는 필수입니다.')
+    return
+  }
+  const phoneErr = validateKrPhone(form.value.phone)
+  if (phoneErr) {
+    alert(phoneErr)
     return
   }
   if (!/^\d{5}$/.test(form.value.postal_code.trim())) {
@@ -116,15 +137,7 @@ const handleCreateAddress = async () => {
     if (json.success) {
       msg.value = '✓ 신규 배송지가 성공적으로 등록되었습니다.'
       showModal.value = false
-      form.value = {
-        recipient_name: auth.user?.name || '',
-        phone: '010-',
-        postal_code: '',
-        address_line1: '',
-        address_line2: '',
-        delivery_note: '문 앞에 놓아주세요',
-        is_default: false
-      }
+      form.value = blankForm()
       await loadAddresses()
       setTimeout(() => (msg.value = ''), 2500)
     } else {
@@ -166,6 +179,10 @@ onMounted(loadAddresses)
     </div>
     <div v-if="errorMsg" class="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
       {{ errorMsg }}
+    </div>
+    <div v-if="actionError" class="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800 flex items-center justify-between gap-3">
+      <span>{{ actionError }}</span>
+      <button @click="retryAction" class="px-3 py-1.5 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 cursor-pointer">다시 시도</button>
     </div>
 
     <!-- Loading Skeleton -->

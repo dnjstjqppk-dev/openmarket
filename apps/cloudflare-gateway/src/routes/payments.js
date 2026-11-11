@@ -35,7 +35,7 @@ export async function handlePaymentRoutes(request, url, env, corsHeaders) {
       orderRef: String(body.order_id || body.orderId || ''),
       paymentKey: String(body.payment_key || body.paymentKey || ''),
       amount: Number(body.amount)
-    });
+    }, { ip: request.headers.get('CF-Connecting-IP') || null });
     const o = r.order;
     const data = { order_id: o.id, order_no: o.order_no, amount: o.total_pay_amount, status: o.payment_status, payment_key: o.payment_key, receipt_url: o.pg_receipt_url, is_sandbox: Number(o.is_sandbox) === 1, idempotent_replay: r.replay };
     return json(corsHeaders, { success: true, message: '결제가 승인되었습니다.', data });

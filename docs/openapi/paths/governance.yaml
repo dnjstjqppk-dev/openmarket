@@ -1,6 +1,7 @@
 # Governance paths (control tower, FDS, disputes).
 # Verified against the gateway implementation (routes/global-governance.js)
-# in the P0-11 Wave 2 sweep (2026-11-10); every path below is covered by
+# in the P0-11 Wave 2 sweep (2026-11-10); FDS enforcement paths added in
+# Wave E (2026-11-11). Every path below is covered by
 # tests/openapi_reconciliation_test.mjs.
 paths:
   /api/v1/admin/control-tower:
@@ -59,9 +60,13 @@ paths:
     get:
       summary: Fraud-detection-system status and active rules (admin)
       tags: [Governance]
+      description: >
+        All counts are measured: blocks from the audit trail (FDS_BLOCK),
+        reviews from orders.fds_decision. Since Wave E checkout evaluates
+        every order (status ENFORCED_AT_CHECKOUT).
       responses:
         '200':
-          description: FDS status (NOT_ENFORCED_AT_CHECKOUT) with the active rule table
+          description: FDS status with measured 24h counts and the active rule table
           content:
             application/json:
               schema:
@@ -74,16 +79,17 @@ paths:
                     type: string
                   data:
                     type: object
-                    required: [status, active_rules]
+                    required: [status, blocked_attempts_24h, reviews_24h, open_reviews, active_rules]
                     properties:
                       status:
                         type: string
+                        enum: [ENFORCED_AT_CHECKOUT]
                       blocked_attempts_24h:
                         type: integer
-                        nullable: true
-                      challenged_3ds_24h:
+                      reviews_24h:
                         type: integer
-                        nullable: true
+                      open_reviews:
+                        type: integer
                       active_rules:
                         type: array
                         items:
@@ -94,8 +100,13 @@ paths:
 
   /api/v1/admin/fds/evaluate:
     post:
-      summary: Evaluate transaction risk against FDS rules (admin)
+      summary: Manually probe transaction risk against FDS rules (admin)
       tags: [Governance]
+      description: >
+        An estimate from caller-supplied signals. Checkout itself evaluates
+        with live database signals (services/fds.js), so the probe can differ
+        from a real verdict. Thresholds follow FDS_BLOCK_SCORE /
+        FDS_REVIEW_SCORE / FDS_HIGH_VALUE_KRW (defaults 85 / 40 / 1500000).
       requestBody:
         required: true
         content:
@@ -108,9 +119,6 @@ paths:
                 ip_country:
                   type: string
                   default: KR
-                card_country:
-                  type: string
-                  default: KR
                 shipping_country:
                   type: string
                   default: KR
@@ -118,7 +126,7 @@ paths:
                   type: number
       responses:
         '200':
-          description: Risk score with BLOCK / CHALLENGE_3DS / ALLOW decision
+          description: Risk score with BLOCK / REVIEW / ALLOW decision
           content:
             application/json:
               schema:
@@ -137,7 +145,7 @@ paths:
                         type: integer
                       decision:
                         type: string
-                        enum: [BLOCK, CHALLENGE_3DS, ALLOW]
+                        enum: [BLOCK, REVIEW, ALLOW]
                       triggered_rules:
                         type: array
                         items:
@@ -147,6 +155,163 @@ paths:
                         format: date-time
         '401':
           description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/fds/reviews:
+    get:
+      summary: List orders held for FDS review (admin)
+      tags: [Governance]
+      description: >
+        Orders with fds_decision REVIEW, newest first (limit 200). Reading the
+        queue writes a pii_access_log VIEW row (buyer_email is exposed).
+      responses:
+        '200':
+          description: Review queue with per-order scores and triggered rules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/fds/reviews/{id}/clear:
+    post:
+      summary: Clear an FDS review and release held settlements (admin)
+      tags: [Governance]
+      description: >
+        Sets fds_decision CLEARED. When the order is already PAID, its HOLD
+        settlements move to PENDING in the same batch. Requires a review note;
+        the loser of a concurrent resolution race gets 409 NOT_IN_REVIEW.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order id or order_no in REVIEW state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Review cleared
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Unknown order id
+        '409':
+          description: NOT_IN_REVIEW when the order is not awaiting review
+
+  /api/v1/admin/fds/reviews/{id}/fraud:
+    post:
+      summary: Confirm an FDS review as fraud (admin)
+      tags: [Governance]
+      description: >
+        Sets fds_decision FRAUD. Settlements stay HOLD; account suspension and
+        refunds follow the existing operator procedures.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order id or order_no in REVIEW state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Review confirmed as fraud
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Unknown order id
+        '409':
+          description: NOT_IN_REVIEW when the order is not awaiting review
+
+  /api/v1/admin/fds/prohibited-hs:
+    get:
+      summary: List prohibited HS codes (admin)
+      tags: [Governance]
+      responses:
+        '200':
+          description: Blocklist rows ordered by code
+        '401':
+          description: Missing or expired JWT, or not an admin
+    post:
+      summary: Add an HS code to the prohibited blocklist (admin)
+      tags: [Governance]
+      description: >
+        Feeds RULE_05 (PROHIBITED_HS_SCANNER): checkout blocks any line whose
+        HS code equals or starts with a listed code (digits compared).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, reason]
+              properties:
+                code:
+                  type: string
+                  maxLength: 20
+                  description: HS code, at least 2 digits (dots allowed).
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: Code blocklisted
+        '400':
+          description: INVALID_HS_CODE when fewer than 2 digits remain
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '409':
+          description: ALREADY_BLOCKED when the code is already listed
+
+  /api/v1/admin/fds/prohibited-hs/{id}:
+    delete:
+      summary: Remove an HS code from the prohibited blocklist (admin)
+      tags: [Governance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Blocklisted HS code.
+      responses:
+        '200':
+          description: Code removed
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Code not on the blocklist
 
   /api/v1/admin/disputes:
     get:

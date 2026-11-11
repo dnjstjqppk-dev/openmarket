@@ -13,7 +13,10 @@ export const ACCOUNTS = Object.freeze({
   COMMISSION_REVENUE: 'COMMISSION_REVENUE',           // revenue: marketplace commission
   DIRECT_SALES_REVENUE: 'DIRECT_SALES_REVENUE',       // revenue: MODEL A goods + shipping
   BANK: 'BANK',                                       // asset: operator bank account (payouts)
-  CREDIT_FORFEITURE_INCOME: 'CREDIT_FORFEITURE_INCOME' // income: credit balance forfeited on member withdrawal (tax treatment: confirm with accountant)
+  CREDIT_FORFEITURE_INCOME: 'CREDIT_FORFEITURE_INCOME', // income: credit balance forfeited on member withdrawal (tax treatment: confirm with accountant)
+  SUPPLIER_PAYABLE: 'SUPPLIER_PAYABLE',             // liability: owed to MODEL A suppliers (Wave E)
+  PURCHASE_COST: 'PURCHASE_COST',                   // expense: dropship COGS at supplier shipment (Wave E)
+  INVENTORY_ASSET: 'INVENTORY_ASSET'                // asset: self-ship stock received at the warehouse (Wave E)
 });
 
 /**

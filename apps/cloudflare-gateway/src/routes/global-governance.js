@@ -2,15 +2,17 @@
 // OLMOA Global OpenMarket Phase 3: Central Operations Control Tower, FDS Anti-Fraud Watch & 3-Party Dispute Arbitration Tribunal
 
 import { requireAdmin } from '../lib/auth.js';
-import { json } from '../lib/http.js';
+import { json, readJson, bad, conflict, notFound, str } from '../lib/http.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
+import { auditStatement } from '../lib/ledger.js';
+import { maybeOpenPii } from '../lib/pii-crypto.js';
 
 export const FDS_ACTIVE_RULES = [
-  { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '동일 IP 10분 내 다중 카드 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
-  { id: 'RULE_02', code: 'GEO_IP_MISMATCH', name: '접속 IP 국가 ≠ 카드 발급국 ≠ 배송지 불일치', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
-  { id: 'RULE_03', code: 'WASH_TRADING_GUARD', name: '구매자-판매자 동일 계좌/디바이스 자전거래 탐지', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
-  { id: 'RULE_04', code: 'HIGH_VALUE_ESCROW_HOLD', name: '고액 직구 주문($1,000 초과) 3D Secure 강제', severity: 'MEDIUM', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' },
-  { id: 'RULE_05', code: 'PROHIBITED_HS_SCANNER', name: '수입금지 품목(식약처 위해성분/가품) AI 키워드 차단', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'NOT_ENFORCED_AT_CHECKOUT' }
+  { id: 'RULE_01', code: 'VELOCITY_CARD_TEST', name: '10분 내 동일 계정 결제 3회 실패 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_02', code: 'GEO_IP_MISMATCH', name: '해외 IP 첫 결제 심사 (구매 이력 있으면 통과)', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_03', code: 'WASH_TRADING_GUARD', name: '구매자=판매자 또는 판매자 CS 번호 수령 차단', severity: 'CRITICAL', status: 'ACTIVE', hit_count_24h: null, enforcement: 'ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_04', code: 'HIGH_VALUE_ESCROW_HOLD', name: '고액 주문(150만원 이상) 정산 보류 + 수동 심사', severity: 'MEDIUM', status: 'ACTIVE', hit_count_24h: null, enforcement: 'ENFORCED_AT_CHECKOUT' },
+  { id: 'RULE_05', code: 'PROHIBITED_HS_SCANNER', name: '수입금지 HS 부호 차단 (운영자 차단목록)', severity: 'HIGH', status: 'ACTIVE', hit_count_24h: null, enforcement: 'ENFORCED_AT_CHECKOUT' }
 ];
 
 export async function handleGlobalGovernanceRoutes(request, url, env, corsHeaders) {
@@ -56,7 +58,7 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
           d1_database: 'HEALTHY',
           customs_unipass_api: env.UNIPASS_API_KEY ? 'KEY_CONFIGURED' : 'NOT_CONFIGURED',
           global_fx_synchronizer: 'STATIC_RATE_TABLE',
-          fds_engine: 'NOT_ENFORCED_AT_CHECKOUT'
+          fds_engine: 'ENFORCED_AT_CHECKOUT'
         },
         timestamp: new Date().toISOString()
       }
@@ -65,27 +67,35 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
 
   // 2. Fraud Detection System (FDS) Overview (/api/v1/admin/fds/overview)
   if (url.pathname === '/api/v1/admin/fds/overview' && request.method === 'GET') {
+    // Wave E: every number below is measured — blocks from the audit trail, reviews from the orders table.
+    const blocked = await env.DB.prepare("SELECT COUNT(*) c FROM admin_audit_log WHERE action = 'FDS_BLOCK' AND created_at > datetime('now', '-24 hours')").first('c') || 0;
+    const reviews24 = await env.DB.prepare("SELECT COUNT(*) c FROM orders WHERE fds_decided_at > datetime('now', '-24 hours') AND fds_decision IN ('REVIEW','CLEARED','FRAUD')").first('c') || 0;
+    const openReviews = await env.DB.prepare("SELECT COUNT(*) c FROM orders WHERE fds_decision = 'REVIEW'").first('c') || 0;
+    const rules = [];
+    for (const r of FDS_ACTIVE_RULES) {
+      const like = `%"${r.code}"%`;
+      const viaOrders = await env.DB.prepare("SELECT COUNT(*) c FROM orders WHERE fds_decided_at > datetime('now', '-24 hours') AND fds_rules_json LIKE ?").bind(like).first('c') || 0;
+      const viaBlocks = await env.DB.prepare("SELECT COUNT(*) c FROM admin_audit_log WHERE action = 'FDS_BLOCK' AND created_at > datetime('now', '-24 hours') AND after_json LIKE ?").bind(like).first('c') || 0;
+      rules.push({ ...r, hit_count_24h: viaOrders + viaBlocks });
+    }
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA FDS Security Engine',
-      data: {
-        // Rules are defined but checkout does not call them, so nothing has been blocked or challenged.
-        status: 'NOT_ENFORCED_AT_CHECKOUT',
-        blocked_attempts_24h: null,
-        challenged_3ds_24h: null,
-        active_rules: FDS_ACTIVE_RULES
-      }
+      data: { status: 'ENFORCED_AT_CHECKOUT', blocked_attempts_24h: blocked, reviews_24h: reviews24, open_reviews: openReviews, active_rules: rules }
     }), { headers: corsHeaders });
   }
 
-  // 3. FDS Real-time Risk Evaluation (/api/v1/admin/fds/evaluate)
+  // 3. FDS manual probe (/api/v1/admin/fds/evaluate). An estimate from supplied
+  // signals — checkout itself evaluates with live DB signals (services/fds.js).
   if (url.pathname === '/api/v1/admin/fds/evaluate' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJson(request);
     const amountKrw = Number(body.amount_krw || 0);
     const ipCountry = String(body.ip_country || 'KR').toUpperCase();
-    const cardCountry = String(body.card_country || 'KR').toUpperCase();
     const shippingCountry = String(body.shipping_country || 'KR').toUpperCase();
     const failedAttempts = Number(body.failed_attempts_10m || 0);
+    const blockAt = Number(env.FDS_BLOCK_SCORE) > 0 ? Number(env.FDS_BLOCK_SCORE) : 85;
+    const reviewAt = Number(env.FDS_REVIEW_SCORE) > 0 ? Number(env.FDS_REVIEW_SCORE) : 40;
+    const highValue = Number(env.FDS_HIGH_VALUE_KRW) > 0 ? Number(env.FDS_HIGH_VALUE_KRW) : 1500000;
 
     let riskScore = 10;
     const triggeredRules = [];
@@ -94,17 +104,17 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
       riskScore += 75;
       triggeredRules.push('VELOCITY_CARD_TEST');
     }
-    if (ipCountry !== cardCountry || cardCountry !== shippingCountry) {
+    if (ipCountry !== shippingCountry) {
       riskScore += 45;
       triggeredRules.push('GEO_IP_MISMATCH');
     }
-    if (amountKrw >= 1500000) {
-      riskScore += 25;
+    if (amountKrw >= highValue) {
+      riskScore += 35;
       triggeredRules.push('HIGH_VALUE_ESCROW_HOLD');
     }
 
     riskScore = Math.min(100, riskScore);
-    const decision = riskScore >= 85 ? 'BLOCK' : riskScore >= 40 ? 'CHALLENGE_3DS' : 'ALLOW';
+    const decision = riskScore >= blockAt ? 'BLOCK' : riskScore >= reviewAt ? 'REVIEW' : 'ALLOW';
 
     return new Response(JSON.stringify({
       success: true,
@@ -118,6 +128,77 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     }), { headers: corsHeaders });
   }
 
+  // 3b. FDS review queue: orders held for human eyes.
+  if (url.pathname === '/api/v1/admin/fds/reviews' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT o.id, o.order_no, o.customer_id, u.email AS buyer_email, o.total_pay_amount, o.payment_status,
+              o.fds_score, o.fds_decision, o.fds_rules_json, o.fds_decided_at, o.created_at
+       FROM orders o LEFT JOIN users u ON u.id = o.customer_id
+       WHERE o.fds_decision = 'REVIEW' ORDER BY o.fds_decided_at DESC LIMIT 200`
+    ).all();
+    await logPiiView(env, govAdmin, 'admin.fds-reviews', 'order', results.map((r) => r.id), 'buyer_email', request);
+    return json(corsHeaders, { success: true, count: results.length,
+      data: results.map((r) => ({ ...r, triggered_rules: JSON.parse(r.fds_rules_json || '[]') })) });
+  }
+
+  // 3c. FDS review resolution: CLEAR releases held settlements (paid orders);
+  // MARK_FRAUD keeps the money held and leaves the account to the fraud process.
+  const fdsClearM = url.pathname.match(/^\/api\/v1\/admin\/fds\/reviews\/([^/]+)\/(clear|fraud)$/);
+  if (fdsClearM && request.method === 'POST') {
+    const body = await readJson(request);
+    const note = str(body.note, { field: '심사 메모', max: 500, required: true });
+    const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? OR order_no = ?').bind(fdsClearM[1], fdsClearM[1]).first();
+    if (!order) throw notFound('주문을 찾을 수 없습니다.');
+    if (order.fds_decision !== 'REVIEW') throw conflict('NOT_IN_REVIEW', `심사 대기 상태에서만 처리할 수 있습니다. (현재: ${order.fds_decision || '없음'})`);
+    const clearing = fdsClearM[2] === 'clear';
+    const next = clearing ? 'CLEARED' : 'FRAUD';
+    const st = [
+      env.DB.prepare('UPDATE orders SET fds_decision = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND fds_decision = ?').bind(next, order.id, 'REVIEW'),
+      auditStatement(env, govAdmin, { action: clearing ? 'FDS_REVIEW_CLEAR' : 'FDS_REVIEW_FRAUD', targetType: 'order', targetId: order.id,
+        before: { fds_decision: 'REVIEW', fds_score: order.fds_score }, after: { fds_decision: next, note }, request })
+    ];
+    if (clearing && order.payment_status === 'PAID') {
+      st.push(env.DB.prepare("UPDATE settlements SET status = 'PENDING', updated_at = CURRENT_TIMESTAMP WHERE status = 'HOLD' AND sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id));
+    }
+    const r = await env.DB.batch(st);
+    if (r[0].meta.changes !== 1) throw conflict('NOT_IN_REVIEW', '다른 운영자가 먼저 처리했습니다.');
+    return json(corsHeaders, { success: true, order_id: order.id, fds_decision: next,
+      ...(clearing && order.payment_status !== 'PAID' ? { note: '미결제 주문이라 보류 정산이 없습니다. 결제 시 정상 흐름으로 진행됩니다.' } : {}),
+      ...(!clearing ? { next_action: '정산은 HOLD로 유지됩니다. 계정 정지·환불은 기존 관리자 절차로 진행하세요.' } : {}) });
+  }
+
+  // 3d. Prohibited HS blocklist (RULE_05 input).
+  if (url.pathname === '/api/v1/admin/fds/prohibited-hs' && request.method === 'GET') {
+    const { results } = await env.DB.prepare('SELECT code, reason, created_at FROM prohibited_hs_codes ORDER BY code').all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+  if (url.pathname === '/api/v1/admin/fds/prohibited-hs' && request.method === 'POST') {
+    const body = await readJson(request);
+    const code = str(body.code, { field: 'HS 부호', max: 20, required: true }).replace(/[^0-9.]/g, '');
+    if (code.replace(/\D/g, '').length < 2) throw bad('INVALID_HS_CODE', 'HS 부호는 숫자 2자리 이상이어야 합니다.');
+    const reason = str(body.reason, { field: '사유', max: 300, required: true });
+    try {
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO prohibited_hs_codes (code, reason) VALUES (?, ?)').bind(code, reason),
+        auditStatement(env, govAdmin, { action: 'FDS_HS_BLOCK_ADD', targetType: 'hs_code', targetId: code, after: { reason }, request })
+      ]);
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw conflict('ALREADY_BLOCKED', '이미 차단된 HS 부호입니다.');
+      throw e;
+    }
+    return json(corsHeaders, { success: true, code, reason }, 201);
+  }
+  const hsDelM = url.pathname.match(/^\/api\/v1\/admin\/fds\/prohibited-hs\/([^/]+)$/);
+  if (hsDelM && request.method === 'DELETE') {
+    const code = decodeURIComponent(hsDelM[1]);
+    const r = await env.DB.batch([
+      env.DB.prepare('DELETE FROM prohibited_hs_codes WHERE code = ?').bind(code),
+      auditStatement(env, govAdmin, { action: 'FDS_HS_BLOCK_REMOVE', targetType: 'hs_code', targetId: code, request })
+    ]);
+    if (r[0].meta.changes !== 1) throw notFound('차단 목록에 없는 HS 부호입니다.');
+    return json(corsHeaders, { success: true, code });
+  }
+
   // 4. 3-Party Dispute Arbitration List (/api/v1/admin/disputes)
   if (url.pathname === '/api/v1/admin/disputes' && request.method === 'GET') {
     const { results: claims } = await env.DB.prepare(
@@ -128,11 +209,14 @@ export async function handleGlobalGovernanceRoutes(request, url, env, corsHeader
     ).all();
     await logPiiView(env, govAdmin, 'admin.disputes', 'claim', claims.map((c) => c.id), 'recipient_name,pccc', request);
 
+    // SEC-10: open the sealed PCCC before masking (legacy plaintext passes through).
+    const masked = [];
+    for (const c of claims) masked.push({ ...c, pccc: maskLast4(await maybeOpenPii(env, c.pccc)) });
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA Dispute Tribunal',
       count: claims.length,
-      data: claims.map((c) => ({ ...c, pccc: maskLast4(c.pccc) }))
+      data: masked
     }), { headers: corsHeaders });
   }
 

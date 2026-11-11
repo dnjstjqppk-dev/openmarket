@@ -23,6 +23,12 @@ jobs:
         run: |
           npm ci
           npm run build
+        env:
+          # P2-A06: frontend endpoint config lives here, never hardcoded in src.
+          VITE_API_BASE_URL: https://olmoa-api.dnjstjqppk.workers.dev
+          VITE_STOREFRONT_URL: https://openmarket.dnjstjqppk.workers.dev
+          VITE_PARTNER_URL: https://olmoa-partner.dnjstjqppk.workers.dev
+          VITE_ADMIN_URL: https://olmoa-admin.dnjstjqppk.workers.dev
 
       - name: Deploy Edge API Gateway (olmoa-api)
         run: cd apps/cloudflare-gateway && npx wrangler deploy

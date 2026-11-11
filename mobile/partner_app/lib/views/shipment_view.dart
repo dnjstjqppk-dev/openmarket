@@ -94,9 +94,11 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                   controller: controller,
                   decoration: const InputDecoration(
                     labelText: '운송장 번호',
-                    hintText: '송장번호 입력',
+                    hintText: '예: 123456789012 또는 9723810465',
+                    helperText: '영문·숫자·하이픈 6-40자 (DHL·FedEx 포함)',
                   ),
-                  keyboardType: TextInputType.number,
+                  // P2-MOB-02: alphanumerics allowed (was number-only).
+                  keyboardType: TextInputType.text,
                 ),
               ],
             ),
@@ -107,6 +109,16 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                 onPressed: () async {
                   final tracking = controller.text.trim();
                   if (tracking.isEmpty) return;
+                  // Server rule (partner.js ship): alphanumerics + hyphen, 6-40.
+                  if (!RegExp(r'^[A-Za-z0-9-]{6,40}$').hasMatch(tracking)) {
+                    if (!ctx.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              '송장번호 형식이 올바르지 않습니다 (영문·숫자·하이픈 6-40자).')),
+                    );
+                    return;
+                  }
                   final r = await _apiService.updateTracking(
                     subOrderId: order.id,
                     carrier: carrier,

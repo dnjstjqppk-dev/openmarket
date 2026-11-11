@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'views/dashboard_view.dart';
 import 'views/shipment_view.dart';
+import 'views/settlements_view.dart';
 import 'views/account_view.dart';
 import 'widgets/responsive.dart';
 
@@ -42,8 +43,10 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
   Widget build(BuildContext context) {
     final views = [
       PartnerDashboardView(
-          onNavigateToShipments: () => setState(() => _currentIndex = 1)),
+          onNavigateToShipments: () => setState(() => _currentIndex = 1),
+          onNavigateToSettlements: () => setState(() => _currentIndex = 2)),
       const PartnerShipmentView(),
+      const PartnerSettlementsView(),
       const PartnerAccountView(),
     ];
 
@@ -77,6 +80,10 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
             icon: Icon(Icons.local_shipping_outlined),
             selectedIcon: Icon(Icons.local_shipping),
             label: '출고·배송'),
+        NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: '정산'),
         NavigationDestination(
             icon: Icon(Icons.person_outlined),
             selectedIcon: Icon(Icons.person),

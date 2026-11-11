@@ -12,10 +12,13 @@ import '../models/search.dart';
 /// ignored, and no demo identity is ever assumed.
 class AuthSession {
   static const _kToken = 'olmoa_token';
+  static const _kRefresh = 'olmoa_refresh_token';
   static const _kUserId = 'olmoa_customer_id';
   static const _kUserName = 'olmoa_customer_name';
 
   static String? _token;
+  // P2-SEC-07: single-use refresh token (keychain). Sent ONLY to /auth/refresh.
+  static String? _refresh;
   static String? _userId;
   static String? _userName;
   static bool _restored = false;
@@ -37,6 +40,7 @@ class AuthSession {
     _restored = true;
     try {
       _token = await tokenStore.read(_kToken);
+      _refresh = await tokenStore.read(_kRefresh);
       final prefs = await SharedPreferences.getInstance();
       // One-way migration: a token left in plaintext prefs by an older
       // build moves into the keychain and is wiped from prefs.
@@ -73,11 +77,13 @@ class AuthSession {
       final body = _decode(res.body);
       if (res.statusCode == 200 && body['success'] == true && body['token'] is String) {
         _token = body['token'] as String;
+        _refresh = body['refresh_token'] is String ? body['refresh_token'] as String : null;
         final user = body['user'];
         _userId = body['customer_id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
         _userName = (user is Map ? (user['full_name'] ?? user['name']) : null)?.toString() ?? '회원';
         try {
           await tokenStore.write(_kToken, _token!);
+          if (_refresh != null) await tokenStore.write(_kRefresh, _refresh!);
         } catch (_) {}
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -96,19 +102,158 @@ class AuthSession {
     }
   }
 
+  /// Wave G: adopt a profile change locally (name only; id never changes).
+  static Future<void> adoptProfile({String? fullName}) async {
+    if (fullName == null || fullName.isEmpty) return;
+    _userName = fullName;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kUserName, fullName);
+    } catch (_) {}
+  }
+
+  /// Wave G (P2-MOB-P1): sign-up. The server returns a session token, so a
+  /// successful registration signs the user in immediately.
+  static Future<Map<String, dynamic>> register({
+    required String email,
+    required String password,
+    required String fullName,
+    required String phone,
+    bool agreeMarketing = false,
+  }) async {
+    final uri = Uri.parse('${ApiService.baseUrl}/api/v1/auth/register');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email.trim(),
+              'password': password,
+              'full_name': fullName.trim(),
+              'phone': phone.trim(),
+              'agree_terms': true,
+              'agree_privacy': true,
+              'agree_marketing': agreeMarketing,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if ((res.statusCode == 200 || res.statusCode == 201) &&
+          body['success'] == true &&
+          body['token'] is String) {
+        _token = body['token'] as String;
+        _refresh = body['refresh_token'] is String ? body['refresh_token'] as String : null;
+        final user = body['user'];
+        _userId = body['customer_id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
+        _userName = (user is Map ? (user['full_name'] ?? user['name']) : null)?.toString() ?? fullName.trim();
+        try {
+          await tokenStore.write(_kToken, _token!);
+          if (_refresh != null) await tokenStore.write(_kRefresh, _refresh!);
+        } catch (_) {}
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (_userId != null) await prefs.setString(_kUserId, _userId!);
+          await prefs.setString(_kUserName, _userName ?? '회원');
+        } catch (_) {}
+        return {'success': true, 'user_name': _userName};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '회원가입에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 회원가입하지 못했습니다.'};
+    }
+  }
+
+  /// Wave G (P2-MOB-P1): password-reset guidance. Without a mail provider the
+  /// server answers honestly that no mail was sent.
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final uri = Uri.parse('${ApiService.baseUrl}/api/v1/auth/forgot-password');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email.trim()}),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      return {
+        'success': body['success'] == true,
+        'message': body['message']?.toString() ?? '요청을 처리하지 못했습니다.',
+        'email_delivery': body['email_delivery']?.toString(),
+      };
+    } catch (_) {
+      return {'success': false, 'message': '네트워크 오류로 요청하지 못했습니다.'};
+    }
+  }
+
+  /// Wave G (P2-MOB-P1): redeem an email-verification token (link or paste).
+  static Future<Map<String, dynamic>> verifyEmail(String token) async {
+    final uri = Uri.parse('${ApiService.baseUrl}/api/v1/auth/verify-email');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'token': token.trim()}),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'message': body['message']?.toString() ?? '이메일이 인증되었습니다.'};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '인증에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 인증하지 못했습니다.'};
+    }
+  }
+
   static Future<void> logout() async {
     _token = null;
+    _refresh = null;
     _userId = null;
     _userName = null;
     try {
       await tokenStore.delete(_kToken);
+      await tokenStore.delete(_kRefresh);
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kToken);
+      await prefs.remove(_kRefresh);
       await prefs.remove(_kUserId);
       await prefs.remove(_kUserName);
     } catch (_) {}
+  }
+
+  static Future<bool>? _refreshInflight;
+
+  /// Single-flight access refresh. Returns true when a rotated pair was stored.
+  static Future<bool> tryRefresh() => _refreshInflight ??= _doRefresh().whenComplete(() => _refreshInflight = null);
+
+  static Future<bool> _doRefresh() async {
+    await restore();
+    final rt = _refresh;
+    if (rt == null || rt.isEmpty) return false;
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/api/v1/auth/refresh');
+      final res = await http
+          .post(uri, headers: const {'Content-Type': 'application/json'}, body: jsonEncode({'refresh_token': rt}))
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 200 && body['success'] == true && body['token'] is String && body['refresh_token'] is String) {
+        _token = body['token'] as String;
+        _refresh = body['refresh_token'] as String;
+        try {
+          await tokenStore.write(_kToken, _token!);
+          await tokenStore.write(_kRefresh, _refresh!);
+        } catch (_) {}
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Called on any 401 from our API: the token is expired or revoked.
@@ -131,11 +276,29 @@ String _idemKey() {
 }
 
 class ApiService {
-  static const String baseUrl = 'https://olmoa-api.dnjstjqppk.workers.dev';
+  // P2-MOB-04: staging/QA builds point elsewhere via
+  //   flutter run --dart-define API_BASE_URL=https://staging-api.example.com
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://olmoa-api.dnjstjqppk.workers.dev',
+  );
+
+  /// P2-SEC-07: runs an authenticated request, refreshing once on 401 and
+  /// retrying with the rotated token (headers are rebuilt inside [req]).
+  /// A second 401 falls through to the caller's onUnauthorized path.
+  static Future<http.Response> _authed(Future<http.Response> Function() req) async {
+    var res = await req();
+    if (res.statusCode == 401 && await AuthSession.tryRefresh()) {
+      res = await req();
+    }
+    return res;
+  }
 
   // Instance methods for views instantiating ApiService()
-  Future<List<Product>> fetchProducts({String? categorySlug, String? query}) =>
-      ApiService.getProducts(categorySlug: categorySlug, query: query);
+  Future<List<Product>> fetchProducts(
+          {String? categorySlug, String? query, String? sort}) =>
+      ApiService.getProducts(
+          categorySlug: categorySlug, query: query, sort: sort);
 
   Future<List<Map<String, dynamic>>> getOrders() => ApiService.fetchOrders();
 
@@ -189,7 +352,7 @@ class ApiService {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     final uri = Uri.parse('$baseUrl/api/v1/addresses');
-    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
     if (res.statusCode == 401) {
       await AuthSession.onUnauthorized();
       throw const AuthRequiredException();
@@ -284,12 +447,17 @@ class ApiService {
 
   /// Server catalog only. On failure returns [] so the view shows a retry
   /// state — a local fake catalog is never presented as real products.
-  static Future<List<Product>> getProducts({String? categorySlug, String? query}) async {
+  static Future<List<Product>> getProducts(
+      {String? categorySlug, String? query, String? sort}) async {
     try {
       var uri = Uri.parse('$baseUrl/api/v1/products');
       final params = <String, String>{'limit': '60'};
-      if (categorySlug != null && categorySlug.isNotEmpty) params['category'] = categorySlug;
+      if (categorySlug != null && categorySlug.isNotEmpty) {
+        params['category'] = categorySlug;
+      }
       if (query != null && query.isNotEmpty) params['q'] = query;
+      // P2-MOB-P3: best/deals channels (server sorts: popular/newest/rating/price_*).
+      if (sort != null && sort.isNotEmpty) params['sort'] = sort;
       uri = uri.replace(queryParameters: params);
 
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
@@ -304,12 +472,25 @@ class ApiService {
     }
   }
 
+  /// P2-MOB-P3: full category tree for the channel screen.
+  static Future<List<Map<String, dynamic>>> getCategories() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/categories');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final List<dynamic> list = _decode(res.body)['data'] ?? [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> fetchOrders() async {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/orders?limit=30');
-      final response = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10));
+      final response = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10)));
       if (response.statusCode == 401) {
         await AuthSession.onUnauthorized();
         throw const AuthRequiredException();
@@ -352,13 +533,14 @@ class ApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl/api/v1/payments/confirm');
-      final response = await http
+      final idemKey = _idemKey();
+      final response = await _authed(() => http
           .post(
             uri,
-            headers: {...AuthSession.headers(), 'X-Idempotency-Key': _idemKey()},
+            headers: {...AuthSession.headers(), 'X-Idempotency-Key': idemKey},
             body: jsonEncode({'order_id': orderRef, 'payment_key': paymentKey, 'amount': amount}),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 15)));
       final body = _decode(response.body);
       if (response.statusCode == 401) {
         await AuthSession.onUnauthorized();
@@ -380,16 +562,17 @@ class ApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final idemKey = idem ? _idemKey() : null;
+      final response = await _authed(() => http
           .post(
             uri,
             headers: {
               ...AuthSession.headers(),
-              if (idem) 'X-Idempotency-Key': _idemKey(),
+              if (idemKey != null) 'X-Idempotency-Key': idemKey,
             },
             body: body == null ? null : jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 12)));
       final decoded = _decode(response.body);
       if (response.statusCode == 401) {
         await AuthSession.onUnauthorized();
@@ -409,7 +592,7 @@ class ApiService {
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/orders/$orderId');
-      final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10));
+      final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10)));
       if (res.statusCode == 401) {
         await AuthSession.onUnauthorized();
         throw const AuthRequiredException();
@@ -434,7 +617,7 @@ class ApiService {
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/orders/$orderId/tracking');
-      final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10));
+      final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10)));
       if (res.statusCode == 401) {
         await AuthSession.onUnauthorized();
         throw const AuthRequiredException();
@@ -495,7 +678,7 @@ class ApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl/api/v1/orders/quote');
-      final res = await http
+      final res = await _authed(() => http
           .post(
             uri,
             headers: AuthSession.headers(),
@@ -506,7 +689,7 @@ class ApiService {
               if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
             }),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 10)));
       final body = _decode(res.body);
       if (res.statusCode == 401) {
         await AuthSession.onUnauthorized();
@@ -526,7 +709,7 @@ class ApiService {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     final uri = Uri.parse('$baseUrl/api/v1/coupons');
-    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
     if (res.statusCode == 401) {
       await AuthSession.onUnauthorized();
       throw const AuthRequiredException();
@@ -546,7 +729,7 @@ class ApiService {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     final uri = Uri.parse('$baseUrl/api/v1/credits');
-    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
     if (res.statusCode == 401) {
       await AuthSession.onUnauthorized();
       throw const AuthRequiredException();
@@ -592,24 +775,24 @@ class ApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl/api/v1/orders/checkout');
-      final response = await http
+      final idemKey = _idemKey();
+      final response = await _authed(() => http
           .post(
             uri,
-            headers: {...AuthSession.headers(), 'X-Idempotency-Key': _idemKey()},
+            headers: {...AuthSession.headers(), 'X-Idempotency-Key': idemKey},
             body: jsonEncode({
               'items': items,
               'recipient_name': recipientName,
               'recipient_phone': phone,
               'shipping_address_line1': addressLine1,
               'shipping_address_line2': addressLine2,
-              'shipping_postal_code': postalCode,
               'shipping_memo': memo,
               if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
               if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
               if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
             }),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 12)));
       final body = _decode(response.body);
       if (response.statusCode == 401) {
         await AuthSession.onUnauthorized();
@@ -637,7 +820,7 @@ class ApiService {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     final uri = Uri.parse('$baseUrl/api/v1/cart');
-    final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
     if (res.statusCode == 401) {
       await AuthSession.onUnauthorized();
       throw const AuthRequiredException();
@@ -649,6 +832,269 @@ class ApiService {
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
+  // ---- Wave G: wishlist / addresses / notifications / support / reviews ----
+
+  static Future<List<Map<String, dynamic>>> getWishlist() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/wishlist');
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '찜 목록을 불러오지 못했습니다.');
+    }
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static Future<Map<String, dynamic>> toggleWishlist(String productId) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/wishlist');
+      final res = await _authed(() => http
+          .post(uri, headers: AuthSession.headers(), body: jsonEncode({'product_id': productId}))
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'wished': body['wished'] == true, 'action': body['action']?.toString()};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '찜하기에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 찜하기에 실패했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createAddress({
+    required String recipientName,
+    required String phone,
+    required String postalCode,
+    required String addressLine1,
+    String addressLine2 = '',
+    String memo = '',
+    bool isDefault = false,
+  }) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/addresses');
+      final res = await _authed(() => http
+          .post(uri,
+              headers: AuthSession.headers(),
+              body: jsonEncode({
+                'recipient_name': recipientName,
+                'phone': phone,
+                'postal_code': postalCode,
+                'address_line1': addressLine1,
+                'address_line2': addressLine2,
+                'delivery_note': memo,
+                'is_default': isDefault ? 1 : 0,
+              }))
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if ((res.statusCode == 200 || res.statusCode == 201) && body['success'] == true) {
+        return {'success': true, 'data': body['data']};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '배송지 등록에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 배송지를 등록하지 못했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> setDefaultAddress(String addressId) async {
+    final r = await _addressAction('/api/v1/addresses/$addressId/default', 'PUT', null);
+    if (r['success'] != true && r['error'] == null) r['error'] = '기본 배송지 변경에 실패했습니다.';
+    return r;
+  }
+
+  static Future<Map<String, dynamic>> deleteAddress(String addressId) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/addresses/$addressId');
+      final res = await _authed(() => http.delete(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) return {'success': true};
+      return {'success': false, 'error': body['error']?.toString() ?? '배송지 삭제에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 배송지를 삭제하지 못했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> _addressAction(String path, String method, Map<String, dynamic>? body) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final req = method == 'PUT'
+          ? http.put(uri, headers: AuthSession.headers(), body: body == null ? null : jsonEncode(body))
+          : http.post(uri, headers: AuthSession.headers(), body: body == null ? null : jsonEncode(body));
+      final res = await _authed(() => req.timeout(const Duration(seconds: 10)));
+      final decoded = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && decoded['success'] == true) return {'success': true, 'data': decoded['data']};
+      return {'success': false, 'error': decoded['error']?.toString()};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 요청을 처리하지 못했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getNotifications() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/notifications?limit=50');
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '알림을 불러오지 못했습니다.');
+    }
+    final body = _decode(res.body);
+    return {
+      'unread': body['unread_count'] ?? 0,
+      'items': ((body['data'] ?? []) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+    };
+  }
+
+  static Future<void> readNotification(String id) async {
+    await _addressAction('/api/v1/notifications/$id/read', 'POST', null);
+  }
+
+  static Future<void> readAllNotifications() async {
+    await _addressAction('/api/v1/notifications/read-all', 'PUT', null);
+  }
+
+  static Future<List<Map<String, dynamic>>> getFaq() async {
+    final uri = Uri.parse('$baseUrl/api/v1/support/faq');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode != 200) throw ApiException('FAQ를 불러오지 못했습니다.');
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> getMyInquiries() async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
+    final uri = Uri.parse('$baseUrl/api/v1/support/inquiries');
+    final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
+    if (res.statusCode == 401) {
+      await AuthSession.onUnauthorized();
+      throw const AuthRequiredException();
+    }
+    if (res.statusCode != 200) {
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '문의 내역을 불러오지 못했습니다.');
+    }
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static Future<Map<String, dynamic>> submitInquiry({
+    required String category,
+    required String subject,
+    required String message,
+  }) async {
+    final r = await _postAction('/api/v1/support/inquiries',
+        body: {'category': category, 'subject': subject, 'message': message});
+    if (r['success'] != true && r['error'] == null) r['error'] = '문의 등록에 실패했습니다.';
+    return r;
+  }
+
+  static Future<Map<String, dynamic>> getReviews(String productId) async {
+    final uri = Uri.parse('$baseUrl/api/v1/products/$productId/reviews');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode != 200) throw ApiException('리뷰를 불러오지 못했습니다.');
+    return _decode(res.body);
+  }
+
+  static Future<Map<String, dynamic>> submitReview({
+    required String productId,
+    required int rating,
+    required String content,
+  }) async {
+    final r = await _postAction('/api/v1/products/$productId/reviews',
+        body: {'rating': rating, 'content': content});
+    if (r['success'] != true && r['error'] == null) r['error'] = '리뷰 등록에 실패했습니다.';
+    return r;
+  }
+
+  static Future<List<Map<String, dynamic>>> getQna(String productId) async {
+    final uri = Uri.parse('$baseUrl/api/v1/products/$productId/qna');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode != 200) throw ApiException('상품 문의를 불러오지 못했습니다.');
+    final List<dynamic> list = _decode(res.body)['data'] ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static Future<Map<String, dynamic>> askQuestion({
+    required String productId,
+    required String question,
+    bool isSecret = false,
+  }) async {
+    final r = await _postAction('/api/v1/products/$productId/qna',
+        body: {'question': question, 'is_secret': isSecret});
+    if (r['success'] != true && r['error'] == null) r['error'] = '문의 등록에 실패했습니다.';
+    return r;
+  }
+
+  static Future<Map<String, dynamic>> updateProfile({String? fullName, String? phone}) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/auth/profile');
+      final res = await _authed(() => http
+          .put(uri,
+              headers: AuthSession.headers(),
+              body: jsonEncode({
+                if (fullName != null) 'full_name': fullName,
+                if (phone != null) 'phone': phone,
+              }))
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) {
+        final u = body['data'] is Map ? (body['data'] as Map)['user'] : null;
+        if (u is Map) AuthSession.adoptProfile(fullName: u['full_name']?.toString());
+        return {'success': true};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '회원 정보 수정에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 회원 정보를 수정하지 못했습니다.'};
+    }
+  }
+
   /// P1-M05: push the full local line set (replace semantics). Returns
   /// {success} or {success:false, error} - INVALID_SKU names the bad line.
   static Future<Map<String, dynamic>> syncCart(List<Map<String, Object>> items) async {
@@ -658,9 +1104,9 @@ class ApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl/api/v1/cart');
-      final res = await http
+      final res = await _authed(() => http
           .put(uri, headers: AuthSession.headers(), body: jsonEncode({'items': items}))
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 10)));
       final body = _decode(res.body);
       if (res.statusCode == 401) {
         await AuthSession.onUnauthorized();

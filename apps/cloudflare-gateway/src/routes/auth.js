@@ -2,7 +2,7 @@
 // Unified authentication. Every role logs in with a users-table account and a PBKDF2 password.
 
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from '../utils/crypto-auth.js';
-import { issueToken, requireAuth } from '../lib/auth.js';
+import { issueToken, issueRefreshToken, useRefreshToken, requireAuth, ACCESS_TOKEN_TTL_SECONDS } from '../lib/auth.js';
 import { json, readJson, bad, unauthorized, conflict, str, HttpError, unavailable } from '../lib/http.js';
 import { emailConfigured, sendEmail, storefrontBaseUrl, resetPasswordMail, verifyEmailMail } from '../lib/email.js';
 import { newId, sqlNow } from '../lib/ids.js';
@@ -40,8 +40,13 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE LOWER(email) = ?').bind(email).first();
     const generic = unauthorized('이메일 또는 비밀번호가 올바르지 않습니다.');
     if (!user) { await verifyPassword(password, 'pbkdf2:100000:00:00'); throw generic; }
-    if (user.locked_until && user.locked_until > sqlNow()) throw new HttpError(423, 'ACCOUNT_LOCKED', '로그인 시도가 너무 많아 잠시 잠겼습니다. 15분 후 다시 시도해 주세요.');
+    // P2-SEC-09: the password is verified BEFORE the lock is revealed. A wrong password
+    // always yields the generic 401 (locked or not); the 423 goes only to a caller who
+    // already knows the password — i.e. the real owner, who needs the "wait" guidance.
     const ok = await verifyPassword(password, user.password_hash);
+    const locked = user.locked_until && user.locked_until > sqlNow();
+    if (locked && ok) throw new HttpError(423, 'ACCOUNT_LOCKED', '로그인 시도가 너무 많아 잠시 잠겼습니다. 15분 후 다시 시도해 주세요.');
+    if (locked) throw generic;
     if (!ok) {
       const fails = Number(user.failed_login_count || 0) + 1;
       await env.DB.prepare('UPDATE users SET failed_login_count = ?, locked_until = ? WHERE id = ?')
@@ -72,9 +77,32 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       if (!partner) throw new HttpError(403, 'PARTNER_PROFILE_MISSING', '입점사 정보가 연결되지 않은 판매자 계정입니다.');
     }
     const token = await issueToken(env, user, partner, { mfa });
+    const refreshToken = await issueRefreshToken(env, user, { mfa });
     const payload = {
-      role: user.role, token, expiresIn: 43200, user: publicUser(user),
+      role: user.role, token, refresh_token: refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS, user: publicUser(user),
       ...(user.role === 'ROLE_ADMIN' ? { admin_role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at), mfa_setup_required: !user.totp_enabled_at && twoFactorRequired(env) } : {}),
+      ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
+      ...(partner ? { partner_id: partner.id, partner } : {})
+    };
+    return json(corsHeaders, { success: true, ...payload, data: payload });
+  }
+
+  // P2-SEC-07: rotate a single-use refresh token into a fresh access + refresh pair.
+  if (p === '/api/v1/auth/refresh' && request.method === 'POST') {
+    const body = await readJson(request);
+    const raw = str(body.refresh_token, { field: '리프레시 토큰', max: 200 });
+    if (!raw) throw bad('REFRESH_TOKEN_REQUIRED', '리프레시 토큰이 필요합니다.');
+    const { user, mfa } = await useRefreshToken(env, raw);
+    let partner = null;
+    if (user.role === 'ROLE_PARTNER') {
+      partner = await env.DB.prepare('SELECT id, business_name, status, sales_model FROM partners WHERE owner_user_id = ?').bind(user.id).first();
+      if (!partner) throw new HttpError(403, 'PARTNER_PROFILE_MISSING', '입점사 정보가 연결되지 않은 판매자 계정입니다.');
+    }
+    const token = await issueToken(env, user, partner, { mfa });
+    const refreshToken = await issueRefreshToken(env, user, { mfa });
+    const payload = {
+      role: user.role, token, refresh_token: refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS, user: publicUser(user),
+      ...(user.role === 'ROLE_ADMIN' ? { admin_role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at) } : {}),
       ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
       ...(partner ? { partner_id: partner.id, partner } : {})
     };
@@ -201,6 +229,11 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     let devToken;
     // NOTE: the answer below depends on provider configuration, not on whether the address exists (no enumeration).
     if (user) {
+      // P2-SEC-09: at most 3 live reset tokens per account — prune older unused ones
+      // (used tokens stay for the audit trail). rowid breaks created_at ties.
+      await env.DB.prepare(`DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL AND id NOT IN (
+          SELECT id FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 2
+        )`).bind(user.id, user.id).run();
       const token = randomToken(32);
       await env.DB.prepare('INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)')
         .bind(newId('prt'), user.id, await sha256Hex(token), new Date(Date.now() + 30 * 60 * 1000).toISOString()).run();

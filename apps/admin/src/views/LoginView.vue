@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { API_BASE_URL, setAdminToken, setAdminRole } from '../config'
+import { API_BASE_URL, setAdminToken, setAdminRefreshToken, setAdminRole } from '../config'
 
 const router = useRouter()
 const route = useRoute()
@@ -31,6 +31,7 @@ const handleAdminLogin = async () => {
       return
     }
     setAdminToken(json.token)
+    if (json.refresh_token) setAdminRefreshToken(json.refresh_token)
     setAdminRole(json.admin_role || '')
     if (json.mfa_setup_required) { router.replace('/security'); return }
     const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'

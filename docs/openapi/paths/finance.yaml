@@ -14,7 +14,11 @@ paths:
         /api/v1/admin/finance/cash-receipts/{id}/issue. Only TRANSFER and
         VIRTUAL_ACCOUNT payments qualify; card payments are rejected with
         NOT_CASH_PAYMENT. Repeat requests for the same order return 200 with
-        already_requested instead of creating a duplicate.
+        already_requested instead of creating a duplicate — unless a refund
+        landed after the request, in which case the stale REQUESTED row is
+        superseded and a fresh row is computed on the net cash basis
+        (total_pay minus refunded PG). Fully refunded or cancelled orders are
+        rejected with ORDER_REFUNDED.
       requestBody:
         required: true
         content:
@@ -71,11 +75,57 @@ paths:
                   data:
                     type: object
         '400':
-          description: INVALID_IDENTIFIER, ORDER_NOT_PAID or NOT_CASH_PAYMENT
+          description: INVALID_IDENTIFIER, ORDER_NOT_PAID, NOT_CASH_PAYMENT, ORDER_REFUNDED or NO_CASH_BASIS
         '401':
           description: Missing or expired JWT, or not a customer session
         '404':
           description: Unknown order id, or not the buyer's own order
+
+  /api/v1/finance/cash-receipts:
+    get:
+      summary: List the buyer's own cash receipts (masked)
+      tags: [Finance]
+      description: Newest-first CASH_RECEIPT rows of the caller's own orders (limit 100).
+      responses:
+        '200':
+          description: Receipt rows with masked buyer identifiers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT, or not a customer session
+
+  /api/v1/finance/cash-receipts/{id}/cancel:
+    post:
+      summary: Cancel the buyer's own REQUESTED receipt
+      tags: [Finance]
+      description: >
+        The id is the tax_invoices row id. Only the ordering buyer's own
+        REQUESTED rows can be cancelled; anything else is 409 NOT_CANCELLABLE.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Receipt marked CANCELLED
+        '401':
+          description: Missing or expired JWT, or not a customer session
+        '409':
+          description: NOT_CANCELLABLE when the row is not the buyer's pending request
 
   /api/v1/finance/cash-receipts/{id}:
     get:
@@ -153,7 +203,10 @@ paths:
       description: >
         Records an issuance the operator performed in the PG console or Hometax.
         Only REQUESTED rows can be processed; the loser of a concurrent
-        issue/fail race gets 409 NOT_REQUESTED.
+        issue/fail race gets 409 NOT_REQUESTED. The order basis is re-verified
+        at issue time: a refund after the request, or an order that is no
+        longer PAID/PARTIAL_REFUNDED, is rejected with 409 RECEIPT_NEEDS_REISSUE
+        (the buyer must re-request on the net basis).
       parameters:
         - name: id
           in: path
@@ -201,7 +254,7 @@ paths:
         '404':
           description: Unknown cash receipt id
         '409':
-          description: NOT_REQUESTED when the row is no longer in REQUESTED state
+          description: NOT_REQUESTED when the row is no longer in REQUESTED state, or RECEIPT_NEEDS_REISSUE when the order basis changed after the request
 
   /api/v1/admin/finance/cash-receipts/{id}/fail:
     post:
@@ -249,6 +302,89 @@ paths:
           description: Unknown cash receipt id
         '409':
           description: NOT_REQUESTED when the row is no longer in REQUESTED state
+
+  /api/v1/admin/finance/cash-receipts/{id}/cancel-record:
+    post:
+      summary: Record the PG-console cancellation of a CANCEL_REQUIRED receipt (admin)
+      tags: [Finance]
+      description: >
+        A finalized refund flips an ISSUED receipt to CANCEL_REQUIRED (a
+        REQUESTED one dies silently). The operator cancels the receipt in the
+        PG console and records the reference here, closing the row as
+        CANCELLED.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: tax_invoices row id (invoice_type CASH_RECEIPT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cancel_ref]
+              properties:
+                cancel_ref:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: Receipt marked CANCELLED
+        '400':
+          description: cancel_ref missing
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Not an admin session
+        '409':
+          description: NOT_CANCEL_REQUIRED when the row is not awaiting cancellation
+
+  /api/v1/admin/finance/sales-report:
+    get:
+      summary: Sales report with journal-true revenue (admin)
+      tags: [Finance]
+      description: >
+        Revenue (direct_net, commission_net, seller_net) is aggregated from
+        journal_entries net of refunds; GMV and order counts come from paid
+        orders. Dates are UTC calendar days, default the last 30 days, max
+        366-day span. Aggregates only — no buyer personal data.
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            description: YYYY-MM-DD, defaults to 29 days ago.
+        - name: to
+          in: query
+          schema:
+            type: string
+            description: YYYY-MM-DD, defaults to today.
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [day, partner]
+            default: day
+      responses:
+        '200':
+          description: Totals plus a day or partner series
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: INVALID_PERIOD, PERIOD_TOO_WIDE or INVALID_GROUP_BY
+        '401':
+          description: Missing or expired JWT, or not an admin
 
   /api/v1/admin/finance/tax-invoices:
     post:

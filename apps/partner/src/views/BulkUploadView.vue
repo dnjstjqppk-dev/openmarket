@@ -10,6 +10,7 @@ const parsedItems = ref<any[]>([])
 const uploading = ref(false)
 const uploadResult = ref<any>(null)
 const errorMsg = ref('')
+const serverRowErrors = ref<string[]>([])
 // Rows that cannot be registered as-is. Nothing is filled in with default prices, stock, category or images.
 const rowErrors = ref<string[]>([])
 
@@ -93,6 +94,7 @@ const executeBulkUpload = async () => {
   if (parsedItems.value.length === 0) return
   uploading.value = true
   errorMsg.value = ''
+  serverRowErrors.value = []
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products/bulk`, {
       method: 'POST',
@@ -100,7 +102,13 @@ const executeBulkUpload = async () => {
       body: JSON.stringify({ items: parsedItems.value })
     })
     const json = await res.json()
-    if (!res.ok || !json.success) throw new Error(json.error || 'Bulk upload failed')
+    if (!res.ok || !json.success) {
+      // T-N02: whole-batch rejects carry per-row errors — render them like rowErrors.
+      if (Array.isArray(json.errors) && json.errors.length) {
+        serverRowErrors.value = json.errors.map((e: any) => (e && typeof e === 'object' ? `${e.row}행: ${e.error}` : String(e)))
+      }
+      throw new Error(json.error || 'Bulk upload failed')
+    }
     uploadResult.value = json.data
   } catch (err: any) {
     errorMsg.value = err.message || 'Network error'
@@ -148,6 +156,10 @@ const executeBulkUpload = async () => {
     </div>
     <div v-if="errorMsg" class="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-600">
       {{ errorMsg }}
+    </div>
+    <div v-if="serverRowErrors.length" class="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700" role="alert">
+      <div class="font-bold mb-1">서버 반려 행 {{ serverRowErrors.length }}개 (전량 업로드 중단됨)</div>
+      <ul class="list-disc pl-4 space-y-0.5 max-h-48 overflow-y-auto"><li v-for="e in serverRowErrors" :key="e">{{ e }}</li></ul>
     </div>
 
     <!-- Preview Table & Execute Button -->

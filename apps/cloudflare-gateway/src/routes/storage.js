@@ -1,7 +1,7 @@
 import { requireAuth, authenticate } from '../lib/auth.js';
 import { logPiiView } from '../services/privacy.js';
 import { newId } from '../lib/ids.js';
-import { bad, notFound, HttpError } from '../lib/http.js';
+import { bad, notFound, HttpError, readJson } from '../lib/http.js';
 // apps/cloudflare-gateway/src/routes/storage.js
 // OLMOA Cloudflare R2 & D1 Resilient Media Storage Engine
 
@@ -31,7 +31,9 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
     let fileBytes = null;
 
     if (contentType.includes('application/json')) {
-      const body = await request.json().catch(() => ({}));
+      // Transport guard only: the product limit (10MB with R2, 1MB on the D1 fallback)
+      // is enforced on decoded bytes below as 400 FILE_TOO_LARGE (P1-P02 contract).
+      const body = await readJson(request, { maxBytes: 15 * 1024 * 1024 });
       fileBase64 = body.file_data || body.base64 || '';
       originalName = (body.file_name || 'upload.png').trim();
       mimeType = (body.content_type || 'image/png').trim().toLowerCase();

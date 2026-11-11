@@ -143,7 +143,7 @@ await t.test('13 seller bulk upload goes to review; operator approves', async ()
   assert.equal((await g.call(`/api/v1/admin/products/${pid}/review`, { method: 'POST', token: adm, body: { decision: 'APPROVE' } })).status, 200);
 });
 await t.test('14 banners and broadcast notifications (admin)', async () => {
-  const c = await g.call('/api/v1/admin/banners', { method: 'POST', token: adm, body: { title: 'E2E 배너', link_url: '/deals' } });
+  const c = await g.call('/api/v1/admin/banners', { method: 'POST', token: adm, body: { title: 'E2E 배너', link_url: '/deals', image_url: 'https://cdn.example.com/e2e-banner.jpg' } });
   assert.equal(c.status, 201);
   assert.equal((await g.call(`/api/v1/admin/banners/${c.json.data.id}`, { method: 'PUT', token: adm, body: { is_active: false } })).status, 200);
   assert.equal((await g.call(`/api/v1/admin/banners/${c.json.data.id}`, { method: 'DELETE', token: adm })).status, 200);
@@ -152,7 +152,7 @@ await t.test('14 banners and broadcast notifications (admin)', async () => {
   assert.ok(n.json.broadcast_count >= 1);
 });
 await t.test('15 customs: PCCC format, FX, duty estimate, cross-border order invoice', async () => {
-  assert.equal((await g.call('/api/v1/customs/validate-pccc', { method: 'POST', body: { pccc: 'P123456789012', name: '김올모', phone: '010-2222-3333' } })).status, 200);
+  assert.equal((await g.call('/api/v1/customs/validate-pccc', { method: 'POST', token: cust, body: { pccc: 'P123456789012', name: '김올모', phone: '010-2222-3333' } })).status, 200);
   assert.equal((await g.call('/api/v1/fx/rates')).status, 200);
   assert.equal((await g.call('/api/v1/customs/estimate-duty', { method: 'POST', body: { goods_amount_krw: 300000, shipping_fee_krw: 5000, hs_code: '8518.30' } })).status, 200);
   const c = await g.call('/api/v1/orders/checkout', { method: 'POST', token: cust, body: { ...ADDR, pccc: 'P123456789012', items: [{ sku_id: mpSku.id, quantity: 1 }] } });

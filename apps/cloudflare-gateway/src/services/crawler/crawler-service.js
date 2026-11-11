@@ -9,6 +9,37 @@ import { extractShopify } from './adapters/shopify-adapter.js';
 import { generateVariantCombinations } from './option-extractor.js';
 import { convertToKrw, calculateRetailPrice } from './pricing-calculator.js';
 
+// P2-SEC-02: product pages are metadata sources, not archives — refuse anything
+// over 2MB instead of buffering it into worker memory.
+export const CRAWL_MAX_HTML_BYTES = 2 * 1024 * 1024;
+
+async function readCappedText(res, maxBytes) {
+  const announced = Number(res.headers.get('content-length') || 0);
+  if (announced > maxBytes) return { tooLarge: true, text: '' };
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value ? value.byteLength : 0;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch { /* ignore */ }
+        return { tooLarge: true, text: '' };
+      }
+      if (value) chunks.push(value);
+    }
+    const merged = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.byteLength; }
+    return { tooLarge: false, text: new TextDecoder().decode(merged) };
+  }
+  const text = await res.text();
+  if (text.length > maxBytes) return { tooLarge: true, text: '' };
+  return { tooLarge: false, text };
+}
+
 export async function crawlAndExtractProduct({ url, htmlOverride = null, pricingRule = {} }) {
   // 1. URL Validation & SSRF Check
   const urlCheck = validateProductUrl(url);
@@ -74,7 +105,15 @@ export async function crawlAndExtractProduct({ url, htmlOverride = null, pricing
           error: `원격 서버 응답 오류 (HTTP ${res.status} ${res.statusText})`
         };
       }
-      html = await res.text();
+      const fetched = await readCappedText(res, CRAWL_MAX_HTML_BYTES);
+      if (fetched.tooLarge) {
+        return {
+          success: false,
+          error_code: 'FETCH_TOO_LARGE',
+          error: '상품 페이지 용량이 너무 큽니다. (2MB 초과)'
+        };
+      }
+      html = fetched.text;
     } catch (e) {
       return {
         success: false,

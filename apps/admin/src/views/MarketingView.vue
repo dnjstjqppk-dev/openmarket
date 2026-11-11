@@ -26,7 +26,7 @@ const newBanner = ref({
   title: '',
   subtitle: '',
   badge_text: 'HOT DEAL',
-  image_url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200',
+  image_url: '',
   link_url: '/deals',
   bg_gradient: 'from-orange-500 to-red-600',
   display_order: 10,
@@ -48,6 +48,24 @@ interface NotificationItem {
 
 const notifications = ref<NotificationItem[]>([])
 const notifTarget = ref('ALL')
+// P2-A01: specific-customer targeting via live user search (no hardcoded id).
+const targetMode = ref<'ALL' | 'SPECIFIC'>('ALL')
+const userQuery = ref('')
+const userHits = ref<{ id: string; email: string; full_name: string }[]>([])
+const searchingUsers = ref(false)
+async function searchUsers() {
+  const q = userQuery.value.trim()
+  userHits.value = []
+  if (q.length < 2) return
+  searchingUsers.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/users?q=${encodeURIComponent(q)}`, { headers: getAdminHeaders() })
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json.success && Array.isArray(json.data)) userHits.value = json.data
+  } finally {
+    searchingUsers.value = false
+  }
+}
 const notifTitle = ref('')
 const notifMessage = ref('')
 const notifType = ref<'SYSTEM' | 'ORDER_STATUS' | 'DISCOUNT' | 'CREDIT_GRANTED'>('SYSTEM')
@@ -90,6 +108,11 @@ async function loadAll() {
 
 async function handleCreateBanner() {
   if (!newBanner.value.title.trim()) return
+  // P2-A02: an explicit https image is required (the server rejects the rest).
+  if (!/^https:\/\/[^/\s]+(\/\S*)?$/.test(newBanner.value.image_url.trim())) {
+    statusMsg.value = '배너 이미지 URL(https)을 입력해 주세요.'
+    return
+  }
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/banners`, {
       method: 'POST',
@@ -104,7 +127,7 @@ async function handleCreateBanner() {
         title: '',
         subtitle: '',
         badge_text: 'HOT DEAL',
-        image_url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200',
+        image_url: '',
         link_url: '/deals',
         bg_gradient: 'from-orange-500 to-red-600',
         display_order: 10,
@@ -152,14 +175,19 @@ async function deleteBanner(id: string) {
 
 async function handleBroadcastNotification() {
   if (!notifTitle.value.trim() || !notifMessage.value.trim()) return
-  if (!window.confirm(`[${notifTarget.value}] 대상으로 알림을 발송합니다. 계속할까요?`)) return
+  const target = targetMode.value === 'ALL' ? 'ALL' : notifTarget.value
+  if (targetMode.value === 'SPECIFIC' && (target === 'ALL' || target === 'SPECIFIC' || !target)) {
+    statusMsg.value = '특정 고객을 먼저 검색해 선택해 주세요.'
+    return
+  }
+  if (!window.confirm(`[${target}] 대상으로 알림을 발송합니다. 계속할까요?`)) return
   sendingNotif.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/notifications`, {
       method: 'POST',
       headers: getAdminHeaders(),
       body: JSON.stringify({
-        target: notifTarget.value,
+        target,
         title: notifTitle.value.trim(),
         message: notifMessage.value.trim(),
         type: notifType.value,
@@ -370,10 +398,20 @@ onMounted(() => {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
             <label class="block font-bold text-slate-700 mb-1">발송 대상</label>
-            <select v-model="notifTarget" class="w-full h-10 px-3 rounded-lg border border-slate-300 font-bold">
+            <select v-model="targetMode" class="w-full h-10 px-3 rounded-lg border border-slate-300 font-bold">
               <option value="ALL">전체 활성 고객 (BROADCAST ALL)</option>
-              <option value="u_customer_001">고객 u_customer_001 (Alex Kim)</option>
+              <option value="SPECIFIC">특정 고객 (아래에서 검색)</option>
             </select>
+            <div v-if="targetMode === 'SPECIFIC'" class="mt-2 space-y-2">
+              <div class="flex gap-2">
+                <input v-model="userQuery" placeholder="고객 id 또는 이메일 앞부분 (2자 이상)" class="flex-1 h-9 px-3 rounded-lg border border-slate-300 text-xs" @keyup.enter="searchUsers" />
+                <button @click="searchUsers" :disabled="searchingUsers" class="h-9 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-60">검색</button>
+              </div>
+              <select v-if="userHits.length" v-model="notifTarget" class="w-full h-10 px-3 rounded-lg border border-slate-300 font-bold">
+                <option v-for="u in userHits" :key="u.id" :value="u.id">{{ u.email }} ({{ u.full_name || u.id }})</option>
+              </select>
+              <p v-else class="text-[11px] text-slate-400">검색 결과가 여기 표시됩니다.</p>
+            </div>
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">알림 유형</label>

@@ -35,7 +35,12 @@ const BANNED = [
   '올모아 무료직배송',
   'within 2 hours',
   '평균 24시간 이내',
-  '24/7 Buyer Protection'
+  '24/7 Buyer Protection',
+  // P2-S06: unmeasurable speed/fulfilment claims in OrdersView.
+  '1초 원클릭',
+  '공장 직발송',
+  // P2-S16: the privacy-officer contact must come from /business-info, never hardcoded.
+  'privacy@olmoa.com'
 ]
 
 function checkClean(label, text) {
@@ -114,6 +119,12 @@ await t.test('C03 rendered view text carries no unverified claims', async () => 
 
 await t.test('C04 gateway FAQ source carries no unverified SLA promises', async () => {
   checkClean('features.js FAQ', read('apps/cloudflare-gateway/src/routes/features.js'))
+})
+
+await t.test('C05 privacy policy renders the officer contact from business-info', async () => {
+  const v = read('apps/storefront/src/views/LegalPrivacyView.vue')
+  assert.ok(!stripComments(v).includes('보호책임자: CPO'), 'officer name must not be hardcoded')
+  assert.ok(v.includes('useBusinessStore') || v.includes('business-info'), 'officer contact must come from /business-info')
 })
 
 t.finish()

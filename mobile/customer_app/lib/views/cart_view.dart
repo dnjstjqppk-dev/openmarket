@@ -7,10 +7,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/cart_line.dart';
+import '../models/contact_input.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/payment_guidance.dart';
+import 'address_book_view.dart';
 import 'login_view.dart';
 import 'payment_view.dart';
 
@@ -61,6 +63,8 @@ class _CartViewState extends State<CartView> {
   String? _syncError;
   bool _syncing = false;
   bool _pulled = false;
+  // P1-M06: a dead session mid-flow returns to login with an expiry notice.
+  bool _sessionExpired = false;
 
   @override
   void initState() {
@@ -85,11 +89,26 @@ class _CartViewState extends State<CartView> {
   Future<void> _refreshAuth() async {
     await AuthSession.restore();
     if (!mounted) return;
-    setState(() => _authReady = true);
+    setState(() {
+      _authReady = true;
+      _sessionExpired = false;
+    });
     if (AuthSession.isAuthenticated) {
       _pullServerCart();
       _loadOptions();
     }
+  }
+
+  /// P1-M06: the refresh already failed inside the service — the token is
+  /// dead, so drop it, tell the user, and show the login form with context.
+  Future<void> _handleSessionExpired() async {
+    if (!mounted) return;
+    await AuthSession.logout();
+    if (!mounted) return;
+    setState(() => _sessionExpired = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('로그인이 만료되었습니다. 다시 로그인해 주세요.')),
+    );
   }
 
   List<Map<String, Object>> get _orderItems => cartLinesToOrderItems(widget.lines);
@@ -120,7 +139,7 @@ class _CartViewState extends State<CartView> {
       }
       await _pushCart();
     } on AuthRequiredException {
-      if (mounted) setState(() {});
+      await _handleSessionExpired();
     } on ApiException catch (e) {
       if (mounted) setState(() => _syncError = e.message);
     } finally {
@@ -169,7 +188,7 @@ class _CartViewState extends State<CartView> {
         _creditBalance = (results[1] as int);
       });
     } on AuthRequiredException {
-      if (mounted) setState(() {});
+      await _handleSessionExpired();
     } on ApiException catch (e) {
       if (mounted) setState(() => _optionsError = e.message);
     } finally {
@@ -203,12 +222,15 @@ class _CartViewState extends State<CartView> {
       pccc: _pccc.text.trim().isEmpty ? null : _pccc.text.trim().toUpperCase(),
     );
     if (!mounted) return;
+    if (r['code'] == 'UNAUTHENTICATED') {
+      setState(() => _quoteLoading = false);
+      await _handleSessionExpired();
+      return;
+    }
     setState(() {
       _quoteLoading = false;
       if (r['success'] == true) {
         _quote = Map<String, dynamic>.from(r['data'] as Map);
-      } else if (r['code'] == 'UNAUTHENTICATED') {
-        _quote = null;
       } else {
         _quote = null;
         _quoteError = (r['error'] ?? '견적 조회에 실패했습니다.').toString();
@@ -331,6 +353,29 @@ class _CartViewState extends State<CartView> {
         ]),
       );
 
+  /// P2-MOB-P4: fill the form from a saved address instead of retyping.
+  Future<void> _pickAddress() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('배송지 선택')),
+          body: AddressBookView(
+            onSelect: (a) {
+              setState(() {
+                _name.text = (a['recipient_name'] ?? '').toString();
+                _phone.text = (a['phone'] ?? '').toString();
+                _zip.text = (a['postal_code'] ?? '').toString();
+                _addr1.text = (a['address_line1'] ?? '').toString();
+                _addr2.text = (a['address_line2'] ?? '').toString();
+              });
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleCheckout() async {
     if (widget.lines.isEmpty || _isCheckingOut) return;
     if (_name.text.trim().isEmpty ||
@@ -341,6 +386,17 @@ class _CartViewState extends State<CartView> {
           ok: false,
           title: '배송지 입력 필요',
           message: '수령인, 연락처, 우편번호, 주소는 필수 입력 항목입니다.');
+      return;
+    }
+    // N-05: shape-check before submit so a typo fails here, not at the server.
+    final phoneErr = validateKrPhone(_phone.text);
+    if (phoneErr != null) {
+      _showResult(ok: false, title: '연락처 확인', message: phoneErr);
+      return;
+    }
+    final zipErr = validateKrPostal(_zip.text);
+    if (zipErr != null) {
+      _showResult(ok: false, title: '우편번호 확인', message: zipErr);
       return;
     }
     // Expand lines back to per-unit products for the existing checkout merge.
@@ -403,7 +459,13 @@ class _CartViewState extends State<CartView> {
     }
     if (!AuthSession.isAuthenticated) {
       return LoginView(
-          onSuccess: () => setState(() {}), reason: '주문하기 전에 로그인해 주세요.');
+          onSuccess: () => setState(() {
+                _sessionExpired = false;
+                _refreshAuth();
+              }),
+          reason: _sessionExpired
+              ? '로그인이 만료되었습니다. 다시 로그인해 주세요.'
+              : '주문하기 전에 로그인해 주세요.');
     }
     if (widget.lines.isEmpty) {
       return Center(
@@ -665,8 +727,19 @@ class _CartViewState extends State<CartView> {
                 ),
               ),
               const Divider(height: 24),
-              const Text('배송지',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('배송지',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  TextButton.icon(
+                    onPressed: _pickAddress,
+                    icon: const Icon(Icons.bookmarks_outlined, size: 16),
+                    label: const Text('주소록', style: TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               TextField(
                   controller: _name,

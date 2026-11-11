@@ -6,7 +6,8 @@ import { requireAuth } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str, intParam, HttpError } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { refundOrder, loadOrderBundle } from '../services/orders.js';
-import { logPiiView } from '../services/privacy.js';
+import { logPiiView, maskLast4 } from '../services/privacy.js';
+import { sealPii, maybeOpenPii } from '../lib/pii-crypto.js';
 import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 
@@ -68,13 +69,14 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   const partnerId = partner.id;
 
   if (p === '/api/v1/partner/profile' && request.method === 'GET') {
+    const ownAccount = await maybeOpenPii(env, partner.bank_account_number);
     return json(corsHeaders, {
       success: true, partner_id: partnerId,
       data: {
         id: partner.id, business_name: partner.business_name, business_reg_number: partner.business_reg_number, status: partner.status,
         sales_model: partner.sales_model, commission_rate: (partner.commission_rate_bps ?? partner.commission_rate * 100) / 100,
-        bank_code: partner.bank_code, bank_account_number: partner.bank_account_number ? `****${String(partner.bank_account_number).slice(-4)}` : null,
-        bank_account_holder: partner.bank_account_holder, payout_account_verified: Number(partner.payout_account_verified) === 1,
+        bank_code: partner.bank_code, bank_account_number: ownAccount ? maskLast4(ownAccount) : null,
+        bank_account_holder: await maybeOpenPii(env, partner.bank_account_holder), payout_account_verified: Number(partner.payout_account_verified) === 1,
         payout_change_pending: Boolean(partner.payout_change_request_json),
         settlement_cycle: partner.settlement_cycle, return_shipping_address: partner.return_shipping_address,
         customer_service_phone: partner.customer_service_phone, base_shipping_fee: partner.base_shipping_fee, free_shipping_threshold: partner.free_shipping_threshold,
@@ -116,13 +118,20 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     let payoutChange = false;
     // The profile API returns the account number masked ("****1234"); echoing it back is not a change request.
     if (typeof b.bank_account_number === 'string' && b.bank_account_number.includes('*')) delete b.bank_account_number;
-    const bankChanged = (b.bank_code && b.bank_code !== partner.bank_code) || b.bank_account_number || (b.bank_account_holder && b.bank_account_holder !== partner.bank_account_holder);
+    // SEC-10: compare against the opened values — the stored ciphertext never equals a plaintext resubmission.
+    const storedAccount = await maybeOpenPii(env, partner.bank_account_number);
+    const storedHolder = await maybeOpenPii(env, partner.bank_account_holder);
+    const bankChanged = (b.bank_code && b.bank_code !== partner.bank_code) || b.bank_account_number || (b.bank_account_holder && b.bank_account_holder !== storedHolder);
     if (bankChanged) {
       // Payout account changes are a classic takeover vector: queue for operator verification, never apply directly.
+      // The queued request holds sealed values (approved verbatim); plaintext is validated, then sealed.
       payoutChange = true;
+      const reqAccount = str(b.bank_account_number || storedAccount, { max: 30 });
+      const reqHolder = str(b.bank_account_holder || storedHolder, { max: 50 });
       st.push(env.DB.prepare('UPDATE partners SET payout_change_request_json = ? WHERE id = ?').bind(JSON.stringify({
-        bank_code: str(b.bank_code || partner.bank_code, { max: 20 }), bank_account_number: str(b.bank_account_number || partner.bank_account_number, { max: 30 }),
-        bank_account_holder: str(b.bank_account_holder || partner.bank_account_holder, { max: 50 }), requested_by: me.userId, requested_at: new Date().toISOString()
+        bank_code: str(b.bank_code || partner.bank_code, { max: 20 }),
+        bank_account_number: await sealPii(env, reqAccount), bank_account_holder: await sealPii(env, reqHolder),
+        requested_by: me.userId, requested_at: new Date().toISOString()
       }), partnerId));
     }
     if (b.business_name && b.business_name !== partner.business_name) throw conflict('BUSINESS_NAME_LOCKED', '상호 변경은 사업자등록증 재심사가 필요합니다. 고객센터로 요청해 주세요.');
@@ -346,6 +355,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     ).bind(partnerId).all();
     for (const s of subs) {
       s.items = (await env.DB.prepare('SELECT i.*, p.thumbnail_url FROM order_items i LEFT JOIN products p ON p.id = i.product_id WHERE i.sub_order_id = ?').bind(s.id).all()).results;
+      // SEC-10: the fulfilling seller is authorized for the full PCCC (customs declaration); open the sealed value.
+      s.pccc = await maybeOpenPii(env, s.pccc);
     }
     // Recipient data provided to the seller for fulfilment (개인정보 제3자 제공/처리위탁) is access-logged.
     await logPiiView(env, me, 'partner.orders', 'order', subs.map((s) => s.parent_order_id), 'recipient_name,recipient_phone,shipping_address,shipping_memo,pccc', request);

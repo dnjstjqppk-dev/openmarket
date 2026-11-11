@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
+import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
+import { validateKrMobile, validateBrnDigits } from '../utils/phone'
 
 const route = useRoute()
 const router = useRouter()
@@ -81,6 +83,14 @@ const openCashReceiptModal = async () => {
 
 const submitCashReceipt = async () => {
   if (!order.value || !cashReceiptIdentity.value.trim()) return
+  // P2-S15: digit-shape check before send (server re-validates strictly).
+  const idErr = cashReceiptType.value === 'BUSINESS'
+    ? validateBrnDigits(cashReceiptIdentity.value)
+    : validateKrMobile(cashReceiptIdentity.value)
+  if (idErr) {
+    cashReceiptError.value = idErr
+    return
+  }
   cashReceiptLoading.value = true
   cashReceiptError.value = ''
   try {
@@ -107,12 +117,8 @@ const submitCashReceipt = async () => {
   }
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  READY: '결제 대기', PAID: '결제 완료', PARTIAL_REFUNDED: '부분 환불', REFUNDED: '환불 완료', CANCELLED: '주문 취소', EXPIRED: '결제 시간 만료', FAILED: '결제 실패',
-  PAYMENT_PENDING: '결제 대기', PAYMENT_CONFIRMED: '결제 완료 · 출고 준비', PREPARING: '상품 준비중', SHIPPED: '출고 완료', IN_TRANSIT: '배송중', DELIVERED: '배송 완료',
-  PURCHASE_CONFIRMED: '구매 확정', RETURN_REQUESTED: '반품 요청', RETURNED: '반품 완료'
-}
-const label = (s: string) => STATUS_LABEL[s] || s
+// P2-S14: shared label module (payment + sub-order states, no raw codes).
+const label = (s: string) => paymentStatusLabel(s) !== s ? paymentStatusLabel(s) : subOrderStatusLabel(s)
 const won = (n: number) => `${Number(n || 0).toLocaleString('ko-KR')}원`
 
 const subs = computed<any[]>(() => order.value?.sub_orders || [])

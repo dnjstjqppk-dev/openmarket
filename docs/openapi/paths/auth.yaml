@@ -1,6 +1,7 @@
 # Auth paths (buyer/seller core). Verified against the gateway implementation
-# (apps/cloudflare-gateway/src/routes/auth.js). JWT lifetime is 12h
-# (expiresIn 43200); ADMIN logins additionally enforce IP allowlist + TOTP.
+# (apps/cloudflare-gateway/src/routes/auth.js). Access JWT lifetime is 1h
+# (expiresIn 3600); single-use refresh tokens (14d, rotated) extend the session.
+# ADMIN logins additionally enforce IP allowlist + TOTP.
 paths:
   /api/v1/auth/login:
     post:
@@ -44,9 +45,12 @@ paths:
                     enum: [ROLE_CUSTOMER, ROLE_PARTNER, ROLE_ADMIN]
                   token:
                     type: string
+                  refresh_token:
+                    type: string
+                    description: Opaque single-use refresh token (14 days). Rotate via POST /api/v1/auth/refresh.
                   expiresIn:
                     type: integer
-                    description: JWT lifetime in seconds (43200).
+                    description: Access JWT lifetime in seconds (3600).
                   user:
                     type: object
                   customer_id:
@@ -63,6 +67,50 @@ paths:
           description: Invalid credentials, or OTP_REQUIRED / OTP_INVALID for ADMIN 2FA
         '403':
           description: ADMIN_IP_NOT_ALLOWED or PARTNER_PROFILE_MISSING
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token into a fresh session pair
+      tags: [Auth]
+      security: []
+      description: Single-use rotation. Replaying an already-used refresh token revokes the whole family (REFRESH_REUSED); logout-all and password reset invalidate via token_version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Fresh access + refresh pair (also mirrored under data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, role, token, refresh_token, user]
+                properties:
+                  success:
+                    type: boolean
+                  role:
+                    type: string
+                    enum: [ROLE_CUSTOMER, ROLE_PARTNER, ROLE_ADMIN]
+                  token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    description: Access JWT lifetime in seconds (3600).
+                  user:
+                    type: object
+        '400':
+          description: REFRESH_TOKEN_REQUIRED when the token is missing
+        '401':
+          description: REFRESH_REUSED on replay, otherwise expired or revoked
 
   /api/v1/auth/register:
     post:

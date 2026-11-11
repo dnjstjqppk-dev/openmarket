@@ -15,6 +15,7 @@ import { hashPassword } from '../utils/crypto-auth.js';
 import { normalizeBrn } from './business.js';
 import { validatePassword } from './auth.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
+import { sealPii, maybeOpenPii } from '../lib/pii-crypto.js';
 
 export function validateKoreanBrnChecksum(rawBrn) {
   const clean = String(rawBrn || '').replace(/[^0-9]/g, '');
@@ -152,7 +153,8 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
                                  business_address, cs_email,
                                  status, kyc_status, sales_model, payout_account_verified, applied_at, seller_terms_version)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'DRAFT', 'MARKETPLACE', 0, CURRENT_TIMESTAMP, ?)`
-        ).bind(partnerId, userId, businessName, brn, representative, mailOrder, exempt, bankCode, account, holder, csPhone, returnAddr, businessAddr, csEmail, SELLER_TERMS_VERSION)
+        ).bind(partnerId, userId, businessName, brn, representative, mailOrder, exempt, bankCode,
+          await sealPii(env, account), await sealPii(env, holder), csPhone, returnAddr, businessAddr, csEmail, SELLER_TERMS_VERSION)
       ]);
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) throw conflict('APPLICATION_EXISTS', '이미 등록된 이메일 또는 사업자등록번호입니다.');
@@ -220,7 +222,8 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     for (const pt of results) {
       const v = await applicationView(env, pt);
       out.push({ ...v, contact_email: pt.contact_email, contact_name: pt.contact_name, contact_phone: pt.contact_phone,
-        bank_code: pt.bank_code, bank_account_number: maskLast4(pt.bank_account_number), bank_account_holder: pt.bank_account_holder,
+        bank_code: pt.bank_code, bank_account_number: maskLast4(await maybeOpenPii(env, pt.bank_account_number)),
+        bank_account_holder: await maybeOpenPii(env, pt.bank_account_holder),
         customer_service_phone: pt.customer_service_phone, return_shipping_address: pt.return_shipping_address,
         business_address: pt.business_address, cs_email: pt.cs_email });
     }

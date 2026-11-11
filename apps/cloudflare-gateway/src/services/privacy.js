@@ -4,6 +4,7 @@
 
 import { newId } from '../lib/ids.js';
 import { conflict } from '../lib/http.js';
+import { sha256Hex } from '../utils/crypto-auth.js';
 import { ACCOUNTS, creditStatement, journalStatements, getActiveOperator } from '../lib/ledger.js';
 
 const DAY = 'days';
@@ -35,6 +36,13 @@ export function piiAccessStatement(env, principal, { action, resource, subjectTy
 export function maskLast4(value) {
   if (value === null || value === undefined || value === '') return value;
   return `****${String(value).slice(-4)}`;
+}
+
+/** P2-SEC-13: PCCC shows at most its last 2 chars ("***********12"); the leading 'P' + digits are the secret. */
+export function maskPccc(value) {
+  if (value === null || value === undefined || value === '') return value;
+  const s = String(value);
+  return `${'*'.repeat(Math.max(0, s.length - 2))}${s.slice(-2)}`;
 }
 
 /** Convenience: log a VIEW of personal data. Awaited so the record exists before the data leaves the server. */
@@ -89,7 +97,8 @@ export async function withdrawCustomer(env, principal, { acknowledgeCreditForfei
   st.push(env.DB.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').bind(userId));
   st.push(env.DB.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?').bind(userId));
   st.push(env.DB.prepare('DELETE FROM user_coupons WHERE user_id = ? AND is_used = 0').bind(userId));
-  st.push(env.DB.prepare('DELETE FROM notification_delivery_logs WHERE recipient IN (?, ?)').bind(user.email, user.phone || '\u0000'));
+  st.push(env.DB.prepare('DELETE FROM notification_delivery_logs WHERE recipient_hash IN (?, ?) OR recipient IN (?, ?)').bind(await sha256Hex(user.email), await sha256Hex(user.phone || '\u0000'), user.email, user.phone || '\u0000'));
+  // SEC-10: sealed rows match by blind index; legacy plaintext rows (hash NULL) match the recipient OR branch.
   // Public posts stay (terms of service), but no longer identify the author.
   st.push(env.DB.prepare('UPDATE product_reviews SET reviewer_name = ?, author_name = CASE WHEN author_name IS NULL THEN NULL ELSE ? END, user_height_cm = NULL, user_weight_kg = NULL WHERE user_id = ?')
     .bind(WITHDRAWN_NAME, WITHDRAWN_NAME, userId));

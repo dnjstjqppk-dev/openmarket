@@ -88,9 +88,13 @@ const activeMode = ref<'single' | 'bulk'>('single');
 const urlInput = ref('');
 const bulkUrlsInput = ref('');
 const targetMargin = ref(25); // 25%
-const selectedCategory = ref('cat_e_audio');
+// P2-T05: the default category is the first loaded row — never a fixed id.
+// Until categories load, the selects show a disabled loading/failed option.
+const selectedCategory = ref('');
 const categories = ref<any[]>([]);
+const categoriesFailed = ref(false);
 const loadCategories = async () => {
+  categoriesFailed.value = false;
   try {
     const res = await fetch(`${API_BASE}/api/v1/categories`);
     const json = await res.json().catch(() => null);
@@ -99,8 +103,12 @@ const loadCategories = async () => {
       if (!categories.value.some((c: any) => c.id === selectedCategory.value)) {
         selectedCategory.value = categories.value[0].id;
       }
+    } else {
+      categoriesFailed.value = true;
     }
-  } catch { /* keep the fallback selection */ }
+  } catch {
+    categoriesFailed.value = true;
+  }
 };
 const htmlOverride = ref('');
 const isCustomHtml = ref(false);
@@ -357,6 +365,10 @@ async function handleBulkCrawl() {
 
 async function handlePublish() {
   if (!result.value) return;
+  if (!selectedCategory.value) {
+    errorMsg.value = '카테고리를 먼저 불러와 선택해 주세요.';
+    return;
+  }
   isPublishing.value = true;
   errorMsg.value = '';
   successMsg.value = '';
@@ -540,7 +552,7 @@ onMounted(() => {
               class="w-full py-2.5 px-3 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
             >
               <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-              <option v-if="!categories.length" value="cat_e_audio">음향기기</option>
+              <option v-if="!categories.length" value="" disabled>{{ categoriesFailed ? '카테고리를 불러오지 못했습니다' : '카테고리 불러오는 중…' }}</option>
             </select>
             <p class="text-[11px] text-slate-500">수집된 상품이 카탈로그에 노출될 1차 상위 카테고리입니다.</p>
           </div>
@@ -830,8 +842,9 @@ https://demo-activewear.myshopify.com/products/sample"
               class="w-full py-2 px-3 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
             >
               <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-              <option v-if="!categories.length" value="cat_e_audio">음향기기</option>
+              <option v-if="!categories.length" value="" disabled>{{ categoriesFailed ? '카테고리를 불러오지 못했습니다' : '카테고리 불러오는 중…' }}</option>
             </select>
+            <button v-if="categoriesFailed" @click="loadCategories" class="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">다시 불러오기</button>
           </div>
         </div>
 

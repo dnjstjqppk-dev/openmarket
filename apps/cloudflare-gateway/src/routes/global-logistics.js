@@ -1,6 +1,8 @@
 import { authenticate, requireMachineSecret } from '../lib/auth.js';
 import { unauthorized, forbidden, readJson, bad, conflict, str, HttpError } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
+import { maskPccc } from '../services/privacy.js';
+import { maybeOpenPii } from '../lib/pii-crypto.js';
 // apps/cloudflare-gateway/src/routes/global-logistics.js
 // OLMOA Global OpenMarket Logistics Engine: International Carriers, 7-Stage Milestone Tracking & Webhook
 
@@ -116,7 +118,7 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
         carrier_info: carrierInfo,
         tracking_number: subOrder.tracking_number,
         full_tracking_url: subOrder.tracking_number && carrierInfo && carrierInfo.tracking_url ? `${carrierInfo.tracking_url}${encodeURIComponent(subOrder.tracking_number)}` : null,
-        pccc: subOrder.pccc ? subOrder.pccc.slice(0, 3) + '*********' + subOrder.pccc.slice(-1) : null,
+        pccc: subOrder.pccc ? maskPccc(await maybeOpenPii(env, subOrder.pccc)) : null,
         customs_clearance_no: subOrder.customs_clearance_no || null,
         flight_vessel_no: subOrder.flight_vessel_no || null,
         origin_country: subOrder.origin_country || null,

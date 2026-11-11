@@ -5,7 +5,7 @@
 import { requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str, intParam } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
-import { auditStatement, getActiveOperator } from '../lib/ledger.js';
+import { ACCOUNTS, auditStatement, getActiveOperator, journalStatements } from '../lib/ledger.js';
 import { logPiiView } from '../services/privacy.js';
 
 const PO_TRANSITIONS = {
@@ -13,9 +13,29 @@ const PO_TRANSITIONS = {
   SENT: ['CONFIRMED', 'FAILED', 'CANCELLED'],
   CONFIRMED: ['SHIPPED', 'FAILED'],
   FAILED: ['SENT', 'CANCELLED'],
-  SHIPPED: [],
+  SHIPPED: ['RECEIVED'], // SELF_SHIP warehouse receipt only (guarded below); dropship posts at SHIPPED
+  RECEIVED: [],
   CANCELLED: []
 };
+
+/**
+ * Wave E 매입분개: Dr PURCHASE_COST (dropship) or INVENTORY_ASSET (self-ship
+ * receipt) / Cr SUPPLIER_PAYABLE for the PO total. Posting is idempotent per
+ * PO (memo `po:<id>`); zero-cost POs post nothing.
+ */
+async function purchaseJournal(env, po, debitAccount) {
+  const cost = Number(po.total_cost) || 0;
+  if (cost <= 0) return [];
+  const done = await env.DB.prepare("SELECT COUNT(*) c FROM journal_entries WHERE txn_type = 'SUPPLIER_PURCHASE' AND memo = ?").bind(`po:${po.id}`).first('c');
+  if (done) return [];
+  return journalStatements(env, {
+    txnType: 'SUPPLIER_PURCHASE', entityId: po.operator_entity_id || null,
+    orderId: null, lines: [
+      { account: debitAccount, debit: cost, sub_order_id: po.sub_order_id, memo: `po:${po.id}` },
+      { account: ACCOUNTS.SUPPLIER_PAYABLE, credit: cost, sub_order_id: po.sub_order_id, memo: `po:${po.id}` }
+    ]
+  });
+}
 
 export async function handleSupplierRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
@@ -121,6 +141,10 @@ export async function handleSupplierRoutes(request, url, env, corsHeaders) {
     if (!po) throw notFound('발주서를 찾을 수 없습니다.');
     const next = String(b.status || '');
     if (!(PO_TRANSITIONS[po.status] || []).includes(next)) throw conflict('ILLEGAL_PO_TRANSITION', `${po.status} → ${next} 전환은 허용되지 않습니다.`);
+    // Wave E: RECEIVED is the SELF_SHIP warehouse receipt (dropship already posted at SHIPPED).
+    if (next === 'RECEIVED' && po.fulfillment_mode !== 'SELF_SHIP') {
+      throw conflict('RECEIVED_SELF_SHIP_ONLY', '입고(RECEIVED)는 자사배송(SELF_SHIP) 발주에만 기록합니다. 위탁배송은 출고(SHIPPED) 시점에 매입이 확정됩니다.');
+    }
     const st = [
       env.DB.prepare('UPDATE purchase_orders SET status = ?, supplier_order_ref = COALESCE(?, supplier_order_ref), failure_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?')
         .bind(next, str(b.supplier_order_ref, { max: 100 }) || null, next === 'FAILED' ? (str(b.failure_reason, { max: 300 }) || '공급사 발주 실패') : null, po.id, po.status),
@@ -130,6 +154,23 @@ export async function handleSupplierRoutes(request, url, env, corsHeaders) {
       const tracking = str(b.tracking_number, { field: '송장번호', max: 40, required: true });
       st.push(env.DB.prepare("UPDATE sub_orders SET status = 'SHIPPED', carrier_code = ?, tracking_number = ?, shipped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('PAYMENT_CONFIRMED','PREPARING')")
         .bind(str(b.carrier, { max: 40 }) || 'CJ대한통운', tracking, po.sub_order_id));
+      // Wave E 매입분개: goods left the supplier — the operator owes them.
+      st.push(...await purchaseJournal(env, po, ACCOUNTS.PURCHASE_COST));
+    }
+    if (next === 'RECEIVED') {
+      // Wave E 매입분개 + 입고: warehouse receipt posts inventory and adds stock.
+      st.push(...await purchaseJournal(env, po, ACCOUNTS.INVENTORY_ASSET));
+      const { results: items } = await env.DB.prepare('SELECT sku_id, quantity FROM purchase_order_items WHERE purchase_order_id = ?').bind(po.id).all();
+      for (const it of items) {
+        st.push(env.DB.prepare(
+          `UPDATE product_skus SET stock_quantity = stock_quantity + ?,
+             status = CASE WHEN stock_quantity + ? > 0 THEN 'IN_STOCK' ELSE status END, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        ).bind(it.quantity, it.quantity, it.sku_id));
+        st.push(env.DB.prepare(
+          `INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
+           VALUES (?, ?, 'PURCHASE_RECEIVE', ?, (SELECT stock_quantity FROM product_skus WHERE id = ?), ?, ?)`
+        ).bind(newId('ldg'), it.sku_id, it.quantity, it.sku_id, po.id, `receive:${po.id}:${it.sku_id}`));
+      }
     }
     await env.DB.batch(st);
     return json(corsHeaders, {

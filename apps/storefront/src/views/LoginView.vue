@@ -48,7 +48,7 @@ async function handleLogin() {
       error.value = json.error || '로그인에 실패했습니다.'
       return
     }
-    auth.login({ id: json.user.id, name: json.user.full_name || '회원', email: json.user.email }, json.token)
+    auth.login({ id: json.user.id, name: json.user.full_name || '회원', email: json.user.email }, json.token, json.refresh_token)
     router.replace(safeRedirect())
   } catch {
     error.value = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
@@ -152,7 +152,7 @@ async function consumeSocialReturn() {
       return
     }
     const u = json.user
-    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email }, json.token)
+    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email }, json.token, json.refresh_token)
     router.replace(safeRedirect())
   } catch {
     router.replace({ path: '/login', query: cleanQuery })

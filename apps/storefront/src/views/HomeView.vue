@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, Clock, Zap } from 'lucide-vue-next'
 import { OmButton, OmIconButton, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, discountRate } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { useCatalogStore } from '../stores/catalog'
+import { WELCOME_CREDIT, LATE_COMPENSATION, RETURN_WINDOW_DAYS, fmtKRW } from '../config/policy'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
 
@@ -111,10 +112,11 @@ const visible = computed(() => {
 const activeRootName = computed(() => rootTabs.value.find((t) => t.slug === activeRoot.value)?.name || '전체')
 
 const banner = computed(() => banners.value[bannerIdx.value] || null)
+// P2-S07: figures from the shared policy module (server-pinned), never literals.
 const benefits = [
-  { value: '10,000원', label: '신규 가입 적립금', to: '/register' },
-  { value: '5,300원', label: '배송 예정일 초과 시 적립', to: '/policy/shipping' },
-  { value: '7일', label: '배송 완료 후 반품 신청', to: '/legal/refund' }
+  { value: fmtKRW(WELCOME_CREDIT), label: '신규 가입 적립금', to: '/register' },
+  { value: fmtKRW(LATE_COMPENSATION), label: '배송 예정일 초과 시 적립', to: '/policy/shipping' },
+  { value: `${RETURN_WINDOW_DAYS}일`, label: '배송 완료 후 반품 신청', to: '/legal/refund' }
 ]
 </script>
 

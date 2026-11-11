@@ -9,9 +9,12 @@ import 'token_store.dart';
 /// are ignored, and no demo seller is ever assumed.
 class PartnerAuthSession {
   static const _kToken = 'olmoa_partner_token';
+  static const _kRefresh = 'olmoa_partner_refresh_token';
   static const _kBusiness = 'olmoa_partner_business';
 
   static String? _token;
+  // P2-SEC-07: single-use refresh token (keychain). Sent ONLY to /auth/refresh.
+  static String? _refresh;
   static String? _businessName;
   static bool _restored = false;
   // NEW-22: JWTs live in the OS keychain. Tests inject MemoryTokenStore.
@@ -30,6 +33,7 @@ class PartnerAuthSession {
     _restored = true;
     try {
       _token = await tokenStore.read(_kToken);
+      _refresh = await tokenStore.read(_kRefresh);
       final prefs = await SharedPreferences.getInstance();
       // One-way migration: a token left in plaintext prefs by an older
       // build moves into the keychain and is wiped from prefs.
@@ -63,10 +67,12 @@ class PartnerAuthSession {
       final body = _decode(res.body);
       if (res.statusCode == 200 && body['success'] == true && body['token'] is String) {
         _token = body['token'] as String;
+        _refresh = body['refresh_token'] is String ? body['refresh_token'] as String : null;
         final partner = body['partner'];
         _businessName = (partner is Map ? partner['business_name'] : null)?.toString() ?? '판매자';
         try {
           await tokenStore.write(_kToken, _token!);
+          if (_refresh != null) await tokenStore.write(_kRefresh, _refresh!);
         } catch (_) {}
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -86,15 +92,48 @@ class PartnerAuthSession {
 
   static Future<void> logout() async {
     _token = null;
+    _refresh = null;
     _businessName = null;
     try {
       await tokenStore.delete(_kToken);
+      await tokenStore.delete(_kRefresh);
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kToken);
+      await prefs.remove(_kRefresh);
       await prefs.remove(_kBusiness);
     } catch (_) {}
+  }
+
+  static Future<bool>? _refreshInflight;
+
+  /// Single-flight access refresh. Returns true when a rotated pair was stored.
+  static Future<bool> tryRefresh() => _refreshInflight ??= _doRefresh().whenComplete(() => _refreshInflight = null);
+
+  static Future<bool> _doRefresh() async {
+    await restore();
+    final rt = _refresh;
+    if (rt == null || rt.isEmpty) return false;
+    try {
+      final uri = Uri.parse('${PartnerApiService.baseUrl}/api/v1/auth/refresh');
+      final res = await http
+          .post(uri, headers: const {'Content-Type': 'application/json'}, body: jsonEncode({'refresh_token': rt}))
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 200 && body['success'] == true && body['token'] is String && body['refresh_token'] is String) {
+        _token = body['token'] as String;
+        _refresh = body['refresh_token'] as String;
+        try {
+          await tokenStore.write(_kToken, _token!);
+          await tokenStore.write(_kRefresh, _refresh!);
+        } catch (_) {}
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> onUnauthorized() => logout();
@@ -110,7 +149,23 @@ Map<String, dynamic> _decode(String source) {
 }
 
 class PartnerApiService {
-  static const String baseUrl = 'https://olmoa-api.dnjstjqppk.workers.dev';
+  // P2-MOB-04: staging/QA builds point elsewhere via
+  //   flutter run --dart-define API_BASE_URL=https://staging-api.example.com
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://olmoa-api.dnjstjqppk.workers.dev',
+  );
+
+  /// P2-SEC-07: runs an authenticated request, refreshing once on 401 and
+  /// retrying with the rotated token (headers are rebuilt inside [req]).
+  /// A second 401 falls through to the caller's onUnauthorized path.
+  static Future<http.Response> _authed(Future<http.Response> Function() req) async {
+    var res = await req();
+    if (res.statusCode == 401 && await PartnerAuthSession.tryRefresh()) {
+      res = await req();
+    }
+    return res;
+  }
 
   // Instance methods
   Future<Map<String, dynamic>> fetchDashboardMetrics() => PartnerApiService.getDashboardMetrics();
@@ -137,7 +192,7 @@ class PartnerApiService {
     if (!PartnerAuthSession.isAuthenticated) throw const PartnerAuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/partner/metrics');
-      final res = await http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 8));
+      final res = await _authed(() => http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 8)));
       if (res.statusCode == 401) {
         await PartnerAuthSession.onUnauthorized();
         throw const PartnerAuthRequiredException();
@@ -161,7 +216,7 @@ class PartnerApiService {
     if (!PartnerAuthSession.isAuthenticated) throw const PartnerAuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/partner/orders');
-      final res = await http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 10));
+      final res = await _authed(() => http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 10)));
       if (res.statusCode == 401) {
         await PartnerAuthSession.onUnauthorized();
         throw const PartnerAuthRequiredException();
@@ -191,13 +246,13 @@ class PartnerApiService {
     }
     try {
       final uri = Uri.parse('$baseUrl/api/v1/partner/orders/$orderId/shipment');
-      final res = await http
+      final res = await _authed(() => http
           .put(
             uri,
             headers: PartnerAuthSession.headers(),
             body: jsonEncode({'carrier': carrier, 'tracking_number': trackingNumber}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 10)));
       final body = _decode(res.body);
       if (res.statusCode == 401) {
         await PartnerAuthSession.onUnauthorized();
@@ -217,7 +272,7 @@ class PartnerApiService {
     if (!PartnerAuthSession.isAuthenticated) throw const PartnerAuthRequiredException();
     try {
       final uri = Uri.parse('$baseUrl/api/v1/partner/settlements');
-      final res = await http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 8));
+      final res = await _authed(() => http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 8)));
       if (res.statusCode == 401) {
         await PartnerAuthSession.onUnauthorized();
         throw const PartnerAuthRequiredException();

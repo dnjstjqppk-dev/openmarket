@@ -9,6 +9,19 @@ import { useAuthStore } from '../../stores/auth'
 import { API_BASE_URL, authHeader } from '../../config'
 
 const props = defineProps<{ productId: string; loginTo: string }>()
+
+// P2-SEC-05: review photos render as raw <img src>. The server validates on save,
+// and the renderer allowlists again (defense in depth): https: absolute or
+// site-relative only. Anything else (javascript:, data:, http:, //host) shows nothing.
+function safeReviewImg(src: unknown): string {
+  if (typeof src !== 'string') return ''
+  const s = src.trim()
+  const lower = s.toLowerCase()
+  if (lower.startsWith('javascript:') || lower.startsWith('data:')) return ''
+  if (/^https:\/\/[^/\s]+(\/\S*)?$/.test(s)) return s
+  if (s.startsWith('/') && !s.startsWith('//')) return s
+  return ''
+}
 const emit = defineEmits<{ summary: [{ count: number; average: number | null }] }>()
 const auth = useAuthStore()
 const toast = useToast()
@@ -179,7 +192,7 @@ async function submit() {
               </p>
               <p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink">{{ r.content || r.comment }}</p>
               <div v-if="r.images?.length" class="mt-2 flex gap-2">
-                <img v-for="(src, i) in r.images.slice(0, 4)" :key="i" :src="src" :alt="`후기 사진 ${i + 1}`" class="h-20 w-20 rounded object-cover" loading="lazy" />
+                <img v-for="(src, i) in r.images.slice(0, 4)" :key="i" :src="safeReviewImg(src)" :alt="`후기 사진 ${i + 1}`" class="h-20 w-20 rounded object-cover" loading="lazy" />
               </div>
             </li>
           </ul>

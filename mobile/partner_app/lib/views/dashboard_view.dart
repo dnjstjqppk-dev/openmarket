@@ -9,8 +9,12 @@ import 'login_view.dart';
 
 class PartnerDashboardView extends StatefulWidget {
   final VoidCallback onNavigateToShipments;
+  final VoidCallback onNavigateToSettlements;
 
-  const PartnerDashboardView({super.key, required this.onNavigateToShipments});
+  const PartnerDashboardView(
+      {super.key,
+      required this.onNavigateToShipments,
+      required this.onNavigateToSettlements});
 
   @override
   State<PartnerDashboardView> createState() => _PartnerDashboardViewState();
@@ -148,9 +152,9 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => widget.onNavigateToShipments(),
+                onPressed: () => widget.onNavigateToSettlements(),
                 icon: const Icon(Icons.account_balance_wallet),
-                label: const Text('출고·배송'),
+                label: const Text('정산 내역'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   elevation: 0,

@@ -128,7 +128,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
         onClearCart: _clearCart,
       ),
       const OrdersView(),
-      const AccountView(),
+      AccountView(onAddToCart: _addToCart),
     ];
 
     return AdaptiveScaffold(

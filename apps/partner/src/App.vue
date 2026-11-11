@@ -87,6 +87,9 @@ watch(() => route.path, () => {
         <router-link to="/imports" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           <i class="fa-solid fa-cloud-arrow-down text-emerald-400 mr-1.5"></i>URL 자동 수집
         </router-link>
+        <router-link to="/channels" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
+          <i class="fa-solid fa-network-wired text-cyan-400 mr-1.5"></i>멀티채널 연동
+        </router-link>
         <router-link to="/bulk-upload" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
           대량 등록 (CSV)
         </router-link>

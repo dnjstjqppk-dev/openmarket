@@ -20,6 +20,8 @@ const controlTower = ref<any>({
 });
 
 const fdsRules = ref<any[]>([]);
+// P2-A04: root-category count is measured (null until the source answers).
+const rootCategoryCount = ref<number | null>(null);
 
 const disputes = ref<any[]>([]);
 const sampleQcList = ref<any[]>([]);
@@ -50,7 +52,7 @@ async function loadControlTower() {
   loadError.value = '';
   failedSources.value = [];
   try {
-    const [json, bnrJson, notifJson, ctJson, fdsJson, dispJson, qcRes, iprRes] = await Promise.all([
+    const [json, bnrJson, notifJson, ctJson, fdsJson, dispJson, qcRes, iprRes, catJson] = await Promise.all([
       fetchSource('대시보드', '/api/v1/admin/dashboard'),
       fetchSource('배너', '/api/v1/admin/banners'),
       fetchSource('알림', '/api/v1/admin/notifications'),
@@ -58,8 +60,10 @@ async function loadControlTower() {
       fetchSource('FDS', '/api/v1/admin/fds/overview'),
       fetchSource('분쟁', '/api/v1/admin/disputes'),
       fetchSource('샘플QC', '/api/v1/admin/sample-qc'),
-      fetchSource('IPR', '/api/v1/admin/ipr-reports')
+      fetchSource('IPR', '/api/v1/admin/ipr-reports'),
+      fetchSource('카테고리', '/api/v1/categories')
     ]);
+    rootCategoryCount.value = Array.isArray(catJson?.data) ? catJson.data.filter((c: any) => !c.parent_id).length : null;
     sampleQcList.value = Array.isArray(qcRes?.data) ? qcRes.data : [];
     iprReports.value = Array.isArray(iprRes?.data) ? iprRes.data : [];
 
@@ -213,7 +217,7 @@ onMounted(loadControlTower);
           <div class="text-slate-400 mt-1">Rolling Reserve 유보금 정책 적용</div>
         </div>
         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div class="text-slate-500 font-medium">글로벌 카탈로그 (42개 대분류)</div>
+          <div class="text-slate-500 font-medium">글로벌 카탈로그<template v-if="rootCategoryCount !== null"> ({{ rootCategoryCount }}개 대분류)</template></div>
           <div class="text-2xl font-black text-blue-600 mt-1">{{ metrics.totalProducts }} 개</div>
           <div class="text-slate-400 mt-1">HS Code 및 부피중량 등록 완료</div>
         </div>
@@ -228,7 +232,7 @@ onMounted(loadControlTower);
               <i class="fa-solid fa-globe text-indigo-600"></i>
               <span>글로벌 엣지 리전 트래픽 & 응답속도</span>
             </h3>
-            <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">300+ PoP Active</span>
+            <!-- P2-A04: no PoP claim without a data source (edge_regions below is the truth). -->
           </div>
           <div class="space-y-3">
             <p v-if="!controlTower.edge_regions || !controlTower.edge_regions.length" class="text-xs text-slate-400">트래픽 분석 데이터 소스가 연결되지 않아 지역별 분포를 표시하지 않습니다.</p>
@@ -264,6 +268,9 @@ onMounted(loadControlTower);
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
+                <tr v-if="fdsRules.length === 0">
+                  <td colspan="4" class="p-4 text-center text-slate-400">표시할 FDS 규칙이 없습니다.</td>
+                </tr>
                 <tr v-for="r in fdsRules" :key="r.id">
                   <td class="p-2 font-mono font-bold text-slate-700 text-[11px]">{{ r.code }}</td>
                   <td class="p-2 text-slate-800 font-medium">{{ r.name }}</td>
@@ -368,7 +375,10 @@ onMounted(loadControlTower);
               <p class="text-[11px] text-slate-500 mt-0.5">M2C 직결 셀러 대량 입고 전 실물 시제품 품질 합격 여부를 판정합니다.</p>
             </div>
           </div>
-          <div class="divide-y divide-slate-100">
+          <div v-if="sampleQcList.length === 0" class="p-6 text-center text-slate-400">
+            검수 대기 중인 샘플이 없습니다.
+          </div>
+          <div v-else class="divide-y divide-slate-100">
             <div v-for="qc in sampleQcList" :key="qc.id" class="py-3 flex items-center justify-between gap-3">
               <div>
                 <div class="font-bold text-slate-900">{{ qc.product_title }}</div>
@@ -404,7 +414,10 @@ onMounted(loadControlTower);
               <p class="text-[11px] text-slate-500 mt-0.5">상표권/가품 신고 접수 시 해당 상품을 즉시 블라인드하고 정산금을 동결합니다.</p>
             </div>
           </div>
-          <div class="divide-y divide-slate-100">
+          <div v-if="iprReports.length === 0" class="p-6 text-center text-slate-400">
+            접수된 지식재산권 신고가 없습니다.
+          </div>
+          <div v-else class="divide-y divide-slate-100">
             <div v-for="ipr in iprReports" :key="ipr.id" class="py-3 flex items-center justify-between gap-3">
               <div>
                 <div class="font-bold text-slate-900">{{ ipr.product_title }}</div>

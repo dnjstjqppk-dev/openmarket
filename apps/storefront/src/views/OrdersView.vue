@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
+import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -246,7 +247,8 @@ function getStatusBadge(status: string) {
     case 'REFUNDED':
       return { label: '반품/환불완료', class: 'bg-purple-50 text-purple-700 border-purple-200' }
     default:
-      return { label: status, class: 'bg-gray-50 text-gray-700 border-gray-200' }
+      // P2-S14: unknown codes fall back to the shared module, never raw.
+      return { label: paymentStatusLabel(status) !== status ? paymentStatusLabel(status) : subOrderStatusLabel(status), class: 'bg-gray-50 text-gray-700 border-gray-200' }
   }
 }
 
@@ -265,7 +267,7 @@ onMounted(loadOrders)
           </span>
         </h1>
         <p class="text-xs sm:text-sm text-gray-500 mt-1">
-          실시간 배송 조회, 구매확정(+1% 올모아 적립금 지급), 1초 원클릭 주문취소 및 반품 신청을 이용하실 수 있습니다.
+          실시간 배송 조회, 구매확정(+1% 올모아 적립금 지급), 주문취소 및 반품 신청을 이용하실 수 있습니다.
         </p>
       </div>
       <div class="flex items-center gap-2 self-start sm:self-auto">
@@ -407,7 +409,7 @@ onMounted(loadOrders)
       <h3 class="text-base font-black text-gray-900 mb-1">
         {{ searchQuery ? `'${searchQuery}' 검색 조건에 맞는 주문이 없습니다.` : '해당 탭에 표시할 주문 내역이 없습니다.' }}
       </h3>
-      <p class="text-xs text-gray-500 mb-5">올모아 공장 직발송 초특가 상품을 둘러보고 첫 주문을 시작해 보세요.</p>
+      <p class="text-xs text-gray-500 mb-5">올모아 초특가 상품을 둘러보고 첫 주문을 시작해 보세요.</p>
       <RouterLink
         to="/"
         class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"

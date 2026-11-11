@@ -22,14 +22,23 @@ wrangler secret put PAYMENT_WEBHOOK_SECRET
 wrangler secret put CARRIER_WEBHOOK_SECRET
 wrangler secret put RESEND_API_KEY        # 메일 발송용 (없으면 NOT_INTEGRATED 유지)
 wrangler secret put KAKAO_REST_API_KEY    # 소셜 로그인용 (없으면 501 유지)
+wrangler secret put TOTP_ENCRYPTION_KEY   # 32자 이상, 운영 필수 (없으면 운영에서 2FA seal 거부)
+wrangler secret put PII_ENCRYPTION_KEY    # 32자 이상, 운영 필수 (없으면 운영에서 정산계좌·PCCC·알림 seal 거부)
 ```
+
+`TOTP_ENCRYPTION_KEY`·`PII_ENCRYPTION_KEY`는 `JWT_SECRET`과 독립된 키여야 한다.
+운영(`ENVIRONMENT=production`)에서 미설정 시 해당 seal 호출이 실패하므로 배포 전 주입을 확인할 것.
+키 교체 시 기존 seal 값을 복호화할 수 없으므로 교체 전 복호화·재암호화 백필이 필요하다.
 
 그 밖의 논시크릿은 `wrangler.jsonc` vars 또는 `.env.example` 참조:
 `ALLOWED_ORIGINS`(브라우저 오리진 allowlist, 필수),
 `PAYMENT_MODE=live`, `TOSS_CLIENT_KEY`, `EMAIL_FROM`, `KAKAO_REDIRECT_URI`,
 `PUBLIC_STOREFRONT_URL`, `ADMIN_IP_ALLOWLIST`, `ADMIN_2FA_REQUIRED=true`,
 `RATE_LIMIT_REQUIRED=true`, `SOLAPI_*`, `PRICESCANNER_API_KEY`,
-`CONNECTOR_SIMULATION=false`(프로덕션 고정), `ALERT_WEBHOOK_URL`.
+`CONNECTOR_SIMULATION=false`(프로덕션 고정), `ALERT_WEBHOOK_URL`,
+`SENTRY_DSN`(서버 500 오류 외부 알림, 미설정 시 no-op), `GIT_COMMIT`(릴리스 태그),
+`FDS_BLOCK_SCORE`(기본 85), `FDS_REVIEW_SCORE`(기본 40), `FDS_HIGH_VALUE_KRW`(기본 1500000),
+`FDS_VELOCITY_COUNT`(기본 3), `FDS_VELOCITY_MINUTES`(기본 10).
 
 ## 3. D1 마이그레이션 적용
 

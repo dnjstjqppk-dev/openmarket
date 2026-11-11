@@ -375,6 +375,15 @@ paths:
     get:
       summary: List users with order counts (latest 100, PII view logged)
       tags: [Admin]
+      description: >
+        With ?q=, narrows to id-exact or email-prefix matches (limit 20) for
+        operator pickers; LIKE metacharacters in q are escaped.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Optional id or email prefix filter (max 100 chars).
       responses:
         '200':
           description: User rows with order_count

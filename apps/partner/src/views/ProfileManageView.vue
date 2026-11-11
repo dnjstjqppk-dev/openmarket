@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
 interface PartnerProfile {
@@ -45,6 +45,14 @@ const profile = ref<PartnerProfile>({
 });
 // Snapshot of the payout account as loaded (number is masked by the API). Bank fields are sent only when really edited.
 const loadedBank = ref({ bank_code: '', bank_account_number: '', bank_account_holder: '' });
+
+// P2-T04: status copy follows the account state.
+const statusText = computed(() => ({
+  APPROVED: 'APPROVED (정상 가동)',
+  PENDING: 'PENDING (심사 대기)',
+  SUSPENDED: 'SUSPENDED (판매 중지)',
+  REJECTED: 'REJECTED (입점 반려)'
+} as Record<string, string>)[profile.value.status] || `${profile.value.status || 'UNKNOWN'} (상태 확인 필요)`);
 
 const loading = ref(true);
 const isSaving = ref(false);
@@ -221,8 +229,11 @@ onMounted(loadProfile);
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">입점 상태</label>
-            <span class="inline-block px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 font-black text-xs border border-emerald-200">
-              ● {{ profile.status }} (정상 가동)
+            <span
+              class="inline-block px-3 py-2 rounded-xl font-black text-xs border"
+              :class="profile.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : profile.status === 'SUSPENDED' || profile.status === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'"
+            >
+              ● {{ statusText }}
             </span>
           </div>
         </div>

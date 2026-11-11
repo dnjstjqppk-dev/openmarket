@@ -2,7 +2,7 @@
 // Operator finance: seller payouts, journal / trial balance, manual refunds & delivery, and full reconciliation.
 
 import { requireAdmin, requireAuth } from '../lib/auth.js';
-import { json, readJson, bad, conflict, notFound, str } from '../lib/http.js';
+import { json, readJson, bad, conflict, notFound, str, idempotencyKey } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { ACCOUNTS, journalStatements, auditStatement, getActiveOperator } from '../lib/ledger.js';
 import { validateKoreanBrnChecksum } from './onboarding.js';
@@ -161,6 +161,26 @@ export async function reconcile(env) {
                WHERE st.payout_id IS NULL AND (
                     (st.status IN ('HOLD', 'PENDING', 'ELIGIBLE_FOR_PAYOUT') AND s.status IN ('CANCELLED', 'EXPIRED'))
                  OR (st.status IN ('PENDING', 'ELIGIBLE_FOR_PAYOUT') AND o.paid_at IS NULL))`));
+  // Wave E R24: purchase journals are exactly-once balanced pairs whose payable
+  // leg equals the PO total at a posted status (dropship SHIPPED, self-ship
+  // RECEIVED) — and every such PO has its pair.
+  add('R24', 'Supplier purchase journals match posted purchase orders',
+    await all(`SELECT txn_id AS id, 'MALFORMED_PAIR' AS why FROM journal_entries WHERE txn_type = 'SUPPLIER_PURCHASE'
+               GROUP BY txn_id HAVING COUNT(*) != 2 OR SUM(debit) != SUM(credit) OR SUM(memo NOT LIKE 'po:%') > 0
+               UNION ALL
+               SELECT j.txn_id AS id, 'PO_MISMATCH' AS why FROM journal_entries j
+               WHERE j.txn_type = 'SUPPLIER_PURCHASE' AND j.account_code = 'SUPPLIER_PAYABLE'
+                 AND NOT EXISTS (SELECT 1 FROM purchase_orders po
+                   WHERE ('po:' || po.id) = j.memo AND po.total_cost = j.credit
+                     AND ((po.fulfillment_mode = 'DROP_SHIP' AND po.status = 'SHIPPED')
+                       OR (po.fulfillment_mode = 'SELF_SHIP' AND po.status = 'RECEIVED')))
+               UNION ALL
+               SELECT po.id AS id, 'MISSING_JOURNAL' AS why FROM purchase_orders po
+               WHERE po.total_cost > 0
+                 AND ((po.fulfillment_mode = 'DROP_SHIP' AND po.status = 'SHIPPED')
+                   OR (po.fulfillment_mode = 'SELF_SHIP' AND po.status = 'RECEIVED'))
+                 AND NOT EXISTS (SELECT 1 FROM journal_entries j
+                   WHERE j.txn_type = 'SUPPLIER_PURCHASE' AND j.memo = ('po:' || po.id))`));
   const ok = checks.every((c) => c.ok);
   return { ok, checked_at: new Date().toISOString(), checks };
 }
@@ -224,15 +244,26 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     // Ownership: a buyer can only request a receipt for their own order (no order-number enumeration).
     const order = await env.DB.prepare('SELECT * FROM orders WHERE (id = ? OR order_no = ?) AND customer_id = ?').bind(orderId, orderId, viewer.userId).first();
     if (!order) throw notFound('주문을 찾을 수 없습니다.');
-    if (order.payment_status !== 'PAID') throw bad('ORDER_NOT_PAID', '결제 완료된 주문에 대해서만 현금영수증을 신청할 수 있습니다.');
+    // Wave E: fully refunded/cancelled orders have no receipt basis; partial
+    // refunds shrink the basis to net cash paid (re-request, not the old row).
+    if (['REFUNDED', 'CANCELLED'].includes(order.payment_status)) throw bad('ORDER_REFUNDED', '환불·취소된 주문에는 현금영수증을 신청할 수 없습니다.');
+    if (!['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)) throw bad('ORDER_NOT_PAID', '결제 완료된 주문에 대해서만 현금영수증을 신청할 수 있습니다.');
     const pay = await env.DB.prepare("SELECT method FROM payment_transactions WHERE order_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1").bind(order.id).first();
     if (!pay || !CASH_RECEIPT_METHODS.has(String(pay.method || '').toUpperCase())) {
       throw bad('NOT_CASH_PAYMENT', '현금영수증은 계좌이체·가상계좌 결제에만 발행됩니다. 카드 결제는 카드 매출전표가 증빙입니다.');
     }
+    const refunded = await env.DB.prepare("SELECT COUNT(*) c FROM refunds WHERE order_id = ? AND status = 'DONE'").bind(order.id).first('c') || 0;
     const existing = await env.DB.prepare("SELECT * FROM tax_invoices WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status IN ('REQUESTED','ISSUED')").bind(order.id).first();
-    if (existing) return json(corsHeaders, { success: true, already_requested: true, data: maskReceipt(existing) });
+    // An issued receipt always owns the order until cancel-record closes it (never a silent duplicate).
+    if (existing && existing.issue_status === 'ISSUED') return json(corsHeaders, { success: true, already_requested: true, data: maskReceipt(existing) });
+    if (existing && !refunded) return json(corsHeaders, { success: true, already_requested: true, data: maskReceipt(existing) });
+    if (existing && refunded) {
+      // A stale pre-refund request can never issue (see /issue recheck): supersede it.
+      await env.DB.prepare("UPDATE tax_invoices SET issue_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, memo = '환불 발생으로 기존 신청 자동 취소 — 재신청으로 대체' WHERE id = ? AND issue_status = 'REQUESTED'").bind(existing.id).run();
+    }
 
-    const total = Number(order.total_pay_amount);
+    const total = Number(order.total_pay_amount) - Number(order.refunded_pg_amount || 0);
+    if (total <= 0) throw bad('NO_CASH_BASIS', '현금 결제 잔액이 없어 현금영수증을 신청할 수 없습니다.');
     const supply = Math.round(total / 1.1); // assumes all lines are VAT-taxable; tax-free goods are not modelled yet
     const operator = await getActiveOperator(env);
     const row = {
@@ -250,6 +281,29 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
       message: '현금영수증 발행 요청이 접수되었습니다. 운영자가 발행하면 승인번호가 표시됩니다.',
       data: maskReceipt(row)
     }, 201);
+  }
+
+  // Wave E: buyer receipt inbox (own orders only, identifiers masked).
+  if (p === '/api/v1/finance/cash-receipts' && request.method === 'GET') {
+    const viewer = await requireAuth(request, env, ['ROLE_CUSTOMER']);
+    const { results } = await env.DB.prepare(
+      `SELECT t.* FROM tax_invoices t JOIN orders o ON o.id = t.order_id
+       WHERE t.invoice_type = 'CASH_RECEIPT' AND o.customer_id = ? ORDER BY t.created_at DESC LIMIT 100`
+    ).bind(viewer.userId).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results.map(maskReceipt) });
+  }
+
+  // Wave E: buyer cancels their own REQUESTED receipt (e.g. mistyped identifier).
+  const crCancelM = p.match(/^\/api\/v1\/finance\/cash-receipts\/([^/]+)\/cancel$/);
+  if (crCancelM && request.method === 'POST') {
+    const viewer = await requireAuth(request, env, ['ROLE_CUSTOMER']);
+    const r = await env.DB.prepare(
+      `UPDATE tax_invoices SET issue_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, memo = '구매자 직접 취소'
+       WHERE id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'REQUESTED'
+         AND order_id IN (SELECT id FROM orders WHERE customer_id = ?)`
+    ).bind(crCancelM[1], viewer.userId).run();
+    if (r.meta.changes !== 1) throw conflict('NOT_CANCELLABLE', '취소할 수 있는 신청이 없습니다. 본인 주문의 발행 대기 건만 취소할 수 있습니다.');
+    return json(corsHeaders, { success: true, id: crCancelM[1], issue_status: 'CANCELLED' });
   }
 
   const crLookupM = p.match(/^\/api\/v1\/finance\/cash-receipts\/([^/]+)$/);
@@ -354,6 +408,15 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     const row = await env.DB.prepare("SELECT * FROM tax_invoices WHERE id = ? AND invoice_type = 'CASH_RECEIPT'").bind(crIssueM[1]).first();
     if (!row) throw notFound('현금영수증 신청 건을 찾을 수 없습니다.');
     if (row.issue_status !== 'REQUESTED') throw conflict('NOT_REQUESTED', `발행 대기 상태에서만 처리할 수 있습니다. (현재: ${row.issue_status})`);
+    // Wave E: the order may have changed since the request — re-verify the basis
+    // at issue time instead of stamping a stale amount.
+    const basis = await env.DB.prepare(
+      `SELECT o.payment_status s, (SELECT COUNT(*) FROM refunds r WHERE r.order_id = o.id AND r.status = 'DONE') AS refunded
+       FROM orders o WHERE o.id = ?`
+    ).bind(row.order_id).first();
+    if (!basis || !['PAID', 'PARTIAL_REFUNDED'].includes(basis.s) || basis.refunded > 0) {
+      throw conflict('RECEIPT_NEEDS_REISSUE', '주문 상태가 바뀌어(환불·취소) 기존 신청 금액이 유효하지 않습니다. 구매자의 재신청을 안내해 주세요.');
+    }
     const issuing = crIssueM[2] === 'issue';
     let upd;
     if (issuing) {
@@ -370,6 +433,22 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, id: row.id, issue_status: issuing ? 'ISSUED' : 'FAILED' });
   }
 
+  // Wave E: operator records the PG-console cancellation of a CANCEL_REQUIRED receipt.
+  const crCancelRecM = p.match(/^\/api\/v1\/admin\/finance\/cash-receipts\/([^/]+)\/cancel-record$/);
+  if (crCancelRecM && request.method === 'POST') {
+    const admin = await requireAdmin(request, env);
+    const b = await readJson(request);
+    const ref = str(b.cancel_ref, { field: '취소 참조번호', max: 100, required: true });
+    const r = await env.DB.batch([
+      env.DB.prepare("UPDATE tax_invoices SET issue_status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, memo = ? WHERE id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'CANCEL_REQUIRED'")
+        .bind(`PG 취소 기록: ${ref}`, crCancelRecM[1]),
+      auditStatement(env, admin, { action: 'CASH_RECEIPT_CANCEL_RECORDED', targetType: 'tax_invoice', targetId: crCancelRecM[1],
+        before: { issue_status: 'CANCEL_REQUIRED' }, after: { issue_status: 'CANCELLED', cancel_ref: ref }, request })
+    ]);
+    if (r[0].meta.changes !== 1) throw conflict('NOT_CANCEL_REQUIRED', '취소 대기(CANCEL_REQUIRED) 상태에서만 기록할 수 있습니다.');
+    return json(corsHeaders, { success: true, id: crCancelRecM[1], issue_status: 'CANCELLED' });
+  }
+
   const isFinance = p.startsWith('/api/v1/admin/finance') || p === '/api/v1/admin/reconciliation' || /^\/api\/v1\/admin\/orders\/[^/]+\/refund$/.test(p) || /^\/api\/v1\/admin\/sub-orders\/[^/]+\/delivered$/.test(p);
   if (!isFinance) return null;
   const admin = await requireAdmin(request, env);
@@ -383,6 +462,77 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     const rows = results.map((r) => ({ ...r, ok: Boolean(r.ok), failed_checks: JSON.parse(r.failed_checks_json || '[]') }));
     const lastCron = rows.find((r) => r.trigger_source === 'CRON') || null;
     return json(corsHeaders, { success: true, data: { runs: rows, last_cron: lastCron, alert_channel_configured: Boolean(env.ALERT_WEBHOOK_URL) } });
+  }
+
+  // Wave E: sales report. Revenue truth is the journal (net of refunds);
+  // GMV/orders come from paid orders. All dates are UTC calendar days.
+  if (p === '/api/v1/admin/finance/sales-report' && request.method === 'GET') {
+    const today = new Date().toISOString().slice(0, 10);
+    const from = url.searchParams.get('from') || new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const to = url.searchParams.get('to') || today;
+    const groupBy = url.searchParams.get('group_by') || 'day';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      throw bad('INVALID_PERIOD', '조회 기간(YYYY-MM-DD)이 올바르지 않습니다.');
+    }
+    if ((new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86400000 > 366) {
+      throw bad('PERIOD_TOO_WIDE', '조회 기간은 최대 366일입니다.');
+    }
+    if (!['day', 'partner'].includes(groupBy)) throw bad('INVALID_GROUP_BY', 'group_by는 day, partner 중 하나여야 합니다.');
+    const inRange = (col) => `substr(${col},1,10) BETWEEN '${from}' AND '${to}'`;
+    const totals = await env.DB.prepare(
+      `SELECT COUNT(*) AS orders, COALESCE(SUM(total_pay_amount),0) AS gmv FROM orders
+       WHERE legacy_record = 0 AND paid_at IS NOT NULL AND ${inRange('paid_at')}`
+    ).first();
+    const refunds = await env.DB.prepare(
+      `SELECT COALESCE(SUM(pg_amount),0) AS pg, COALESCE(SUM(credit_amount),0) AS credit FROM refunds
+       WHERE status = 'DONE' AND ${inRange('completed_at')}`
+    ).first();
+    const netOf = async (account) => env.DB.prepare(
+      `SELECT COALESCE(SUM(credit),0) - COALESCE(SUM(debit),0) AS v FROM journal_entries
+       WHERE account_code = ? AND txn_type IN ('PAYMENT_CAPTURE','REFUND') AND ${inRange('created_at')}`
+    ).bind(account).first('v') || 0;
+    const data = {
+      from, to, group_by: groupBy,
+      totals: {
+        gmv: totals.gmv, orders: totals.orders,
+        refunds_pg: refunds.pg, refunds_credit: refunds.credit,
+        direct_net: await netOf(ACCOUNTS.DIRECT_SALES_REVENUE),
+        commission_net: await netOf(ACCOUNTS.COMMISSION_REVENUE),
+        seller_net: await netOf(ACCOUNTS.SELLER_PAYABLE)
+      },
+      series: []
+    };
+    if (groupBy === 'day') {
+      const { results } = await env.DB.prepare(
+        `SELECT substr(o.paid_at,1,10) AS date, COUNT(*) AS orders, COALESCE(SUM(o.total_pay_amount),0) AS gmv,
+                (SELECT COALESCE(SUM(r.pg_amount),0) FROM refunds r WHERE r.status = 'DONE' AND substr(r.completed_at,1,10) = substr(o.paid_at,1,10)) AS refunds_pg,
+                (SELECT COALESCE(SUM(j.credit),0) - COALESCE(SUM(j.debit),0) FROM journal_entries j
+                 WHERE j.account_code = '${ACCOUNTS.DIRECT_SALES_REVENUE}' AND j.txn_type IN ('PAYMENT_CAPTURE','REFUND') AND substr(j.created_at,1,10) = substr(o.paid_at,1,10)) AS direct_net,
+                (SELECT COALESCE(SUM(j.credit),0) - COALESCE(SUM(j.debit),0) FROM journal_entries j
+                 WHERE j.account_code = '${ACCOUNTS.COMMISSION_REVENUE}' AND j.txn_type IN ('PAYMENT_CAPTURE','REFUND') AND substr(j.created_at,1,10) = substr(o.paid_at,1,10)) AS commission_net
+         FROM orders o WHERE o.legacy_record = 0 AND o.paid_at IS NOT NULL AND ${inRange('o.paid_at')}
+         GROUP BY substr(o.paid_at,1,10) ORDER BY date`
+      ).all();
+      data.series = results;
+    } else {
+      const { results } = await env.DB.prepare(
+        `SELECT pt.id AS partner_id, pt.business_name,
+                COALESCE((SELECT SUM(s.goods_amount + s.shipping_fee) FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+                          WHERE s.partner_id = pt.id AND o.legacy_record = 0 AND o.paid_at IS NOT NULL AND ${inRange('o.paid_at')}), 0) AS gmv,
+                COALESCE((SELECT SUM(j.credit) - SUM(j.debit) FROM journal_entries j
+                          WHERE j.partner_id = pt.id AND j.account_code = '${ACCOUNTS.COMMISSION_REVENUE}' AND j.txn_type IN ('PAYMENT_CAPTURE','REFUND') AND ${inRange('j.created_at')}), 0) AS commission_net,
+                COALESCE((SELECT SUM(j.credit) - SUM(j.debit) FROM journal_entries j
+                          WHERE j.partner_id = pt.id AND j.account_code = '${ACCOUNTS.SELLER_PAYABLE}' AND j.txn_type IN ('PAYMENT_CAPTURE','REFUND') AND ${inRange('j.created_at')}), 0) AS seller_net,
+                COALESCE((SELECT SUM(j.credit) - SUM(j.debit) FROM journal_entries j
+                          WHERE j.partner_id = pt.id AND j.account_code = '${ACCOUNTS.DIRECT_SALES_REVENUE}' AND j.txn_type IN ('PAYMENT_CAPTURE','REFUND') AND ${inRange('j.created_at')}), 0) AS direct_net
+         FROM partners pt WHERE EXISTS (SELECT 1 FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+                                        WHERE s.partner_id = pt.id AND o.paid_at IS NOT NULL AND ${inRange('o.paid_at')})
+         ORDER BY gmv DESC`
+      ).all();
+      data.series = results;
+    }
+    // Aggregates only (no buyer personal data), so no pii_access_log row.
+    return json(corsHeaders, { success: true, data });
   }
 
   if (p === '/api/v1/admin/finance/reserve-holds' && request.method === 'GET') {
@@ -417,8 +567,7 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
 
   if (p === '/api/v1/admin/finance/payouts' && request.method === 'POST') {
     const b = await readJson(request);
-    const idemKey = request.headers.get('X-Idempotency-Key') || b.idempotency_key || null;
-    if (idemKey && !/^[A-Za-z0-9_.:-]{8,100}$/.test(idemKey)) throw bad('INVALID_IDEMPOTENCY_KEY', '멱등성 키 형식이 올바르지 않습니다.');
+    const idemKey = idempotencyKey(request.headers.get('X-Idempotency-Key') || b.idempotency_key || null);
     if (idemKey) {
       const prior = await env.DB.prepare('SELECT * FROM payouts WHERE idempotency_key = ?').bind(idemKey).first();
       if (prior) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(prior) });

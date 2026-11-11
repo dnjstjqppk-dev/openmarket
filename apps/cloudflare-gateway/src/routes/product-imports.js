@@ -10,6 +10,35 @@ import { priceFields, resolveCategory } from './partner.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { newId } from '../lib/ids.js';
 
+// P2-SEC-02: bulk crawls fan out to at most 5 concurrent fetches under a global
+// deadline, with a per-item timeout against one hung origin. The knobs are
+// env-tunable for operators (BULK_CRAWL_DEADLINE_MS / BULK_ITEM_TIMEOUT_MS).
+export const BULK_CRAWL_CONCURRENCY = 5;
+export const BULK_CRAWL_DEADLINE_MS = 60_000;
+export const BULK_ITEM_TIMEOUT_MS = 20_000;
+
+/**
+ * Run fn over items with at most `limit` in flight. Results keep input order;
+ * a throwing fn becomes an {status:'error'} entry, never a lost item.
+ */
+export async function mapWithConcurrency(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = new Array(Math.min(Math.max(1, limit), Math.max(items.length, 1))).fill(0).map(async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      try {
+        out[i] = { status: 'ok', value: await fn(items[i], i) };
+      } catch (e) {
+        out[i] = { status: 'error', error: (e && e.message) || String(e) };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 export async function handleProductImportRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
   if (!p.startsWith('/api/v1/imports') && !p.startsWith('/api/v1/admin/imports')) return null;
@@ -21,7 +50,15 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
 
     const body = await readJson(request);
     const targetUrl = String(body.url || '').trim();
-    const htmlOverride = body.html_override || null;
+    // P2-SEC-01: the custom-HTML path (partner "직접 입력" box) persists
+    // caller-supplied markup — cap it well below the 1MB body limit. The URL
+    // itself is still SSRF-validated inside crawlAndExtractProduct.
+    let htmlOverride = null;
+    if (body.html_override !== undefined && body.html_override !== null && body.html_override !== '') {
+      if (typeof body.html_override !== 'string') throw bad('INVALID_HTML_OVERRIDE', '직접 입력 HTML 형식이 올바르지 않습니다.');
+      if (body.html_override.length > 512 * 1024) throw bad('HTML_OVERRIDE_TOO_LARGE', '직접 입력 HTML은 512KB 이하만 가능합니다.');
+      htmlOverride = body.html_override;
+    }
     const pricingRule = body.pricing_rule || {};
 
     if (!targetUrl) throw bad('URL_REQUIRED', '수집할 상품 웹 주소(URL)를 입력해 주세요.');
@@ -330,9 +367,27 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     if (urls.length === 0) throw bad('URLS_REQUIRED', '수집할 상품 URL 배열을 입력해 주세요.');
     if (urls.length > 50) throw bad('BATCH_LIMIT_EXCEEDED', '한 번에 최대 50개까지 수집 가능합니다.');
 
+    const deadlineMs = Number(env.BULK_CRAWL_DEADLINE_MS) > 0 ? Number(env.BULK_CRAWL_DEADLINE_MS) : BULK_CRAWL_DEADLINE_MS;
+    const itemTimeoutMs = Number(env.BULK_ITEM_TIMEOUT_MS) > 0 ? Number(env.BULK_ITEM_TIMEOUT_MS) : BULK_ITEM_TIMEOUT_MS;
+    const deadline = Date.now() + deadlineMs;
+    const crawlOne = (u) => {
+      if (Date.now() > deadline) {
+        return Promise.resolve({ success: false, error: 'BULK_DEADLINE_EXCEEDED: 전체 수집 제한 시간을 초과했습니다.', error_code: 'BULK_DEADLINE_EXCEEDED', data: null });
+      }
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve({ success: false, error: '수집 시간 초과로 건너뛰었습니다.', error_code: 'BULK_ITEM_TIMEOUT', data: null }), itemTimeoutMs);
+        crawlAndExtractProduct({ url: u, pricingRule: body.pricing_rule || {} }).then(
+          (r) => { clearTimeout(timer); resolve(r); },
+          (e) => { clearTimeout(timer); resolve({ success: false, error: (e && e.message) || String(e), error_code: 'CRAWL_FAILED', data: null }); }
+        );
+      });
+    };
+    const settled = await mapWithConcurrency(urls, BULK_CRAWL_CONCURRENCY, crawlOne);
     const batchResults = [];
-    for (const u of urls) {
-      const res = await crawlAndExtractProduct({ url: u, pricingRule: body.pricing_rule || {} });
+    for (let ui = 0; ui < urls.length; ui++) {
+      const u = urls[ui];
+      const entry = settled[ui];
+      const res = entry.status === 'ok' ? entry.value : { success: false, error: entry.error, error_code: 'CRAWL_FAILED', data: null };
       const jobId = newId('imp');
       const domain = res.data?.domain || 'unknown';
       const status = res.success ? 'ANALYZED' : 'FAILED';

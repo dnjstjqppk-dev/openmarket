@@ -2,7 +2,7 @@
 // Customer order API. Identity comes only from the verified JWT (lib/auth.js).
 
 import { requireAuth, requireCustomer, authenticate } from '../lib/auth.js';
-import { json, readJson, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str, idempotencyKey } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { grantCreditStatements } from '../lib/ledger.js';
 import { REASON_CODES, faultOf, partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
@@ -18,6 +18,8 @@ export const OPEN_CLAIM_SQL = "SELECT COUNT(*) c FROM returns WHERE sub_order_id
 
 function presentOrder(b) {
   const { order, subs, items } = b;
+  // Wave E: the fraud verdict travels with the order, but rule detail never leaks to buyers.
+  const { fds_rules_json: _fdsRules, ...orderOut } = order;
   const subsOut = subs.map((s) => ({
     id: s.id, sub_order_no: s.sub_order_no, partner_id: s.partner_id, business_name: s.business_name, sales_model: s.sales_model,
     status: s.status, goods_amount: s.goods_amount, shipping_fee: s.shipping_fee, total_amount: s.total_amount,
@@ -30,7 +32,7 @@ function presentOrder(b) {
     items: items.filter((i) => i.sub_order_id === s.id)
   }));
   return {
-    ...order,
+    ...orderOut,
     checkout_idempotency_key: undefined,
     sub_orders: subsOut,
     items: subsOut.flatMap((s) => s.items.map((i) => ({ ...i, status: s.status, partner_name: s.business_name, partner_id: s.partner_id, carrier: s.carrier_code, tracking_number: s.tracking_number })))
@@ -70,7 +72,9 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
   if ((p === '/api/v1/orders/checkout' || p === '/api/v1/orders') && request.method === 'POST') {
     const me = await requireCustomer(request, env);
     const body = await readJson(request);
-    const r = await createOrder(env, me, body, request.headers.get('X-Idempotency-Key'));
+    const r = await createOrder(env, me, body, request.headers.get('X-Idempotency-Key'), {
+      ip: request.headers.get('CF-Connecting-IP') || null, ipCountry: request.headers.get('CF-IPCountry') || null
+    });
     const o = r.order;
     const data = {
       order_id: o.id, order_no: o.order_no, payment_status: o.payment_status, status: o.payment_status,
@@ -121,8 +125,8 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const me = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
     const body = await readJson(request).catch(() => ({}));
     const lines = Array.isArray(body.items) ? body.items : null;
-    const idem = request.headers.get('X-Idempotency-Key');
-    const r = await cancelSubOrder(env, me, ordId, decodeURIComponent(subCancel[1]), { isAdmin: me.role === 'ROLE_ADMIN', lines, idemKey: idem && /^[A-Za-z0-9_-]{8,80}$/.test(idem) ? idem : null });
+    const idem = idempotencyKey(request.headers.get('X-Idempotency-Key'));
+    const r = await cancelSubOrder(env, me, ordId, decodeURIComponent(subCancel[1]), { isAdmin: me.role === 'ROLE_ADMIN', lines, idemKey: idem });
     return json(corsHeaders, { success: true, status: r.status, refund: r.refund, partial: Boolean(r.partial), replay: Boolean(r.replay), warnings: r.warnings || [] });
   }
 

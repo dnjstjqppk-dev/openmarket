@@ -841,8 +841,7 @@ paths:
     post:
       summary: Validate a personal customs clearance code (PCCC)
       tags: [Storefront]
-      security: []
-      description: Format check only unless UNIPASS_API_KEY is configured; without Uni-Pass, verified is always false.
+      description: Requires a customer JWT (the Uni-Pass verdict is a per-person oracle). Format check only unless UNIPASS_API_KEY is configured; without Uni-Pass, verified is always false.
       requestBody:
         required: true
         content:
@@ -883,6 +882,8 @@ paths:
                     type: object
         '400':
           description: MISSING_PCCC, INVALID_PCCC_FORMAT or INVALID_NAME
+        '401':
+          description: Missing or expired customer JWT
 
   /api/v1/fx/rates:
     get:

@@ -137,6 +137,12 @@ const confirmStatusUpdate = async () => {
   }
 };
 
+// P2-T01: Korean return-state labels (never raw codes).
+const STATUS_LABEL: Record<string, string> = {
+  REQUESTED: '검토 요청', APPROVED: '승인됨', REJECTED: '반려됨', REFUNDED: '환불 완료'
+};
+const statusLabel = (s: string) => STATUS_LABEL[s] || s;
+
 const formatPrice = (val?: number) => {
   return (val || 0).toLocaleString('ko-KR') + '원';
 };
@@ -342,7 +348,7 @@ onMounted(() => {
                     'bg-rose-100 text-rose-800': item.status === 'REJECTED'
                   }"
                 >
-                  {{ item.status }}
+                  {{ statusLabel(item.status) }}
                 </span>
               </td>
               <td class="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">

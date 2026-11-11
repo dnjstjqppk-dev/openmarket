@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { adminApi, won } from '../config';
+import { adminApi, won, API_BASE_URL } from '../config';
 
 interface SupplierOrder {
   id: string;
@@ -82,6 +82,19 @@ const filteredPlatforms = computed(() => {
   if (platformCategoryFilter.value === 'ALL') return platforms.value;
   return platforms.value.filter(p => p.category === platformCategoryFilter.value);
 });
+// P2-A03: every platform count derives from the loaded list — no literals.
+const platformCounts = computed<Record<string, number>>(() => {
+  const c: Record<string, number> = { ALL: platforms.value.length, DOMESTIC_OPENMARKET: 0, GLOBAL_OPENMARKET: 0, B2B_SUPPLIER: 0, '3PL_LOGISTICS': 0 };
+  for (const p of platforms.value) if (c[p.category] !== undefined) c[p.category] += 1;
+  return c;
+});
+const platformFilterTabs = computed(() => [
+  { id: 'ALL', label: `전체 플랫폼 (${platformCounts.value.ALL})` },
+  { id: 'DOMESTIC_OPENMARKET', label: `국내 오픈마켓 (${platformCounts.value.DOMESTIC_OPENMARKET})` },
+  { id: 'GLOBAL_OPENMARKET', label: `글로벌 오픈마켓 (${platformCounts.value.GLOBAL_OPENMARKET})` },
+  { id: 'B2B_SUPPLIER', label: `B2B 도매 공급사 (${platformCounts.value.B2B_SUPPLIER})` },
+  { id: '3PL_LOGISTICS', label: `3PL 물류사 (${platformCounts.value['3PL_LOGISTICS']})` }
+]);
 
 // State
 const orders = ref<SupplierOrder[]>([]);
@@ -373,7 +386,7 @@ onMounted(() => {
       >
         <i class="fa-solid fa-globe text-indigo-500"></i>
         <span>글로벌 오픈마켓 & 공급망 플랫폼</span>
-        <span class="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ platforms.length || 18 }}개</span>
+        <span class="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ platforms.length }}개</span>
       </button>
     </div>
 
@@ -696,10 +709,10 @@ onMounted(() => {
         <div>
           <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
             <i class="fa-solid fa-network-wired text-indigo-600"></i>
-            <span>글로벌 오픈마켓 & 공급망 플랫폼 연동 매트릭스 (18개)</span>
+            <span>글로벌 오픈마켓 & 공급망 플랫폼 연동 매트릭스 ({{ platforms.length }}개)</span>
           </h2>
           <p class="text-xs text-slate-500">
-            국내 4대 오픈마켓, 글로벌 4개사, 국내 4대 B2B 공급처 및 6대 3PL 물류사의 API 규격, 수수료, 연동 상태를 중앙 관제합니다.
+            국내·글로벌 오픈마켓, B2B 공급처 및 3PL 물류사의 API 규격, 수수료, 연동 상태를 중앙 관제합니다.
           </p>
         </div>
         <button
@@ -717,7 +730,7 @@ onMounted(() => {
             <span class="text-xs font-bold text-blue-700">국내 오픈마켓</span>
             <span class="text-lg">🇰🇷</span>
           </div>
-          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.domestic_openmarket || 4 }}개</div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.domestic_openmarket ?? platformCounts.DOMESTIC_OPENMARKET }}개</div>
           <p class="text-[11px] text-blue-600/80 mt-1 font-medium">네이버, 쿠팡, 11번가, G마켓/옥션</p>
         </div>
 
@@ -726,7 +739,7 @@ onMounted(() => {
             <span class="text-xs font-bold text-indigo-700">글로벌 오픈마켓</span>
             <span class="text-lg">🌐</span>
           </div>
-          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.global_openmarket || 4 }}개</div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.global_openmarket ?? platformCounts.GLOBAL_OPENMARKET }}개</div>
           <p class="text-[11px] text-indigo-600/80 mt-1 font-medium">아마존 SP-API, Shopee, 알리, 라쿠텐</p>
         </div>
 
@@ -735,7 +748,7 @@ onMounted(() => {
             <span class="text-xs font-bold text-amber-800">B2B 도매 공급사</span>
             <span class="text-lg">📦</span>
           </div>
-          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.b2b_supplier || 4 }}개</div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.b2b_supplier ?? platformCounts.B2B_SUPPLIER }}개</div>
           <p class="text-[11px] text-amber-700 mt-1 font-medium">도매꾹, 도매매, 온채널, 오너클랜</p>
         </div>
 
@@ -744,7 +757,7 @@ onMounted(() => {
             <span class="text-xs font-bold text-emerald-800">글로벌 3PL 물류사</span>
             <span class="text-lg">🚚</span>
           </div>
-          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.logistics_3pl || 6 }}개</div>
+          <div class="mt-2 text-2xl font-black text-slate-900">{{ platformSummary?.logistics_3pl ?? platformCounts['3PL_LOGISTICS'] }}개</div>
           <p class="text-[11px] text-emerald-700 mt-1 font-medium">CJ, 한진, 롯데글로벌, 우체국, DHL, FedEx</p>
         </div>
       </div>
@@ -757,7 +770,7 @@ onMounted(() => {
             <span class="text-xs text-emerald-400 font-bold">● HMAC-SHA256 SIGNATURE VERIFIED</span>
           </div>
           <p class="text-xs text-slate-300 font-mono break-all">
-            POST https://olmoa-api.dnjstjqppk.workers.dev/api/v1/channels/webhooks/:platform_code
+            POST {{ API_BASE_URL }}/api/v1/channels/webhooks/:platform_code
           </p>
         </div>
         <div class="flex items-center gap-2 text-xs text-slate-400 font-medium">
@@ -769,13 +782,7 @@ onMounted(() => {
       <!-- Category Filter Tabs -->
       <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         <button
-          v-for="cat in [
-            { id: 'ALL', label: '전체 플랫폼 (18)' },
-            { id: 'DOMESTIC_OPENMARKET', label: '국내 오픈마켓 (4)' },
-            { id: 'GLOBAL_OPENMARKET', label: '글로벌 오픈마켓 (4)' },
-            { id: 'B2B_SUPPLIER', label: 'B2B 도매 공급사 (4)' },
-            { id: '3PL_LOGISTICS', label: '3PL 물류사 (6)' }
-          ]"
+          v-for="cat in platformFilterTabs"
           :key="cat.id"
           @click="platformCategoryFilter = cat.id"
           class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"

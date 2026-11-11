@@ -23,11 +23,34 @@ class _ProductDetailViewState extends State<ProductDetailView> {
   ProductDetail? _detail;
   String? _error;
   final Map<String, String> _selection = {};
+  // P2-MOB-P2: wishlist toggle state (server is the source of truth).
+  bool _wished = false;
+  bool _wishBusy = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _toggleWish() async {
+    if (_wishBusy) return;
+    setState(() => _wishBusy = true);
+    final r = await ApiService.toggleWishlist(widget.productId);
+    if (!mounted) return;
+    setState(() => _wishBusy = false);
+    if (r['success'] == true) {
+      setState(() => _wished = r['wished'] == true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(r['wished'] == true ? '찜 목록에 담았습니다.' : '찜을 해제했습니다.'),
+            duration: const Duration(seconds: 1)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((r['error'] ?? '찜하기에 실패했습니다.').toString())),
+      );
+    }
   }
 
   Future<void> _load() async {
@@ -58,7 +81,17 @@ class _ProductDetailViewState extends State<ProductDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('상품 상세')),
+      appBar: AppBar(
+        title: const Text('상품 상세'),
+        actions: [
+          IconButton(
+            tooltip: _wished ? '찜 해제' : '찜하기',
+            onPressed: _wishBusy ? null : _toggleWish,
+            icon: Icon(_wished ? Icons.favorite : Icons.favorite_border,
+                color: _wished ? OlmoaColors.ruby500 : null),
+          ),
+        ],
+      ),
       body: _buildBody(),
       bottomNavigationBar: _DetailBottomBar(
         detail: _detail,
@@ -161,7 +194,316 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           const SizedBox(height: 8),
           Text(_stripTags(p.descriptionHtml), style: const TextStyle(fontSize: 13, height: 1.6)),
         ],
+        // P2-MOB-P2: reviews + Q&A live on the detail page, not just a count.
+        _ReviewsSection(productId: widget.productId),
+        _QnaSection(productId: widget.productId),
         const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _ReviewsSection extends StatefulWidget {
+  final String productId;
+
+  const _ReviewsSection({required this.productId});
+
+  @override
+  State<_ReviewsSection> createState() => _ReviewsSectionState();
+}
+
+class _ReviewsSectionState extends State<_ReviewsSection> {
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final r = await ApiService.getReviews(widget.productId);
+      final List<dynamic> list = (r['data'] is Map ? r['data']['reviews'] : r['data']) ?? [];
+      if (mounted) {
+        setState(() =>
+            _rows = list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _write() async {
+    final content = TextEditingController();
+    int rating = 5;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('리뷰 작성'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 1; i <= 5; i++)
+                    IconButton(
+                      onPressed: () => setDialog(() => rating = i),
+                      icon: Icon(i <= rating ? Icons.star : Icons.star_border,
+                          color: Colors.amber),
+                    ),
+                ],
+              ),
+              TextField(
+                  controller: content,
+                  decoration:
+                      const InputDecoration(labelText: '리뷰 내용 (10자 이상)'),
+                  maxLines: 3),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('등록')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (content.text.trim().length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('리뷰는 10자 이상 입력해 주세요.')),
+      );
+      return;
+    }
+    final r = await ApiService.submitReview(
+        productId: widget.productId,
+        rating: rating,
+        content: content.text.trim());
+    if (!mounted) return;
+    if (r['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('리뷰가 등록되었습니다.')),
+      );
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text((r['error'] ?? '리뷰 등록에 실패했습니다.').toString())),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('리뷰 ${_rows.length}개',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            TextButton(onPressed: _write, child: const Text('리뷰 쓰기')),
+          ],
+        ),
+        if (_loading)
+          const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator()))
+        else if (_error != null)
+          Text(_error!, style: const TextStyle(fontSize: 12, color: Colors.red))
+        else if (_rows.isEmpty)
+          const Text('아직 등록된 리뷰가 없습니다.',
+              style: TextStyle(fontSize: 12, color: Colors.grey))
+        else
+          for (final r in _rows.take(5))
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                title: Text(
+                    '${'★' * ((r['rating'] as num?)?.toInt() ?? 0)} ${(r['author_name'] ?? r['reviewer_name'] ?? '').toString()}',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold)),
+                subtitle: Text((r['content'] ?? '').toString(),
+                    style: const TextStyle(fontSize: 13)),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _QnaSection extends StatefulWidget {
+  final String productId;
+
+  const _QnaSection({required this.productId});
+
+  @override
+  State<_QnaSection> createState() => _QnaSectionState();
+}
+
+class _QnaSectionState extends State<_QnaSection> {
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final rows = await ApiService.getQna(widget.productId);
+      if (mounted) setState(() => _rows = rows);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _ask() async {
+    final question = TextEditingController();
+    bool secret = false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('상품 문의'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                  controller: question,
+                  decoration: const InputDecoration(labelText: '궁금한 점을 입력해 주세요'),
+                  maxLines: 3),
+              Row(children: [
+                Checkbox(
+                    value: secret,
+                    onChanged: (v) => setDialog(() => secret = v ?? false)),
+                const Text('비밀글', style: TextStyle(fontSize: 13)),
+              ]),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('등록')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (question.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('문의 내용을 입력해 주세요.')),
+      );
+      return;
+    }
+    final r = await ApiService.askQuestion(
+        productId: widget.productId,
+        question: question.text.trim(),
+        isSecret: secret);
+    if (!mounted) return;
+    if (r['success'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('문의가 등록되었습니다.')),
+      );
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text((r['error'] ?? '문의 등록에 실패했습니다.').toString())),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('상품 문의 ${_rows.length}개',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+            TextButton(onPressed: _ask, child: const Text('문의하기')),
+          ],
+        ),
+        if (_loading)
+          const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator()))
+        else if (_error != null)
+          Text(_error!, style: const TextStyle(fontSize: 12, color: Colors.red))
+        else if (_rows.isEmpty)
+          const Text('등록된 문의가 없습니다.',
+              style: TextStyle(fontSize: 12, color: Colors.grey))
+        else
+          for (final q in _rows.take(5))
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: ExpansionTile(
+                title: Text((q['question'] ?? '').toString(),
+                    style: const TextStyle(fontSize: 13)),
+                subtitle: Text(
+                    (q['answer'] ?? '').toString().isNotEmpty
+                        ? '답변 완료'
+                        : '답변 대기',
+                    style: const TextStyle(fontSize: 11)),
+                children: [
+                  if ((q['answer'] ?? '').toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text((q['answer'] ?? '').toString(),
+                            style: const TextStyle(fontSize: 13)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
       ],
     );
   }

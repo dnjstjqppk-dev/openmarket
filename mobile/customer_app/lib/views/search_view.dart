@@ -71,9 +71,12 @@ class _SearchViewState extends State<SearchView> {
 
   void _onQueryChanged(String q) {
     _debounce?.cancel();
-    // A new keystroke invalidates the previous result list.
-    _results = null;
-    _submittedQuery = '';
+    // P2-MOB-05: a new keystroke invalidates the previous result list
+    // immediately (inside setState — the stale list must vanish at once).
+    setState(() {
+      _results = null;
+      _submittedQuery = '';
+    });
     _debounce = Timer(const Duration(milliseconds: 300), () => _fetchSuggest(q.trim()));
   }
 

@@ -26,6 +26,19 @@ const negoNotes = ref('')
 const submittingNego = ref(false)
 
 const won = (n: number) => `${Number(n || 0).toLocaleString('ko-KR')}원`
+// P2-T01: Korean labels for campaign / bid / negotiation states.
+const CAMPAIGN_LABEL: Record<string, string> = {
+  OPEN: '입찰 진행중', EVALUATING: '심사중', AWARDED: '낙찰 완료', CANCELLED: '취소됨', CLOSED: '마감됨'
+}
+const BID_LABEL: Record<string, string> = {
+  SUBMITTED: '제출됨', SHORTLISTED: '후보 선정', WON: '★ 낙찰 확정', LOST: '미선정', RETRACTED: '철회됨'
+}
+const NEGO_LABEL: Record<string, string> = {
+  PROPOSED: 'MD 제안', ACCEPTED: '수락됨', REJECTED: '거절됨', SUPERSEDED: '대체됨'
+}
+const campaignLabel = (s: string) => CAMPAIGN_LABEL[s] || s
+const bidLabel = (s: string) => BID_LABEL[s] || s
+const negoLabel = (s: string) => NEGO_LABEL[s] || s
 // T13: per-source load failures are shown with retry (not an empty tab).
 const loadErrors = ref<string[]>([])
 
@@ -201,7 +214,7 @@ onMounted(loadData)
                 {{ c.category_id || '카테고리 소싱' }}
               </span>
               <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-black text-[10px]">
-                {{ c.status }}
+                {{ campaignLabel(c.status) }}
               </span>
             </div>
             <div>
@@ -262,7 +275,7 @@ onMounted(loadData)
                   b.status === 'LOST' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
                 ]"
               >
-                {{ b.status === 'WON' ? '★ 낙찰 확정' : b.status === 'LOST' ? '미선정' : '검토 중' }}
+                {{ bidLabel(b.status) }}
               </span>
             </td>
           </tr>
@@ -282,7 +295,7 @@ onMounted(loadData)
         <div class="space-y-1">
           <div class="flex items-center gap-2">
             <span class="font-bold text-gray-900">{{ n.product_title || '등록 상품' }}</span>
-            <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">{{ n.status }}</span>
+            <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">{{ negoLabel(n.status) }}</span>
           </div>
           <div class="text-gray-500 text-[11px]">
             기존 판매가 <strong class="text-gray-900">{{ won(n.current_sale_price) }}</strong> → MD 제안가 <strong class="text-rose-600">{{ won(n.suggested_target_price) }}</strong>

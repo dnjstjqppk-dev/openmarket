@@ -1,7 +1,17 @@
-export const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://olmoa-api.dnjstjqppk.workers.dev'
+// P2-A06: endpoints are required env. Production builds refuse to boot on an
+// implicit host; `vite dev` falls back to the local gateway / storefront.
+function requiredEnv(name: string, devFallback: string): string {
+  const env = (import.meta as any).env || {}
+  if (env[name]) return env[name]
+  if (env.DEV === true) return devFallback
+  throw new Error(`[config] ${name} is not set — refusing to boot with an implicit endpoint`)
+}
+export const API_BASE_URL = requiredEnv('VITE_API_BASE_URL', 'http://127.0.0.1:8787')
+// P1-T08: storefront preview base (product deep links), never hardcoded.
+export const STOREFRONT_URL = requiredEnv('VITE_STOREFRONT_URL', 'http://localhost:5173')
 export const API_BASE = API_BASE_URL
 
-const KEYS = { token: 'partner_token', id: 'partner_id', name: 'partner_name', model: 'partner_sales_model', status: 'partner_status' }
+const KEYS = { token: 'partner_token', refresh: 'partner_refresh_token', id: 'partner_id', name: 'partner_name', model: 'partner_sales_model', status: 'partner_status' }
 
 function read(k: string): string | null {
   try { return localStorage.getItem(k) } catch { return null }
@@ -17,6 +27,8 @@ export const getPartnerAuthHeaders = (): Record<string, string> => {
 export const getPartnerId = (): string => read(KEYS.id) || ''
 export const getPartnerName = (): string => read(KEYS.name) || ''
 export const getPartnerToken = (): string | null => read(KEYS.token)
+/** P2-SEC-07: single-use refresh token, sent ONLY to POST /api/v1/auth/refresh. */
+export const getPartnerRefreshToken = (): string | null => read(KEYS.refresh)
 /** UI routing hint only (the API enforces approval on every call). */
 export const getPartnerStatus = (): string => read(KEYS.status) || ''
 export const setPartnerStatus = (s: string) => { try { localStorage.setItem(KEYS.status, s) } catch { /* ignore */ } }
@@ -26,12 +38,20 @@ export const getPartnerHeaders = (): Record<string, string> => {
   return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
 }
 
-export function savePartnerSession(token: string, partner: { id: string; business_name: string; sales_model?: string; status?: string }) {
+export function savePartnerSession(token: string, partner: { id: string; business_name: string; sales_model?: string; status?: string }, refreshToken?: string) {
   localStorage.setItem(KEYS.token, token)
   localStorage.setItem(KEYS.id, partner.id)
   localStorage.setItem(KEYS.name, partner.business_name)
   if (partner.sales_model) localStorage.setItem(KEYS.model, partner.sales_model)
   if (partner.status) localStorage.setItem(KEYS.status, partner.status)
+  if (refreshToken) localStorage.setItem(KEYS.refresh, refreshToken)
+  else localStorage.removeItem(KEYS.refresh)
+}
+
+/** Swap in a rotated pair after a successful /auth/refresh. */
+export function updatePartnerToken(token: string, refreshToken: string) {
+  localStorage.setItem(KEYS.token, token)
+  localStorage.setItem(KEYS.refresh, refreshToken)
 }
 
 export function clearPartnerSession() {

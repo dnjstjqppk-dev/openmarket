@@ -22,18 +22,21 @@ const loading = ref(true);
 const statusFilter = ref('ALL');
 const actionMsg = ref('');
 const refunding = ref<string | null>(null);
+// P2-A08: load failures surface with retry instead of misrendering as "no results".
+const loadError = ref('');
 
 async function loadOrders() {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/orders`, {
       headers: getAdminHeaders()
     });
-    const json = await res.json();
-    if (json.success && json.data) {
-      orders.value = json.data;
-    }
-  } catch (_) {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success || !json.data) throw new Error(json.error || `주문 목록 조회 실패 (${res.status})`);
+    orders.value = json.data;
+  } catch (e: any) {
+    loadError.value = e?.message || '주문 목록을 불러오지 못했습니다.';
   } finally {
     loading.value = false;
   }
@@ -113,6 +116,11 @@ onMounted(loadOrders);
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
       <i class="fa-solid fa-spinner fa-spin mr-2"></i>주문 목록을 불러오는 중...
+    </div>
+
+    <div v-else-if="loadError" class="p-8 text-center text-xs">
+      <p class="text-rose-600 font-bold">{{ loadError }}</p>
+      <button @click="loadOrders" class="mt-3 px-4 py-2 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-700 cursor-pointer">다시 시도</button>
     </div>
 
     <div v-else class="overflow-x-auto text-xs">

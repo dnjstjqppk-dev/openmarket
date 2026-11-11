@@ -3,13 +3,14 @@
 
 import { requireAdmin } from '../lib/auth.js';
 import { hasPermission } from '../lib/admin-policy.js';
-import { readJson, json, bad, conflict, forbidden, notFound, str } from '../lib/http.js';
+import { readJson, json, bad, conflict, forbidden, notFound, str, safeUrl } from '../lib/http.js';
 import { hashPassword } from '../utils/crypto-auth.js';
 import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement, grantCreditStatements } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle, mapDbError } from '../services/orders.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
+import { isSealedPii, maybeOpenPii, sealPii } from '../lib/pii-crypto.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
@@ -65,11 +66,19 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   if (url.pathname === '/api/v1/admin/users' && request.method === 'GET') {
-    const { results } = await env.DB.prepare(
-      `SELECT id, email, full_name, phone, role, is_active, created_at,
-              (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
-       FROM users ORDER BY created_at DESC LIMIT 100`
-    ).all();
+    // P2-A01: ?q= narrows to one customer picker page (id/email prefix); bare call keeps the latest 100.
+    const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
+    const { results } = q
+      ? await env.DB.prepare(
+        `SELECT id, email, full_name, phone, role, is_active, created_at,
+                (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
+         FROM users WHERE id = ? OR email LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 20`
+      ).bind(q, `${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`).all()
+      : await env.DB.prepare(
+        `SELECT id, email, full_name, phone, role, is_active, created_at,
+                (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
+         FROM users ORDER BY created_at DESC LIMIT 100`
+      ).all();
     await logPiiView(env, admin, 'admin.users', 'user', results.map((u) => u.id), 'email,full_name,phone', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
@@ -115,7 +124,9 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        ORDER BY p.created_at DESC`
     ).all();
     await logPiiView(env, admin, 'admin.partners', 'user', results.map((r) => r.owner_user_id), 'email,full_name,phone,bank_account', request);
-    const maskedPartners = results.map((r) => ({ ...r, bank_account_number: maskLast4(r.bank_account_number) }));
+    // SEC-10: open sealed accounts before masking (legacy plaintext passes through).
+    const maskedPartners = [];
+    for (const r of results) maskedPartners.push({ ...r, bank_account_number: maskLast4(await maybeOpenPii(env, r.bank_account_number)) });
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: maskedPartners }), { headers: corsHeaders });
   }
 
@@ -219,16 +230,23 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }
     if (!pt.payout_change_request_json) throw conflict('NO_PENDING_CHANGE', '대기 중인 계좌 변경 요청이 없습니다.');
     const req = JSON.parse(pt.payout_change_request_json);
+    // SEC-10: the audit trail keeps last-4 traceability, never a full account number (old or new).
+    const maskedReq = { ...req, bank_account_number: maskLast4(await maybeOpenPii(env, req.bank_account_number)) };
     if (decision === 'APPROVE') {
       if (!evidence) throw bad('EVIDENCE_REQUIRED', '계좌 실명 확인 근거를 입력해 주세요.');
+      // Queued values are sealed since SEC-10; a request queued before that is sealed here on approval.
+      const approvedAccount = isSealedPii(req.bank_account_number) ? req.bank_account_number : await sealPii(env, req.bank_account_number);
+      const approvedHolder = isSealedPii(req.bank_account_holder) ? req.bank_account_holder : await sealPii(env, req.bank_account_holder);
       await env.DB.batch([
         env.DB.prepare('UPDATE partners SET bank_code = ?, bank_account_number = ?, bank_account_holder = ?, payout_account_verified = 1, payout_change_request_json = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .bind(req.bank_code, req.bank_account_number, req.bank_account_holder, pt.id),
-        audit('PAYOUT_ACCOUNT_CHANGE_APPROVE', 'partner', pt.id, { bank_code: pt.bank_code, bank_account_number: pt.bank_account_number }, { ...req, evidence })
+          .bind(req.bank_code, approvedAccount, approvedHolder, pt.id),
+        audit('PAYOUT_ACCOUNT_CHANGE_APPROVE', 'partner', pt.id,
+          { bank_code: pt.bank_code, bank_account_number: maskLast4(await maybeOpenPii(env, pt.bank_account_number)) },
+          { ...maskedReq, evidence })
       ]);
       return json(corsHeaders, { success: true, applied: true });
     }
-    await env.DB.batch([env.DB.prepare('UPDATE partners SET payout_change_request_json = NULL WHERE id = ?').bind(pt.id), audit('PAYOUT_ACCOUNT_CHANGE_REJECT', 'partner', pt.id, req, null)]);
+    await env.DB.batch([env.DB.prepare('UPDATE partners SET payout_change_request_json = NULL WHERE id = ?').bind(pt.id), audit('PAYOUT_ACCOUNT_CHANGE_REJECT', 'partner', pt.id, maskedReq, null)]);
     return json(corsHeaders, { success: true, applied: false });
   }
 
@@ -250,6 +268,8 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         s.items = items;
       }
       ord.sub_orders = subs;
+      // SEC-10: the operator console reads the full PCCC; open the sealed value.
+      ord.pccc = await maybeOpenPii(env, ord.pccc);
     }
     await logPiiView(env, admin, 'admin.orders', 'order', orders.map((o) => o.id), 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, pagination: { page: admPage, per_page: admPerPage, total: Number(admTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(admTotal) || 0) / admPerPage)) }, data: orders }), { headers: corsHeaders });
@@ -373,12 +393,15 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/admin/banners' && request.method === 'POST') {
     const body = await readJson(request);
     const bannerId = newId('bnr');
-    const title = (body.title || '신규 프로모션').trim();
-    const subtitle = (body.subtitle || '').trim();
-    const badgeText = (body.badge_text || 'SPECIAL').trim();
-    const imageUrl = (body.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1200').trim();
-    const linkUrl = (body.link_url || '/channel/lightning-deals').trim();
-    const bgGradient = (body.bg_gradient || 'from-orange-500 to-red-600').trim();
+    // P2-SEC-04: banner fields render raw in the storefront — cap lengths and
+    // keep URLs to https / site-relative (no javascript: or data: payloads).
+    const title = str(body.title ?? '신규 프로모션', { field: '배너 제목', max: 120 }) || '신규 프로모션';
+    const subtitle = str(body.subtitle, { field: '배너 부제', max: 200 });
+    const badgeText = str(body.badge_text ?? 'SPECIAL', { field: '배너 뱃지', max: 40 }) || 'SPECIAL';
+    // P2-A02: no stock-photo default — a banner without an explicit image is rejected, never silently illustrated.
+    const imageUrl = safeUrl(body.image_url, { field: '배너 이미지', required: true });
+    const linkUrl = safeUrl(body.link_url || '/channel/lightning-deals', { field: '배너 링크', allowRelative: true, required: true });
+    const bgGradient = str(body.bg_gradient ?? 'from-orange-500 to-red-600', { field: '배너 배경', max: 120 }) || 'from-orange-500 to-red-600';
     const displayOrder = parseInt(body.display_order ?? 0, 10);
     const isActive = body.is_active === false || body.is_active === 0 ? 0 : 1;
 
@@ -402,11 +425,11 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       if (!existing) throw notFound('Banner not found');
       const isActive = body.is_active !== undefined ? (body.is_active ? 1 : 0) : existing.is_active;
       const displayOrder = body.display_order !== undefined ? parseInt(body.display_order, 10) : existing.display_order;
-      const title = body.title ? body.title.trim() : existing.title;
-      const subtitle = body.subtitle !== undefined ? body.subtitle.trim() : existing.subtitle;
-      const badgeText = body.badge_text !== undefined ? body.badge_text.trim() : existing.badge_text;
-      const bgGradient = body.bg_gradient ? body.bg_gradient.trim() : existing.bg_gradient;
-      const linkUrl = body.link_url ? body.link_url.trim() : existing.link_url;
+      const title = body.title ? str(body.title, { field: '배너 제목', max: 120 }) : existing.title;
+      const subtitle = body.subtitle !== undefined ? str(body.subtitle, { field: '배너 부제', max: 200 }) : existing.subtitle;
+      const badgeText = body.badge_text !== undefined ? str(body.badge_text, { field: '배너 뱃지', max: 40 }) : existing.badge_text;
+      const bgGradient = body.bg_gradient ? str(body.bg_gradient, { field: '배너 배경', max: 120 }) : existing.bg_gradient;
+      const linkUrl = body.link_url ? safeUrl(body.link_url, { field: '배너 링크', allowRelative: true, required: true }) : existing.link_url;
 
       await env.DB.batch([
         env.DB.prepare(
@@ -444,10 +467,10 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/admin/notifications' && request.method === 'POST') {
     const body = await readJson(request);
     const target = body.target || 'ALL';
-    const title = (body.title || '올모아 공지사항').trim();
-    const message = (body.message || '').trim();
+    const title = str(body.title ?? '올모아 공지사항', { field: '알림 제목', max: 120 }) || '올모아 공지사항';
+    const message = str(body.message, { field: '알림 메시지', max: 2000 });
     const type = ['ORDER_STATUS', 'DISCOUNT', 'CREDIT_GRANTED', 'SYSTEM'].includes(body.type) ? body.type : 'SYSTEM';
-    const actionUrl = (body.action_url || body.link_url || '/').trim();
+    const actionUrl = safeUrl(body.action_url || body.link_url || '/', { field: '알림 이동 주소', allowRelative: true, required: true });
 
     if (!title || !message) throw bad('NOTIFICATION_REQUIRED', '알림 제목과 메시지는 필수 항목입니다.');
 
