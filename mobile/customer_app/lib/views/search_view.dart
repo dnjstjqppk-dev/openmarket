@@ -5,6 +5,7 @@
 // POST /api/v1/search/log like the web search bar.
 
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/search.dart';
@@ -32,6 +33,9 @@ class _SearchViewState extends State<SearchView> {
   bool _resultsLoading = false;
   String? _resultsError;
   String _submittedQuery = '';
+  int _resultsPage = 1;
+  bool _resultsHasMore = false;
+  bool _resultsLoadingMore = false;
 
   @override
   void initState() {
@@ -91,10 +95,12 @@ class _SearchViewState extends State<SearchView> {
     });
     unawaited(ApiService.logSearch(q));
     try {
-      final list = await ApiService.getProductsStrict(query: q);
+      final first = await ApiService.getProductsPage(query: q, page: 1);
       if (!mounted) return;
       setState(() {
-        _results = list;
+        _results = first.items;
+        _resultsPage = first.page;
+        _resultsHasMore = first.hasMore;
         _resultsLoading = false;
       });
     } catch (_) {
@@ -104,6 +110,30 @@ class _SearchViewState extends State<SearchView> {
         _resultsLoading = false;
         _resultsError = '검색 결과를 불러오지 못했습니다.';
       });
+    }
+  }
+
+  Future<void> _loadMoreResults() async {
+    if (_resultsLoadingMore || !_resultsHasMore) return;
+    setState(() => _resultsLoadingMore = true);
+    try {
+      final next = await ApiService.getProductsPage(
+          query: _submittedQuery, page: _resultsPage + 1);
+      if (mounted) {
+        setState(() {
+          _results = [...?_results, ...next.items];
+          _resultsPage = next.page;
+          _resultsHasMore = next.hasMore;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다음 페이지를 불러오지 못했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _resultsLoadingMore = false);
     }
   }
 
@@ -213,8 +243,15 @@ class _SearchViewState extends State<SearchView> {
                 contentPadding: EdgeInsets.zero,
                 leading: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(p.thumbnailUrl,
-                      width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 48, height: 48, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))),
+                  child: p.thumbnailUrl.isEmpty
+                      ? Container(width: 48, height: 48, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))
+                      : CachedNetworkImage(
+                          imageUrl: p.thumbnailUrl,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(width: 48, height: 48, color: Colors.grey.shade100),
+                          errorWidget: (_, __, ___) => Container(width: 48, height: 48, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))),
                 ),
                 title: Text(p.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(_won(p.lowestSalePrice), style: const TextStyle(color: OlmoaColors.ruby500, fontWeight: FontWeight.bold)),
@@ -242,17 +279,36 @@ class _SearchViewState extends State<SearchView> {
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: list.length,
+      itemCount: list.length + (_resultsHasMore ? 1 : 0),
       separatorBuilder: (_, __) => const Divider(height: 24),
       itemBuilder: (context, i) {
+        if (i >= list.length) {
+          return Center(
+            child: _resultsLoadingMore
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator())
+                : OutlinedButton(
+                    onPressed: _loadMoreResults,
+                    child: const Text('결과 더 보기'),
+                  ),
+          );
+        }
         final p = list[i];
         return InkWell(
           onTap: () => _openDetail(p.id),
           child: Row(children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(p.thumbnailUrl,
-                  width: 72, height: 72, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 72, height: 72, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))),
+              child: p.thumbnailUrl.isEmpty
+                  ? Container(width: 72, height: 72, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))
+                  : CachedNetworkImage(
+                      imageUrl: p.thumbnailUrl,
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(width: 72, height: 72, color: Colors.grey.shade100),
+                      errorWidget: (_, __, ___) => Container(width: 72, height: 72, color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, color: Colors.grey))),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -613,7 +613,7 @@ paths:
           required: false
           schema:
             type: string
-          description: SPA-generated CSRF token, 8-256 URL-safe chars, echoed back untouched.
+          description: SPA-generated CSRF token, 8-256 URL-safe chars, echoed back untouched. The mobile app prefixes it with `app-` so the callback bounces to the olmoa://social-login deep link instead of the storefront.
       responses:
         '302':
           description: Redirect to Kakao authorize with account_email scope
@@ -627,10 +627,10 @@ paths:
       summary: Kakao OAuth callback (redirects to the storefront login page)
       tags: [Auth]
       security: []
-      description: Success lands on /login?social_code=<one-time>&state=...; failures on /login?social_error=<CODE>&state=... The JWT itself never travels in a URL.
+      description: Success lands on /login?social_code=<one-time>&state=...; failures on /login?social_error=<CODE>&state=... When the state starts with `app-`, the same parameters bounce to olmoa://social-login for the mobile app. The JWT itself never travels in a URL.
       responses:
         '302':
-          description: Redirect to the storefront login page with social_code or social_error (OAUTH_DENIED, OAUTH_EXCHANGE_FAILED, OAUTH_PROFILE_FAILED, OAUTH_EMAIL_REQUIRED, EMAIL_TAKEN, ACCOUNT_DISABLED, OAUTH_PROVIDER_ERROR)
+          description: Redirect to the storefront login page (or olmoa://social-login for app states) with social_code or social_error (OAUTH_DENIED, OAUTH_EXCHANGE_FAILED, OAUTH_PROFILE_FAILED, OAUTH_EMAIL_REQUIRED, EMAIL_TAKEN, ACCOUNT_DISABLED, OAUTH_PROVIDER_ERROR)
         '501':
           description: SOCIAL_LOGIN_NOT_INTEGRATED when Kakao credentials are unconfigured
 

@@ -32,7 +32,6 @@ flowchart TD
     
     CF_Store & CF_Admin & CF_Partner --> CF_API["olmoa-api.workers.dev"]
     CF_API --> D1[("Cloudflare D1 SQL (42대 루트 카테고리, 194개 전체 분류, 62개 실상품, 원자적 재고 감산)")]
-    CF_API -.-> GoEngine["Go 1.23 Core Engine (backend/)"]
 ```
 
 ---
@@ -86,7 +85,6 @@ openmarket/
 │   ├── admin/                     # 관리자 콘솔 (Vue 3 + TS + Vite)
 │   ├── partner/                   # 파트너 판매자센터 (Vue 3 + TS + Vite)
 │   └── cloudflare-gateway/        # 통합 Edge API Gateway (Cloudflare D1 연동)
-├── backend/                       # Go 1.23 핵심 도메인 로직 및 상태머신
 ├── migrations/                    # Cloudflare D1 SQL 마이그레이션 6종
 ├── docs/audit/                    # 전수감사 보고서 14종 (CSV 및 Markdown)
 └── package.json                   # 모노레포 워크스페이스

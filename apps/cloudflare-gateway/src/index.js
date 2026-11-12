@@ -11,6 +11,9 @@ import { handlePartnerRoutes } from './routes/partner.js';
 import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
 import { handleFeatureRoutes } from './routes/features.js';
+import { handlePushRoutes } from './routes/push.js';
+import { handleRecommendRoutes } from './routes/recommend.js';
+import { handleShippingRoutes } from './routes/shipping.js';
 import { handleGlobalCustomsAndFxRoutes } from './routes/global-customs-fx.js';
 import { handleGlobalLogisticsRoutes } from './routes/global-logistics.js';
 import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
@@ -55,6 +58,9 @@ const ROUTERS = [
   handleStorageRoutes,
   handleTemuOpsRoutes,
   handleFeatureRoutes,
+  handlePushRoutes,
+  handleRecommendRoutes,
+  handleShippingRoutes,
   handleCatalogRoutes,
   handleOrderRoutes,
   handlePartnerRoutes,
@@ -104,6 +110,9 @@ async function health(env, corsHeaders) {
       operator_entity_active: operatorConfigured,
       payment,
       email_delivery: emailConfigured(env) ? 'RESEND' : 'NOT_INTEGRATED',
+      // H-4: binding presence only — whether the olmoa-media bucket itself
+      // exists in the account is a human deploy check, not probed here.
+      media_storage: (env.STORAGE_BUCKET || env.R2 || env.BUCKET) ? 'R2_BOUND' : 'D1_FALLBACK',
       carrier_tracking_api: 'NOT_INTEGRATED',
       supplier_order_api: 'NOT_INTEGRATED'
     },

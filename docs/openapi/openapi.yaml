@@ -144,6 +144,20 @@ paths:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1reviews'
   /api/v1/products/{id}/qna:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1qna'
+  /api/v1/products/{id}/view:
+    $ref: './paths/recommend.yaml#/paths/~1api~1v1~1products~1{id}~1view'
+  /api/v1/recommendations/related:
+    $ref: './paths/recommend.yaml#/paths/~1api~1v1~1recommendations~1related'
+  /api/v1/recommendations/for-you:
+    $ref: './paths/recommend.yaml#/paths/~1api~1v1~1recommendations~1for-you'
+  /api/v1/recommendations/cart-bundle:
+    $ref: './paths/recommend.yaml#/paths/~1api~1v1~1recommendations~1cart-bundle'
+  /api/v1/shipping/remote-zones:
+    $ref: './paths/shipping.yaml#/paths/~1api~1v1~1shipping~1remote-zones'
+  /api/v1/admin/shipping/remote-zones:
+    $ref: './paths/shipping.yaml#/paths/~1api~1v1~1admin~1shipping~1remote-zones'
+  /api/v1/admin/shipping/remote-zones/{prefix}:
+    $ref: './paths/shipping.yaml#/paths/~1api~1v1~1admin~1shipping~1remote-zones~1{prefix}'
   /api/v1/customs/validate-pccc:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1customs~1validate-pccc'
   /api/v1/fx/rates:
@@ -297,6 +311,13 @@ paths:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications~1read-all'
   /api/v1/notifications/{id}/read:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1notifications~1{id}~1read'
+
+  /api/v1/push/tokens:
+    $ref: './paths/push.yaml#/paths/~1api~1v1~1push~1tokens'
+  /api/v1/admin/push/broadcast:
+    $ref: './paths/push.yaml#/paths/~1api~1v1~1admin~1push~1broadcast'
+  /api/v1/admin/push/stats:
+    $ref: './paths/push.yaml#/paths/~1api~1v1~1admin~1push~1stats'
 
   /api/v1/finance/cash-receipts/request:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1finance~1cash-receipts~1request'

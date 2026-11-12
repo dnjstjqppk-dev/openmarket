@@ -19,6 +19,8 @@ export interface QuoteSubOrder {
   sales_model: string
   goods_amount: number
   shipping_fee: number
+  remote_surcharge?: number
+  remote_zone?: string | null
   items: QuoteLine[]
 }
 export interface Quote {
@@ -30,12 +32,14 @@ export interface Quote {
   total_pay_amount: number
   currency: string
   requires_pccc: boolean
+  remote_zone?: string | null
   sub_orders: QuoteSubOrder[]
 }
 export interface QuoteRequest {
   items: { product_id: string; sku_id: string; quantity: number }[]
   user_coupon_id?: string
   use_credit_amount?: number
+  shipping_postal_code?: string
 }
 
 export async function fetchQuote(body: QuoteRequest, signal?: AbortSignal): Promise<Quote> {

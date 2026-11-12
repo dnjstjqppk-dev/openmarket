@@ -46,6 +46,18 @@ const claimFeePreview = computed(() => {
 const qtyCancel = ref<Record<string, number>>({})
 const trackingInfo = ref<any>(null)
 const loadingTracking = ref(false)
+// NEW-20: explain a remote surcharge baked into shipping_fee (public zone list).
+const remoteZones = ref<any[]>([])
+fetch(`${API_BASE_URL}/api/v1/shipping/remote-zones`).then((r) => r.json())
+  .then((j) => { if (j?.success && Array.isArray(j.data)) remoteZones.value = j.data }).catch(() => {})
+const orderRemoteZone = computed(() => {
+  const postal = String(order.value?.shipping_postal_code || '').replace(/\D/g, '')
+  let hit: any = null
+  for (const z of remoteZones.value) {
+    if (postal.startsWith(String(z.postal_prefix || '')) && (!hit || String(z.postal_prefix).length > String(hit.postal_prefix).length)) hit = z
+  }
+  return hit
+})
 
 const showInvoiceModal = ref(false)
 const invoiceData = ref<any>(null)
@@ -398,7 +410,7 @@ onMounted(loadOrderDetail)
                 </span></span>
               <span class="font-bold whitespace-nowrap">{{ won(it.total_price) }}</span>
             </li>
-            <li class="flex justify-between text-slate-500"><span>배송비</span><span>{{ sub.shipping_fee ? won(sub.shipping_fee) : '무료' }}</span></li>
+            <li class="flex justify-between text-slate-500"><span>배송비</span><span>{{ sub.shipping_fee ? won(sub.shipping_fee) : '무료' }}<template v-if="orderRemoteZone"> ({{ orderRemoteZone.zone_name }} 추가배송비 {{ won(orderRemoteZone.surcharge_amount) }} 포함)</template></span></li>
           </ul>
           <div v-if="sub.tracking_number" class="text-[11px] text-slate-600 mb-3">{{ sub.carrier_code }} · <button class="underline" @click="copyTracking(sub.tracking_number)">{{ sub.tracking_number }}</button>
             <button class="ml-2 text-[#FF5000] font-bold" @click="loadMilestoneTracking(sub.id)">배송 조회</button></div>
@@ -565,6 +577,8 @@ onMounted(loadOrderDetail)
                 v-if="item.thumbnail_url"
                 :src="item.thumbnail_url"
                 class="w-16 h-16 rounded-xl object-cover bg-gray-100 shrink-0 border border-gray-100"
+                loading="lazy"
+                decoding="async"
               />
               <div v-else class="w-16 h-16 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 shrink-0">
                 <i class="fa-solid fa-bag-shopping text-xl"></i>

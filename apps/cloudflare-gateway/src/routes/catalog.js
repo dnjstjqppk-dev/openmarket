@@ -28,6 +28,42 @@ export function computeServerQualityScore(product) {
   return Math.min(100, score);
 }
 
+// H-1: builds a safe FTS5 MATCH expression from a user query. Terms shorter
+// than 3 chars cannot use the trigram index (null = stay on the LIKE path).
+// Every term is double-quoted with quotes stripped, so operators, wildcards,
+// and quote-breaking input become inert literals. Returns null when no term
+// survives, including the synonym canonical as a fallback source.
+export function buildFtsMatch(raw, canonical) {
+  const termsOf = (s) => String(s || '').split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => [...term].length >= 3)
+    .map((term) => `"${term.replace(/"/g, '')}"`);
+  const rawTerms = termsOf(raw);
+  const canon = String(canonical || '').trim();
+  if (!rawTerms.length) {
+    if (!canon || canon === String(raw || '').trim()) return null;
+    const canonTerms = termsOf(canon);
+    return canonTerms.length ? canonTerms.join(' AND ') : null;
+  }
+  let match = rawTerms.join(' AND ');
+  if (canon && canon !== String(raw).trim()) {
+    const canonTerms = termsOf(canon);
+    if (canonTerms.length) match += ` OR (${canonTerms.join(' AND ')})`;
+  }
+  return match;
+}
+
+// H-1: sub-trigram (1-2 char) raw terms. The FTS index cannot match them,
+// so they re-enter as ANDed LIKE predicates on the ranked arm — '무선 이어폰'
+// must not match a product with no '무선' anywhere.
+export function shortSearchTerms(raw) {
+  return String(raw || '').split(/\s+/).map((term) => term.trim()).filter((term) => term.length >= 1 && [...term].length < 3);
+}
+
+export function escapeLike(term) {
+  return String(term).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   // 1. All Categories Tree with Bottom-Up Descendant Rollup
   if (url.pathname === '/api/v1/categories' && request.method === 'GET') {
@@ -100,8 +136,9 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/products' && request.method === 'GET') {
     const catParam = url.searchParams.get('category');
     const partnerParam = url.searchParams.get('partner_id');
-    const sortParam = url.searchParams.get('sort') || 'popular';
     const searchParam = url.searchParams.get('q') || url.searchParams.get('search');
+    // H-1: keyword searches default to relevance; an explicit sort always wins.
+    const sortParam = url.searchParams.get('sort') || (searchParam ? 'relevance' : 'popular');
     const minPrice = url.searchParams.get('min_price');
     const maxPrice = url.searchParams.get('max_price');
     // Offset pagination. `limit` stays as a legacy alias of `per_page`; invalid values fall back to defaults.
@@ -110,7 +147,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const pageRaw = Number.parseInt(url.searchParams.get('page') || '1', 10);
     const page = Math.max(1, Number.isSafeInteger(pageRaw) ? pageRaw : 1);
 
-    let query = `
+    const selectList = `
       SELECT p.*,
              p.id as slug,
              COALESCE(pt.business_name, 'OLMOA DIRECT') as brand,
@@ -118,86 +155,127 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
              c.name as category_name, c.slug as category_slug,
              pc.slug as parent_category_slug,
              pt.business_name, pt.base_shipping_fee, pt.free_shipping_threshold,
-             (SELECT s.id FROM product_skus s WHERE s.product_id = p.id ORDER BY s.sale_price ASC LIMIT 1) as default_sku_id,
+             (SELECT s.id FROM product_skus s WHERE s.product_id = p.id AND s.stock_quantity > 0 ORDER BY s.sale_price ASC LIMIT 1) as default_sku_id,
              (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
-             COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count
+             COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count`;
+    const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
-      LEFT JOIN partners pt ON p.partner_id = pt.id
-      WHERE p.status = 'ACTIVE'
-    `;
+      LEFT JOIN partners pt ON p.partner_id = pt.id`;
+    const baseWhere = `WHERE p.status = 'ACTIVE'`;
     const binds = [];
-    let whereSql = "WHERE p.status = 'ACTIVE'"; // mirrored for the COUNT(*) query below
+    let filterSql = '';
 
     if (catParam && catParam !== 'all') {
       const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(catParam, catParam).first();
       if (catRow) {
-        query += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
-        whereSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
+        filterSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
         binds.push(catRow.id, catRow.id);
       } else {
-        query += ` AND (c.slug = ? OR p.category_id = ?)`;
-        whereSql += ` AND (c.slug = ? OR p.category_id = ?)`;
+        filterSql += ` AND (c.slug = ? OR p.category_id = ?)`;
         binds.push(catParam, catParam);
       }
     }
 
     if (partnerParam) {
-      query += ` AND p.partner_id = ?`;
-      whereSql += ` AND p.partner_id = ?`;
+      filterSql += ` AND p.partner_id = ?`;
       binds.push(partnerParam);
     }
+
+    if (minPrice) {
+      filterSql += ` AND p.lowest_sale_price >= ?`;
+      binds.push(Number.isSafeInteger(Number.parseInt(minPrice, 10)) ? Number.parseInt(minPrice, 10) : 0);
+    }
+    if (maxPrice) {
+      filterSql += ` AND p.lowest_sale_price <= ?`;
+      binds.push(Number.isSafeInteger(Number.parseInt(maxPrice, 10)) ? Number.parseInt(maxPrice, 10) : 100_000_000);
+    }
+
+    // col prefixes data columns: 'p.' inside the product query, '' in the UNION wrapper.
+    const sortOrder = (sort, col) => {
+      if (sort === 'price_asc') return ` ORDER BY ${col}lowest_sale_price ASC`;
+      if (sort === 'price_desc') return ` ORDER BY ${col}lowest_sale_price DESC`;
+      if (sort === 'newest') return ` ORDER BY ${col}created_at DESC`;
+      if (sort === 'rating') return ` ORDER BY ${col}avg_rating DESC, ${col}total_sold_count DESC`;
+      if (sort === 'relevance' && col === '') return ` ORDER BY CASE WHEN _rank IS NULL THEN 1 ELSE 0 END, _rank ASC, total_sold_count DESC`;
+      return ` ORDER BY ${col}total_sold_count DESC`;
+    };
+
+    const send = (rows, total) => new Response(JSON.stringify({
+      success: true,
+      brand: 'OLMOA',
+      count: rows.length,
+      filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam },
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
+      data: rows
+    }), { headers: corsHeaders });
+
+    const runQuery = async (sql, sqlBinds) => {
+      let stmt = env.DB.prepare(sql);
+      if (sqlBinds.length > 0) stmt = stmt.bind(...sqlBinds);
+      return stmt.all();
+    };
 
     if (searchParam) {
       const synRow = await env.DB.prepare('SELECT canonical_keyword FROM search_synonyms WHERE LOWER(term) = LOWER(?) LIMIT 1').bind(searchParam.trim()).first();
       const effectiveSearch = synRow ? synRow.canonical_keyword : searchParam.trim();
-      query += ` AND (p.title LIKE ? OR p.description_html LIKE ? OR c.name LIKE ? OR p.title LIKE ?)`;
-      whereSql += ` AND (p.title LIKE ? OR p.description_html LIKE ? OR c.name LIKE ? OR p.title LIKE ?)`;
-      binds.push(`%${searchParam}%`, `%${searchParam}%`, `%${searchParam}%`, `%${effectiveSearch}%`);
+      const ftsMatch = buildFtsMatch(searchParam.trim(), effectiveSearch);
+      // Legacy recall predicate (unchanged semantics): title, description, category, synonym.
+      const likePred = ` AND (p.title LIKE ? OR p.description_html LIKE ? OR c.name LIKE ? OR p.title LIKE ?)`;
+      const likeBinds = [`%${searchParam}%`, `%${searchParam}%`, `%${searchParam}%`, `%${effectiveSearch}%`];
+
+      if (ftsMatch) {
+        // Ranked path: FTS title/brand/category hits by bm25 first, then the
+        // LIKE-only recall (mostly description matches) deduplicated below.
+        // MATCH only runs in a direct FTS FROM subquery — joins and ORs with
+        // other tables are rejected ("unable to use function MATCH").
+        const ftsSub = `SELECT product_id, bm25(product_search_fts) AS _r FROM product_search_fts WHERE product_search_fts MATCH ?`;
+        const ftsIds = `SELECT product_id FROM product_search_fts WHERE product_search_fts MATCH ?`;
+        // Short raw terms AND back in only when the MATCH itself is raw-driven;
+        // a canonical-rescued search ('버즈' -> '이어폰') must not require the raw term.
+        const rawHasFts = String(searchParam).split(/\s+/).some((term) => [...term.trim()].length >= 3);
+        const shorts = rawHasFts ? shortSearchTerms(searchParam.trim()) : [];
+        const shortPred = shorts.map(() => ` AND (p.title LIKE ? ESCAPE '\\' OR p.description_html LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\')`).join('');
+        const shortBinds = shorts.flatMap((term) => {
+          const pattern = `%${escapeLike(term)}%`;
+          return [pattern, pattern, pattern];
+        });
+        try {
+          const arm1 = `${selectList}, m._r AS _rank ${fromSql} JOIN (${ftsSub}) m ON m.product_id = p.id ${baseWhere} ${filterSql}${shortPred}`;
+          const arm1Ids = `SELECT p.id ${fromSql} JOIN (${ftsIds}) m ON m.product_id = p.id ${baseWhere} ${filterSql}${shortPred}`;
+          const arm2 = `${selectList}, NULL AS _rank ${fromSql} ${baseWhere} ${filterSql}${likePred} AND p.id NOT IN (${ftsIds})`;
+          const arm2Ids = `SELECT p.id ${fromSql} ${baseWhere} ${filterSql}${likePred} AND p.id NOT IN (${ftsIds})`;
+          const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM (${arm1Ids} UNION ALL ${arm2Ids})`)
+            .bind(ftsMatch, ...binds, ...shortBinds, ...binds, ...likeBinds, ftsMatch).first('total');
+          const { results } = await runQuery(
+            `SELECT * FROM (${arm1} UNION ALL ${arm2})${sortOrder(sortParam, '')} LIMIT ? OFFSET ?`,
+            [ftsMatch, ...binds, ...shortBinds, ...binds, ...likeBinds, ftsMatch, perPage, (page - 1) * perPage]
+          );
+          for (const row of results) delete row._rank;
+          return send(results, total);
+        } catch {
+          // An unexpected FTS failure must degrade to LIKE, never 500.
+        }
+      }
+
+      let likeQuery = `${selectList} ${fromSql} ${baseWhere} ${filterSql}${likePred}`;
+      const likeAll = [...binds, ...likeBinds];
+      let likeOrder = sortOrder(sortParam, 'p.');
+      if (sortParam === 'relevance') {
+        // Short-query relevance: exact title, title prefix, title contains, then sales.
+        likeOrder = ` ORDER BY CASE WHEN p.title = ? THEN 0 WHEN p.title LIKE ? THEN 1 WHEN p.title LIKE ? THEN 2 ELSE 3 END, p.total_sold_count DESC`;
+        const q = searchParam.trim();
+        likeAll.push(q, `${q}%`, `%${q}%`);
+      }
+      const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN categories pc ON c.parent_id = pc.id LEFT JOIN partners pt ON p.partner_id = pt.id ${baseWhere} ${filterSql}${likePred}`).bind(...likeAll.slice(0, likeAll.length - (sortParam === 'relevance' ? 3 : 0))).first('total');
+      const { results } = await runQuery(`${likeQuery}${likeOrder} LIMIT ? OFFSET ?`, [...likeAll, perPage, (page - 1) * perPage]);
+      return send(results, total);
     }
 
-    if (minPrice) {
-      query += ` AND p.lowest_sale_price >= ?`;
-      whereSql += ` AND p.lowest_sale_price >= ?`;
-      binds.push(Number.isSafeInteger(Number.parseInt(minPrice, 10)) ? Number.parseInt(minPrice, 10) : 0);
-    }
-    if (maxPrice) {
-      query += ` AND p.lowest_sale_price <= ?`;
-      whereSql += ` AND p.lowest_sale_price <= ?`;
-      binds.push(Number.isSafeInteger(Number.parseInt(maxPrice, 10)) ? Number.parseInt(maxPrice, 10) : 100_000_000);
-    }
-
-    if (sortParam === 'price_asc') {
-      query += ` ORDER BY p.lowest_sale_price ASC`;
-    } else if (sortParam === 'price_desc') {
-      query += ` ORDER BY p.lowest_sale_price DESC`;
-    } else if (sortParam === 'newest') {
-      query += ` ORDER BY p.created_at DESC`;
-    } else if (sortParam === 'rating') {
-      query += ` ORDER BY avg_rating DESC, p.total_sold_count DESC`;
-    } else {
-      query += ` ORDER BY p.total_sold_count DESC`;
-    }
-
-    const total = await env.DB.prepare('SELECT COUNT(*) AS total FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN categories pc ON c.parent_id = pc.id LEFT JOIN partners pt ON p.partner_id = pt.id ' + whereSql).bind(...binds).first('total');
-    query += ` LIMIT ? OFFSET ?`;
-    binds.push(perPage, (page - 1) * perPage);
-
-    let stmt = env.DB.prepare(query);
-    if (binds.length > 0) {
-      stmt = stmt.bind(...binds);
-    }
-    const { results } = await stmt.all();
-
-    return new Response(JSON.stringify({
-      success: true,
-      brand: 'OLMOA',
-      count: results.length,
-      filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam },
-      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
-      data: results
-    }), { headers: corsHeaders });
+    const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN categories pc ON c.parent_id = pc.id LEFT JOIN partners pt ON p.partner_id = pt.id ${baseWhere} ${filterSql}`).bind(...binds).first('total');
+    const { results } = await runQuery(`${selectList} ${fromSql} ${baseWhere} ${filterSql}${sortOrder(sortParam, 'p.')} LIMIT ? OFFSET ?`, [...binds, perPage, (page - 1) * perPage]);
+    return send(results, total);
   }
 
   // 4a. Algorithmic Buy Box Evaluation (GET /api/v1/products/:id/buy-box)

@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/partner_api_service.dart';
+import '../services/partner_push_service.dart';
 import '../theme/app_theme.dart';
 import 'login_view.dart';
 
@@ -52,6 +53,8 @@ class _PartnerAccountViewState extends State<PartnerAccountView> {
           const SizedBox(height: 24),
           OutlinedButton(
             onPressed: () async {
+              // Push token is dropped first: the DELETE needs the session.
+              await PartnerPushService.unregister();
               await PartnerAuthSession.logout();
               if (mounted) setState(() => _loggedIn = false);
             },

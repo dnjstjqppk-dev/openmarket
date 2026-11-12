@@ -5,6 +5,8 @@ import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerAuthHeaders 
 const products = ref<any[]>([])
 const loading = ref(true)
 const toast = ref('')
+// P1-T07: load failures surface with retry instead of a blank table.
+const loadError = ref('')
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -169,6 +171,7 @@ const chargeableWeightKg = computed(() => {
 
 const loadProducts = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products`, {
       headers: getPartnerHeaders()
@@ -179,11 +182,11 @@ const loadProducts = async () => {
     products.value = json.success && Array.isArray(json.data)
       ? json.data.map((p: any) => ({ ...p, editPrice: p.sale_price ?? p.lowest_sale_price ?? 0, editStock: p.stock_quantity ?? 0 }))
       : []
-    if (!res.ok || !json.success) toast.value = `상품 목록을 불러오지 못했습니다. ${json.error || ''}`
+    if (!res.ok || !json.success) loadError.value = `상품 목록을 불러오지 못했습니다. ${json.error || ''}`
   } catch (e) {
     console.error(e)
     products.value = []
-    toast.value = '상품 목록을 불러오지 못했습니다. (네트워크 오류)'
+    loadError.value = '상품 목록을 불러오지 못했습니다. (네트워크 오류)'
   } finally {
     loading.value = false
   }
@@ -649,6 +652,18 @@ onMounted(() => { loadProducts(); loadCategories() })
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
+          <tr v-if="loading">
+            <td colspan="8" class="py-10 px-5 text-center text-gray-400">상품 목록을 불러오는 중입니다...</td>
+          </tr>
+          <tr v-else-if="loadError">
+            <td colspan="8" class="py-10 px-5 text-center">
+              <p class="text-red-600 font-bold">{{ loadError }}</p>
+              <button @click="loadProducts" class="mt-2 px-3 py-1.5 rounded border font-bold">다시 불러오기</button>
+            </td>
+          </tr>
+          <tr v-else-if="!products.length">
+            <td colspan="8" class="py-10 px-5 text-center text-gray-400">등록된 상품이 없습니다. 위 양식으로 첫 상품을 등록해 보세요.</td>
+          </tr>
           <tr v-for="p in products" :key="p.id + '_' + (p.sku_id || '')" class="hover:bg-gray-50/80 transition">
             <td class="py-3 px-5">
               <div class="flex items-center gap-3">

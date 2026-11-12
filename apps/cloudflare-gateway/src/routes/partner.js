@@ -9,6 +9,7 @@ import { refundOrder, loadOrderBundle } from '../services/orders.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
 import { sealPii, maybeOpenPii } from '../lib/pii-crypto.js';
 import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
+import { pushOrderShipped } from '../services/push.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 
 
@@ -373,7 +374,17 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
                       WHERE EXISTS (SELECT 1 FROM sub_orders WHERE id = ? AND partner_id = ? AND tracking_number = ? AND status = 'SHIPPED')`)
         .bind(newId('trk'), subOrderId, carrier, tracking, subOrderId, partnerId, tracking)
     ]);
-    return r[0].meta.changes === 1;
+    const ok = r[0].meta.changes === 1;
+    // H-2: a push failure must never fail the shipment itself.
+    if (ok) {
+      try {
+        const ord = await env.DB.prepare(
+          'SELECT o.customer_id, o.order_no FROM orders o JOIN sub_orders s ON s.parent_order_id = o.id WHERE s.id = ?'
+        ).bind(subOrderId).first();
+        if (ord) await pushOrderShipped(env, { orderNo: ord.order_no, customerId: ord.customer_id, trackingNumber: tracking });
+      } catch { /* logged as FAILED inside notifyUser; shipment already committed */ }
+    }
+    return ok;
   }
 
   if (p === '/api/v1/partner/orders/bulk-shipment' && (request.method === 'PUT' || request.method === 'POST')) {
@@ -514,6 +525,12 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       if (m.includes('BATCH_ASSERTION') || m.includes('UNIQUE')) throw conflict('NOT_AWAITING_RESHIPMENT', '이미 재출고된 교환 건입니다.');
       throw e;
     }
+    try {
+      const ord = await env.DB.prepare(
+        'SELECT o.customer_id, o.order_no FROM orders o JOIN sub_orders s ON s.parent_order_id = o.id WHERE s.id = ?'
+      ).bind(claim.sub_order_id).first();
+      if (ord) await pushOrderShipped(env, { orderNo: ord.order_no, customerId: ord.customer_id, trackingNumber: tracking });
+    } catch { /* push must never fail the re-shipment */ }
     return json(corsHeaders, { success: true, claim_id: claim.id, exchange_status: 'RESHIPPED', sub_order_status: 'SHIPPED' });
   }
 

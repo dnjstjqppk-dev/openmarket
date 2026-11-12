@@ -1,5 +1,9 @@
 # OpenMarket 기술 스택 감사 보고서 (TECH_STACK_AUDIT.md)
 
+> 2026-11-12 NEW-24 결정: Go 표준은 폐기 — `backend/`, `apps/api/` 삭제됨.
+> 정식 아키텍처는 Vue 3 + TypeScript (Frontend), Cloudflare Workers + D1 (Backend),
+> Flutter + Dart (Mobile). 아래 본문은 결정 이전 스냅샷으로 유지한다.
+
 ## 1. 감사 개요 및 목적
 본 감사는 OpenMarket의 공식 기술 표준인 **Vue 3 + TypeScript (Frontend), Go (Backend), Flutter + Dart (Mobile)** 준수 여부를 전수 조사하고, 비표준 구현을 제거하여 정식 아키텍처로의 전환 계획을 수립하기 위해 수행되었습니다.
 

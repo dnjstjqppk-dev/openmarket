@@ -73,17 +73,17 @@ async function load() {
     if (my === seq) loading.value = false
   }
 }
-// ---- related: same-category best sellers (popular = units ordered), self excluded ----
+// ---- related: co-purchase + co-view + popular fill (server ranked, self excluded) ----
 const related = ref<any[]>([])
 async function loadRelated(id: string, categorySlug: string | null) {
   related.value = []
-  if (!categorySlug) return
+  void categorySlug
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(categorySlug)}&per_page=9&sort=popular`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/recommendations/related?product_id=${encodeURIComponent(id)}&limit=8`)
     const j = await res.json().catch(() => null)
     if (product.value?.id !== id) return
     if (!res.ok || !j?.success || !Array.isArray(j.data)) return
-    related.value = j.data.filter((p: any) => p.id !== id).slice(0, 8)
+    related.value = j.data
   } catch { /* section stays hidden */ }
 }
 function loadSideData(id: string) {
@@ -93,6 +93,8 @@ function loadSideData(id: string) {
   if (auth.isAuthenticated) {
     fetch(`${API_BASE_URL}/api/v1/wishlist`, { headers: { ...authHeader() } }).then((r) => r.json())
       .then((j) => { if (j?.success && Array.isArray(j.data)) isWishlisted.value = j.data.some((w: any) => w.product_id === id) }).catch(() => {})
+    // H-3: co-view signal (one row per user+product+day; failures are silent).
+    fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(id)}/view`, { method: 'POST', headers: { ...authHeader() } }).catch(() => {})
   }
 }
 // ---- availability -----------------------------------------------------------------------------------
@@ -406,11 +408,11 @@ watch(() => route.hash, applyHash)
         </div>
       </section>
 
-      <!-- related (same category, ordered by units sold) ------------------------------------------------ -->
+      <!-- related (co-purchase + co-view + popular fill, server ranked) ----------------------------------- -->
       <section v-if="related.length" class="mt-12" aria-labelledby="related-heading">
         <div class="mb-4 flex items-baseline justify-between">
-          <h2 id="related-heading" class="text-lg font-bold">같은 카테고리 인기 상품</h2>
-          <RouterLink v-if="product.category_slug" :to="`/category/${product.category_slug}`" class="text-sm font-medium text-primary hover:underline">전체 보기</RouterLink>
+          <h2 id="related-heading" class="text-lg font-bold">연관 상품</h2>
+          <RouterLink v-if="product.category_slug" :to="`/category/${product.category_slug}`" class="text-sm font-medium text-primary hover:underline">같은 카테고리 보기</RouterLink>
         </div>
         <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <li v-for="p in related" :key="p.id"><ProductCard :product="p" /></li>

@@ -99,6 +99,7 @@ onMounted(() => {
           <router-link v-if="canSee('/security')" to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
           <router-link v-if="canSee('/audit-log')" to="/audit-log" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">감사 로그</router-link>
           <router-link v-if="canSee('/inquiries')" to="/inquiries" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">고객 문의</router-link>
+          <router-link v-if="canSee('/shipping-zones')" to="/shipping-zones" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">도서산간 배송비</router-link>
           <router-link v-if="canSee('/marketing')" to="/marketing" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">
             마케팅·배너
           </router-link>
@@ -156,6 +157,7 @@ onMounted(() => {
         <router-link v-if="canSee('/security')" to="/security" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">계정 보안</router-link>
         <router-link v-if="canSee('/audit-log')" to="/audit-log" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">감사 로그</router-link>
         <router-link v-if="canSee('/inquiries')" to="/inquiries" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">고객 문의</router-link>
+        <router-link v-if="canSee('/shipping-zones')" to="/shipping-zones" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium">도서산간 배송비</router-link>
         <router-link v-if="canSee('/marketing')" to="/marketing" class="block px-3 py-2 rounded text-xs text-slate-300 hover:text-white hover:bg-slate-800 font-medium" active-class="bg-slate-800 text-orange-400 font-bold">
           마케팅·배너 & 알림 센터
         </router-link>

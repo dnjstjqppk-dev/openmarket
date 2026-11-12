@@ -83,7 +83,10 @@ onMounted(loadCategories);
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
       <input v-model="form.name" placeholder="카테고리명" class="border border-slate-300 rounded-lg px-2 py-1.5" />
       <input v-model="form.slug" placeholder="슬러그 (자동)" class="border border-slate-300 rounded-lg px-2 py-1.5" />
-      <input v-model="form.parent_id" placeholder="부모 ID (선택)" class="border border-slate-300 rounded-lg px-2 py-1.5" />
+      <select v-model="form.parent_id" class="border border-slate-300 rounded-lg px-2 py-1.5 bg-white">
+        <option value="">최상위 (부모 없음)</option>
+        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }} ({{ c.slug }})</option>
+      </select>
       <input v-model.number="form.sort_order" type="number" placeholder="정렬순서" class="border border-slate-300 rounded-lg px-2 py-1.5" />
       <button @click="createCategory" class="bg-indigo-600 text-white rounded-lg px-3 py-1.5 font-bold hover:bg-indigo-700">
         카테고리 생성

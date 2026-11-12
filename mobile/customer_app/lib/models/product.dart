@@ -76,7 +76,7 @@ class Product {
       lowestSalePrice: _asInt(json['lowest_sale_price']),
       totalSoldCount: _asInt(json['total_sold_count']),
       categoryName: (json['category_name'] ?? '').toString(),
-      businessName: (json['business_name'] ?? '').toString(),
+      businessName: (json['business_name'] ?? json['brand'] ?? '').toString(),
       defaultSkuId: (json['default_sku_id'] ?? '').toString(),
     );
   }

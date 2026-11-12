@@ -477,6 +477,7 @@ onMounted(loadOrders)
                 :alt="item.product_title"
                 class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-gray-100 shrink-0 border border-gray-200"
                 loading="lazy"
+                decoding="async"
               />
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">

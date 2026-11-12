@@ -2,8 +2,15 @@
 // Customer sign-in against POST /api/v1/auth/login (role CUSTOMER).
 // On success the server-issued JWT is stored in AuthSession.
 
+import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/social_login.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import 'forgot_password_view.dart';
 import 'register_view.dart';
@@ -22,17 +29,134 @@ class LoginView extends StatefulWidget {
   State<LoginView> createState() => _LoginViewState();
 }
 
+/// Production deep-link source. Widget tests replace it with
+/// [NoopSocialLinkSource] before pumping [LoginView].
+SocialLinkSource socialLinkSource = _AppLinksSocialLinkSource();
+
+class _AppLinksSocialLinkSource implements SocialLinkSource {
+  final _links = AppLinks();
+
+  @override
+  Stream<Uri> incomingLinks() => _links.uriLinkStream;
+
+  @override
+  Future<Uri?> initialLink() => _links.getInitialLink();
+}
+
 class _LoginViewState extends State<LoginView> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
   String? _error;
+  bool _socialBusy = false;
+  StreamSubscription<Uri>? _linkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Wave G2: OAuth returns arrive on olmoa://social-login, warm or cold.
+    try {
+      _linkSub = socialLinkSource.incomingLinks().listen(_consumeSocialLink,
+          onError: (_) {});
+      socialLinkSource.initialLink().then((link) {
+        if (link != null) _consumeSocialLink(link);
+      }).catchError((_) => null);
+    } catch (_) {
+      _linkSub = null;
+    }
+  }
 
   @override
   void dispose() {
+    _linkSub?.cancel().then((_) {}, onError: (_) {});
+    _linkSub = null;
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// Starts Kakao login in the system browser. Probes first: an unconfigured
+  /// server answers 501 JSON instead of the 302 to Kakao (LoginView.vue mirror).
+  Future<void> _startKakao() async {
+    if (_socialBusy) return;
+    setState(() {
+      _socialBusy = true;
+      _error = null;
+    });
+    try {
+      final state = newSocialAppState();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(socialStateStoreKey, state);
+      final url = socialStartUrl(ApiService.baseUrl, state);
+      final client = http.Client();
+      int status;
+      try {
+        final req = http.Request('GET', Uri.parse(url))
+          ..followRedirects = false;
+        final res = await client.send(req).timeout(const Duration(seconds: 10));
+        await res.stream.drain();
+        status = res.statusCode;
+      } finally {
+        client.close();
+      }
+      if (status == 302) {
+        final launched = await launchUrl(Uri.parse(url),
+            mode: LaunchMode.externalApplication);
+        if (!launched && mounted) {
+          await prefs.remove(socialStateStoreKey);
+          setState(() => _error = '브라우저를 열 수 없습니다. 다시 시도해 주세요.');
+        }
+        return;
+      }
+      await prefs.remove(socialStateStoreKey);
+      if (!mounted) return;
+      setState(() => _error = status == 501
+          ? '소셜 로그인은 아직 제공되지 않습니다.'
+          : '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+    } catch (_) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(socialStateStoreKey);
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _error = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      if (mounted) setState(() => _socialBusy = false);
+    }
+  }
+
+  /// Consumes an OAuth return link: state is verified before the one-time
+  /// code is touched, exactly like the SPA.
+  Future<void> _consumeSocialLink(Uri link) async {
+    final parsed = parseSocialReturn(link);
+    if (parsed == null || !parsed.understood) return;
+    final prefs = await SharedPreferences.getInstance();
+    final expected = prefs.getString(socialStateStoreKey);
+    await prefs.remove(socialStateStoreKey);
+    if (!mounted) return;
+    if (expected == null || parsed.state != expected) {
+      setState(() => _error = '로그인 요청을 확인할 수 없습니다. 다시 시도해 주세요.');
+      return;
+    }
+    if (parsed.error != null) {
+      setState(() => _error = socialErrorMessage(parsed.error!));
+      return;
+    }
+    setState(() {
+      _socialBusy = true;
+      _error = null;
+    });
+    final r = await AuthSession.loginWithSocialCode(code: parsed.code!);
+    if (!mounted) return;
+    setState(() => _socialBusy = false);
+    if (r['success'] == true) {
+      widget.onSuccess();
+      PushService.syncAfterLogin();
+    } else {
+      setState(
+          () => _error = (r['error'] ?? '소셜 로그인에 실패했습니다.').toString());
+    }
   }
 
   Future<void> _submit() async {
@@ -47,6 +171,7 @@ class _LoginViewState extends State<LoginView> {
     setState(() => _busy = false);
     if (r['success'] == true) {
       widget.onSuccess();
+      PushService.syncAfterLogin();
     } else {
       setState(() => _error = (r['error'] ?? '로그인하지 못했습니다.').toString());
     }
@@ -112,6 +237,49 @@ class _LoginViewState extends State<LoginView> {
                     : const Text('로그인',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('또는',
+                      style: TextStyle(
+                          color: Colors.grey.shade600, fontSize: 12)),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _socialBusy ? null : _startKakao,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFEE500),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _socialBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.black, strokeWidth: 2))
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble, size: 18),
+                          SizedBox(width: 8),
+                          Text('카카오로 시작하기',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15)),
+                        ],
+                      ),
               ),
             ),
             const SizedBox(height: 8),

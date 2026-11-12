@@ -192,7 +192,7 @@ async function submit() {
               </p>
               <p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink">{{ r.content || r.comment }}</p>
               <div v-if="r.images?.length" class="mt-2 flex gap-2">
-                <img v-for="(src, i) in r.images.slice(0, 4)" :key="i" :src="safeReviewImg(src)" :alt="`후기 사진 ${i + 1}`" class="h-20 w-20 rounded object-cover" loading="lazy" />
+                <img v-for="(src, i) in r.images.slice(0, 4)" :key="i" :src="safeReviewImg(src)" :alt="`후기 사진 ${i + 1}`" class="h-20 w-20 rounded object-cover" loading="lazy" decoding="async" />
               </div>
             </li>
           </ul>

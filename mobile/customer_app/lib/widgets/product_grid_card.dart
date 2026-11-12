@@ -1,5 +1,6 @@
 // P2-MOB-P3: shared product grid card (extracted verbatim from home_view so
 // the home grid and the channel screens render identically).
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../theme/app_theme.dart';
@@ -39,15 +40,25 @@ class ProductGridCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Image.network(
-                      p.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade100,
-                        child: const Icon(Icons.shopping_bag,
-                            size: 40, color: Colors.grey),
-                      ),
-                    ),
+                    // H-4: disk-cached thumbnails (an empty URL renders the
+                    // fallback directly — never handed to the loader).
+                    child: p.thumbnailUrl.isEmpty
+                        ? Container(
+                            color: Colors.grey.shade100,
+                            child: const Icon(Icons.shopping_bag,
+                                size: 40, color: Colors.grey),
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: p.thumbnailUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                                color: Colors.grey.shade100),
+                            errorWidget: (_, __, ___) => Container(
+                              color: Colors.grey.shade100,
+                              child: const Icon(Icons.shopping_bag,
+                                  size: 40, color: Colors.grey),
+                            ),
+                          ),
                   ),
                   if (p.discountPercent > 0)
                     Positioned(

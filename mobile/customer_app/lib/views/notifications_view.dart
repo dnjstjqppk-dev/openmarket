@@ -14,9 +14,12 @@ class NotificationsView extends StatefulWidget {
 class _NotificationsViewState extends State<NotificationsView> {
   bool _authReady = false;
   bool _isLoading = true;
+  bool _loadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _items = [];
   int _unread = 0;
+  int _page = 1;
+  bool _hasMore = false;
 
   @override
   void initState() {
@@ -37,11 +40,13 @@ class _NotificationsViewState extends State<NotificationsView> {
       _error = null;
     });
     try {
-      final r = await ApiService.getNotifications();
+      final r = await ApiService.getNotificationsPage();
       if (!mounted) return;
       setState(() {
-        _items = (r['items'] as List).cast<Map<String, dynamic>>();
-        _unread = (r['unread'] as num?)?.toInt() ?? 0;
+        _items = r.items;
+        _unread = r.unread;
+        _page = r.page;
+        _hasMore = r.hasMore;
       });
     } on AuthRequiredException {
       if (mounted) setState(() {});
@@ -49,6 +54,30 @@ class _NotificationsViewState extends State<NotificationsView> {
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final r = await ApiService.getNotificationsPage(page: _page + 1);
+      if (mounted) {
+        setState(() {
+          _items = [..._items, ...r.items];
+          _unread = r.unread;
+          _page = r.page;
+          _hasMore = r.hasMore;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다음 페이지를 불러오지 못했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -103,9 +132,21 @@ class _NotificationsViewState extends State<NotificationsView> {
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: _items.length,
+      itemCount: _items.length + (_hasMore ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
+        if (index >= _items.length) {
+          return Center(
+            child: _loadingMore
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator())
+                : OutlinedButton(
+                    onPressed: _loadMore,
+                    child: const Text('알림 더 보기'),
+                  ),
+          );
+        }
         final n = _items[index];
         final read = n['is_read'] == 1 || n['is_read'] == true;
         return Card(

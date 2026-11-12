@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../models/contact_input.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 
 class RegisterView extends StatefulWidget {
   final VoidCallback onSuccess;
@@ -64,6 +65,7 @@ class _RegisterViewState extends State<RegisterView> {
     setState(() => _busy = false);
     if (r['success'] == true) {
       widget.onSuccess();
+      PushService.syncAfterLogin();
     } else {
       setState(
           () => _error = (r['error'] ?? '회원가입에 실패했습니다.').toString());

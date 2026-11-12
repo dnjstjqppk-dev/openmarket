@@ -115,7 +115,7 @@ function requestQuote() {
     quoting.value = true
     quoteError.value = ''
     try {
-      quote.value = await fetchQuote({ items: itemsPayload(), user_coupon_id: selectedUserCouponId.value ? String(selectedUserCouponId.value) : undefined, use_credit_amount: creditAmount.value }, my.signal)
+      quote.value = await fetchQuote({ items: itemsPayload(), user_coupon_id: selectedUserCouponId.value ? String(selectedUserCouponId.value) : undefined, use_credit_amount: creditAmount.value, shipping_postal_code: zipCode.value.trim() || undefined }, my.signal)
     } catch (e: any) {
       if (my.signal.aborted || e?.name === 'AbortError') return
       quote.value = null
@@ -125,7 +125,7 @@ function requestQuote() {
     }
   }, 250)
 }
-watch([selectedUserCouponId, creditAmount], requestQuote)
+watch([selectedUserCouponId, creditAmount, zipCode], requestQuote)
 onBeforeUnmount(() => { ctrl?.abort(); if (timer) clearTimeout(timer) })
 
 const paymentConfig = ref<{ mode: string; client_key: string | null; api_client_key?: string | null; widget_client_key?: string | null; is_test_key: boolean | null; message?: string } | null>(null)
@@ -322,11 +322,11 @@ async function submitOrder() {
             <li v-for="s in quote.sub_orders" :key="s.partner_id" class="px-5 py-4">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><Store class="h-4 w-4 text-ink-muted" aria-hidden="true" />{{ sellerName(s.partner_id) }}</p>
-                <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}</p>
+                <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}<template v-if="s.remote_surcharge"> ({{ s.remote_zone }} 추가배송비 {{ won(s.remote_surcharge) }} 포함)</template></p>
               </div>
               <ul class="space-y-3">
                 <li v-for="it in s.items" :key="it.sku_id" class="flex gap-3">
-                  <img :src="thumbOf(it.sku_id)" :alt="it.title" class="h-16 w-16 shrink-0 rounded-md border border-line bg-surface-2 object-cover" loading="lazy" />
+                  <img :src="thumbOf(it.sku_id)" :alt="it.title" class="h-16 w-16 shrink-0 rounded-md border border-line bg-surface-2 object-cover" loading="lazy" decoding="async" />
                   <div class="min-w-0 flex-1">
                     <p class="line-clamp-2 text-sm text-ink">{{ it.title }}</p>
                     <p class="text-xs text-ink-muted">{{ it.option_summary }} · {{ formatNumber(it.quantity) }}개<template v-if="it.volume_discount_pct"> · 수량 할인 {{ it.volume_discount_pct }}%</template></p>
@@ -377,6 +377,7 @@ async function submitOrder() {
           <div v-if="quote.volume_discount_amount" class="flex justify-between"><dt class="text-ink-muted">수량 할인</dt><dd class="tabular-nums text-accent">-{{ won(quote.volume_discount_amount) }}</dd></div>
           <div v-if="quote.coupon_discount_amount" class="flex justify-between"><dt class="text-ink-muted">쿠폰 할인</dt><dd class="tabular-nums text-accent">-{{ won(quote.coupon_discount_amount) }}</dd></div>
           <div class="flex justify-between"><dt class="text-ink-muted">배송비 ({{ quote.sub_orders.length }}개 판매자)</dt><dd class="tabular-nums text-ink">{{ quote.total_shipping_amount ? won(quote.total_shipping_amount) : '무료' }}</dd></div>
+          <div v-if="quote.remote_zone" class="flex justify-between"><dt class="text-ink-muted">{{ quote.remote_zone }} 추가배송비 포함</dt><dd class="tabular-nums text-ink">판매자별 {{ won(quote.sub_orders[0]?.remote_surcharge || 0) }}</dd></div>
           <div v-if="quote.credit_used_amount" class="flex justify-between"><dt class="text-ink-muted">적립금 사용</dt><dd class="tabular-nums text-accent">-{{ won(quote.credit_used_amount) }}</dd></div>
           <div class="flex items-baseline justify-between border-t border-line-divider pt-3">
             <dt class="font-semibold text-ink">최종 결제 금액</dt>

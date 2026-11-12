@@ -9,6 +9,8 @@ import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, ge
 import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
 import { sealPii } from '../lib/pii-crypto.js';
+import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
+import { resolveRemoteZone } from '../lib/remote-zones.js';
 
 export const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_LINES = 50;
@@ -103,6 +105,13 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
 
   const lines = parseLines(body.items);
   const addr = dryRun ? null : parseAddress(body);
+  // NEW-20: quotes stay address-free, but resolve the zone when a postal rides along.
+  const zonePostal = dryRun
+    ? String(body.shipping_postal_code || (body.shipping_address || {}).zip || (body.shipping_address || {}).postal_code || '')
+    : addr.postal;
+  const remoteZone = await resolveRemoteZone(env, zonePostal);
+  const remoteSurcharge = remoteZone ? Number(remoteZone.surcharge_amount) || 0 : 0;
+  const remoteZoneName = remoteZone ? remoteZone.zone_name : null;
   const rawPccc = body.pccc ? String(body.pccc).trim().toUpperCase() : null;
   if (rawPccc && !/^P\d{12}$/.test(rawPccc)) throw bad('INVALID_PCCC', "개인통관고유부호 형식이 올바르지 않습니다. 'P'로 시작하는 13자리 번호여야 합니다.");
 
@@ -173,11 +182,13 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   let idx = 1;
   for (const [partnerId, its] of groups) {
     const goods = its.reduce((a, it) => a + it.lineTotal, 0);
-    const fee = its[0].freeThreshold > 0 && goods >= its[0].freeThreshold ? 0 : its[0].shippingFee;
+    const base = its[0].freeThreshold > 0 && goods >= its[0].freeThreshold ? 0 : its[0].shippingFee;
+    // NEW-20: the island surcharge rides on top even when base shipping is free.
+    const fee = base + remoteSurcharge;
     const commission = its[0].salesModel === 'MARKETPLACE' ? applyBps(goods, its[0].bps) : 0;
     subs.push({
       id: newId('sub'), no: `${orderNo}-${idx++}`, partnerId, salesModel: its[0].salesModel, bps: its[0].bps,
-      goods, shipping: assertWon(fee, 'shipping'), commission, items: its
+      goods, shipping: assertWon(fee, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission, items: its
     });
   }
   const allItems = subs.flatMap((s) => s.items);
@@ -238,8 +249,8 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   if (dryRun) {
     return { quote: {
       total_goods_amount: goodsBase, volume_discount_amount: volumeTotal, coupon_discount_amount: coupon, credit_used_amount: credit,
-      total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW', requires_pccc: orderRequiresPccc,
-      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
+      total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW', requires_pccc: orderRequiresPccc, remote_zone: remoteZoneName,
+      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, remote_surcharge: s.remoteSurcharge, remote_zone: s.remoteZone, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
     } };
   }
 
@@ -396,6 +407,21 @@ async function capturePayment(env, order, pg) {
     }
   }
   await runBatch(env, st);
+  // J-2: sellers learn about paid orders by push (failures never fail capture).
+  try {
+    const partnerIds = [...new Set(bundle.subs.map((s) => s.partner_id))];
+    if (partnerIds.length) {
+      const { results: owners } = await env.DB.prepare(
+        `SELECT id, owner_user_id FROM partners WHERE id IN (${partnerIds.map(() => '?').join(',')})`
+      ).bind(...partnerIds).all();
+      for (const o of owners) {
+        if (!o.owner_user_id) continue;
+        const mine = bundle.subs.filter((s) => s.partner_id === o.id);
+        const count = bundle.items.filter((i) => mine.some((s) => s.id === i.sub_order_id)).reduce((a, i) => a + i.quantity, 0);
+        await pushSellerNewOrder(env, { orderNo: order.order_no, userId: o.owner_user_id, itemCount: count });
+      }
+    }
+  } catch { /* logged as FAILED inside notifyUser; capture already committed */ }
 }
 
 /**
@@ -675,6 +701,12 @@ export async function refundOrder(env, actor, orderRef, request) {
   }
   await runBatch(env, fin);
   const refund = await env.DB.prepare('SELECT * FROM refunds WHERE id = ?').bind(refundId).first();
+  try {
+    await pushRefundCompleted(env, {
+      orderNo: o.order_no, customerId: o.customer_id,
+      amount: (Number(refund.pg_amount) || 0) + (Number(refund.credit_amount) || 0)
+    });
+  } catch { /* push must never fail the refund */ }
   return { replay: false, refund, orderStatus: nextOrder, warnings };
 }
 

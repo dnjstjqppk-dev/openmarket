@@ -237,17 +237,20 @@ function exportToCSV() {
   }
 
   const headers = ['주문번호', '하위주문번호', '수령인', '연락처', '우편번호', '주소', '상세주소', '배송메모', '품목수', '총금액'];
+  // P1-T05: every cell through the escaper (SettlementView convention) —
+  // a comma or quote in any field used to break the columns.
+  const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = pending.map(s => [
-    `"${s.order_no}"`,
-    `"${s.sub_order_no || s.id}"`,
-    `"${s.recipient_name}"`,
-    `"${s.recipient_phone}"`,
-    `"${s.shipping_postal_code || ''}"`,
-    `"${(s.shipping_address_line1 || '').replace(/"/g, '""')}"`,
-    `"${(s.shipping_address_line2 || '').replace(/"/g, '""')}"`,
-    `"${(s.shipping_memo || '').replace(/"/g, '""')}"`,
-    s.items ? s.items.length : 1,
-    s.total_amount
+    csvCell(s.order_no),
+    csvCell(s.sub_order_no || s.id),
+    csvCell(s.recipient_name),
+    csvCell(s.recipient_phone),
+    csvCell(s.shipping_postal_code),
+    csvCell(s.shipping_address_line1),
+    csvCell(s.shipping_address_line2),
+    csvCell(s.shipping_memo),
+    csvCell(s.items ? s.items.length : 1),
+    csvCell(s.total_amount)
   ]);
 
   const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');

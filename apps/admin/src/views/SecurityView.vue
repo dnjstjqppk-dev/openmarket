@@ -60,8 +60,11 @@ async function createOperator() {
   load()
 }
 
+const operatorListKey = ref(0)
 async function updateOperator(o: any, patch: any, label: string) {
-  if (!confirm(`${o.email}: ${label}. 해당 계정의 모든 세션이 종료됩니다.`)) return
+  // A-N05: the role select is one-way bound, so a cancelled confirm must
+  // force a re-render or it keeps showing the unapplied value.
+  if (!confirm(`${o.email}: ${label}. 해당 계정의 모든 세션이 종료됩니다.`)) { operatorListKey.value++; return }
   const r = await adminApi(`/api/v1/admin/admin-users/${o.id}`, { method: 'PUT', json: patch })
   if (!r.ok) { err.value = r.data.error; load(); return }
   msg.value = `${o.email}: ${label} 완료`
@@ -109,7 +112,7 @@ onMounted(load)
       <p class="text-slate-500">재무: 지급·대사·환불 / 운영·MD: 상품·입점·발주·주문·마케팅 / 고객지원: 주문·클레임·환불·회원 조회 / 개인정보 보호책임: 접속기록·회원 조회. 권한 변경·비활성화·2단계 인증 초기화는 즉시 세션을 끊습니다.</p>
       <div class="overflow-x-auto"><table class="w-full min-w-[560px]">
         <thead class="text-slate-500"><tr><th class="text-left p-1">계정</th><th class="text-left p-1">권한</th><th class="text-left p-1">2단계</th><th class="text-left p-1">상태</th><th></th></tr></thead>
-        <tbody><tr v-for="o in operators" :key="o.id" class="border-t">
+        <tbody :key="operatorListKey"><tr v-for="o in operators" :key="o.id" class="border-t">
           <td class="p-1">{{ o.email }}<div class="text-slate-400">{{ o.full_name }}</div></td>
           <td class="p-1"><select :value="o.admin_role" class="h-8 px-1 rounded border" :aria-label="`${o.email} 권한`" @change="updateOperator(o, { admin_role: ($event.target as HTMLSelectElement).value }, '권한 변경')">
             <option v-for="r in ROLES" :key="r" :value="r">{{ ADMIN_ROLE_LABEL[r] }}</option></select></td>

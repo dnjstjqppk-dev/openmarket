@@ -27,8 +27,13 @@ class OrdersView extends StatefulWidget {
 }
 
 class _OrdersViewState extends State<OrdersView> {
-  Future<List<Map<String, dynamic>>>? _ordersFuture;
   bool _authReady = false;
+  bool _loading = true;
+  bool _loadingMore = false;
+  String? _error;
+  List<Map<String, dynamic>> _orders = [];
+  int _page = 1;
+  bool _hasMore = false;
 
   @override
   void initState() {
@@ -39,13 +44,54 @@ class _OrdersViewState extends State<OrdersView> {
   Future<void> _init() async {
     await AuthSession.restore();
     if (!mounted) return;
-    setState(() {
-      _authReady = true;
-      if (AuthSession.isAuthenticated) _ordersFuture = ApiService.fetchOrders();
-    });
+    setState(() => _authReady = true);
+    if (AuthSession.isAuthenticated) _load();
   }
 
-  void _reload() => setState(() => _ordersFuture = ApiService.fetchOrders());
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final first = await ApiService.fetchOrdersPage();
+      if (mounted) {
+        setState(() {
+          _orders = first.items;
+          _page = first.page;
+          _hasMore = first.hasMore;
+        });
+      }
+    } on AuthRequiredException {
+      if (mounted) setState(() {});
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await ApiService.fetchOrdersPage(page: _page + 1);
+      if (mounted) {
+        setState(() {
+          _orders = [..._orders, ...next.items];
+          _page = next.page;
+          _hasMore = next.hasMore;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다음 페이지를 불러오지 못했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,44 +99,62 @@ class _OrdersViewState extends State<OrdersView> {
     if (!AuthSession.isAuthenticated) {
       return LoginView(onSuccess: _init, reason: '주문 내역을 보려면 로그인해 주세요.');
     }
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _ordersFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          final err = snapshot.error;
-          if (err is AuthRequiredException) {
-            return LoginView(
-                onSuccess: _init, reason: '로그인이 만료되었습니다. 다시 로그인해 주세요.');
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error!, style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: _load, child: const Text('다시 시도')),
+          ],
+        ),
+      );
+    }
+    if (_orders.isEmpty) {
+      return const Center(
+        child: Text('주문 내역이 없습니다.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _orders.length + (_hasMore ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          if (index >= _orders.length) {
+            return Center(
+              child: _loadingMore
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator())
+                  : OutlinedButton(
+                      onPressed: _loadMore,
+                      child: const Text('주문 더 보기'),
+                    ),
+            );
           }
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                    err is ApiException ? err.message : '주문 내역을 불러오지 못했습니다.',
-                    style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 12),
-                ElevatedButton(onPressed: _reload, child: const Text('다시 시도')),
-              ],
-            ),
-          );
-        }
-        final orders = snapshot.data ?? [];
-        if (orders.isEmpty) {
-          return const Center(
-            child: Text('주문 내역이 없습니다.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-          );
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final order = orders[index];
+          return _orderCard(context, _orders[index]);
+        },
+      ),
+    );
+  }
+
+  Widget _orderCard(BuildContext context, Map<String, dynamic> order) {
+    return _OrderCard(order: order);
+  }
+}
+
+class _OrderCard extends StatelessWidget {
+  final Map<String, dynamic> order;
+
+  const _OrderCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
             final orderNo = (order['order_no'] ?? order['id'] ?? '').toString();
             final status =
                 (order['payment_status'] ?? order['status'] ?? '').toString();
@@ -162,9 +226,5 @@ class _OrdersViewState extends State<OrdersView> {
                 ),
               ),
             );
-          },
-        );
-      },
-    );
   }
 }

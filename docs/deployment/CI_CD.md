@@ -18,7 +18,8 @@ flowchart TD
 
 ## 2. 워크플로우 구성 파일
 1. `.github/workflows/ci.yml`:
-   - Go 1.23 환경 구성 및 `go test -v ./...` 실행
+   - Node 게이트웨이·UI·계약 체인 + Flutter analyze/test + Cloudflare dry-run + LCP 예산
+   - Go 잡은 2026-11-12 NEW-24 결정으로 제거 (`backend/`, `apps/api/` 삭제)
    - Node 20 환경 구성 및 4개 Cloudflare 프로젝트 dry-run 배포 문법 검증
 2. `.github/workflows/deploy.yml`:
    - `CLOUDFLARE_API_TOKEN`을 이용한 실 배포 자동화

@@ -5,6 +5,7 @@
 // The cart only clears when the server confirms the order.
 
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/cart_line.dart';
 import '../models/contact_input.dart';
@@ -12,6 +13,7 @@ import '../models/product.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/payment_guidance.dart';
+import '../widgets/product_grid_card.dart';
 import 'address_book_view.dart';
 import 'login_view.dart';
 import 'payment_view.dart';
@@ -22,6 +24,7 @@ class CartView extends StatefulWidget {
   final void Function(CartLine line) onRemoveLine;
   final void Function(List<CartLine> server) onMergeServerLines;
   final VoidCallback onClearCart;
+  final void Function(Product) onAddToCart;
 
   const CartView({
     super.key,
@@ -30,6 +33,7 @@ class CartView extends StatefulWidget {
     required this.onRemoveLine,
     required this.onMergeServerLines,
     required this.onClearCart,
+    required this.onAddToCart,
   });
 
   @override
@@ -220,6 +224,7 @@ class _CartViewState extends State<CartView> {
       userCouponId: _couponId,
       useCreditAmount: _creditWant,
       pccc: _pccc.text.trim().isEmpty ? null : _pccc.text.trim().toUpperCase(),
+      postalCode: _zip.text.trim().isEmpty ? null : _zip.text.trim(),
     );
     if (!mounted) return;
     if (r['code'] == 'UNAUTHENTICATED') {
@@ -369,6 +374,7 @@ class _CartViewState extends State<CartView> {
                 _addr2.text = (a['address_line2'] ?? '').toString();
               });
               Navigator.of(context).pop();
+              _scheduleQuote();
             },
           ),
         ),
@@ -512,19 +518,32 @@ class _CartViewState extends State<CartView> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            l.product.thumbnailUrl,
-                            width: 70,
-                            height: 70,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 70,
-                              height: 70,
-                              color: Colors.grey.shade100,
-                              child: const Icon(Icons.shopping_bag,
-                                  color: Colors.grey),
-                            ),
-                          ),
+                          child: l.product.thumbnailUrl.isEmpty
+                              ? Container(
+                                  width: 70,
+                                  height: 70,
+                                  color: Colors.grey.shade100,
+                                  child: const Icon(Icons.shopping_bag,
+                                      color: Colors.grey),
+                                )
+                              : CachedNetworkImage(
+                                  imageUrl: l.product.thumbnailUrl,
+                                  width: 70,
+                                  height: 70,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Container(
+                                    width: 70,
+                                    height: 70,
+                                    color: Colors.grey.shade100,
+                                  ),
+                                  errorWidget: (_, __, ___) => Container(
+                                    width: 70,
+                                    height: 70,
+                                    color: Colors.grey.shade100,
+                                    child: const Icon(Icons.shopping_bag,
+                                        color: Colors.grey),
+                                  ),
+                                ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -598,6 +617,13 @@ class _CartViewState extends State<CartView> {
                       ],
                     ),
                   )),
+              _CartBundleStrip(
+                  ids: widget.lines
+                      .map((l) => l.product.id)
+                      .where((id) => id.isNotEmpty)
+                      .toSet()
+                      .toList(),
+                  onAddToCart: widget.onAddToCart),
               const Divider(height: 24),
               const Text('쿠폰 · 적립금 · 통관번호',
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
@@ -712,6 +738,11 @@ class _CartViewState extends State<CartView> {
                         _guideRow('적립금 사용',
                             '-${_won(_quote!['credit_used_amount'])}'),
                       _guideRow('배송비', _won(_quote!['total_shipping_amount'])),
+                      if ((_quote!['remote_zone'] ?? '').toString().isNotEmpty)
+                        Text(
+                            '${_quote!['remote_zone']} 추가배송비가 판매자별로 포함되어 있습니다.',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey)),
                       if (_quote!['requires_pccc'] == true)
                         const Text('해외직구 상품 포함 — 개인통관고유부호가 필요합니다.',
                             style: TextStyle(
@@ -758,7 +789,8 @@ class _CartViewState extends State<CartView> {
                   controller: _zip,
                   decoration: const InputDecoration(
                       labelText: '우편번호 *', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _scheduleQuote()),
               const SizedBox(height: 10),
               TextField(
                   controller: _addr1,
@@ -838,6 +870,75 @@ class _CartViewState extends State<CartView> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// H-3: cross-sell strip fed by the cart-bundle endpoint. Hidden while the
+/// cart ids are empty or the fetch answers nothing.
+class _CartBundleStrip extends StatefulWidget {
+  final List<String> ids;
+  final void Function(Product) onAddToCart;
+
+  const _CartBundleStrip({required this.ids, required this.onAddToCart});
+
+  @override
+  State<_CartBundleStrip> createState() => _CartBundleStripState();
+}
+
+class _CartBundleStripState extends State<_CartBundleStrip> {
+  List<Product> _rows = [];
+  String _loadedKey = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CartBundleStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final key = widget.ids.join(',');
+    if (key == _loadedKey) return;
+    _loadedKey = key;
+    if (widget.ids.isEmpty) {
+      if (mounted) setState(() => _rows = []);
+      return;
+    }
+    final rows = await ApiService.getCartBundle(widget.ids, limit: 5);
+    if (mounted && _loadedKey == key) setState(() => _rows = rows);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_rows.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        const Text('함께 구매하면 좋은 상품',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _rows.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) => SizedBox(
+              width: 160,
+              child: ProductGridCard(
+                  product: _rows[i], onAddToCart: widget.onAddToCart),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
       ],
     );
   }

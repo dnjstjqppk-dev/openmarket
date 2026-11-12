@@ -10,7 +10,7 @@
 | `olmoa-admin` | 관리자 콘솔 (정적) | `apps/admin` | `dist` (`wrangler.jsonc` assets) |
 
 D1 데이터베이스: `openmarket-db` (`6935e21b-ffdc-47d1-8e7d-d97b1b8b317a`), 바인딩명 `DB`.
-`apps/api`(Go 데모 서버)와 `backend/`(Go 도메인 참조 구현)는 프로덕션 요청 경로가 아니다.
+`apps/api`와 `backend/`(구 Go 참조 구현)는 2026-11-12 NEW-24 결정으로 삭제됐다. API는 `apps/cloudflare-gateway` 단일 구현이다.
 
 ## 2. 시크릿 주입 (프로덕션 필수)
 

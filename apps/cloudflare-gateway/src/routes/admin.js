@@ -9,6 +9,7 @@ import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement, grantCreditStatements } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle, mapDbError } from '../services/orders.js';
+import { pushClaimCreditGranted, pushClaimRejected } from '../services/push.js';
 import { logPiiView, maskLast4 } from '../services/privacy.js';
 import { isSealedPii, maybeOpenPii, sealPii } from '../lib/pii-crypto.js';
 
@@ -324,6 +325,10 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(claim.sub_order_id),
         audit('CLAIM_REJECT', 'claim', clmId, claim, { note })
       ]);
+      try {
+        const ord = await env.DB.prepare('SELECT order_no FROM orders WHERE id = ?').bind(claim.order_id).first();
+        await pushClaimRejected(env, { orderNo: ord ? ord.order_no : claim.order_id, customerId: claim.user_id, note });
+      } catch { /* push must never fail the decision */ }
       return json(corsHeaders, { success: true, claim_id: clmId, status: 'REJECTED' });
     }
     if (claim.claim_type === 'PRICE_ADJUSTMENT') {
@@ -365,6 +370,11 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         await env.DB.batch(st);
       } catch (e) {
         throw mapDbError(e) ? conflict('CLAIM_ALREADY_PROCESSED', `이미 처리된 클레임입니다. (${clmId})`) : e;
+      }
+      if (grant > 0) {
+        try {
+          await pushClaimCreditGranted(env, { orderNo: order.order_no, customerId: claim.user_id, amount: grant });
+        } catch { /* push must never fail the decision */ }
       }
       return json(corsHeaders, { success: true, claim_id: clmId, status: 'REFUNDED', granted: grant });
     }
@@ -608,6 +618,10 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (!name) throw bad('CATEGORY_NAME_REQUIRED', '카테고리명은 필수입니다.');
     const id = body.id || newId('cat');
     const parentId = body.parent_id || null;
+    if (parentId) {
+      const parent = await env.DB.prepare('SELECT id FROM categories WHERE id = ?').bind(parentId).first();
+      if (!parent) throw bad('INVALID_PARENT_CATEGORY', '존재하지 않는 상위 카테고리입니다.');
+    }
     const depth = parentId ? 1 : 0;
     await env.DB.batch([
       env.DB.prepare(

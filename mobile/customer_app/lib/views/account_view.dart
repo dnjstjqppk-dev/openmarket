@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import 'address_book_view.dart';
 import 'login_view.dart';
@@ -92,6 +93,8 @@ class _AccountViewState extends State<AccountView> {
         Center(
           child: OutlinedButton(
             onPressed: () async {
+              // Push token is dropped first: the DELETE needs the session.
+              await PushService.unregister();
               await AuthSession.logout();
               if (mounted) setState(() => _loggedIn = false);
             },

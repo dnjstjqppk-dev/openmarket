@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: OLMOA Shipping Fragment
+  version: 1.0.0
+paths:
+  /api/v1/shipping/remote-zones:
+    get:
+      summary: Remote/island surcharge zones (public)
+      tags: [Shipping]
+      security: []
+      description: Operator-managed postal-prefix table. Checkout matches the longest prefix; unknown postals have no zone.
+      responses:
+        '200':
+          description: Zone rows ordered by prefix
+
+  /api/v1/admin/shipping/remote-zones:
+    get:
+      summary: List remote surcharge zones (admin)
+      tags: [Shipping]
+      responses:
+        '200':
+          description: Zone rows ordered by prefix
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    put:
+      summary: Upsert a remote surcharge zone (admin)
+      tags: [Shipping]
+      description: Same-prefix rows are replaced. Takes effect on the next checkout immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postal_prefix, zone_name, surcharge_amount]
+              properties:
+                postal_prefix:
+                  type: string
+                  description: 2-5 digits.
+                zone_name:
+                  type: string
+                surcharge_amount:
+                  type: integer
+                  description: KRW 0-100000, applied per seller sub-order.
+      responses:
+        '200':
+          description: Stored row
+        '400':
+          description: INVALID_PREFIX, INVALID_ZONE_NAME, or INVALID_SURCHARGE
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/admin/shipping/remote-zones/{prefix}:
+    delete:
+      summary: Delete a remote surcharge zone (admin)
+      tags: [Shipping]
+      parameters:
+        - name: prefix
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deletion count
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)

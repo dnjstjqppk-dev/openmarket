@@ -2,10 +2,16 @@
 // OLMOA Customer Mobile App Main Entry Point
 // Official Brand: OLMOA (올모아) | Slogan: 내가 찾는 모든 것, 여기.
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:sentry/sentry.dart';
 import 'models/cart_line.dart';
 import 'models/product.dart';
+import 'models/sentry_options.dart';
+import 'services/push_service.dart';
 import 'theme/app_theme.dart';
+import 'views/notifications_view.dart';
 import 'views/home_view.dart';
 import 'views/cart_view.dart';
 import 'views/orders_view.dart';
@@ -13,8 +19,45 @@ import 'views/account_view.dart';
 import 'views/search_view.dart';
 import 'widgets/responsive.dart';
 
-void main() {
+/// Wave J-2: notification taps land on the inbox, even from terminated state.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> _boot() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Wave H-2: dormant without Firebase console files (human step).
+  await PushService.init();
+  PushService.onNotificationTap = () {
+    appNavigatorKey.currentState?.push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('알림함')),
+        body: const NotificationsView(),
+      ),
+    ));
+  };
   runApp(const OlmoaCustomerApp());
+}
+
+void main() async {
+  // Wave H-4: Dart crash reporting only when a DSN was injected at build
+  // time. Pure-Dart SDK (no native plugin): framework errors and uncaught
+  // async errors are captured; native crashes stay out of scope.
+  final sentry = resolveSentryConfig(
+    dsn: const String.fromEnvironment('SENTRY_DSN'),
+    environment: const String.fromEnvironment('SENTRY_ENVIRONMENT',
+        defaultValue: 'production'),
+  );
+  if (!sentry.enabled) return _boot();
+  await Sentry.init((options) {
+    options.dsn = sentry.dsn;
+    options.environment = sentry.environment;
+  });
+  FlutterError.onError = (details) {
+    Sentry.captureException(details.exception, stackTrace: details.stack);
+  };
+  return runZonedGuarded(
+    _boot,
+    (error, stack) => Sentry.captureException(error, stackTrace: stack),
+  );
 }
 
 class OlmoaCustomerApp extends StatelessWidget {
@@ -25,6 +68,15 @@ class OlmoaCustomerApp extends StatelessWidget {
     return MaterialApp(
       title: 'OLMOA',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
+      // P2-MOB-09: framework strings (dialogs, pickers, back labels) follow
+      // the device locale; app copy stays Korean-first until EN strings land.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('ko'), Locale('en')],
       theme: buildOlmoaLightTheme(),
       darkTheme: buildOlmoaDarkTheme(),
       home: const OlmoaMainScreen(),
@@ -126,6 +178,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
         onRemoveLine: _removeLine,
         onMergeServerLines: _mergeServerLines,
         onClearCart: _clearCart,
+        onAddToCart: _addToCart,
       ),
       const OrdersView(),
       AccountView(onAddToCart: _addToCart),

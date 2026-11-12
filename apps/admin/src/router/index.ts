@@ -18,6 +18,7 @@ import PartnerApplicationsView from '../views/PartnerApplicationsView.vue';
 import SecurityView from '../views/SecurityView.vue';
 import AuditLogView from '../views/AuditLogView.vue';
 import InquiriesView from '../views/InquiriesView.vue';
+import ShippingZonesView from '../views/ShippingZonesView.vue';
 import NotFoundView from '../views/NotFoundView.vue';
 
 // P1-A01: client-side route roles mirror the server ROLE_PERMISSIONS read side
@@ -45,6 +46,7 @@ const routes = [
   { path: '/security', name: 'security', component: SecurityView, meta: { roles: ALL } },
   { path: '/audit-log', name: 'audit-log', component: AuditLogView, meta: { roles: ['SUPER_ADMIN', 'PRIVACY_OFFICER'] } },
   { path: '/inquiries', name: 'inquiries', component: InquiriesView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS', 'CS'] } },
+  { path: '/shipping-zones', name: 'shipping-zones', component: ShippingZonesView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS'] } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView }
 ];
 

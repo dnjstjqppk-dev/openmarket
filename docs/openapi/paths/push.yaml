@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: OLMOA Push Fragment
+  version: 1.0.0
+paths:
+  /api/v1/push/tokens:
+    post:
+      summary: Register a push device token (customer or partner)
+      tags: [Push]
+      description: Upserts by token hash (re-register touches last_seen_at). app defaults to the authenticated role and must match it. Tokens are sealed at rest.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token:
+                  type: string
+                  description: FCM registration token, 20-2000 chars.
+                platform:
+                  type: string
+                  enum: [ANDROID, IOS, WEB]
+                app:
+                  type: string
+                  enum: [CUSTOMER, PARTNER]
+                  description: Optional; must match the authenticated role when given.
+      responses:
+        '201':
+          description: Token registered
+        '200':
+          description: Token re-registered (upsert)
+        '400':
+          description: INVALID_TOKEN, INVALID_PLATFORM, or APP_ROLE_MISMATCH
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+    delete:
+      summary: Drop a push device token (logout)
+      tags: [Push]
+      description: Deletes only the caller's own token row. Idempotent ({deleted: 0} when absent).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Deletion count
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/admin/push/broadcast:
+    post:
+      summary: Broadcast a push to device tokens (admin, capped)
+      tags: [Push]
+      description: Requires ADMIN. Fan-out is capped at 200 recipients per call (limit_applied reports the clamp). Without FCM credentials every recipient logs PUSH_NOT_CONFIGURED and nothing is sent. Dead tokens are pruned on UNREGISTERED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, body]
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+                app:
+                  type: string
+                  enum: [CUSTOMER, PARTNER]
+                  description: Optional audience filter.
+                limit:
+                  type: integer
+                  description: 'Requested fan-out; clamped to 1-200.'
+      responses:
+        '200':
+          description: sent/failed/skipped counts with the applied limit
+        '400':
+          description: CONTENT_REQUIRED or INVALID_APP
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '403':
+          description: Non-admin role
+
+  /api/v1/admin/push/stats:
+    get:
+      summary: Push token counts by app and platform (admin)
+      tags: [Push]
+      description: Requires ADMIN. Operational counts only — no token material. fcm_configured reports credential presence, never values.
+      responses:
+        '200':
+          description: Counts plus the FCM configuration flag
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '403':
+          description: Non-admin role

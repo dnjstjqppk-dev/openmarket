@@ -3,6 +3,7 @@ import { unauthorized, forbidden, readJson, bad, conflict, str, HttpError } from
 import { newId } from '../lib/ids.js';
 import { maskPccc } from '../services/privacy.js';
 import { maybeOpenPii } from '../lib/pii-crypto.js';
+import { pushOrderDelivered } from '../services/push.js';
 // apps/cloudflare-gateway/src/routes/global-logistics.js
 // OLMOA Global OpenMarket Logistics Engine: International Carriers, 7-Stage Milestone Tracking & Webhook
 
@@ -190,6 +191,14 @@ export async function handleGlobalLogisticsRoutes(request, url, env, corsHeaders
     );
 
     await env.DB.batch(batch);
+
+    // H-2: notify only on the transition into DELIVERED (webhooks may repeat the terminal stage).
+    if (newStatus === 'DELIVERED' && subOrder.status !== 'DELIVERED') {
+      try {
+        const ord = await env.DB.prepare('SELECT customer_id, order_no FROM orders WHERE id = ?').bind(subOrder.parent_order_id).first();
+        if (ord) await pushOrderDelivered(env, { orderNo: ord.order_no, customerId: ord.customer_id });
+      } catch { /* push must never fail the webhook */ }
+    }
 
     return new Response(JSON.stringify({
       success: true,

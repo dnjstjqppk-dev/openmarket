@@ -78,7 +78,7 @@ const activeCount = computed(() => items.value.filter((i) => i.status === 'ACTIV
       <li v-for="item in items" :key="item.wishlist_id" class="relative">
         <ProductCard v-if="item.status === 'ACTIVE'" :product="item" />
         <div v-else class="flex h-full flex-col overflow-hidden rounded-lg border border-line bg-surface-2">
-          <div class="aspect-square overflow-hidden bg-surface-3"><img :src="item.thumbnail_url" :alt="item.title" class="h-full w-full object-cover opacity-50 grayscale" loading="lazy" /></div>
+          <div class="aspect-square overflow-hidden bg-surface-3"><img :src="item.thumbnail_url" :alt="item.title" class="h-full w-full object-cover opacity-50 grayscale" loading="lazy" decoding="async" /></div>
           <div class="flex flex-1 flex-col gap-1.5 p-3">
             <OmBadge tone="neutral" class="w-fit">판매 중지</OmBadge>
             <p class="line-clamp-2 text-sm text-ink-muted">{{ item.title }}</p>

@@ -118,6 +118,22 @@ onMounted(() => {
     .then((j) => { deals.value = j?.data?.campaign ? (j.data.deals || []).slice(0, 5) : [] })
     .catch(() => { deals.value = [] })
 })
+
+// ---- H-3: cart bundle (co-purchased with the cart lines, server ranked) -------------------------------
+const bundle = ref<any[]>([])
+async function loadBundle() {
+  bundle.value = []
+  const ids = [...new Set(cart.items.map((i) => i.product_id).filter(Boolean))]
+  if (!ids.length) return
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/recommendations/cart-bundle?ids=${encodeURIComponent(ids.join(','))}&limit=5`)
+    const j = await res.json().catch(() => null)
+    if (!res.ok || !j?.success || !Array.isArray(j.data)) return
+    bundle.value = j.data
+  } catch { /* section stays hidden */ }
+}
+onMounted(loadBundle)
+watch(() => cart.items.length, loadBundle)
 </script>
 
 <template>
@@ -177,7 +193,7 @@ onMounted(() => {
             <li v-for="it in g.items" :key="it.sku_id" class="flex gap-3 p-4">
               <OmCheckbox class="mt-1 shrink-0" :model-value="cart.isSelected(it.sku_id)" :aria-label="`${it.title} 선택`" @update:model-value="cart.setSelected(it.sku_id, !!$event)" />
               <RouterLink :to="`/product/${it.product_id}`" class="h-20 w-20 shrink-0 overflow-hidden rounded-md border border-line bg-surface-2 sm:h-24 sm:w-24">
-                <img :src="it.thumbnail_url" :alt="it.title" class="h-full w-full object-cover" loading="lazy" />
+                <img :src="it.thumbnail_url" :alt="it.title" class="h-full w-full object-cover" loading="lazy" decoding="async" />
               </RouterLink>
               <div class="min-w-0 flex-1">
                 <div class="flex items-start justify-between gap-2">
@@ -205,6 +221,13 @@ onMounted(() => {
               </div>
             </li>
           </ul>
+        </section>
+
+        <section v-if="bundle.length" aria-labelledby="cart-bundle">
+          <h2 id="cart-bundle" class="mb-3 text-lg font-bold text-ink">함께 구매하면 좋은 상품</h2>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <ProductCard v-for="p in bundle" :key="p.id" :product="p" />
+          </div>
         </section>
       </div>
 

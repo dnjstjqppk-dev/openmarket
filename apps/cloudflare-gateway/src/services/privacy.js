@@ -97,6 +97,9 @@ export async function withdrawCustomer(env, principal, { acknowledgeCreditForfei
   st.push(env.DB.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').bind(userId));
   st.push(env.DB.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?').bind(userId));
   st.push(env.DB.prepare('DELETE FROM user_coupons WHERE user_id = ? AND is_used = 0').bind(userId));
+  // H-2: push rows key the opaque user id (internal, like notifications.user_id).
+  st.push(env.DB.prepare("DELETE FROM notification_delivery_logs WHERE channel = 'PUSH' AND recipient = ?").bind(userId));
+  st.push(env.DB.prepare('DELETE FROM push_device_tokens WHERE user_id = ?').bind(userId));
   st.push(env.DB.prepare('DELETE FROM notification_delivery_logs WHERE recipient_hash IN (?, ?) OR recipient IN (?, ?)').bind(await sha256Hex(user.email), await sha256Hex(user.phone || '\u0000'), user.email, user.phone || '\u0000'));
   // SEC-10: sealed rows match by blind index; legacy plaintext rows (hash NULL) match the recipient OR branch.
   // Public posts stay (terms of service), but no longer identify the author.

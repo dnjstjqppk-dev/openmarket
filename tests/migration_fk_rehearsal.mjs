@@ -61,3 +61,39 @@ assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0, 'no danglin
 assert.equal(one("SELECT COUNT(*) c FROM orders WHERE legacy_record = 1").c, before.orders, 'pre-V3 orders kept as legacy');
 assert.equal(one("SELECT COUNT(*) c FROM sqlite_master WHERE name LIKE '_v20_%'").c, 0, 'temporary stash tables removed');
 console.log(`[PASS] migrations ${files[split]}..${files.at(-1)} apply with foreign keys ON over legacy data: ${JSON.stringify(after)}`);
+
+// P2-D03: id columns without REFERENCES cannot be enforced by SQLite (ALTER
+// TABLE cannot add them later without full rebuilds), so the seed database is
+// scanned for dangling non-null values instead. Columns whose parent lives
+// outside D1 (external payout accounts, 3PL hubs/warehouses, supplier POs)
+// are intentionally unenforced and listed below as such.
+const seedDb = new DatabaseSync(':memory:');
+seedDb.exec('PRAGMA foreign_keys = ON;');
+for (const f of files) seedDb.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'));
+seedDb.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, 'dev/seed_local_dev.sql'), 'utf8'));
+
+const DANGLING_PAIRS = [
+  // [child table, child column, parent table]
+  ['support_inquiries', 'order_id', 'orders'],
+  ['storage_objects', 'uploader_id', 'users'],
+  ['sample_qc_requests', 'product_id', 'products'],
+  ['partner_penalties', 'sub_order_id', 'sub_orders'],
+  ['orders', 'applied_user_coupon_id', 'user_coupons'],
+  ['settlement_adjustments', 'refund_id', 'refunds'],
+  ['settlement_adjustments', 'applied_payout_id', 'payouts'],
+  ['returns', 'refund_id', 'refunds'],
+  ['refunds', 'claim_id', 'returns'],
+  ['journal_entries', 'order_id', 'orders'],
+  ['tax_invoices', 'issuer_entity_id', 'business_entities'],
+  ['bidding_campaigns', 'winning_bid_id', 'supplier_bids'],
+];
+// Intentionally unenforced (no D1 parent table; external or denormalized ids):
+// partners.payout_account_id, sub_orders.consolidation_hub_id,
+// channel_order_items.warehouse_id, channel_order_items.supplier_po_item_id.
+for (const [child, column, parent] of DANGLING_PAIRS) {
+  const n = seedDb.prepare(
+    `SELECT COUNT(*) c FROM ${child} WHERE ${column} IS NOT NULL AND ${column} NOT IN (SELECT id FROM ${parent})`
+  ).get().c;
+  assert.equal(n, 0, `P2-D03: no dangling ${child}.${column} in the seed database`);
+}
+console.log(`[PASS] P2-D03: ${DANGLING_PAIRS.length} unenforced id columns have zero dangling seed rows`);

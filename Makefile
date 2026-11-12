@@ -17,7 +17,7 @@ build:
 	npm run build
 
 test:
-	cd backend && go test -v ./...
+	npm test
 
 migrate-d1-local:
 	for f in migrations/d1_*.sql; do npx wrangler d1 execute $(D1_DB_NAME) --local --file="$$f"; done

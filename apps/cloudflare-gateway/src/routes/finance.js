@@ -12,6 +12,7 @@ const CASH_RECEIPT_METHODS = new Set(['가상계좌', '계좌이체', 'TRANSFER'
 const maskId = (v) => { const t = String(v || ''); return t.length <= 4 ? '****' : '*'.repeat(t.length - 4) + t.slice(-4); };
 const maskReceipt = (r) => (r ? { ...r, buyer_identifier: maskId(r.buyer_identifier) } : r);
 import { refundOrder, runBatch, loadOrderBundle } from '../services/orders.js';
+import { pushOrderDelivered } from '../services/push.js';
 
 // A payout is always for ONE operating entity: after a 개인사업자 -> 법인 switch, settlements of each entity are
 // paid (and journalled) separately, oldest entity first. `other_entities_pending` tells the caller to run again.
@@ -673,6 +674,12 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
       auditStatement(env, admin, { action: 'MANUAL_DELIVERED', targetType: 'sub_order', targetId: dlM[1], after: { evidence }, request })
     ]);
     if (r[0].meta.changes !== 1) throw conflict('NOT_IN_TRANSIT', '출고(배송중) 상태의 주문만 배송완료 처리할 수 있습니다.');
+    try {
+      const ord = await env.DB.prepare(
+        'SELECT o.customer_id, o.order_no FROM orders o JOIN sub_orders s ON s.parent_order_id = o.id WHERE s.id = ?'
+      ).bind(dlM[1]).first();
+      if (ord) await pushOrderDelivered(env, { orderNo: ord.order_no, customerId: ord.customer_id });
+    } catch { /* push must never fail the delivery marking */ }
     return json(corsHeaders, { success: true });
   }
 

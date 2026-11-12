@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: OLMOA Recommendations Fragment
+  version: 1.0.0
+paths:
+  /api/v1/products/{id}/view:
+    post:
+      summary: Log an authenticated product view (co-view signal)
+      tags: [Recommendations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: View recorded (one row per user, product, and day)
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Product not found
+
+  /api/v1/recommendations/related:
+    get:
+      summary: Related products (co-purchase, co-view, popular fill)
+      tags: [Recommendations]
+      security: []
+      parameters:
+        - name: product_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+          description: Clamped to 1-20; invalid values fall back to 8.
+      responses:
+        '200':
+          description: Server-ranked cards with per-signal counts; only ACTIVE products, self excluded
+        '400':
+          description: PRODUCT_REQUIRED when product_id is missing
+        '404':
+          description: Product not found
+
+  /api/v1/recommendations/for-you:
+    get:
+      summary: Personalized picks (affinity) or global popular for guests
+      tags: [Recommendations]
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+          description: Clamped to 1-20; invalid values fall back to 8.
+      responses:
+        '200':
+          description: personalized=false for guests and buyers without signals
+
+  /api/v1/recommendations/cart-bundle:
+    get:
+      summary: Items frequently bought with the given cart products
+      tags: [Recommendations]
+      security: []
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated product ids (unknown ids ignored).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+          description: Clamped to 1-20; invalid values fall back to 8.
+      responses:
+        '200':
+          description: Co-purchased cards excluding the cart ids, popular fill after
+        '400':
+          description: IDS_REQUIRED when no id is given

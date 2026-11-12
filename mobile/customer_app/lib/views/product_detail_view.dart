@@ -3,11 +3,13 @@
 // real SKU matrix, stock and volume discounts. The orderable SKU is resolved
 // from the selected options — never invented, never defaulted silently.
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/product_detail.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/product_grid_card.dart';
 
 class ProductDetailView extends StatefulWidget {
   final String productId;
@@ -68,6 +70,8 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           _selection[d.attributes.single.name] = d.attributes.single.values.single;
         }
       });
+      // H-3: co-view signal (silent; the server dedups per user+product+day).
+      ApiService.logProductView(widget.productId);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
@@ -132,8 +136,13 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           borderRadius: BorderRadius.circular(12),
           child: AspectRatio(
             aspectRatio: 1,
-            child: Image.network(p.thumbnailUrl,
-                fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, size: 64, color: Colors.grey))),
+            child: p.thumbnailUrl.isEmpty
+                ? Container(color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, size: 64, color: Colors.grey))
+                : CachedNetworkImage(
+                    imageUrl: p.thumbnailUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(color: Colors.grey.shade100),
+                    errorWidget: (_, __, ___) => Container(color: Colors.grey.shade100, child: const Icon(Icons.shopping_bag, size: 64, color: Colors.grey))),
           ),
         ),
         const SizedBox(height: 12),
@@ -197,6 +206,9 @@ class _ProductDetailViewState extends State<ProductDetailView> {
         // P2-MOB-P2: reviews + Q&A live on the detail page, not just a count.
         _ReviewsSection(productId: widget.productId),
         _QnaSection(productId: widget.productId),
+        // H-3: server-ranked related products (hidden while empty).
+        _RelatedSection(
+            productId: widget.productId, onAddToCart: widget.onAddToCart),
         const SizedBox(height: 24),
       ],
     );
@@ -504,6 +516,59 @@ class _QnaSectionState extends State<_QnaSection> {
                 ],
               ),
             ),
+      ],
+    );
+  }
+}
+
+class _RelatedSection extends StatefulWidget {
+  final String productId;
+  final void Function(Product) onAddToCart;
+
+  const _RelatedSection({required this.productId, required this.onAddToCart});
+
+  @override
+  State<_RelatedSection> createState() => _RelatedSectionState();
+}
+
+class _RelatedSectionState extends State<_RelatedSection> {
+  List<Product> _rows = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final rows =
+        await ApiService.getRelatedProducts(widget.productId, limit: 6);
+    if (mounted) setState(() => _rows = rows);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_rows.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        const Text('연관 상품',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _rows.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) => SizedBox(
+              width: 160,
+              child: ProductGridCard(
+                  product: _rows[i], onAddToCart: widget.onAddToCart),
+            ),
+          ),
+        ),
       ],
     );
   }

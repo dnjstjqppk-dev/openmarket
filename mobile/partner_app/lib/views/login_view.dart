@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/partner_api_service.dart';
+import '../services/partner_push_service.dart';
 import '../theme/app_theme.dart';
 
 class PartnerLoginView extends StatefulWidget {
@@ -41,6 +42,7 @@ class _PartnerLoginViewState extends State<PartnerLoginView> {
     setState(() => _busy = false);
     if (r['success'] == true) {
       widget.onSuccess();
+      PartnerPushService.syncAfterLogin();
     } else {
       setState(() => _error = (r['error'] ?? '로그인하지 못했습니다.').toString());
     }

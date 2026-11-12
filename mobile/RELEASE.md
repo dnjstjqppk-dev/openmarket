@@ -25,6 +25,15 @@
 2. `tosspayments_webview_flutter 1.0.6`이 compileSdk 31 고정 +
    androidx.window 1.2.0 의존 (34+ 요구) → AAR 메타데이터 실패.
    → 루트 `build.gradle.kts`에서 34 미만 모듈만 34로 상향 (내림 없음).
+3. Wave H-2 푸시: `firebase_messaging 17`·`flutter_local_notifications 23`은
+   androidx.core 1.19 (AGP 9.1 + compileSdk 37 요구)를 끌고 와 고객앱
+   AGP 8.13 핀(Toss 우회 1번)과 충돌 → `firebase_core ^4.15.2` +
+   `firebase_messaging ^16.7.1` + `flutter_local_notifications ^22.3.3` 고정.
+   Toss 수정 후 AGP 9로 올릴 때 함께 해제. `desugar_jdk_libs`는 22도 요구
+   (app/build.gradle.kts coreLibraryDesugaring 유지).
+4. Wave H-4 크래시 리포팅: `sentry_flutter 10`은 minSdk 26 요구,
+   9.x는 Kotlin 컴파일 실패 → 네이티브 플러그인 대신 순수 Dart `sentry` 사용
+   (Dart/프레임워크 오류만 수집, 네이티브 크래시는 범위 밖). DSN 없으면 미동작.
 
 ## 빌드 명령
 ```bash
@@ -34,11 +43,23 @@ flutter build appbundle --release --dart-define API_BASE_URL=https://olmoa-api.d
 # 파트너
 cd mobile/partner_app
 flutter build appbundle --release --dart-define API_BASE_URL=https://olmoa-api.dnjstjqppk.workers.dev
+# 크래시 리포팅을 켜려면 (둘 다, 선택): --dart-define SENTRY_DSN=https://... --dart-define SENTRY_ENVIRONMENT=production
 # iOS (Mac)
 flutter build ipa --release --dart-define API_BASE_URL=https://olmoa-api.dnjstjqppk.workers.dev
 ```
 버전은 각 `pubspec.yaml`의 `version: 1.0.0+1` (이름+코드) — 스토어 업로드마다
 +code 증가. 첫 제출 전 실버전 번호 확정 필요 (PO).
+
+## 푸시 활성화 순서 (Wave H-2 + J-2, 인간 작업 — 전부 없으면 푸시는 조용히 휴면)
+1. Firebase 콘솔 프로젝트 생성 + Android 앱 2개(`com.olmoa.customer_app`,
+   `com.olmoa.partner_app`) 등록 → 각 `android/app/`에 `google-services.json`
+   두기 (gitignore, 빌드 시 자동 인식)
+2. iOS 앱 2개 등록 → `GoogleService-Info.plist`를 Xcode로 각 Runner에 추가 +
+   Apple Developer APNs 키를 Firebase에 등록 + Push Notifications capability
+3. 워커 시크릿 주입: `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY`
+   (서비스 계정 JSON의 3값)
+4. 실기기 확인: 로그인 → 권한 허용 → 고객 출고/배송/환불·판매자 새주문 수신,
+   포그라운드 표시 + 탭 시 알림함(고객)/출고 화면(파트너) 이동
 
 ## 서명 키 생성 (최초 1회, 인간 작업)
 ```bash
@@ -63,7 +84,10 @@ keytool -genkeypair -v -storetype JKS -keystore olmoa-upload.keystore \
 - [ ] `flutter run --release` 실기기 스모크 (로그인→주문→결제위젯→알림)
 - [ ] 크래시 리포팅 연동 여부 결정 (현재 없음 — Sentry 모바일은 Wave H 후보)
 
-## 남은 모바일 기능 (Wave G2 — 스토어 심사 전이어도 되는 것부터)
-- 파트너: 상품·반품·Q&A·입찰·멀티채널·프로필 화면 (P2-MOB-P5)
-- 고객: 소셜 로그인 앱 연동 (서버 Kakao 준비됨, 앱 리다이렉트 미구현)
-- 푸시 FCM/APNs (NEW-21, Wave H)
+## 남은 모바일 기능 (Wave G2 완료 — Wave H 반영)
+- ~~파트너: 상품·반품·Q&A·입찰·멀티채널·프로필 화면 (P2-MOB-P5)~~ 완료
+- ~~고객: 소셜 로그인 앱 연동~~ 완료
+- ~~푸시 FCM (NEW-21)~~ 코드 완료 — Firebase 콘솔 + 워커 시크릿은 위 순서 참조
+- ~~모바일 크래시 리포팅~~ 순수 Dart Sentry 배선 완료 — DSN 주입 시 동작
+- 파트너앱 FCM (토큰 등록 API는 준비됨, 앱 플러그인 미배선)
+- 푸시 탭 딥링크 (현재 탭하면 앱만 열림)

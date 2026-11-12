@@ -1,5 +1,6 @@
 // P2-MOB-P2: wishlist list from GET /api/v1/wishlist. Tap opens the
 // product detail; the heart removes the row (server toggle).
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
@@ -105,9 +106,16 @@ class _WishlistViewState extends State<WishlistView> {
             leading: (p['thumbnail_url'] ?? '').toString().isNotEmpty
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network((p['thumbnail_url'] ?? '').toString(),
-                        width: 48, height: 48, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
+                    child: CachedNetworkImage(
+                        imageUrl: (p['thumbnail_url'] ?? '').toString(),
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                            width: 48,
+                            height: 48,
+                            color: Colors.grey.shade100),
+                        errorWidget: (_, __, ___) =>
                             const Icon(Icons.image_not_supported)),
                   )
                 : const Icon(Icons.image_not_supported),

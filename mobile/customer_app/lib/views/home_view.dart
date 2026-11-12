@@ -2,6 +2,7 @@
 // Temu-style Global E-Commerce Product Feed for Flutter Mobile App
 
 import 'package:flutter/material.dart';
+import '../models/paged_result.dart';
 import '../models/product.dart';
 import '../models/search.dart';
 import '../services/api_service.dart';
@@ -24,6 +25,7 @@ class _HomeViewState extends State<HomeView> {
   List<Product> _products = [];
   List<Map<String, dynamic>> _banners = [];
   List<AutocompleteCategory> _categories = [];
+  List<Product> _forYou = [];
   String? _categorySlug;
   bool _isLoading = true;
 
@@ -33,20 +35,54 @@ class _HomeViewState extends State<HomeView> {
     _loadProducts();
   }
 
+  int _page = 1;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+
   Future<void> _loadProducts() async {
     final results = await Future.wait([
-      _apiService.fetchProducts(categorySlug: _categorySlug),
+      ApiService.getProductsPage(categorySlug: _categorySlug, page: 1),
       _apiService.fetchBanners(),
       // P1-M01: the server's recommended_categories drive the filter chips.
       ApiService.getAutocomplete(''),
+      // H-3: personalized strip (guests get global popular).
+      ApiService.getForYou(limit: 8),
     ]);
     if (mounted) {
+      final first = results[0] as PagedResult<Product>;
       setState(() {
-        _products = results[0] as List<Product>;
+        _products = first.items;
+        _page = first.page;
+        _hasMore = first.hasMore;
         _banners = results[1] as List<Map<String, dynamic>>;
         _categories = (results[2] as AutocompleteResult).categories;
+        _forYou = results[3] as List<Product>;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await ApiService.getProductsPage(
+          categorySlug: _categorySlug, page: _page + 1);
+      if (mounted) {
+        setState(() {
+          _products = [..._products, ...next.items];
+          _page = next.page;
+          _hasMore = next.hasMore;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다음 페이지를 불러오지 못했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -200,6 +236,39 @@ class _HomeViewState extends State<HomeView> {
           if (_categories.isNotEmpty)
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
+          // H-3: personalized strip on the unfiltered feed.
+          if (_categorySlug == null && _forYou.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 4, 12, 8),
+                    child: Text('맞춤 추천',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w900)),
+                  ),
+                  SizedBox(
+                    height: 240,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _forYou.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (context, i) => SizedBox(
+                        width: 160,
+                        child: ProductGridCard(
+                            product: _forYou[i],
+                            onAddToCart: widget.onAddToCart),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+
           // Product Grid: 2 columns on phones, 3 on tablets, 4 on desktop widths.
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -223,6 +292,20 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
           ),
+          if (_hasMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: _loadingMore
+                      ? const CircularProgressIndicator()
+                      : OutlinedButton(
+                          onPressed: _loadMore,
+                          child: const Text('상품 더 보기'),
+                        ),
+                ),
+              ),
+            ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),

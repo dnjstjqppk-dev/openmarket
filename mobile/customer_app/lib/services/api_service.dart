@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/paged_result.dart';
 import '../models/product.dart';
 import 'token_store.dart';
 import '../models/product_detail.dart';
@@ -97,6 +98,46 @@ class AuthSession {
         return {'success': false, 'error': '로그인 시도가 너무 많아 계정이 잠겼습니다. 15분 후 다시 시도해 주세요.'};
       }
       return {'success': false, 'error': body['error']?.toString() ?? '이메일 또는 비밀번호가 올바르지 않습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 로그인하지 못했습니다.'};
+    }
+  }
+
+  /// Wave G2: exchanges a one-time Kakao login code (delivered by the
+  /// olmoa://social-login deep link) for the JWT session. Persistence
+  /// mirrors [login]: JWTs in the keychain, identity in prefs.
+  static Future<Map<String, dynamic>> loginWithSocialCode({
+    required String code,
+  }) async {
+    final uri = Uri.parse('${ApiService.baseUrl}/api/v1/auth/social/kakao/exchange');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'code': code}),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _decode(res.body);
+      if (res.statusCode == 200 && body['success'] == true && body['token'] is String) {
+        _token = body['token'] as String;
+        _refresh = body['refresh_token'] is String ? body['refresh_token'] as String : null;
+        final user = body['user'];
+        _userId = body['customer_id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
+        _userName = (user is Map ? (user['full_name'] ?? user['name']) : null)?.toString() ?? '회원';
+        try {
+          await tokenStore.write(_kToken, _token!);
+          if (_refresh != null) await tokenStore.write(_kRefresh, _refresh!);
+        } catch (_) {}
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_kToken); // never leave the JWT in plaintext
+          if (_userId != null) await prefs.setString(_kUserId, _userId!);
+          await prefs.setString(_kUserName, _userName ?? '회원');
+        } catch (_) {}
+        return {'success': true, 'user_name': _userName};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '소셜 로그인에 실패했습니다.'};
     } catch (_) {
       return {'success': false, 'error': '네트워크 오류로 로그인하지 못했습니다.'};
     }
@@ -365,6 +406,57 @@ class ApiService {
   static Future<List<Product>> fetchProductsStatic({String? categorySlug, String? query}) =>
       getProducts(categorySlug: categorySlug, query: query);
 
+  /// Wave H-3: server-ranked recommendations. Public endpoints answer []; a
+  /// failure hides the section instead of inventing products.
+  static Future<List<Product>> getRelatedProducts(String productId, {int limit = 8}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/recommendations/related?product_id=${Uri.encodeQueryComponent(productId)}&limit=$limit');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final List<dynamic> list = _decode(res.body)['data'] ?? [];
+      return list.map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Product>> getCartBundle(List<String> ids, {int limit = 5}) async {
+    final cart = ids.where((id) => id.isNotEmpty).toSet().toList();
+    if (cart.isEmpty) return [];
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/recommendations/cart-bundle?ids=${Uri.encodeQueryComponent(cart.join(','))}&limit=$limit');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final List<dynamic> list = _decode(res.body)['data'] ?? [];
+      return list.map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Product>> getForYou({int limit = 8}) async {
+    try {
+      await AuthSession.restore();
+      final uri = Uri.parse('$baseUrl/api/v1/recommendations/for-you?limit=$limit');
+      final res = await http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final List<dynamic> list = _decode(res.body)['data'] ?? [];
+      return list.map((e) => Product.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Co-view signal. Silent by design; the server dedups per user+product+day.
+  static Future<void> logProductView(String productId) async {
+    try {
+      await AuthSession.restore();
+      if (!AuthSession.isAuthenticated) return;
+      final uri = Uri.parse('$baseUrl/api/v1/products/${Uri.encodeQueryComponent(productId)}/view');
+      await _authed(() => http.post(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
+    } catch (_) {}
+  }
+
   /// Keyword/category/product suggestions (chosung + synonyms, server-side).
   /// Empty query returns trending keywords + recommended categories.
   static Future<AutocompleteResult> getAutocomplete(String query) async {
@@ -472,6 +564,28 @@ class ApiService {
     }
   }
 
+  /// Wave J-3 (P2-MOB-08): paged catalog read for load-more lists.
+  static Future<PagedResult<Product>> getProductsPage(
+      {String? categorySlug, String? query, String? sort, int page = 1, int perPage = 20}) async {
+    try {
+      var uri = Uri.parse('$baseUrl/api/v1/products');
+      final params = <String, String>{'page': '$page', 'per_page': '$perPage'};
+      if (categorySlug != null && categorySlug.isNotEmpty) params['category'] = categorySlug;
+      if (query != null && query.isNotEmpty) params['q'] = query;
+      if (sort != null && sort.isNotEmpty) params['sort'] = sort;
+      uri = uri.replace(queryParameters: params);
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        return PagedResult<Product>.fromJson(_decode(res.body), (m) => Product.fromJson(m));
+      }
+      throw ApiException(_decode(res.body)['error']?.toString() ?? '상품 목록을 불러오지 못했습니다.');
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw ApiException('네트워크 오류로 상품 목록을 불러오지 못했습니다.');
+    }
+  }
+
   /// P2-MOB-P3: full category tree for the channel screen.
   static Future<List<Map<String, dynamic>>> getCategories() async {
     try {
@@ -486,10 +600,16 @@ class ApiService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchOrders() async {
+    final page = await fetchOrdersPage();
+    return page.items;
+  }
+
+  /// Wave J-3 (P2-MOB-08): paged order history for load-more lists.
+  static Future<PagedResult<Map<String, dynamic>>> fetchOrdersPage({int page = 1, int perPage = 20}) async {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
     try {
-      final uri = Uri.parse('$baseUrl/api/v1/orders?limit=30');
+      final uri = Uri.parse('$baseUrl/api/v1/orders?page=$page&per_page=$perPage');
       final response = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 10)));
       if (response.statusCode == 401) {
         await AuthSession.onUnauthorized();
@@ -498,8 +618,8 @@ class ApiService {
       if (response.statusCode != 200) {
         throw ApiException(_decode(response.body)['error']?.toString() ?? '주문 내역을 불러오지 못했습니다.');
       }
-      final List<dynamic> list = _decode(response.body)['data'] ?? [];
-      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      return PagedResult<Map<String, dynamic>>.fromJson(
+          _decode(response.body), (m) => m);
     } on AuthRequiredException {
       rethrow;
     } on ApiException {
@@ -671,6 +791,7 @@ class ApiService {
     String? userCouponId,
     int useCreditAmount = 0,
     String? pccc,
+    String? postalCode,
   }) async {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) {
@@ -687,6 +808,7 @@ class ApiService {
               if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
               if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
               if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
+              if (postalCode != null && postalCode.isNotEmpty) 'shipping_postal_code': postalCode,
             }),
           )
           .timeout(const Duration(seconds: 10)));
@@ -874,6 +996,58 @@ class ApiService {
     }
   }
 
+  /// Wave H-2: registers / drops the FCM device token (server seals it).
+  static Future<Map<String, dynamic>> registerPushToken({
+    required String token,
+    required String platform,
+  }) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/push/tokens');
+      final res = await _authed(() => http
+          .post(uri, headers: AuthSession.headers(), body: jsonEncode({'token': token, 'platform': platform}))
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if ((res.statusCode == 200 || res.statusCode == 201) && body['success'] == true) {
+        return {'success': true, 'created': body['created'] == true};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '푸시 등록에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 푸시 등록에 실패했습니다.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> unregisterPushToken({required String token}) async {
+    await AuthSession.restore();
+    if (!AuthSession.isAuthenticated) {
+      return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/push/tokens');
+      final res = await _authed(() => http
+          .delete(uri, headers: AuthSession.headers(), body: jsonEncode({'token': token}))
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await AuthSession.onUnauthorized();
+        return {'success': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) {
+        return {'success': true, 'deleted': body['deleted']};
+      }
+      return {'success': false, 'error': body['error']?.toString() ?? '푸시 해제에 실패했습니다.'};
+    } catch (_) {
+      return {'success': false, 'error': '네트워크 오류로 푸시 해제에 실패했습니다.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> createAddress({
     required String recipientName,
     required String phone,
@@ -966,9 +1140,15 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getNotifications() async {
+    final page = await getNotificationsPage();
+    return {'unread': page.unread, 'items': page.items, 'hasMore': page.hasMore};
+  }
+
+  /// Wave J-3 (P2-MOB-08): paged inbox for load-more lists.
+  static Future<({List<Map<String, dynamic>> items, int unread, bool hasMore, int page, int totalPages})> getNotificationsPage({int page = 1, int perPage = 20}) async {
     await AuthSession.restore();
     if (!AuthSession.isAuthenticated) throw const AuthRequiredException();
-    final uri = Uri.parse('$baseUrl/api/v1/notifications?limit=50');
+    final uri = Uri.parse('$baseUrl/api/v1/notifications?page=$page&per_page=$perPage');
     final res = await _authed(() => http.get(uri, headers: AuthSession.headers()).timeout(const Duration(seconds: 8)));
     if (res.statusCode == 401) {
       await AuthSession.onUnauthorized();
@@ -978,10 +1158,9 @@ class ApiService {
       throw ApiException(_decode(res.body)['error']?.toString() ?? '알림을 불러오지 못했습니다.');
     }
     final body = _decode(res.body);
-    return {
-      'unread': body['unread_count'] ?? 0,
-      'items': ((body['data'] ?? []) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
-    };
+    final paged = PagedResult<Map<String, dynamic>>.fromJson(body, (m) => m);
+    final unread = body['unread_count'];
+    return (items: paged.items, unread: unread is int ? unread : int.tryParse('$unread') ?? 0, hasMore: paged.hasMore, page: paged.page, totalPages: paged.totalPages);
   }
 
   static Future<void> readNotification(String id) async {

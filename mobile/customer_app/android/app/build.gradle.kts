@@ -7,6 +7,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Wave H-2: google-services.json comes from the Firebase console (human step).
+// The plugin applies only when the file exists so contractless builds stay
+// green; without it push stays dormant at runtime (PushService guard).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Release signing: android/key.properties (git-ignored; see key.properties.example).
 // Without it, release builds fall back to the debug key so `flutter run
 // --release` keeps working — store uploads MUST use the release key.
@@ -24,6 +31,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Wave H-2: required by flutter_local_notifications.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -68,4 +77,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

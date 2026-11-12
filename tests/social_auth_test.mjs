@@ -127,4 +127,20 @@ await t.test('8. unknown and expired login codes are rejected without an oracle'
   assert.equal(expired.json.error, unknown.json.error, 'expired and unknown give the identical answer');
 });
 
+await t.test('9. app states bounce to the app deep link instead of the storefront', async () => {
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: KAKAO_ENV });
+  const appState = 'app-a1b2c3d4e5f60718293a4b5c6d7e8f90';
+  const start = await g.call(`/api/v1/auth/social/kakao/start?state=${appState}`);
+  assert.equal(start.status, 302);
+  assert.ok((start.headers.get('location') || '').includes(`state=${appState}`), 'app state is STATE_RE-safe and echoes');
+  const cb = await g.call(`/api/v1/auth/social/kakao/callback?error=access_denied&state=${appState}`);
+  assert.equal(cb.status, 302);
+  const loc = cb.headers.get('location') || '';
+  assert.ok(loc.startsWith('olmoa://social-login?'), `bounces to the app, got ${loc}`);
+  assert.ok(loc.includes('social_error=OAUTH_DENIED'));
+  assert.ok(loc.includes(`state=${appState}`), 'state echoed to the app');
+  const web = await g.call(`/api/v1/auth/social/kakao/callback?error=access_denied&state=${VALID_STATE}`);
+  assert.ok((web.headers.get('location') || '').includes('/login?'), 'web states still bounce to the storefront');
+});
+
 t.finish();

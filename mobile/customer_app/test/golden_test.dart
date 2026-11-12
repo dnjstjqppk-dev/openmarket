@@ -4,6 +4,7 @@
 // Regenerate: flutter test --update-goldens test/golden_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:olmoa_customer/models/social_login.dart';
 import 'package:olmoa_customer/theme/app_theme.dart';
 import 'package:olmoa_customer/views/login_view.dart';
 import 'package:olmoa_customer/widgets/responsive.dart';
@@ -20,6 +21,10 @@ void setSurface(WidgetTester tester, double width, double height) {
 Widget themed(Widget child) => MaterialApp(theme: buildOlmoaLightTheme(), home: Scaffold(body: child));
 
 void main() {
+  // No host platform in widget tests: the login view must not open the
+  // deep-link channel (its async error would pollute neighboring tests).
+  socialLinkSource = const NoopSocialLinkSource();
+
   testWidgets('login form on a 390 phone', (tester) async {
     setSurface(tester, 390, 844);
     await tester.pumpWidget(themed(LoginView(onSuccess: () {}, reason: '골든 캡처용')));

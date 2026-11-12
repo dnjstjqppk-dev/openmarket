@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
 
 // The one-click sample batch is a development aid: production sellers only see the CSV template.
@@ -13,6 +13,15 @@ const errorMsg = ref('')
 const serverRowErrors = ref<string[]>([])
 // Rows that cannot be registered as-is. Nothing is filled in with default prices, stock, category or images.
 const rowErrors = ref<string[]>([])
+// T-N03: category ID reference (same loader as the single-product form).
+const categories = ref<any[]>([])
+onMounted(async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.success && Array.isArray(json.data)) categories.value = json.data
+  } catch { /* reference stays hidden */ }
+})
 
 const sampleCsvContent = `title,brand,category_id,original_price,sale_price,stock_quantity,option_label,thumbnail_url
 "Ultra-Light Carbon Trekking Poles (Pair)",OLMOA OUTDOOR,cat_sports,89000,49000,150,"Black / 120cm",https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=600&q=80
@@ -138,7 +147,12 @@ const executeBulkUpload = async () => {
     <div class="bg-white rounded-2xl p-8 border-2 border-dashed border-gray-300 text-center">
       <div class="text-4xl mb-3">📦</div>
       <h3 class="text-base font-bold text-gray-800 mb-1">Drop your Catalog CSV file here</h3>
-      <p class="text-xs text-gray-500 mb-5">Columns: title, brand, category_id, original_price, sale_price, stock_quantity, option_label, thumbnail_url</p>
+      <p class="text-xs text-gray-500 mb-2">Columns: title, brand, category_id, original_price, sale_price, stock_quantity, option_label, thumbnail_url</p>
+      <details v-if="categories.length" class="mb-5 text-left text-xs text-gray-600 bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
+        <summary class="font-bold cursor-pointer">카테고리 ID 참조 ({{ categories.length }}개)</summary>
+        <ul class="mt-2 space-y-0.5 font-mono"><li v-for="c in categories" :key="c.id">{{ c.id }} — {{ c.name }}</li></ul>
+      </details>
+      <div v-else class="mb-5"></div>
 
       <label class="inline-block px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold cursor-pointer">
         Select CSV File
