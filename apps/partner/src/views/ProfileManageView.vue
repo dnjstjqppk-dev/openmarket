@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Building, CircleAlert, CircleCheck, LoaderCircle, PiggyBank, Save, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
@@ -143,12 +144,12 @@ onMounted(loadProfile);
     </div>
 
     <div v-if="toastMsg" role="status" class="p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-xs" :class="toastErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'">
-      <i class="fa-solid" :class="toastErr ? 'fa-circle-exclamation' : 'fa-circle-check'"></i>
+      <CircleAlert v-if="toastErr" class="h-4 w-4" aria-hidden="true" /><CircleCheck v-else class="h-4 w-4" aria-hidden="true" />
       <span>{{ toastMsg }}</span>
     </div>
 
     <div v-if="loading" class="p-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-500"></i>
+      <LoaderCircle class="h-4 w-4 animate-spin text-3xl mb-3 text-indigo-500" aria-hidden="true" />
       <p class="text-xs font-bold">판매자 설정을 불러오는 중입니다...</p>
     </div>
 
@@ -163,7 +164,7 @@ onMounted(loadProfile);
       <!-- 1. Basic Merchant Information -->
       <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <h2 class="text-sm font-black text-slate-900 pb-2 border-b border-slate-100 flex items-center gap-2">
-          <i class="fa-solid fa-building text-indigo-600"></i>
+          <Building class="h-4 w-4 text-indigo-600" aria-hidden="true" />
           <span>기본 사업자 정보 (수수료율 {{ profile.commission_rate }}%)</span>
         </h2>
 
@@ -242,7 +243,7 @@ onMounted(loadProfile);
       <!-- 2. Settlement Bank Account -->
       <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <h2 class="text-sm font-black text-slate-900 pb-2 border-b border-slate-100 flex items-center gap-2">
-          <i class="fa-solid fa-piggy-bank text-emerald-600"></i>
+          <PiggyBank class="h-4 w-4 text-emerald-600" aria-hidden="true" />
           <span>정산금 지급 은행 계좌 설정</span>
         </h2>
 
@@ -291,7 +292,7 @@ onMounted(loadProfile);
       <!-- 3. Logistics & Shipping Policy -->
       <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <h2 class="text-sm font-black text-slate-900 pb-2 border-b border-slate-100 flex items-center gap-2">
-          <i class="fa-solid fa-truck-fast text-sky-600"></i>
+          <Truck class="h-4 w-4 text-sky-600" aria-hidden="true" />
           <span>배송비 정책 및 반품지 주소</span>
         </h2>
 
@@ -343,7 +344,7 @@ onMounted(loadProfile);
           :disabled="isSaving"
           class="px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
         >
-          <i class="fa-solid fa-floppy-disk"></i>
+          <Save class="h-4 w-4" aria-hidden="true" />
           <span>{{ isSaving ? '저장 중...' : '설정 저장하기' }}</span>
         </button>
       </div>

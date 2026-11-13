@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowUpRight, Calculator, CircleCheck, Key, Network, Plug, RotateCw, Share2, ShoppingCart, TriangleAlert, X } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
@@ -428,7 +429,7 @@ onMounted(() => {
     <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
       <div class="relative z-10 space-y-2">
         <div class="inline-flex items-center gap-2 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-          <i class="fa-solid fa-network-wired text-cyan-400"></i>
+          <Network class="h-4 w-4 text-cyan-400" aria-hidden="true" />
           <span>GLOBAL MULTI-CHANNEL & SUPPLY CHAIN INTEGRATION</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">글로벌 멀티채널 오픈마켓 연동 & 위탁배송 관리</h1>
@@ -441,11 +442,11 @@ onMounted(() => {
 
     <!-- Alert Messages -->
     <div v-if="errorMsg" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg flex-shrink-0"></i>
+      <TriangleAlert class="h-4 w-4 text-rose-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ errorMsg }}</span>
     </div>
     <div v-if="successMsg" class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-circle-check text-emerald-500 text-lg flex-shrink-0"></i>
+      <CircleCheck class="h-4 w-4 text-emerald-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ successMsg }}</span>
     </div>
 
@@ -457,7 +458,7 @@ onMounted(() => {
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeTab === 'channels' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-plug"></i>
+        <Plug class="h-4 w-4" aria-hidden="true" />
         <span>판매채널 연결 & 계정 ({{ credentials.length }})</span>
       </button>
       <button
@@ -466,7 +467,7 @@ onMounted(() => {
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeTab === 'listings' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-share-nodes"></i>
+        <Share2 class="h-4 w-4" aria-hidden="true" />
         <span>채널별 등록 상품 ({{ listings.length }})</span>
       </button>
       <button
@@ -475,7 +476,7 @@ onMounted(() => {
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeTab === 'orders' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-cart-shopping"></i>
+        <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         <span>외부 채널 주문 & 발주 ({{ channelOrders.length }})</span>
       </button>
       <button
@@ -484,7 +485,7 @@ onMounted(() => {
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeTab === 'calculator' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-calculator"></i>
+        <Calculator class="h-4 w-4" aria-hidden="true" />
         <span>글로벌 채널 마진 계산기</span>
       </button>
     </div>
@@ -500,7 +501,7 @@ onMounted(() => {
           @click="showCredModal = true"
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
         >
-          <i class="fa-solid fa-key"></i>
+          <Key class="h-4 w-4" aria-hidden="true" />
           <span>새 판매채널 계정 연결</span>
         </button>
       </div>
@@ -528,7 +529,7 @@ onMounted(() => {
               @click="handleSyncOrders(c.id)"
               class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
             >
-              <i class="fa-solid fa-rotate"></i> 주문 수집 실행
+              <RotateCw class="h-4 w-4" aria-hidden="true" /> 주문 수집 실행
             </button>
             <span v-if="hasCredentialFor(c.platform_name)" class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-1 rounded">API 키 등록됨</span>
             <span v-else class="text-xs bg-slate-100 text-slate-500 font-semibold px-2 py-1 rounded">API 키 미등록</span>
@@ -548,7 +549,7 @@ onMounted(() => {
           @click="openDeployModal"
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
         >
-          <i class="fa-solid fa-share-nodes"></i>
+          <Share2 class="h-4 w-4" aria-hidden="true" />
           <span>새 상품 배포</span>
         </button>
       </div>
@@ -582,7 +583,7 @@ onMounted(() => {
               <td class="px-3 py-2.5 text-indigo-600 font-mono">
                 <a v-if="l.external_url" :href="l.external_url" target="_blank" class="hover:underline flex items-center gap-1">
                   <span>바로가기</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                  <ArrowUpRight class="h-4 w-4 text-[9px]" aria-hidden="true" />
                 </a>
                 <span v-else class="text-slate-400">-</span>
               </td>
@@ -741,7 +742,7 @@ onMounted(() => {
         <div class="flex items-center justify-between border-b pb-2">
           <h3 class="font-bold text-slate-900">판매채널 API 계정 연동</h3>
           <button @click="showCredModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <i class="fa-solid fa-xmark"></i>
+            <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -797,7 +798,7 @@ onMounted(() => {
         <div class="flex items-center justify-between border-b pb-2">
           <h3 class="font-bold text-slate-900">B2B 공급사 발주</h3>
           <button @click="showDispatchModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <i class="fa-solid fa-xmark"></i>
+            <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>
@@ -825,7 +826,7 @@ onMounted(() => {
         <div class="flex items-center justify-between border-b pb-2">
           <h3 class="font-bold text-slate-900">3PL 출고·송장 연동</h3>
           <button @click="showFulfillModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <i class="fa-solid fa-xmark"></i>
+            <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>
@@ -853,7 +854,7 @@ onMounted(() => {
         <div class="flex items-center justify-between border-b pb-2">
           <h3 class="font-bold text-slate-900">외부 채널 상품 배포 (다건 가능)</h3>
           <button @click="showDeployModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <i class="fa-solid fa-xmark"></i>
+            <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>

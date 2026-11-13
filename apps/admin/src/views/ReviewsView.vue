@@ -58,12 +58,12 @@ onMounted(loadReviews);
         <p class="text-xs text-slate-500 mt-0.5">고객 리뷰를 조회하고 부적절한 콘텐츠를 삭제합니다.</p>
       </div>
       <button @click="loadReviews" class="text-xs text-indigo-600 font-bold hover:underline">
-        <i class="fa-solid fa-rotate mr-1"></i>새로고침
+        <RotateCw class="h-4 w-4 mr-1" aria-hidden="true" />새로고침
       </button>
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>리뷰 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />리뷰 목록을 불러오는 중...
     </div>
 
     <div v-else class="overflow-x-auto text-xs">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Boxes, LogOut, Menu, X } from 'lucide-vue-next'
 import { ref, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { getAdminToken, clearAdminToken, getAdminRole, ADMIN_ROLE_LABEL } from './config';
@@ -93,7 +94,7 @@ onMounted(() => {
           <router-link v-if="canSee('/business')" to="/business" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">운영 사업자</router-link>
           <router-link v-if="canSee('/suppliers')" to="/suppliers" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">공급사·발주</router-link>
           <router-link v-if="canSee('/supplier-integrations')" to="/supplier-integrations" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white flex items-center gap-1" active-class="bg-slate-800 text-orange-400 font-bold">
-            <i class="fa-solid fa-boxes-packing text-amber-400"></i>3PL·수집통합
+            <Boxes class="h-4 w-4 text-amber-400" aria-hidden="true" />3PL·수집통합
           </router-link>
           <router-link v-if="canSee('/reconciliation')" to="/reconciliation" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">데이터 대사</router-link>
           <router-link v-if="canSee('/security')" to="/security" class="px-3 py-1.5 rounded transition text-slate-300 hover:text-white" active-class="bg-slate-800 text-orange-400 font-bold">계정 보안</router-link>
@@ -107,7 +108,7 @@ onMounted(() => {
 
         <div class="flex items-center gap-2">
           <button @click="handleLogout" class="hidden sm:flex items-center bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-white px-3 py-1.5 rounded text-xs transition cursor-pointer">
-            <i class="fa-solid fa-right-from-bracket mr-1.5"></i>로그아웃
+            <LogOut class="h-4 w-4 mr-1.5" aria-hidden="true" />로그아웃
           </button>
           <!-- Mobile Hamburger Toggle -->
           <button
@@ -115,7 +116,7 @@ onMounted(() => {
             class="md:hidden p-2 text-slate-300 hover:text-white focus:outline-none"
             aria-label="Toggle Navigation"
           >
-            <i :class="mobileMenuOpen ? 'fa-solid fa-xmark text-lg' : 'fa-solid fa-bars text-lg'"></i>
+            <X v-if="mobileMenuOpen" class="h-5 w-5" aria-hidden="true" /><Menu v-else class="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -163,7 +164,7 @@ onMounted(() => {
         </router-link>
         <div class="pt-2 border-t border-slate-800">
           <button @click="handleLogout" class="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-slate-800 rounded font-medium">
-            <i class="fa-solid fa-right-from-bracket mr-1.5"></i>로그아웃
+            <LogOut class="h-4 w-4 mr-1.5" aria-hidden="true" />로그아웃
           </button>
         </div>
       </div>

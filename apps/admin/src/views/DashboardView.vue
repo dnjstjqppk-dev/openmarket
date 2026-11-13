@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Globe, Images, LoaderCircle, Megaphone, Scale, ShieldCheck } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { API_BASE_URL, getAdminHeaders } from '../config';
@@ -192,7 +193,7 @@ onMounted(loadControlTower);
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>글로벌 관제 지표를 집계하는 중입니다...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />글로벌 관제 지표를 집계하는 중입니다...
     </div>
 
     <div v-else class="space-y-6">
@@ -229,7 +230,7 @@ onMounted(loadControlTower);
         <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div class="flex items-center justify-between border-b pb-2.5">
             <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <i class="fa-solid fa-globe text-indigo-600"></i>
+              <Globe class="h-4 w-4 text-indigo-600" aria-hidden="true" />
               <span>글로벌 엣지 리전 트래픽 & 응답속도</span>
             </h3>
             <!-- P2-A04: no PoP claim without a data source (edge_regions below is the truth). -->
@@ -252,7 +253,7 @@ onMounted(loadControlTower);
         <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div class="flex items-center justify-between border-b pb-2.5">
             <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <i class="fa-solid fa-shield-halved text-rose-600"></i>
+              <ShieldCheck class="h-4 w-4 text-rose-600" aria-hidden="true" />
               <span>실시간 FDS (이상거래 및 부정결제 탐지 엔진)</span>
             </h3>
             <span class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Zero-Trust Active</span>
@@ -295,7 +296,7 @@ onMounted(loadControlTower);
         <div class="flex items-center justify-between border-b pb-2.5">
           <div>
             <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <i class="fa-solid fa-scale-balanced text-amber-600"></i>
+              <Scale class="h-4 w-4 text-amber-600" aria-hidden="true" />
               <span>3자 분쟁 중재 법정 (구매자 vs 판매자 클레임 직권 판정 데스크)</span>
             </h3>
             <p class="text-[11px] text-slate-500 mt-0.5">반품, 파손, 오배송 및 최저가 보상 클레임에 대해 관리자가 에스크로 자금을 직권 중재합니다.</p>
@@ -443,7 +444,7 @@ onMounted(loadControlTower);
         <RouterLink to="/marketing" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-orange-500 transition shadow-xs group block">
           <div class="flex items-center justify-between mb-2">
             <span class="p-2.5 bg-orange-50 text-orange-600 rounded-xl group-hover:bg-orange-500 group-hover:text-white transition">
-              <i class="fa-solid fa-images text-base"></i>
+              <Images class="h-4 w-4" aria-hidden="true" />
             </span>
             <span class="text-xs font-bold text-orange-600">활성 {{ metrics.bannersCount }}개 →</span>
           </div>
@@ -454,7 +455,7 @@ onMounted(loadControlTower);
         <RouterLink to="/marketing" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-indigo-500 transition shadow-xs group block">
           <div class="flex items-center justify-between mb-2">
             <span class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition">
-              <i class="fa-solid fa-bullhorn text-base"></i>
+              <Megaphone class="h-4 w-4" aria-hidden="true" />
             </span>
             <span class="text-xs font-bold text-indigo-600">누적 {{ metrics.notifsCount }}건 →</span>
           </div>
@@ -465,7 +466,7 @@ onMounted(loadControlTower);
         <RouterLink to="/ledger" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group block">
           <div class="flex items-center justify-between mb-2">
             <span class="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition">
-              <i class="fa-solid fa-scale-balanced text-base"></i>
+              <Scale class="h-4 w-4" aria-hidden="true" />
             </span>
             <span class="text-xs font-bold text-emerald-600">원장 감사 →</span>
           </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Boxes, LoaderCircle, Truck } from 'lucide-vue-next'
 import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
@@ -73,10 +74,10 @@ onMounted(async () => {
       </div>
       <div class="flex gap-2">
         <router-link to="/products" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-          <i class="fa-solid fa-boxes-stacked mr-1.5"></i>상품 재고 관리
+          <Boxes class="h-4 w-4 mr-1.5" aria-hidden="true" />상품 재고 관리
         </router-link>
         <router-link to="/shipments" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-          <i class="fa-solid fa-truck-fast mr-1.5"></i>송장 출고 관리
+          <Truck class="h-4 w-4 mr-1.5" aria-hidden="true" />송장 출고 관리
         </router-link>
       </div>
     </div>
@@ -218,7 +219,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="loading" class="p-8 text-center text-slate-400 text-xs">
-        <i class="fa-solid fa-spinner fa-spin mr-2"></i>주문 정보를 불러오는 중...
+        <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />주문 정보를 불러오는 중...
       </div>
 
       <div v-else-if="recentOrders.length === 0" class="p-8 text-center text-slate-400 text-xs">

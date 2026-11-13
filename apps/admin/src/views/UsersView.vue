@@ -95,13 +95,13 @@ onMounted(loadUsers);
       <div class="flex items-center gap-2">
         <input v-model="searchQuery" placeholder="이메일/이름 검색" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5" />
         <button @click="loadUsers" class="text-xs text-indigo-600 font-bold hover:underline">
-          <i class="fa-solid fa-rotate mr-1"></i>새로고침
+          <RotateCw class="h-4 w-4 mr-1" aria-hidden="true" />새로고침
         </button>
       </div>
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>회원 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />회원 목록을 불러오는 중...
     </div>
 
     <div v-else class="overflow-x-auto text-xs">

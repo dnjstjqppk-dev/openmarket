@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Bell, Images, LoaderCircle, Plus, Send } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getAdminHeaders } from '../config'
 
@@ -231,7 +232,7 @@ onMounted(() => {
             activeTab === 'BANNERS' ? 'bg-orange-500 text-white shadow-xs' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
           ]"
         >
-          <i class="fa-solid fa-images mr-1.5"></i>프로모션 배너 ({{ banners.length }})
+          <Images class="h-4 w-4 mr-1.5" aria-hidden="true" />프로모션 배너 ({{ banners.length }})
         </button>
         <button
           @click="activeTab = 'NOTIFICATIONS'"
@@ -240,7 +241,7 @@ onMounted(() => {
             activeTab === 'NOTIFICATIONS' ? 'bg-orange-500 text-white shadow-xs' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
           ]"
         >
-          <i class="fa-solid fa-bell mr-1.5"></i>공지 & 알림 발송 ({{ notifications.length }})
+          <Bell class="h-4 w-4 mr-1.5" aria-hidden="true" />공지 & 알림 발송 ({{ notifications.length }})
         </button>
       </div>
     </div>
@@ -252,7 +253,7 @@ onMounted(() => {
     </div>
 
     <div v-if="loading" class="p-16 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin text-2xl text-orange-500 mb-2"></i>
+      <LoaderCircle class="h-4 w-4 animate-spin text-2xl text-orange-500 mb-2" aria-hidden="true" />
       <p>데이터를 불러오는 중입니다...</p>
     </div>
 
@@ -266,7 +267,7 @@ onMounted(() => {
           @click="showAddBannerModal = true"
           class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5"
         >
-          <i class="fa-solid fa-plus"></i>새 배너 등록
+          <Plus class="h-4 w-4" aria-hidden="true" />새 배너 등록
         </button>
       </div>
 
@@ -442,7 +443,7 @@ onMounted(() => {
             :disabled="sendingNotif || !notifTitle.trim() || !notifMessage.trim()"
             class="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-black shadow-xs transition disabled:opacity-50 cursor-pointer"
           >
-            <i class="fa-solid fa-paper-plane mr-1.5"></i>
+            <Send class="h-4 w-4 mr-1.5" aria-hidden="true" />
             {{ sendingNotif ? '발송 처리 중...' : '알림 즉시 발송' }}
           </button>
         </div>

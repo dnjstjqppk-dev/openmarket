@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowLeft, CreditCard, MapPin, PackageOpen, Receipt, ShoppingBag } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
@@ -358,7 +359,7 @@ onMounted(loadOrderDetail)
 <template>
   <div class="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
     <RouterLink to="/orders" class="text-xs font-bold text-[#FF5000] hover:underline inline-flex items-center gap-1">
-      <i class="fa-solid fa-arrow-left"></i>전체 주문 내역으로 돌아가기
+      <ArrowLeft class="h-4 w-4" aria-hidden="true" />전체 주문 내역으로 돌아가기
     </RouterLink>
 
     <div v-if="statusBanner" class="p-4 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-[#00A862] flex items-center justify-between">
@@ -432,7 +433,7 @@ onMounted(loadOrderDetail)
         <button v-if="canPriceAdjust" :disabled="busy" @click="handleLateDeliveryClaim" class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold">배송 지연 보상 신청</button>
         <button v-if="order.pccc" @click="loadCommercialInvoice" class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">통관 인보이스</button>
         <button v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)" @click="openCashReceiptModal" class="px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
-          <i class="fa-solid fa-receipt mr-1"></i>현금영수증 신청/조회
+          <Receipt class="h-4 w-4 mr-1" aria-hidden="true" />현금영수증 신청/조회
         </button>
         <span v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status) && order.payment_method && !['가상계좌', '계좌이체', 'TRANSFER', 'VIRTUAL_ACCOUNT'].includes(String(order.payment_method).toUpperCase())" class="text-[11px] text-slate-500 self-center">카드 결제는 카드 매출전표가 증빙이며 현금영수증 대상이 아닙니다.</span>
         <label v-if="order.payment_status === 'READY'" class="inline-flex items-center gap-1 text-xs text-slate-600">결제 수단
@@ -491,7 +492,7 @@ onMounted(loadOrderDetail)
         <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
           <div class="flex items-center justify-between border-b pb-3">
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
-              <i class="fa-solid fa-location-dot text-[#FF5000]"></i>배송지 정보
+              <MapPin class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />배송지 정보
             </h2>
             
           </div>
@@ -534,7 +535,7 @@ onMounted(loadOrderDetail)
         <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
           <div class="flex items-center justify-between border-b pb-3">
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
-              <i class="fa-solid fa-credit-card text-[#FF5000]"></i>결제 내역 요약
+              <CreditCard class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />결제 내역 요약
             </h2>
             <span class="text-[11px] font-mono text-gray-500">{{ order.pg_provider === 'SANDBOX' ? '결제 시뮬레이터' : (order.pg_provider || '-') }}</span>
           </div>
@@ -564,7 +565,7 @@ onMounted(loadOrderDetail)
       <!-- Ordered Items & Partner Fulfillment -->
       <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs">
         <h2 class="text-base font-black text-gray-900 mb-4 flex items-center gap-2">
-          <i class="fa-solid fa-box-open text-gray-600"></i>주문 상품 및 배송 현황
+          <PackageOpen class="h-4 w-4 text-gray-600" aria-hidden="true" />주문 상품 및 배송 현황
         </h2>
         <div class="divide-y divide-gray-100">
           <div
@@ -581,7 +582,7 @@ onMounted(loadOrderDetail)
                 decoding="async"
               />
               <div v-else class="w-16 h-16 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 shrink-0">
-                <i class="fa-solid fa-bag-shopping text-xl"></i>
+                <ShoppingBag class="h-5 w-5" aria-hidden="true" />
               </div>
               <div class="space-y-1">
                 <div class="text-sm font-bold text-gray-900">{{ item.title || item.product_id }}</div>

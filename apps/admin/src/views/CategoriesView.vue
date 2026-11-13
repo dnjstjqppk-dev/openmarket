@@ -97,7 +97,7 @@ onMounted(loadCategories);
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>카테고리 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />카테고리 목록을 불러오는 중...
     </div>
 
     <div v-else class="overflow-x-auto text-xs">

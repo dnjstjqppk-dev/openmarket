@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowUpRight, Boxes, CircleCheck, CloudDownload, Forklift, Globe, Key, LoaderCircle, Network, RotateCw, ShieldCheck, SlidersHorizontal, Store, ToggleRight, TriangleAlert, Truck, X } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { adminApi, won, API_BASE_URL } from '../config';
 
@@ -306,7 +307,7 @@ onMounted(() => {
       <div class="relative z-10 space-y-3">
         <div class="flex flex-wrap items-center gap-3">
           <div class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-            <i class="fa-solid fa-boxes-packing text-amber-400"></i>
+            <Boxes class="h-4 w-4 text-amber-400" aria-hidden="true" />
             <span>3PL FULFILLMENT & DROPSHIP CENTER</span>
           </div>
           <div class="flex items-center gap-2 text-xs bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700 font-mono">
@@ -320,21 +321,21 @@ onMounted(() => {
         </p>
       </div>
       <div class="absolute -right-6 -bottom-6 opacity-10 text-white text-9xl pointer-events-none">
-        <i class="fa-solid fa-truck-ramp-box"></i>
+        <Forklift class="h-4 w-4" aria-hidden="true" />
       </div>
     </div>
 
     <!-- Alert Banners -->
     <div v-if="actionMsg" class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-circle-check text-emerald-500 text-lg flex-shrink-0"></i>
+      <CircleCheck class="h-4 w-4 text-emerald-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-semibold">{{ actionMsg }}</span>
     </div>
     <div v-if="errorMsg" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg flex-shrink-0"></i>
+      <TriangleAlert class="h-4 w-4 text-rose-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-semibold">{{ errorMsg }}</span>
     </div>
     <div v-if="isLoading" class="p-8 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>데이터를 불러오는 중입니다...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />데이터를 불러오는 중입니다...
     </div>
 
     <!-- Navigation Tabs -->
@@ -344,7 +345,7 @@ onMounted(() => {
         class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'orders' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
-        <i class="fa-solid fa-truck-fast"></i>
+        <Truck class="h-4 w-4" aria-hidden="true" />
         <span>3PL & 위탁 공급사 발주 (PO)</span>
         <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-mono">{{ orders.length }}</span>
       </button>
@@ -354,7 +355,7 @@ onMounted(() => {
         class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'imports' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
-        <i class="fa-solid fa-cloud-arrow-down"></i>
+        <CloudDownload class="h-4 w-4" aria-hidden="true" />
         <span>URL 상품 수집 감사 (Imports)</span>
         <span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded-full font-mono">{{ importJobs.length }}</span>
       </button>
@@ -364,7 +365,7 @@ onMounted(() => {
         class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'sync' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
-        <i class="fa-solid fa-arrows-rotate"></i>
+        <RotateCw class="h-4 w-4" aria-hidden="true" />
         <span>재고·공급가 변동 알림 (Sync)</span>
         <span class="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ syncLogs.length }}</span>
       </button>
@@ -374,7 +375,7 @@ onMounted(() => {
         class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'flags' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
-        <i class="fa-solid fa-toggle-on text-emerald-500"></i>
+        <ToggleRight class="h-4 w-4 text-emerald-500" aria-hidden="true" />
         <span>기능 활성화 관리 (Feature Flags)</span>
         <span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ flags.length }}개</span>
       </button>
@@ -384,7 +385,7 @@ onMounted(() => {
         class="py-3 px-5 text-sm font-bold border-b-2 transition flex items-center gap-2 cursor-pointer flex-shrink-0"
         :class="currentTab === 'platforms' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
       >
-        <i class="fa-solid fa-globe text-indigo-500"></i>
+        <Globe class="h-4 w-4 text-indigo-500" aria-hidden="true" />
         <span>글로벌 오픈마켓 & 공급망 플랫폼</span>
         <span class="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full font-mono">{{ platforms.length }}개</span>
       </button>
@@ -403,7 +404,7 @@ onMounted(() => {
           @click="loadOrders"
           class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
         >
-          <i class="fa-solid fa-rotate-right"></i> 목록 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 목록 새로고침
         </button>
       </div>
 
@@ -495,7 +496,7 @@ onMounted(() => {
           @click="loadImportJobs"
           class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
         >
-          <i class="fa-solid fa-rotate-right"></i> 목록 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 목록 새로고침
         </button>
       </div>
 
@@ -526,7 +527,7 @@ onMounted(() => {
               <td class="px-3 py-3 text-slate-500 max-w-xs truncate" :title="j.source_url">
                 <a :href="j.source_url" target="_blank" class="hover:underline flex items-center gap-1">
                   <span>{{ j.source_url }}</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                  <ArrowUpRight class="h-4 w-4 text-[9px]" aria-hidden="true" />
                 </a>
               </td>
               <td class="px-3 py-3 text-center">
@@ -573,7 +574,7 @@ onMounted(() => {
           @click="loadSyncLogs"
           class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
         >
-          <i class="fa-solid fa-rotate-right"></i> 로그 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 로그 새로고침
         </button>
       </div>
 
@@ -628,7 +629,7 @@ onMounted(() => {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-sliders text-indigo-600"></i>
+            <SlidersHorizontal class="h-4 w-4 text-indigo-600" aria-hidden="true" />
             <span>상용 기능별 독립 ON/OFF 제어 (Feature Flags Engine)</span>
           </h2>
           <p class="text-xs text-slate-500">
@@ -639,7 +640,7 @@ onMounted(() => {
           @click="loadFlags"
           class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer"
         >
-          <i class="fa-solid fa-rotate-right"></i> 플래그 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 플래그 새로고침
         </button>
       </div>
 
@@ -690,10 +691,10 @@ onMounted(() => {
 
           <div class="pt-4 border-t border-slate-200/60 mt-4 flex items-center justify-between text-[11px]">
             <span v-if="flag.requires_credential === 1" class="text-amber-800 font-medium">
-              <i class="fa-solid fa-key mr-1"></i>외부 연동 API 키 필요
+              <Key class="h-4 w-4 mr-1" aria-hidden="true" />외부 연동 API 키 필요
             </span>
             <span v-else class="text-emerald-700 font-medium">
-              <i class="fa-solid fa-circle-check mr-1"></i>내부 안전 엔진 동작
+              <CircleCheck class="h-4 w-4 mr-1" aria-hidden="true" />내부 안전 엔진 동작
             </span>
             <span class="text-slate-400 font-mono text-[10px]">
               {{ flag.updated_at ? new Date(flag.updated_at).toLocaleDateString() : '-' }}
@@ -708,7 +709,7 @@ onMounted(() => {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-network-wired text-indigo-600"></i>
+            <Network class="h-4 w-4 text-indigo-600" aria-hidden="true" />
             <span>글로벌 오픈마켓 & 공급망 플랫폼 연동 매트릭스 ({{ platforms.length }}개)</span>
           </h2>
           <p class="text-xs text-slate-500">
@@ -719,7 +720,7 @@ onMounted(() => {
           @click="loadPlatforms"
           class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
         >
-          <i class="fa-solid fa-rotate-right"></i> 플랫폼 목록 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 플랫폼 목록 새로고침
         </button>
       </div>
 
@@ -774,7 +775,7 @@ onMounted(() => {
           </p>
         </div>
         <div class="flex items-center gap-2 text-xs text-slate-400 font-medium">
-          <i class="fa-solid fa-shield-halved text-emerald-400 text-base"></i>
+          <ShieldCheck class="h-4 w-4 text-emerald-400" aria-hidden="true" />
           <span>실제 외부 결제/발주 차단 가드(Safe Mock) 및 멱등키 보증</span>
         </div>
       </div>
@@ -863,7 +864,7 @@ onMounted(() => {
 
           <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span class="font-mono text-[11px]">
-              <i class="fa-solid fa-store mr-1 text-indigo-500"></i>
+              <Store class="h-4 w-4 mr-1 text-indigo-500" aria-hidden="true" />
               활성 채널: <strong class="text-slate-800">{{ platform.active_channels_count || 0 }}개</strong>
             </span>
             <a
@@ -874,7 +875,7 @@ onMounted(() => {
               class="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 text-[11px]"
             >
               <span>API 개발 문서</span>
-              <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+              <ArrowUpRight class="h-4 w-4 text-[9px]" aria-hidden="true" />
             </a>
           </div>
         </div>
@@ -886,11 +887,11 @@ onMounted(() => {
       <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-truck-ramp-box text-indigo-600"></i>
+            <Forklift class="h-4 w-4 text-indigo-600" aria-hidden="true" />
             <span>3PL 운송장 번호 등록 및 직출고</span>
           </h3>
           <button @click="showDispatchModal = false" class="text-slate-400 hover:text-slate-600">
-            <i class="fa-solid fa-xmark text-lg"></i>
+            <X class="h-4 w-4 text-lg" aria-hidden="true" />
           </button>
         </div>
 
@@ -943,7 +944,7 @@ onMounted(() => {
             :disabled="isDispatching"
             class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5 cursor-pointer"
           >
-            <i v-if="isDispatching" class="fa-solid fa-spinner fa-spin"></i>
+            <LoaderCircle v-if="isDispatching" class="h-4 w-4 animate-spin" aria-hidden="true" />
             <span>{{ isDispatching ? '처리 중...' : '출고 완료 처리' }}</span>
           </button>
         </div>

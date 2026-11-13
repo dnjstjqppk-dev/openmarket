@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check, Copy, FileSpreadsheet, Forklift, LoaderCircle, Printer, Receipt, Search, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 
@@ -307,14 +308,14 @@ onMounted(() => {
           @click="showBulkModal = true"
           class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
         >
-          <i class="fa-solid fa-truck-ramp-box"></i>
+          <Forklift class="h-4 w-4" aria-hidden="true" />
           <span>선택 {{ selectedIds.length }}건 일괄 출고</span>
         </button>
         <button
           @click="exportToCSV"
           class="px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
         >
-          <i class="fa-solid fa-file-excel text-emerald-600"></i>
+          <FileSpreadsheet class="h-4 w-4 text-emerald-600" aria-hidden="true" />
           <span>엑셀/CSV 다운로드</span>
         </button>
       </div>
@@ -362,7 +363,7 @@ onMounted(() => {
           placeholder="주문번호, 수령인, 연락처 검색..."
           class="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
         />
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+        <Search class="h-4 w-4 absolute left-3 top-2.5 text-slate-400" aria-hidden="true" />
         <button
           v-if="searchQuery"
           @click="searchQuery = ''"
@@ -375,7 +376,7 @@ onMounted(() => {
 
     <!-- Loading State -->
     <div v-if="loading" class="p-16 text-center text-slate-400">
-      <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-500"></i>
+      <LoaderCircle class="h-4 w-4 animate-spin text-3xl mb-3 text-indigo-500" aria-hidden="true" />
       <p class="text-xs font-bold">주문 및 발송 대기 목록을 불러오는 중입니다...</p>
     </div>
 
@@ -388,7 +389,7 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div v-else-if="filteredShipments.length === 0" class="bg-white rounded-2xl p-12 text-center border border-slate-200">
-      <i class="fa-solid fa-truck text-4xl text-slate-300 mb-2"></i>
+      <Truck class="h-4 w-4 text-4xl text-slate-300 mb-2" aria-hidden="true" />
       <h3 class="font-bold text-slate-700 text-sm">해당 조건의 발송 건이 없습니다.</h3>
       <p class="text-xs text-slate-400 mt-1">고객의 신규 주문이 체결되면 실시간으로 표시됩니다.</p>
     </div>
@@ -519,7 +520,7 @@ onMounted(() => {
                   @click="openPackingSlip(s)"
                   class="text-[10px] text-indigo-600 hover:underline font-normal inline-flex items-center gap-1"
                 >
-                  <i class="fa-solid fa-print"></i>패킹슬립
+                  <Printer class="h-4 w-4" aria-hidden="true" />패킹슬립
                 </button>
               </td>
               <td class="py-3 px-3 font-medium text-slate-800 whitespace-nowrap">
@@ -537,7 +538,7 @@ onMounted(() => {
                     title="주소 복사"
                     class="shrink-0 text-slate-400 hover:text-indigo-600 text-[11px]"
                   >
-                    <i :class="copyToast === s.id ? 'fa-solid fa-check text-emerald-600' : 'fa-regular fa-copy'"></i>
+                    <Check v-if="copyToast === s.id" class="h-4 w-4 text-emerald-600" aria-hidden="true" /><Copy v-else class="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
                 <div v-if="s.shipping_memo" class="text-[10px] text-indigo-600 truncate mt-0.5">
@@ -594,7 +595,7 @@ onMounted(() => {
       <div class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-100">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-2 text-indigo-900 font-black text-lg">
-            <i class="fa-solid fa-truck-ramp-box"></i>
+            <Forklift class="h-4 w-4" aria-hidden="true" />
             <h3>선택 {{ selectedIds.length }}건 일괄 출고 등록</h3>
           </div>
           <button @click="showBulkModal = false" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
@@ -704,7 +705,7 @@ onMounted(() => {
       <div class="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-2 text-slate-900 font-black text-lg">
-            <i class="fa-solid fa-receipt text-indigo-600"></i>
+            <Receipt class="h-4 w-4 text-indigo-600" aria-hidden="true" />
             <h3>배송 패킹 슬립 (주문서)</h3>
           </div>
           <button @click="showPackingSlipModal = false" class="text-slate-400 hover:text-slate-600 p-1">✕</button>
@@ -773,7 +774,7 @@ onMounted(() => {
             @click="printPackingSlip"
             class="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <i class="fa-solid fa-print"></i>
+            <Printer class="h-4 w-4" aria-hidden="true" />
             <span>인쇄하기 (Print)</span>
           </button>
         </div>

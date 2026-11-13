@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LoaderCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
 
@@ -130,7 +131,7 @@ onMounted(loadCoupons);
     <p v-if="formError" role="alert" class="text-xs font-bold text-rose-600">{{ formError }}</p>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>쿠폰 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />쿠폰 목록을 불러오는 중...
     </div>
 
     <div v-else class="overflow-x-auto text-xs">

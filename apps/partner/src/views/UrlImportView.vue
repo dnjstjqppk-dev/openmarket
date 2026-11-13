@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowUpRight, Bot, Check, CircleAlert, CircleCheck, CloudDownload, Globe, Layers, Link, LoaderCircle, RotateCw, Search, ShieldCheck, TriangleAlert, WandSparkles, X, Zap } from 'lucide-vue-next'
 import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 import { stripToSafeHtml } from '../utils/stripHtml';
@@ -418,7 +419,7 @@ onMounted(() => {
     <div class="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
       <div class="relative z-10 space-y-2">
         <div class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-          <i class="fa-solid fa-cloud-arrow-down text-emerald-400"></i>
+          <CloudDownload class="h-4 w-4 text-emerald-400" aria-hidden="true" />
           <span>GLOBAL URL CRAWLER & 3PL SYSTEM</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">URL 기반 상품 자동 수집 & 3PL 위탁판매 등록</h1>
@@ -428,17 +429,17 @@ onMounted(() => {
         </p>
       </div>
       <div class="absolute -right-8 -bottom-8 opacity-10 text-white text-9xl pointer-events-none">
-        <i class="fa-solid fa-globe"></i>
+        <Globe class="h-4 w-4" aria-hidden="true" />
       </div>
     </div>
 
     <!-- Alert Messages -->
     <div v-if="errorMsg" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg flex-shrink-0"></i>
+      <TriangleAlert class="h-4 w-4 text-rose-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ errorMsg }}</span>
     </div>
     <div v-if="successMsg" class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-3">
-      <i class="fa-solid fa-circle-check text-emerald-500 text-lg flex-shrink-0"></i>
+      <CircleCheck class="h-4 w-4 text-emerald-500 text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ successMsg }}</span>
     </div>
 
@@ -450,7 +451,7 @@ onMounted(() => {
         class="px-5 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeMode === 'single' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-link"></i>
+        <Link class="h-4 w-4" aria-hidden="true" />
         <span>단일 URL 정밀 수집 (Single Mode)</span>
       </button>
       <button
@@ -459,7 +460,7 @@ onMounted(() => {
         class="px-5 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 cursor-pointer"
         :class="activeMode === 'bulk' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
       >
-        <i class="fa-solid fa-layer-group"></i>
+        <Layers class="h-4 w-4" aria-hidden="true" />
         <span>대량 URL 일괄 수집 (Bulk Mode)</span>
       </button>
     </div>
@@ -473,7 +474,7 @@ onMounted(() => {
             <p class="text-xs text-slate-500">지원 프로토콜: HTTP/HTTPS (Shopify, Schema.org, OpenGraph 자동 감지)</p>
           </div>
           <div class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <i class="fa-solid fa-shield-halved text-emerald-500"></i>
+            <ShieldCheck class="h-4 w-4 text-emerald-500" aria-hidden="true" />
             <span>SSRF 사설 IP 및 Cloud Metadata 접근 100% 원천 차단</span>
           </div>
         </div>
@@ -500,7 +501,7 @@ onMounted(() => {
           <div class="flex gap-2">
             <div class="relative flex-1">
               <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
-                <i class="fa-solid fa-link"></i>
+                <Link class="h-4 w-4" aria-hidden="true" />
               </span>
               <input
                 v-model="urlInput"
@@ -514,8 +515,8 @@ onMounted(() => {
               :disabled="isLoading"
               class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white text-sm font-bold rounded-xl shadow transition flex items-center gap-2 cursor-pointer"
             >
-              <i v-if="isLoading" class="fa-solid fa-spinner fa-spin"></i>
-              <i v-else class="fa-solid fa-magnifying-glass"></i>
+              <LoaderCircle v-if="isLoading" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Search v-else class="h-4 w-4" aria-hidden="true" />
               <span>{{ isLoading ? '수집 및 분석 중...' : '상품 수집' }}</span>
             </button>
           </div>
@@ -579,8 +580,8 @@ onMounted(() => {
               :disabled="isAiEnhancing"
               class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <i v-if="isAiEnhancing" class="fa-solid fa-spinner fa-spin"></i>
-              <i v-else class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+              <LoaderCircle v-if="isAiEnhancing" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <WandSparkles v-else class="h-4 w-4 text-amber-300" aria-hidden="true" />
               <span>{{ isAiEnhancing ? 'AI 번역·가공 중...' : '✨ AI 한국어 자동 번역 및 마케팅 가공' }}</span>
             </button>
 
@@ -606,7 +607,7 @@ onMounted(() => {
         <div v-if="aiInfo" class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-              <i class="fa-solid fa-robot text-purple-600"></i>
+              <Bot class="h-4 w-4 text-purple-600" aria-hidden="true" />
               AI 마케팅 로컬라이제이션 완료
             </span>
             <span class="text-[11px] px-2 py-0.5 rounded-full font-mono font-semibold bg-purple-100 text-purple-800 border border-purple-200">
@@ -629,7 +630,7 @@ onMounted(() => {
             class="px-2.5 py-1 rounded-md font-mono text-[11px] flex items-center gap-1.5"
             :class="pass ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-400 border border-slate-200 line-through'"
           >
-            <i :class="pass ? 'fa-solid fa-check text-emerald-500' : 'fa-solid fa-xmark text-slate-400'"></i>
+            <Check v-if="pass" class="h-4 w-4 text-emerald-500" aria-hidden="true" /><X v-else class="h-4 w-4 text-slate-400" aria-hidden="true" />
             {{ key }}
           </span>
         </div>
@@ -781,8 +782,8 @@ onMounted(() => {
             :disabled="isPublishing"
             class="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white text-sm font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
           >
-            <i v-if="isPublishing" class="fa-solid fa-spinner fa-spin"></i>
-            <i v-else class="fa-solid fa-check"></i>
+            <LoaderCircle v-if="isPublishing" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Check v-else class="h-4 w-4" aria-hidden="true" />
             <span>{{ isPublishing ? '카탈로그 등록 중...' : '공식 판매 승인 및 카탈로그 등록' }}</span>
           </button>
         </div>
@@ -798,7 +799,7 @@ onMounted(() => {
             <p class="text-xs text-slate-500">한 번에 최대 50개의 외부 상품 링크를 일괄 크롤링하고 수집 작업을 큐잉합니다.</p>
           </div>
           <span class="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5">
-            <i class="fa-solid fa-bolt"></i>
+            <Zap class="h-4 w-4" aria-hidden="true" />
             <span>Feature Flag: bulk_crawler</span>
           </span>
         </div>
@@ -855,8 +856,8 @@ https://demo-activewear.myshopify.com/products/sample"
             :disabled="isBulkLoading"
             class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white text-sm font-bold rounded-xl shadow transition flex items-center gap-2 cursor-pointer"
           >
-            <i v-if="isBulkLoading" class="fa-solid fa-spinner fa-spin"></i>
-            <i v-else class="fa-solid fa-layer-group"></i>
+            <LoaderCircle v-if="isBulkLoading" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Layers v-else class="h-4 w-4" aria-hidden="true" />
             <span>{{ isBulkLoading ? '대량 일괄 수집 중...' : '대량 수집 실행' }}</span>
           </button>
         </div>
@@ -931,12 +932,12 @@ https://demo-activewear.myshopify.com/products/sample"
           @click="loadHistory"
           class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 cursor-pointer"
         >
-          <i class="fa-solid fa-rotate-right"></i> 새로고침
+          <RotateCw class="h-4 w-4" aria-hidden="true" /> 새로고침
         </button>
       </div>
 
       <div v-if="historyError" class="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-xs font-medium flex items-center gap-2">
-        <i class="fa-solid fa-circle-exclamation"></i>
+        <CircleAlert class="h-4 w-4" aria-hidden="true" />
         <span>{{ historyError }}</span>
         <button @click="loadHistory" class="ml-auto font-bold underline hover:text-rose-900 cursor-pointer">다시 시도</button>
       </div>
@@ -965,7 +966,7 @@ https://demo-activewear.myshopify.com/products/sample"
               <td class="px-3 py-2.5 text-slate-500 max-w-xs truncate" :title="job.source_url">
                 <a :href="job.source_url" target="_blank" class="hover:underline flex items-center gap-1">
                   <span>{{ job.source_url }}</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                  <ArrowUpRight class="h-4 w-4 text-[9px]" aria-hidden="true" />
                 </a>
               </td>
               <td class="px-3 py-2.5 text-center">

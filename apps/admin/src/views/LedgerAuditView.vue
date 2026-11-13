@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LoaderCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL, getAdminHeaders } from '../config'
@@ -88,7 +89,7 @@ onMounted(loadLedgers)
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>원장을 불러오는 중입니다...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />원장을 불러오는 중입니다...
     </div>
 
     <div v-if="!loading && !loadError" class="space-y-8">

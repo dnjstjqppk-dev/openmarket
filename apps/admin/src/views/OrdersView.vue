@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
 
@@ -105,7 +106,7 @@ onMounted(loadOrders);
           <option value="CANCELLED">취소</option>
         </select>
         <button @click="loadOrders" class="text-xs text-indigo-600 font-bold hover:underline cursor-pointer">
-          <i class="fa-solid fa-rotate mr-1"></i>새로고침
+          <RotateCw class="h-4 w-4 mr-1" aria-hidden="true" />새로고침
         </button>
       </div>
     </div>
@@ -115,7 +116,7 @@ onMounted(loadOrders);
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>주문 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />주문 목록을 불러오는 중...
     </div>
 
     <div v-else-if="loadError" class="p-8 text-center text-xs">

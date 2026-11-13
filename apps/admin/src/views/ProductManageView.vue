@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
 
@@ -93,7 +94,7 @@ onMounted(() => {
         <p class="text-xs text-slate-500 mt-0.5">입점사 등록 상품 승인, 노출 상태 변경 및 실시간 가용 재고 모니터링</p>
       </div>
       <button @click="loadProducts" class="text-xs text-indigo-600 font-bold hover:underline">
-        <i class="fa-solid fa-arrows-rotate mr-1"></i>새로고침
+        <RotateCw class="h-4 w-4 mr-1" aria-hidden="true" />새로고침
       </button>
     </div>
 
@@ -102,7 +103,7 @@ onMounted(() => {
     </div>
 
     <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <i class="fa-solid fa-spinner fa-spin mr-2"></i>상품 목록을 불러오는 중...
+      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />상품 목록을 불러오는 중...
     </div>
 
     <div v-else-if="products.length === 0" class="p-12 text-center text-slate-400 text-xs">

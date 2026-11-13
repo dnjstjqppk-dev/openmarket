@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowUpRight, CloudUpload, Image, Pencil, Plus } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
 
@@ -348,7 +349,7 @@ onMounted(() => { loadProducts(); loadCategories() })
           @click="showCreateModal = true"
           class="px-4 py-2.5 rounded-xl bg-[#FF5000] hover:bg-[#E04600] text-white text-xs font-black cursor-pointer shadow-sm flex items-center gap-1.5 transition active:scale-95"
         >
-          <i class="fa-solid fa-plus text-xs"></i>
+          <Plus class="h-4 w-4" aria-hidden="true" />
           <span>+ 개별 상품 등록 (단건 등록)</span>
         </button>
       </div>
@@ -495,7 +496,7 @@ onMounted(() => { loadProducts(); loadCategories() })
           </div>
           <div class="flex items-center gap-2">
             <label class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer transition">
-              <i class="fa-solid fa-image mr-1"></i>상세 이미지 업로드
+              <Image class="h-4 w-4 mr-1" aria-hidden="true" />상세 이미지 업로드
               <input type="file" accept="image/*" @change="(e) => handleDetailImageUpload(e, false)" class="hidden" />
             </label>
             <button
@@ -605,7 +606,7 @@ onMounted(() => { loadProducts(); loadCategories() })
           </div>
           <div class="flex items-center gap-2">
             <label class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer transition">
-              <i class="fa-solid fa-cloud-arrow-up mr-1"></i>상세 이미지 추가
+              <CloudUpload class="h-4 w-4 mr-1" aria-hidden="true" />상세 이미지 추가
               <input type="file" accept="image/*" @change="(e) => handleDetailImageUpload(e, true)" class="hidden" />
             </label>
             <button
@@ -713,7 +714,7 @@ onMounted(() => { loadProducts(); loadCategories() })
                   title="구매자 스토어프론트 상세페이지 새 창으로 열기"
                 >
                   <span>미리보기</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                  <ArrowUpRight class="h-3 w-3" aria-hidden="true" />
                 </a>
                 <!-- 2. 상세페이지 편집 모달 열기 버튼 -->
                 <button
@@ -721,7 +722,7 @@ onMounted(() => { loadProducts(); loadCategories() })
                   class="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer"
                   title="상세페이지 설명(HTML), 이미지 및 상품 정보 편집"
                 >
-                  <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                  <Pencil class="h-3 w-3" aria-hidden="true" />
                   <span>상세 편집</span>
                 </button>
                 <!-- 3. 빠른 가격/재고 적용 버튼 -->

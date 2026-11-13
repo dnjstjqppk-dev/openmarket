@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check, ChevronRight, CircleCheck, Coins, Copy, MapPin, PackageOpen, Pencil, RotateCw, Search, ShieldCheck, ShoppingCart, Ticket, TriangleAlert, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -275,14 +276,14 @@ onMounted(loadOrders)
           to="/addresses"
           class="text-xs font-bold text-gray-700 hover:text-[#FF5000] px-3.5 py-2 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 shadow-xs transition inline-flex items-center gap-1.5"
         >
-          <i class="fa-solid fa-location-dot text-[#FF5000]"></i>
+          <MapPin class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />
           <span>배송지 관리</span>
         </RouterLink>
         <RouterLink
           to="/coupons"
           class="text-xs font-bold text-[#FF5000] hover:text-white hover:bg-[#FF5000] px-3.5 py-2 rounded-xl border border-orange-300 bg-orange-50 shadow-xs transition inline-flex items-center gap-1.5"
         >
-          <i class="fa-solid fa-ticket"></i>
+          <Ticket class="h-4 w-4" aria-hidden="true" />
           <span>쿠폰·적립금</span>
         </RouterLink>
       </div>
@@ -294,7 +295,7 @@ onMounted(loadOrders)
       class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-[#00A862] flex items-center justify-between shadow-xs animate-fade-in"
     >
       <div class="flex items-center gap-2">
-        <i class="fa-solid fa-circle-check text-base"></i>
+        <CircleCheck class="h-4 w-4" aria-hidden="true" />
         <span>{{ actionMsg }}</span>
       </div>
       <button @click="actionMsg = ''" class="text-emerald-700 hover:text-emerald-900 font-bold p-1">✕</button>
@@ -369,7 +370,7 @@ onMounted(loadOrders)
           placeholder="주문번호 또는 상품명 검색..."
           class="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-300 text-xs focus:ring-2 focus:ring-[#FF5000] focus:border-[#FF5000] outline-none"
         />
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+        <Search class="h-4 w-4 absolute left-3 top-2.5 text-gray-400" aria-hidden="true" />
         <button
           v-if="searchQuery"
           @click="searchQuery = ''"
@@ -388,7 +389,7 @@ onMounted(loadOrders)
     <!-- Error State -->
     <div v-else-if="loadError" class="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-xs">
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-2xl">
-        <i class="fa-solid fa-triangle-exclamation"></i>
+        <TriangleAlert class="h-4 w-4" aria-hidden="true" />
       </div>
       <h3 class="text-base font-black text-gray-900 mb-1">주문 내역을 불러오지 못했습니다</h3>
       <p class="text-xs text-gray-500 mb-5">{{ loadError }}</p>
@@ -396,7 +397,7 @@ onMounted(loadOrders)
         @click="loadOrders"
         class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-black shadow-md transition"
       >
-        <i class="fa-solid fa-rotate"></i>
+        <RotateCw class="h-4 w-4" aria-hidden="true" />
         <span>다시 시도</span>
       </button>
     </div>
@@ -404,7 +405,7 @@ onMounted(loadOrders)
     <!-- Empty State -->
     <div v-else-if="filteredOrders.length === 0" class="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-xs">
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-50 flex items-center justify-center text-[#FF5000] text-2xl">
-        <i class="fa-solid fa-box-open"></i>
+        <PackageOpen class="h-4 w-4" aria-hidden="true" />
       </div>
       <h3 class="text-base font-black text-gray-900 mb-1">
         {{ searchQuery ? `'${searchQuery}' 검색 조건에 맞는 주문이 없습니다.` : '해당 탭에 표시할 주문 내역이 없습니다.' }}
@@ -414,7 +415,7 @@ onMounted(loadOrders)
         to="/"
         class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"
       >
-        <i class="fa-solid fa-cart-shopping"></i>
+        <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         <span>인기 특가 쇼핑하러 가기</span>
       </RouterLink>
     </div>
@@ -444,7 +445,7 @@ onMounted(loadOrders)
                 title="주문번호 복사"
                 class="text-gray-400 hover:text-[#FF5000] text-[11px]"
               >
-                <i :class="copyToast === (order.order_no || order.id) ? 'fa-solid fa-check text-emerald-600' : 'fa-regular fa-copy'"></i>
+                <Check v-if="copyToast === (order.order_no || order.id)" class="h-4 w-4 text-emerald-600" aria-hidden="true" /><Copy v-else class="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <span class="text-xs text-gray-400 hidden sm:inline">•</span>
@@ -529,7 +530,7 @@ onMounted(loadOrders)
                 :to="`/product/${item.product_id}#reviews`"
                 class="px-3 py-1.5 rounded-xl border border-gray-300 hover:border-[#FF5000] text-gray-700 hover:text-[#FF5000] text-xs font-bold transition inline-flex items-center gap-1"
               >
-                <i class="fa-solid fa-pen-to-square text-[#FF5000]"></i>
+                <Pencil class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />
                 <span>리뷰 쓰기</span>
               </RouterLink>
             </div>
@@ -550,7 +551,7 @@ onMounted(loadOrders)
         <!-- Card Footer Actions Bar -->
         <div class="bg-gray-50/60 px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
           <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
-            <i class="fa-solid fa-shield-halved text-[#00A862]"></i>
+            <ShieldCheck class="h-4 w-4 text-[#00A862]" aria-hidden="true" />
             <span>결제 후 30일 내 판매가 인하 시 차액 적립 · 수령 후 7일 내 반품 신청</span>
           </div>
 
@@ -570,7 +571,7 @@ onMounted(loadOrders)
               @click="confirmPurchase(order.id)"
               class="px-4 py-1.5 rounded-full bg-orange-50 text-[#FF5000] hover:bg-[#FF5000] hover:text-white border border-orange-200 text-xs font-black transition cursor-pointer inline-flex items-center gap-1"
             >
-              <i class="fa-solid fa-coins"></i>
+              <Coins class="h-4 w-4" aria-hidden="true" />
               <span>구매확정 (+1% 적립)</span>
             </button>
 
@@ -580,7 +581,7 @@ onMounted(loadOrders)
               @click="openTracking(order)"
               class="px-3.5 py-1.5 rounded-full bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white border border-sky-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
             >
-              <i class="fa-solid fa-truck"></i>
+              <Truck class="h-4 w-4" aria-hidden="true" />
               <span>배송 조회</span>
             </button>
 
@@ -590,7 +591,7 @@ onMounted(loadOrders)
               class="px-4 py-1.5 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-bold transition text-center shadow-xs inline-flex items-center gap-1"
             >
               <span>상세 조회 / 보상·반품 신청</span>
-              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+              <ChevronRight class="h-3 w-3" aria-hidden="true" />
             </RouterLink>
           </div>
         </div>
@@ -605,7 +606,7 @@ onMounted(loadOrders)
       <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
           <div class="flex items-center gap-2 text-rose-600 font-black text-lg">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+            <TriangleAlert class="h-4 w-4" aria-hidden="true" />
             <h3>주문 취소 신청</h3>
           </div>
           <button @click="showCancelModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
@@ -676,7 +677,7 @@ onMounted(loadOrders)
       <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
           <div class="flex items-center gap-2 text-sky-700 font-black text-lg">
-            <i class="fa-solid fa-truck-fast"></i>
+            <Truck class="h-4 w-4" aria-hidden="true" />
             <h3>배송 조회</h3>
           </div>
           <button @click="showTrackingModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>

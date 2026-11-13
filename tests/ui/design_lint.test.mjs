@@ -154,4 +154,14 @@ await t.test('D01 no file exceeds its design-lint cap', async () => {
   assert.ok(total > 0, 'scanner must find the known violations')
 })
 
+await t.test('D02 no font awesome usage remains (work order 1-6)', async () => {
+  const htmlRoots = ['apps/storefront', 'apps/admin', 'apps/partner'].map((d) => join(ROOT, d, 'index.html'))
+  const files = [...ROOTS.flatMap((d) => walk(d)), ...htmlRoots]
+  for (const f of files) {
+    const src = strip(readFileSync(f, 'utf8'))
+    assert.ok(!/\bfa-[a-z]/.test(src), `${relative(ROOT, f)} must not use fa-* classes`)
+    assert.ok(!/font-?awesome/i.test(src), `${relative(ROOT, f)} must not reference font awesome`)
+  }
+})
+
 t.finish()
