@@ -71,7 +71,6 @@ watch(pccc, () => { pcccResult.value = null })
 // S-N01: cross-border lines (catalog flag via cart, server-confirmed via quote)
 // make PCCC mandatory instead of opt-in; the server enforces PCCC_REQUIRED too.
 const pcccRequired = computed(() => quote.value?.requires_pccc === true || lines.value.some((l) => Number(l.requires_pccc) === 1))
-watch(pcccRequired, (req) => { if (req) needsCustoms.value = true }, { immediate: true })
 async function validatePccc() {
   pcccChecking.value = true
   try {
@@ -126,6 +125,9 @@ function requestQuote() {
   }, 250)
 }
 watch([selectedUserCouponId, creditAmount, zipCode], requestQuote)
+// Gate-1 fix: this immediate watch must run after `quote` is declared
+// (evaluating pcccRequired earlier throws a TDZ ReferenceError and blanks the page).
+watch(pcccRequired, (req) => { if (req) needsCustoms.value = true }, { immediate: true })
 onBeforeUnmount(() => { ctrl?.abort(); if (timer) clearTimeout(timer) })
 
 const paymentConfig = ref<{ mode: string; client_key: string | null; api_client_key?: string | null; widget_client_key?: string | null; is_test_key: boolean | null; message?: string } | null>(null)
