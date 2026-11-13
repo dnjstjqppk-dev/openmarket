@@ -18,4 +18,5 @@
 2-3 | 통과 | 155aa37 | coupon_engine 12/12 + migrations + p1 + openapi 3/3 + e2e 26/26 | 플랫폼/스토어 분리·분담·환불·발급, 해석 → Q-2-3
 2-4 | 통과 | b1919fc | settlement_policy 10/10 + migrations + p1 + payouts + openapi 3/3 + e2e 26/26 | 정책 정산식·출금 신청·승인 지급, 해석 → Q-2-4
 2-5 | 통과 | 1e64bbe | reviews_social 8/8 + migrations + products + p1 + openapi 3/3 + e2e 26/26 | 리뷰 집계 트리거·정렬·소셜 테이블, 해석 → Q-2-5
-2-6 | 통과 | PENDING | flash_sale 8/8 + migrations + p1 + commercial + products + openapi 3/3 + e2e 26/26 | 딜 단가·배정 경합·복원·기획전, 핀 갱신 → Q-2-6
+2-6 | 통과 | f675bf1 | flash_sale 8/8 + migrations + p1 + commercial + products + openapi 3/3 + e2e 26/26 | 딜 단가·배정 경합·복원·기획전, 핀 갱신 → Q-2-6
+2-7 | 통과 | PENDING | penalty_grade 4/4 + migrations + p1 + openapi 3/3 + e2e 26/26 | 페널티·등급표·월간 집계, 정의 → Q-2-7

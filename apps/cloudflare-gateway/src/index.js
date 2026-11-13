@@ -33,6 +33,7 @@ import { handleAdminSecurityRoutes } from './routes/admin-security.js';
 import { handleClientErrorRoutes } from './routes/client-errors.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 import { purgeExpiredPii } from './services/privacy.js';
+import { computeMonthlyGrades } from './services/grading.js';
 import { enforceRateLimit, classify } from './lib/ratelimit.js';
 import { authenticate } from './lib/auth.js';
 
@@ -182,7 +183,20 @@ export default {
           console.error(JSON.stringify({ level: 'error', job: 'pii_purge', error: String(e && e.message || e) }));
         }
       }
-      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged }));
+      // 2-7: monthly seller grading for the previous month (first tick of the 1st UTC).
+      let grading = 'NOT_DUE';
+      try {
+        const nowD = new Date(event.scheduledTime || Date.now());
+        if (nowD.getUTCDate() === 1 && nowD.getUTCHours() === 0 && nowD.getUTCMinutes() < 5) {
+          const prev = new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - 1, 1));
+          const ym = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}`;
+          grading = `${ym}:${await computeMonthlyGrades(env, ym)}`;
+        }
+      } catch (e) {
+        grading = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'grading', error: String(e && e.message || e) }));
+      }
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged, grading }));
     })());
   }
 };
