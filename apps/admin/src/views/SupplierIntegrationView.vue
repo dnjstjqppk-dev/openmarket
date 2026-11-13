@@ -2,6 +2,10 @@
 import { ArrowUpRight, Boxes, CircleCheck, CloudDownload, Forklift, Globe, Key, LoaderCircle, Network, RotateCw, ShieldCheck, SlidersHorizontal, Store, ToggleRight, TriangleAlert, Truck, X } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { adminApi, won, API_BASE_URL } from '../config';
+import { useConfirm, useToast } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
+const toastApi = useToast()
 
 interface SupplierOrder {
   id: string;
@@ -188,7 +192,7 @@ async function loadFlags() {
 async function toggleFlag(flag: FeatureFlag) {
   const targetState = flag.is_enabled === 1 ? false : true;
   const verb = targetState ? '활성화(ON)' : '비활성화(OFF)';
-  if (!confirm(`[${flag.name}] 기능을 ${verb} 하시겠습니까?\n주의: ${flag.description}`)) return;
+  if (!(await confirm({ title: '기능 플래그', body: `[${flag.name}] 기능을 ${verb} 하시겠습니까?\n주의: ${flag.description}` }))) return;
 
   actionMsg.value = '';
   errorMsg.value = '';
@@ -214,7 +218,7 @@ async function toggleFlag(flag: FeatureFlag) {
 }
 
 async function handleAccept(po: SupplierOrder) {
-  if (!confirm(`PO [${po.id}] 발주를 접수/승인하시겠습니까?`)) return;
+  if (!(await confirm({ title: '발주 접수', body: `PO [${po.id}] 발주를 접수/승인하시겠습니까?` }))) return;
   actionMsg.value = '';
   errorMsg.value = '';
   try {
@@ -243,7 +247,7 @@ function openDispatch(po: SupplierOrder) {
 async function executeDispatch() {
   if (!dispatchTarget.value) return;
   if (!dispatchTracking.value.trim()) {
-    alert('운송장 번호를 입력해 주세요.');
+    toastApi.error('운송장 번호를 입력해 주세요.');
     return;
   }
   isDispatching.value = true;

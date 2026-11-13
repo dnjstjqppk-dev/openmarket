@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface Category {
   id: string;
@@ -57,7 +60,7 @@ async function createCategory() {
 }
 
 async function deleteCategory(id: string) {
-  if (!confirm('카테고리를 삭제하시겠습니까?')) return;
+  if (!(await confirm({ title: '카테고리 삭제', body: '카테고리를 삭제하시겠습니까?', danger: true }))) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/categories/${id}`, {
       method: 'DELETE',

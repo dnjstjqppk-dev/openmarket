@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
+import { useToast } from '@olmoa/ui'
+
+const toastApi = useToast()
 
 const settlements = ref<any[]>([])
 // T-N01: payouts and adjustments come from /partner/settlements directly.
@@ -38,7 +41,7 @@ const csvCell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
 
 const exportSettlementCsv = () => {
   if (settlements.value.length === 0) {
-    alert('내보낼 정산 내역이 없습니다.')
+    toastApi.error('내보낼 정산 내역이 없습니다.')
     return
   }
   const rows = ['id,order_id,gross_amount,commission_rate,commission_amount,shipping_fee,effective_net_payout,settlement_status,created_at']

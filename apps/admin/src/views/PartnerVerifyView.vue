@@ -2,6 +2,9 @@
 import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface Partner {
   id: string;
@@ -106,7 +109,7 @@ async function payoutAction(p: Partner, decision: 'VERIFY_CURRENT' | 'APPROVE' |
   if (decision !== 'REJECT') {
     evidence = window.prompt('계좌 실명 확인 근거를 입력하세요 (필수, 감사 로그에 기록됩니다)', '')?.trim() || '';
     if (!evidence) return;
-  } else if (!window.confirm(`[${p.business_name}]의 계좌 변경 요청을 반려할까요?`)) {
+  } else if (!(await confirm({ title: '계좌 변경 반려', body: `[${p.business_name}]의 계좌 변경 요청을 반려할까요?` }))) {
     return;
   }
   isProcessing.value = p.id;

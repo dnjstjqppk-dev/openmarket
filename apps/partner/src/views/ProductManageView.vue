@@ -2,6 +2,9 @@
 import { ArrowUpRight, CloudUpload, Image, Pencil, Plus } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
+import { useToast } from '@olmoa/ui'
+
+const toastApi = useToast()
 
 const products = ref<any[]>([])
 const loading = ref(true)
@@ -218,15 +221,15 @@ const saveProductChanges = async (p: any) => {
 
 const createNewProduct = async () => {
   if (!newProd.value.title.trim()) {
-    alert('상품명을 입력해 주세요.')
+    toastApi.error('상품명을 입력해 주세요.')
     return
   }
   if (!newProd.value.category_id) {
-    alert('카테고리를 선택해 주세요.')
+    toastApi.error('카테고리를 선택해 주세요.')
     return
   }
   if (newProd.value.kc_certified && !newProd.value.kc_cert_number.trim()) {
-    alert('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
+    toastApi.error('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
     return
   }
   try {
@@ -250,7 +253,7 @@ const createNewProduct = async () => {
       newProd.value.description_html = defaultDescriptionTemplate
       await loadProducts()
     } else {
-      alert(json.error || '상품 등록 실패')
+      toastApi.error(json.error || '상품 등록 실패')
     }
   } catch (e) {
     console.error(e)
@@ -285,7 +288,7 @@ const openEditModal = (p: any) => {
 const updateExistingProduct = async () => {
   if (!editingProd.value || !editingProd.value.id) return
   if (editingProd.value.kc_certified && !(editingProd.value.kc_cert_number || '').trim()) {
-    alert('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
+    toastApi.error('KC 인증 대상 상품은 인증번호를 입력해야 합니다.')
     return
   }
   try {
@@ -306,7 +309,7 @@ const updateExistingProduct = async () => {
       setTimeout(() => { toast.value = '' }, 3500)
       await loadProducts()
     } else {
-      alert(json.error || '상세페이지 업데이트 실패')
+      toastApi.error(json.error || '상세페이지 업데이트 실패')
     }
   } catch (e) {
     console.error(e)

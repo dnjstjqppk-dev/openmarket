@@ -2,6 +2,9 @@
 // 운영 사업자 관리: 개인사업자 → 법인 전환. 기존 거래는 당시 사업자에 귀속된 채 보존되고, 전환 시점 이후 거래만 새 사업자에 귀속된다.
 import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const entities = ref<any[]>([])
 const loading = ref(true)
@@ -52,7 +55,7 @@ async function create() {
 }
 async function activate(e: any) {
   if (!confirmReview.value[e.id]) return say('세무·법률·PG 계약 검토 완료를 확인해 주세요.', 'err')
-  if (!confirm(`${e.legal_name}을(를) 현재 운영 사업자로 전환합니다. 이후 모든 신규 주문·정산이 이 사업자에 귀속됩니다. 진행할까요?`)) return
+  if (!(await confirm({ title: '운영 사업자 전환', body: `${e.legal_name}을(를) 현재 운영 사업자로 전환합니다. 이후 모든 신규 주문·정산이 이 사업자에 귀속됩니다.` }))) return
   const r = await adminApi(`/api/v1/admin/business-entities/${e.id}/activate`, { method: 'POST', json: { confirm_legal_review: true, note: '관리자 콘솔 전환' } })
   if (!r.ok) return say(r.data.error || '전환 실패', 'err')
   say(`전환 완료 (${r.data.data.effective_at}). 이전 사업자의 미결 채무를 아래에서 확인하세요.`)

@@ -4,6 +4,10 @@ import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
 import { validateKrPhone } from '../utils/phone'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
+const formError = ref('')
 
 const auth = useAuthStore()
 const addresses = ref<any[]>([])
@@ -80,7 +84,7 @@ const setDefault = async (addrId: string) => {
 }
 
 const deleteAddress = async (addrId: string) => {
-  if (!confirm('해당 배송지를 삭제하시겠습니까?')) return
+  if (!(await confirm({ title: '배송지 삭제', body: '해당 배송지를 삭제하시겠습니까?' }))) return
   lastAction = () => deleteAddress(addrId)
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}`, {
@@ -99,17 +103,18 @@ const deleteAddress = async (addrId: string) => {
 }
 
 const handleCreateAddress = async () => {
+  formError.value = ''
   if (!form.value.recipient_name || !form.value.phone || !form.value.address_line1) {
-    alert('수령인, 연락처, 도로명 주소는 필수입니다.')
+    formError.value = '수령인, 연락처, 도로명 주소는 필수입니다.'
     return
   }
   const phoneErr = validateKrPhone(form.value.phone)
   if (phoneErr) {
-    alert(phoneErr)
+    formError.value = phoneErr
     return
   }
   if (!/^\d{5}$/.test(form.value.postal_code.trim())) {
-    alert('우편번호 5자리를 입력해 주세요.')
+    formError.value = '우편번호 5자리를 입력해 주세요.'
     return
   }
 
@@ -141,10 +146,10 @@ const handleCreateAddress = async () => {
       await loadAddresses()
       setTimeout(() => (msg.value = ''), 2500)
     } else {
-      alert(json.error || '배송지 등록에 실패했습니다.')
+      formError.value = json.error || '배송지 등록에 실패했습니다.'
     }
   } catch (err: any) {
-    alert('네트워크 오류가 발생했습니다.')
+    formError.value = '네트워크 오류가 발생했습니다.'
   } finally {
     submitting.value = false
   }
@@ -348,6 +353,7 @@ onMounted(loadAddresses)
             <span>이 배송지를 기본 배송지로 설정합니다.</span>
           </label>
 
+          <p v-if="formError" role="alert" class="rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs font-bold text-danger">{{ formError }}</p>
           <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
             <button
               type="button"

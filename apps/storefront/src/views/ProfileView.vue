@@ -4,6 +4,10 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
+import { useConfirm, useToast } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
+const toastApi = useToast()
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -75,7 +79,7 @@ const loadUserProfile = async () => {
 
 const saveProfile = async () => {
   if (!formName.value.trim()) {
-    alert('이름을 입력해 주세요.')
+    toastApi.error('이름을 입력해 주세요.')
     return
   }
   savingProfile.value = true
@@ -104,10 +108,10 @@ const saveProfile = async () => {
       toast.value = '✓ 회원 정보가 성공적으로 수정되었습니다.'
       setTimeout(() => { toast.value = '' }, 3000)
     } else {
-      alert(json.error || '회원 정보 수정에 실패했습니다.')
+      toastApi.error(json.error || '회원 정보 수정에 실패했습니다.')
     }
   } catch (e: any) {
-    alert(e.message || '네트워크 오류')
+    toastApi.error(e.message || '네트워크 오류')
   } finally {
     savingProfile.value = false
   }
@@ -156,8 +160,8 @@ const handlePasswordChange = async () => {
   }
 }
 
-const handleLogout = () => {
-  if (confirm('로그아웃 하시겠습니까?')) {
+const handleLogout = async () => {
+  if (await confirm({ title: '로그아웃', body: '로그아웃 하시겠습니까?' })) {
     auth.logout()
     router.push('/')
   }
@@ -215,7 +219,7 @@ const submitWithdraw = async () => {
       withdrawError.value = json.error || '탈퇴 처리에 실패했습니다.'
       return
     }
-    alert(json.message || '회원 탈퇴가 완료되었습니다.')
+    toastApi.success(json.message || '회원 탈퇴가 완료되었습니다.')
     auth.logout()
     router.push('/')
   } catch (e: any) {

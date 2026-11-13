@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface AdminReview {
   id: string;
@@ -34,7 +37,7 @@ async function loadReviews() {
 }
 
 async function deleteReview(id: string) {
-  if (!confirm('이 리뷰를 삭제하시겠습니까?')) return;
+  if (!(await confirm({ title: '리뷰 삭제', body: '이 리뷰를 삭제하시겠습니까?', danger: true }))) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/reviews/${id}`, {
       method: 'DELETE',

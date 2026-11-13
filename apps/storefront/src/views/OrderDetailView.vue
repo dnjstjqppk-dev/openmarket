@@ -5,6 +5,9 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 import { validateKrMobile, validateBrnDigits } from '../utils/phone'
 
 const route = useRoute()
@@ -213,7 +216,8 @@ const loadOrderDetail = async () => {
 }
 
 async function handleCancelOrder() {
-  if (!order.value || !confirm('주문 전체를 취소하시겠습니까? 결제 금액은 원결제 수단으로, 사용한 적립금은 적립금으로 환불됩니다.')) return
+  if (!order.value) return
+  if (!(await confirm({ title: '주문 전체 취소', body: '결제 금액은 원결제 수단으로, 사용한 적립금은 적립금으로 환불됩니다.', amounts: [`주문 금액 ${won(order.value.total_pay_amount || order.value.total_amount)}`], danger: true }))) return
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/cancel`)
   say(ok ? (json.refund ? `주문이 취소되었습니다. 환불: 결제수단 ${won(json.refund.pg_amount)} · 적립금 ${won(json.refund.credit_amount)}` : '결제 전 주문이 취소되었습니다.') : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()
@@ -222,7 +226,7 @@ async function handleCancelOrder() {
 async function handleCancelQty(sub: any, it: any) {
   const remaining = it.quantity - (it.refunded_quantity || 0)
   const qty = Math.max(1, Math.min(remaining, Number(qtyCancel.value[it.id] || 1)))
-  if (!confirm(`${it.product_title} ${qty}개를 취소하시겠습니까?${qty === remaining && sub.items.every((x: any) => x.id === it.id || x.quantity === (x.refunded_quantity || 0)) ? ' (남은 상품이 없어 배송비도 환불됩니다)' : ' 배송비는 남은 상품과 함께 그대로 유지됩니다.'}`)) return
+  if (!(await confirm({ title: '부분 취소', body: `${it.product_title} ${qty}개를 취소하시겠습니까?${qty === remaining && sub.items.every((x: any) => x.id === it.id || x.quantity === (x.refunded_quantity || 0)) ? ' (남은 상품이 없어 배송비도 환불됩니다)' : ' 배송비는 남은 상품과 함께 그대로 유지됩니다.'}`, amounts: [`해당 상품 ${won((it.unit_price || 0) * qty)}`], danger: true }))) return
   busy.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`, {
@@ -238,7 +242,8 @@ async function handleCancelQty(sub: any, it: any) {
 }
 
 async function handleCancelSub(sub: any) {
-  if (!confirm(`${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`)) return
+  // HOLD (Q-1-9): e2e_browser stubs window.confirm for this flow; convert with the e2e script update.
+  if (!window.confirm(`${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`)) return
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`)
   say(ok ? `부분 취소 완료 · 환불 ${won((json.refund?.pg_amount || 0) + (json.refund?.credit_amount || 0))}` : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()

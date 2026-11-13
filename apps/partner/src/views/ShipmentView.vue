@@ -233,7 +233,7 @@ async function doBulkShipment() {
 function exportToCSV() {
   const pending = shipments.value.filter(s => s.status !== 'SHIPPED' && s.status !== 'DELIVERED');
   if (pending.length === 0) {
-    alert('출고 대기 중인 주문이 없습니다.');
+    say('출고 대기 중인 주문이 없습니다.', 'err');
     return;
   }
 

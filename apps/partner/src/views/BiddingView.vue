@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
+import { useToast } from '@olmoa/ui'
+
+const toastApi = useToast()
 
 const activeTab = ref<'campaigns' | 'my-bids' | 'negotiations'>('campaigns')
 const campaigns = ref<any[]>([])
@@ -100,10 +103,10 @@ async function submitBid() {
       await loadData()
       activeTab.value = 'my-bids'
     } else {
-      alert(json.error || '입찰 제출 실패')
+      toastApi.error(json.error || '입찰 제출 실패')
     }
   } catch (e: any) {
-    alert(e.message || '입찰 처리 중 오류')
+    toastApi.error(e.message || '입찰 처리 중 오류')
   } finally {
     submittingBid.value = false
   }
@@ -133,10 +136,10 @@ async function respondNego(action: 'ACCEPT' | 'REJECT' | 'COUNTER', counter?: nu
       setTimeout(() => { toast.value = '' }, 3500)
       await loadData()
     } else {
-      alert(json.error || '협상 처리 실패')
+      toastApi.error(json.error || '협상 처리 실패')
     }
   } catch (e: any) {
-    alert(e.message || '처리 오류')
+    toastApi.error(e.message || '처리 오류')
   } finally {
     submittingNego.value = false
   }

@@ -25,6 +25,9 @@ useOverlay(open, panel, () => { if (current.value) settle(current.value.id, fals
       >
         <h2 class="text-md font-bold text-ink">{{ current.title }}</h2>
         <p v-if="current.body" class="mt-2 whitespace-pre-line text-sm text-ink-muted">{{ current.body }}</p>
+        <ul v-if="current.amounts.length" class="mt-2 space-y-0.5">
+          <li v-for="(a, i) in current.amounts" :key="i" class="om-num text-sm font-black text-ink">{{ a }}</li>
+        </ul>
         <div class="mt-5 flex justify-end gap-2">
           <button
             type="button"

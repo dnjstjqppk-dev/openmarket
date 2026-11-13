@@ -54,6 +54,7 @@ const approveSettlement = async (s: any) => {
 const resolveClaim = async (claimId: string, status: string, refundAmount?: number) => {
   if (status !== 'REJECTED') {
     const amt = Number(refundAmount || 0).toLocaleString()
+    // HOLD (Q-1-9): admin_ops A07 pins window.confirm here; convert after the test is updated.
     if (!window.confirm(`클레임 ${claimId} (환불 ₩${amt}) 승인 시 실제 환불이 실행됩니다. 계속할까요?`)) return
   }
   let body: any = { decision: 'APPROVE' }

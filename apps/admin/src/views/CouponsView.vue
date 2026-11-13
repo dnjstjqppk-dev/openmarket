@@ -2,6 +2,9 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface Coupon {
   id: string;
@@ -86,7 +89,7 @@ async function createCoupon() {
 }
 
 async function deleteCoupon(id: string) {
-  if (!confirm('쿠폰을 삭제하시겠습니까?')) return;
+  if (!(await confirm({ title: '쿠폰 삭제', body: '쿠폰을 삭제하시겠습니까?', danger: true }))) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/coupons/${id}`, {
       method: 'DELETE',

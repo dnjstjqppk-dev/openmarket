@@ -35,3 +35,17 @@
 - (b) 급상승 순위 변동은 2-9 /search/trending이 있어야 해서 배치·표시 구조만 만들고 배지는 데이터가 올 때까지 숨긴다.
 - (c) 로그인 사용자의 최근 본 상품 서버 기록도 2-9 me/recently-viewed 대기이며, 그전까지 전체 localStorage(최대 50개)를 쓴다.
 - 운영자 확인 필요: 분리 진행 승인.
+
+## Q-1-9 (작업 1-9, 2026-11-13): 기존 테스트가 고정한 5곳은 네이티브 유지
+
+- 52곳 중 47곳 전환 완료(스토어 13·어드민 20·파트너 14). 아래 5곳은 기존 테스트가
+  `window.confirm`을 직접 고정하고 있어 테스트 변경 금지 규칙상 손대지 않았다.
+  - PartnerVerifyView verify() — P1-A08이 `window.confirm` 리터럴 요구
+  - DashboardView arbitrateDispute — admin_ops A05가 리터럴 요구
+  - MarketingView handleBroadcastNotification — admin_ops A06이 리터럴 요구
+  - LedgerAuditView resolveClaim — admin_ops A07이 리터럴 요구
+  - OrderDetailView handleCancelSub — e2e_browser가 window.confirm 스텁 후 클릭
+- prompt() 11곳(어드민)은 지시서 범위에 없어 손대지 않았다.
+- 운영자 결정 필요: 5개 테스트를 새 다이얼로그 방식으로 고쳐도 되는지.
+  승인되면 5곳 전환 + 테스트 갱신 후 1-9를 다시 통과 처리한다.
+  결정 전까지 작업 1-9 판정은 실패(완료 기준 "검사 결과 0건" 미충족)로 기록한다.

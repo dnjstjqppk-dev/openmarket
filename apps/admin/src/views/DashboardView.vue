@@ -103,6 +103,7 @@ async function loadControlTower() {
 async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER') {
   const notes = ruling === 'RELEASE_TO_SELLER' ? window.prompt('반품 거절(판매자 지급) 판정 근거를 입력하세요', '')?.trim() : null;
   if (ruling === 'RELEASE_TO_SELLER' && !notes) return;
+  // HOLD (Q-1-9): admin_ops A05 pins window.confirm here; convert after the test is updated.
   if (ruling === 'FULL_REFUND_TO_BUYER' && !window.confirm(`분쟁 건(${claim.id})에 대해 구매자 환불을 승인합니다. 실제 환불이 실행됩니다. 계속할까요?`)) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claim.id}`, {

@@ -2,7 +2,7 @@
 import { Bell, Boxes, ChartPie, LogOut, Megaphone, MessageSquare, Receipt, Settings, ShieldCheck, Users } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { OmConsoleShell, type ConsoleMenuItem } from '@olmoa/ui';
+import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
 import { API_BASE_URL, getAdminToken, getAdminHeaders, clearAdminToken, getAdminRole, ADMIN_ROLE_LABEL } from './config';
 
 const router = useRouter();
@@ -156,6 +156,8 @@ onMounted(() => {
       </button>
     </template>
     <router-view @auth-changed="checkAuth" />
+    <OmToast />
+    <OmConfirmDialog />
     <!-- Mobile Navigation Dropdown: explicit role-gated links (P1-A02). -->
     <template #mobile-nav>
       <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">

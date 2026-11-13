@@ -4,7 +4,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Bell, ChevronUp, Heart, House, LayoutGrid, LogOut, Monitor, Moon, Package, Search, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
-import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
+import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, OmConfirmDialog, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
@@ -416,5 +416,6 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
       </template>
     </OmFooter>
     <OmToast />
+    <OmConfirmDialog />
   </div>
 </template>

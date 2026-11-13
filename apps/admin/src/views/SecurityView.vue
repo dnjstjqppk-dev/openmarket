@@ -2,6 +2,9 @@
 // 계정 보안 (O11): 내 2단계 인증 설정 + (최고관리자) 운영자 계정·권한 관리.
 import { ref, reactive, computed, onMounted } from 'vue'
 import { adminApi, setAdminToken, setAdminRole, ADMIN_ROLE_LABEL } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const me = ref<any>(null)
 const setup = ref<{ secret: string; otpauth_uri: string } | null>(null)
@@ -64,7 +67,7 @@ const operatorListKey = ref(0)
 async function updateOperator(o: any, patch: any, label: string) {
   // A-N05: the role select is one-way bound, so a cancelled confirm must
   // force a re-render or it keeps showing the unapplied value.
-  if (!confirm(`${o.email}: ${label}. 해당 계정의 모든 세션이 종료됩니다.`)) { operatorListKey.value++; return }
+  if (!(await confirm({ title: '계정 변경', body: `${o.email}: ${label}. 해당 계정의 모든 세션이 종료됩니다.` }))) { operatorListKey.value++; return }
   const r = await adminApi(`/api/v1/admin/admin-users/${o.id}`, { method: 'PUT', json: patch })
   if (!r.ok) { err.value = r.data.error; load(); return }
   msg.value = `${o.email}: ${label} 완료`

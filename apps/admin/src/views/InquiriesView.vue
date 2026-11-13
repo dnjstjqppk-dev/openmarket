@@ -3,6 +3,9 @@
 // POST /api/v1/admin/inquiries/:id/reply. CS/OPERATIONS/SUPER_ADMIN read and reply.
 import { ref, onMounted } from 'vue'
 import { adminApi } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const rows = ref<any[]>([])
 const loading = ref(false)
@@ -50,7 +53,7 @@ function pick(row: any) {
 
 async function reply() {
   if (!selected.value || !answer.value.trim()) return
-  if (!confirm(`[${selected.value.subject}] 문의에 답변을 등록합니다.${closing.value ? ' (종결 처리)' : ''}`)) return
+  if (!(await confirm({ title: '답변 등록', body: `[${selected.value.subject}] 문의에 답변을 등록합니다.${closing.value ? ' (종결 처리)' : ''}` }))) return
   replying.value = true
   replyError.value = ''
   try {

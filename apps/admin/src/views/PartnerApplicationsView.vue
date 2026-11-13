@@ -2,6 +2,9 @@
 // 입점 신청 심사 (O05). 서류 열람은 개인정보 접속기록에 남는다. 승인 = 수수료율 + 사업자 상태 확인 근거 필수.
 import { ref, reactive, onMounted } from 'vue'
 import { adminApi, API_BASE_URL, getAdminToken } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const filter = ref('SUBMITTED')
 const apps = ref<any[]>([])
@@ -48,7 +51,7 @@ async function openDoc(fileId: string) {
 async function review(a: any, decision: 'APPROVE' | 'REJECT' | 'REQUEST_RESUBMIT') {
   const f = forms[a.partner_id]
   const label = { APPROVE: '승인', REJECT: '반려', REQUEST_RESUBMIT: '보완 요청' }[decision]
-  if (!confirm(`${a.business_name} 입점 신청을 ${label}합니다.`)) return
+  if (!(await confirm({ title: '입점 심사', body: `${a.business_name} 입점 신청을 ${label}합니다.`, danger: decision === 'REJECT' }))) return
   const body: any = { decision, note: f.note || undefined }
   if (decision === 'APPROVE') Object.assign(body, { commission_rate: f.commission_rate === '' ? undefined : Number(f.commission_rate), business_status_evidence: f.business_status_evidence, confirm_documents_checked: f.confirm_documents_checked })
   if (decision === 'REQUEST_RESUBMIT') body.rejected_document_ids = f.rejected

@@ -2,6 +2,9 @@
 import { Bell, Images, LoaderCircle, Plus, Send } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getAdminHeaders } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const activeTab = ref<'BANNERS' | 'NOTIFICATIONS'>('BANNERS')
 const loading = ref(true)
@@ -159,7 +162,7 @@ async function toggleBannerActive(b: Banner) {
 }
 
 async function deleteBanner(id: string) {
-  if (!confirm('해당 배너를 삭제하시겠습니까?')) return
+  if (!(await confirm({ title: '배너 삭제', body: '해당 배너를 삭제하시겠습니까?', danger: true }))) return
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/banners/${id}`, {
       method: 'DELETE',
@@ -181,6 +184,7 @@ async function handleBroadcastNotification() {
     statusMsg.value = '특정 고객을 먼저 검색해 선택해 주세요.'
     return
   }
+  // HOLD (Q-1-9): admin_ops A06 pins window.confirm here; convert after the test is updated.
   if (!window.confirm(`[${target}] 대상으로 알림을 발송합니다. 계속할까요?`)) return
   sendingNotif.value = true
   try {

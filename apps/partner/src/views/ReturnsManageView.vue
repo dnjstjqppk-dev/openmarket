@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { useToast } from '@olmoa/ui';
+
+const toastApi = useToast();
 
 interface ReturnItem {
   id: string;
@@ -128,10 +131,10 @@ const confirmStatusUpdate = async () => {
       activeModal.value = false;
       await loadReturns();
     } else {
-      alert(json.error || '상태 변경 중 오류가 발생했습니다.');
+      toastApi.error(json.error || '상태 변경 중 오류가 발생했습니다.');
     }
   } catch (e: any) {
-    alert(e.message || '네트워크 통신 오류');
+    toastApi.error(e.message || '네트워크 통신 오류');
   } finally {
     processing.value = false;
   }

@@ -2,6 +2,10 @@
 import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm, useToast } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
+const toastApi = useToast()
 
 interface AdminProduct {
   id: string;
@@ -45,7 +49,7 @@ async function loadProducts() {
 
 async function updateStatus(p: AdminProduct, newStatus: 'ACTIVE' | 'HIDDEN') {
   const label = newStatus === 'ACTIVE' ? '판매 재개(노출)' : '판매 중지(노출 중단)';
-  if (!window.confirm(`[${p.title}] 상품을 ${label} 처리합니다. 계속할까요?`)) return;
+  if (!(await confirm({ title: '상품 상태 변경', body: `[${p.title}] 상품을 ${label} 처리합니다.`, danger: newStatus === 'HIDDEN' }))) return;
   updatingId.value = p.id;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/products/${p.id}/status`, {
@@ -75,7 +79,7 @@ async function reviewProduct(p: any, decision: 'APPROVE' | 'REJECT') {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/products/${p.id}/review`, { method: 'POST', headers: getAdminHeaders(), body: JSON.stringify({ decision, note }) })
     const json = await res.json()
     if (json.success) { p.review_status = json.review_status; p.status = json.status }
-    else alert(json.error || '처리 실패')
+    else toastApi.error(json.error || '처리 실패')
   } finally {
     updatingId.value = null
   }

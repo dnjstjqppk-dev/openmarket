@@ -2,7 +2,7 @@
 import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Truck } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { OmConsoleShell, type ConsoleMenuItem } from '@olmoa/ui';
+import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
 import { API_BASE_URL, getPartnerHeaders, getPartnerName, clearPartnerSession } from './config';
 
 const router = useRouter();
@@ -91,6 +91,8 @@ onMounted(() => { loadHeader(); });
       </button>
     </template>
     <router-view />
+    <OmToast />
+    <OmConfirmDialog />
     <!-- Mobile Dropdown Menu: explicit links (F-T16). -->
     <template #mobile-nav>
       <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">

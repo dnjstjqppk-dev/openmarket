@@ -5,13 +5,16 @@ import { reactive } from 'vue'
 export interface ConfirmOptions {
   title: string
   body?: string
+  /** Money lines rendered bold under the body (real amounts only). */
+  amounts?: string[]
   confirmLabel?: string
   cancelLabel?: string
   danger?: boolean
 }
-interface Pending extends Required<Omit<ConfirmOptions, 'body'>> {
+interface Pending extends Required<Omit<ConfirmOptions, 'body' | 'amounts'>> {
   id: number
   body: string
+  amounts: string[]
   resolve: (ok: boolean) => void
 }
 
@@ -27,6 +30,7 @@ export function useConfirm() {
         id: ++seq,
         title: opts.title,
         body: opts.body ?? '',
+        amounts: opts.amounts ?? [],
         confirmLabel: opts.confirmLabel ?? '확인',
         cancelLabel: opts.cancelLabel ?? '취소',
         danger: opts.danger ?? false,

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface RemoteZone {
   postal_prefix: string;
@@ -66,7 +69,7 @@ async function saveZone() {
 }
 
 async function deleteZone(prefix: string) {
-  if (!confirm(`우편번호 앞자리 '${prefix}' 지역을 삭제할까요? 해당 지역 주문에는 추가배송비가 붙지 않습니다.`)) return;
+  if (!(await confirm({ title: '지역 삭제', body: `우편번호 앞자리 '${prefix}' 지역을 삭제할까요? 해당 지역 주문에는 추가배송비가 붙지 않습니다.`, danger: true }))) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/shipping/remote-zones/${encodeURIComponent(prefix)}`, {
       method: 'DELETE',

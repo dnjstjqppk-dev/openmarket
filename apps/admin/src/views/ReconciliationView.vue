@@ -3,6 +3,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi, won } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const route = useRoute()
 const recon = ref<any>(null)
@@ -37,7 +40,7 @@ async function load() {
 async function pay(p: any) {
   const reserveNote = p.reserve_to_hold || p.reserve_to_release
     ? `\n(정산 ${won(p.gross_amount)} − 리저브 보류 ${won(p.reserve_to_hold)} + 리저브 해제 ${won(p.reserve_to_release)})` : ''
-  if (!confirm(`${p.business_name}에 ${won(p.amount)} 지급을 승인합니다.${reserveNote}\n실제 이체는 은행에서 별도로 진행합니다.`)) return
+  if (!(await confirm({ title: '지급 승인', body: `실제 이체는 은행에서 별도로 진행합니다.${reserveNote}`, amounts: [`${p.business_name} ${won(p.amount)}`], danger: true }))) return
   const r = await adminApi('/api/v1/admin/finance/payouts', { method: 'POST', json: { partner_id: p.partner_id } })
   const d = r.data?.data || {}
   msg.value = r.ok

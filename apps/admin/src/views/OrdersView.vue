@@ -2,6 +2,9 @@
 import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { useConfirm, formatNumber } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 interface AdminOrder {
   id: string;
@@ -59,7 +62,7 @@ async function fullRefund(o: AdminOrder) {
   if (!lines.length) return;
   const reason = window.prompt(`주문 ${o.order_no || o.id} 전액 환불 사유를 입력하세요 (필수, 환불 원장에 기록됩니다)`, '')?.trim();
   if (!reason) return;
-  if (!window.confirm(`${lines.length}개 품목 전량을 원결제수단/적립금으로 환불합니다. 계속할까요?`)) return;
+  if (!(await confirm({ title: '주문 전액 환불', body: `${lines.length}개 품목 전량을 원결제수단/적립금으로 환불합니다.`, amounts: [`환불 ${formatNumber(o.total_pay_amount)}`], danger: true }))) return;
   refunding.value = o.id;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/orders/${o.id}/refund`, {

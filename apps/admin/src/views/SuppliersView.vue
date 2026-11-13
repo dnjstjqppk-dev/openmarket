@@ -2,6 +2,9 @@
 // MODEL A 직영: 공급사 · SKU 소싱(원가·재판매 권한) · 발주서 & M2C 역경매 비딩 엔진
 import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
+import { useConfirm } from '@olmoa/ui'
+
+const { confirm } = useConfirm()
 
 const tab = ref<'po' | 'suppliers' | 'bidding'>('po')
 const suppliers = ref<any[]>([])
@@ -61,7 +64,7 @@ async function viewBids(campaignId: string) {
 }
 
 async function awardBid(campaignId: string, bidId: string) {
-  if (!confirm('이 입찰을 최종 낙찰(Award)하시겠습니까? 캠페인은 완료 처리되고 나머지 입찰은 미선정됩니다.')) return
+  if (!(await confirm({ title: '최종 낙찰', body: '이 입찰을 최종 낙찰(Award)하시겠습니까? 캠페인은 완료 처리되고 나머지 입찰은 미선정됩니다.' }))) return
   const r = await adminApi(`/api/v1/admin/bidding/campaigns/${campaignId}/award`, {
     method: 'POST',
     json: { winning_bid_id: bidId }
@@ -102,8 +105,8 @@ async function openSupplier(s: any) {
 async function movePo(po: any, status: string) {
   // P1-A10: CANCELLED is terminal (no outgoing transitions) and FAILED is
   // destructive — both need an explicit confirmation before the click lands.
-  if (status === 'CANCELLED' && !confirm(`발주 ${po.po_no}를 취소합니다. 취소는 되돌릴 수 없습니다(terminal). 계속할까요?`)) return
-  if (status === 'FAILED' && !confirm(`발주 ${po.po_no}를 실패/품절 처리합니다. 계속할까요?`)) return
+  if (status === 'CANCELLED' && !(await confirm({ title: '발주 취소', body: `발주 ${po.po_no}를 취소합니다. 취소는 되돌릴 수 없습니다(terminal).`, danger: true }))) return
+  if (status === 'FAILED' && !(await confirm({ title: '실패 처리', body: `발주 ${po.po_no}를 실패/품절 처리합니다.` }))) return
   const body: any = { status }
   if (status === 'SENT' || status === 'CONFIRMED') body.supplier_order_ref = prompt('공급사 주문번호(선택)') || undefined
   if (status === 'FAILED') body.failure_reason = prompt('실패 사유 (예: 공급사 재고 소진)') || '공급사 발주 실패'
