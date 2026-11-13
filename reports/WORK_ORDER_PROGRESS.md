@@ -13,3 +13,4 @@
 1-9 | 실패 | 040ca81 | confirm_dialogs 5/5 + test:ui + typecheck 4종 | 47곳 전환, 테스트 고정 5곳 보류 → Q-1-9
 1-10 | 통과 | 4136380 | footer_unify 5/5 + test:ui + typecheck 3종 | 헤더 신원·3앱 푸터 통일, 3건 정의 대기 → Q-1-10
 1-11 | 통과 | 01181e2 | dummy_sweep 4/4 + test:ui + typecheck | 가짜 8건 제거·교체, 시뮬레이션 없음 확인
+2-1 | 통과 | PENDING | d1_53 3/3 + rehearsal + K/p1 pins | 16테이블 신규, 스키마 핀 d1_53, 부록A 불일치 → Q-2-1
