@@ -213,6 +213,10 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}~1reship'
   /api/v1/partner/returns/{id}:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}'
+  /api/v1/partner/coupons:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons'
+  /api/v1/partner/coupons/{id}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons~1{id}'
 
   /api/v1/storage/upload:
     $ref: './paths/storage.yaml#/paths/~1api~1v1~1storage~1upload'

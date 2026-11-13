@@ -9,6 +9,7 @@ import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, ge
 import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
 import { feeForSub } from './fees.js';
+import { hasNewCoupon, isNewCouponId, validateCoupon, redeemStatements, releaseStatements } from './coupons.js';
 import { sealPii } from '../lib/pii-crypto.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
@@ -228,27 +229,46 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const volumeTotal = goodsBase - goodsAfterVolume;
   const shippingTotal = subs.reduce((a, s) => a + s.shipping, 0);
 
-  // 3. Coupon (must be owned, unused, active, unexpired)
+  // 3. Coupon (must be owned, unused, active, unexpired; exactly one per order)
   let coupon = 0;
   let userCouponId = null;
+  let couponNew = null;
+  if (body.user_coupon_id && body.coupon_code) throw conflict('COUPON_ONLY_ONE', '쿠폰은 한 주문에 하나만 사용할 수 있습니다.');
   const couponRef = body.user_coupon_id || body.coupon_code;
-  if (couponRef) {
-    const uc = await env.DB.prepare(
-      `SELECT uc.id, c.discount_type, c.discount_value, c.min_order_amount, c.max_discount_amount
-       FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
-       WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?
-         AND (uc.id = ? OR UPPER(c.code) = UPPER(?))
-       LIMIT 1`
-    ).bind(principal.userId, sqlNow(), String(couponRef), String(couponRef)).first();
-    if (!uc) throw conflict('COUPON_NOT_AVAILABLE', '사용할 수 있는 쿠폰이 아닙니다. (미보유·사용완료·만료)');
-    if (goodsAfterVolume < (uc.min_order_amount || 0)) throw conflict('COUPON_MIN_ORDER', `쿠폰 최소 주문금액(${uc.min_order_amount}원) 미달입니다.`);
-    coupon = uc.discount_type === 'PERCENT' ? applyBps(goodsAfterVolume, uc.discount_value * 100) : uc.discount_value;
-    if (uc.max_discount_amount) coupon = Math.min(coupon, uc.max_discount_amount);
-    coupon = Math.min(assertWon(coupon, 'coupon'), goodsAfterVolume);
-    userCouponId = uc.id;
+  if (couponRef && await hasNewCoupon(env, principal.userId, couponRef)) {
+    // 2-3: new generation (store/platform split, seller absorption).
+    couponNew = await validateCoupon(env, {
+      ref: couponRef,
+      userId: principal.userId,
+      lines: allItems.map((it) => ({ goods: it.lineTotal, partnerId: it.partnerId }))
+    });
+    coupon = couponNew.discount;
+    userCouponId = couponNew.issuedId;
+    allItems.forEach((it, i) => { it.couponAlloc = couponNew.allocations[i]; it.net = it.lineTotal - couponNew.allocations[i]; });
+  } else {
+    if (couponRef) {
+      const uc = await env.DB.prepare(
+        `SELECT uc.id, c.discount_type, c.discount_value, c.min_order_amount, c.max_discount_amount
+         FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
+         WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?
+           AND (uc.id = ? OR UPPER(c.code) = UPPER(?))
+         LIMIT 1`
+      ).bind(principal.userId, sqlNow(), String(couponRef), String(couponRef)).first();
+      if (!uc) throw conflict('COUPON_NOT_AVAILABLE', '사용할 수 있는 쿠폰이 아닙니다. (미보유·사용완료·만료)');
+      if (goodsAfterVolume < (uc.min_order_amount || 0)) throw conflict('COUPON_MIN_ORDER', `쿠폰 최소 주문금액(${uc.min_order_amount}원) 미달입니다.`);
+      coupon = uc.discount_type === 'PERCENT' ? applyBps(goodsAfterVolume, uc.discount_value * 100) : uc.discount_value;
+      if (uc.max_discount_amount) coupon = Math.min(coupon, uc.max_discount_amount);
+      coupon = Math.min(assertWon(coupon, 'coupon'), goodsAfterVolume);
+      userCouponId = uc.id;
+    }
+    const couponAllocs = allocate(coupon, allItems.map((it) => it.lineTotal));
+    allItems.forEach((it, i) => { it.couponAlloc = couponAllocs[i]; it.net = it.lineTotal - couponAllocs[i]; });
   }
-  const couponAllocs = allocate(coupon, allItems.map((it) => it.lineTotal));
-  allItems.forEach((it, i) => { it.couponAlloc = couponAllocs[i]; it.net = it.lineTotal - couponAllocs[i]; });
+  for (const s of subs) {
+    s.sellerCoupon = couponNew && couponNew.ownerType === 'SELLER' && couponNew.partnerId === s.partnerId
+      ? s.items.reduce((a, it) => a + it.couponAlloc, 0)
+      : 0;
+  }
 
   // 4. Credits (allocated over item nets and shipping lines)
   const payableBeforeCredit = goodsAfterVolume - coupon + shippingTotal;
@@ -330,7 +350,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
         `INSERT INTO settlements (id, sub_order_id, partner_id, operator_entity_id, gross_amount, shipping_fee, commission_rate, commission_rate_bps,
            commission_amount, net_payout_amount, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HOLD')`
-      ).bind(newId('stl'), s.id, s.partnerId, operator.id, s.goods, s.shipping, s.bps / 10000, s.bps, s.commission, s.goods - s.commission + s.shipping));
+      ).bind(newId('stl'), s.id, s.partnerId, operator.id, s.goods, s.shipping, s.bps / 10000, s.bps, s.commission, s.goods - s.commission + s.shipping - (s.sellerCoupon || 0)));
     }
     for (const it of s.items) {
       st.push(env.DB.prepare(
@@ -352,7 +372,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     }
   }
   if (userCouponId) {
-    st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 1, used_at = CURRENT_TIMESTAMP, used_order_id = ? WHERE id = ?').bind(orderId, userCouponId));
+    if (isNewCouponId(userCouponId)) {
+      st.push(...redeemStatements(env, { issuedId: userCouponId, orderId, userId: principal.userId, definitionId: couponNew.definitionId, discount: coupon }));
+    } else {
+      st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 1, used_at = CURRENT_TIMESTAMP, used_order_id = ? WHERE id = ?').bind(orderId, userCouponId));
+    }
   }
   if (credit > 0) st.push(creditStatement(env, { userId: principal.userId, amount: -credit, reason: '주문 결제 적립금 사용(예약)', referenceId: orderId }));
 
@@ -362,6 +386,9 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     if (idemKey && e instanceof HttpError && e.code === 'DUPLICATE_REQUEST') {
       const prev = await env.DB.prepare('SELECT * FROM orders WHERE customer_id = ? AND checkout_idempotency_key = ?').bind(principal.userId, idemKey).first();
       if (prev) return { replay: true, order: prev };
+    }
+    if (String(e?.message || '').includes('coupon_redemptions')) {
+      throw conflict('COUPON_NOT_AVAILABLE', '사용할 수 있는 쿠폰이 아닙니다. (미보유·사용완료·만료)');
     }
     throw e;
   }
@@ -530,7 +557,8 @@ export async function releaseUnpaidOrder(env, orderRef, target) {
   ];
   st.push(...restockStatements(env, b.order.id, b.items.map((it) => ({ it, qty: it.quantity })), 'ORDER_CANCEL', `release:${b.order.id}`));
   if (b.order.applied_user_coupon_id) {
-    st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(b.order.applied_user_coupon_id, b.order.id));
+    if (isNewCouponId(b.order.applied_user_coupon_id)) st.push(...releaseStatements(env, { orderId: b.order.id }));
+    else st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(b.order.applied_user_coupon_id, b.order.id));
   }
   if (b.order.credit_used_amount > 0) {
     st.push(creditStatement(env, { userId: b.order.customer_id, amount: b.order.credit_used_amount, reason: target === 'EXPIRED' ? '결제 시간 만료 적립금 복원' : '결제 전 취소 적립금 복원', referenceId: `restore:${b.order.id}` }));
@@ -725,7 +753,8 @@ export async function refundOrder(env, actor, orderRef, request) {
   const nextOrder = full ? (request.orderStatusOnFull || 'REFUNDED') : 'PARTIAL_REFUNDED';
   fin.push(env.DB.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP, cancelled_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE cancelled_at END WHERE id = ?').bind(nextOrder, full ? 1 : 0, o.id));
   if (full && request.restoreCoupon && o.applied_user_coupon_id) {
-    fin.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(o.applied_user_coupon_id, o.id));
+    if (isNewCouponId(o.applied_user_coupon_id)) fin.push(...releaseStatements(env, { orderId: o.id }));
+    else fin.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(o.applied_user_coupon_id, o.id));
   }
   if (request.claimId) {
     fin.push(env.DB.prepare("UPDATE returns SET status = 'REFUNDED', refund_amount = ?, refund_id = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ?").bind(pg + credit, refundId, actor.userId, request.claimId));

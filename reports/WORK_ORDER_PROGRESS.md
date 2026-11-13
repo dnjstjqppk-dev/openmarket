@@ -14,4 +14,5 @@
 1-10 | 통과 | 4136380 | footer_unify 5/5 + test:ui + typecheck 3종 | 헤더 신원·3앱 푸터 통일, 3건 정의 대기 → Q-1-10
 1-11 | 통과 | 01181e2 | dummy_sweep 4/4 + test:ui + typecheck | 가짜 8건 제거·교체, 시뮬레이션 없음 확인
 2-1 | 통과 | 7d88ed6 | d1_53 3/3 + rehearsal + K/p1 pins | 16테이블 신규, 스키마 핀 d1_53, 부록A 불일치 → Q-2-1
-2-2 | 통과 | PENDING | fee_engine 6/6 + openapi + e2e 26/26 | 단일 수수료 엔진, 소급없음 배치, 마진 정의 → Q-2-2
+2-2 | 통과 | e1bd279 | fee_engine 6/6 + openapi + e2e 26/26 | 단일 수수료 엔진, 소급없음 배치, 마진 정의 → Q-2-2
+2-3 | 통과 | PENDING | coupon_engine 9/9 + openapi + e2e + funds | 쿠폰 분리·단일·경합·환불회수, 어드민CRUD 미정 → Q-2-3

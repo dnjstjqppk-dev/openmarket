@@ -73,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_coupon_issued_user ON coupon_issued(user_id);
 
 CREATE TABLE IF NOT EXISTS coupon_redemptions (
     id TEXT PRIMARY KEY,
+    issued_id TEXT NOT NULL UNIQUE REFERENCES coupon_issued(id),
     definition_id TEXT NOT NULL REFERENCES coupon_definitions(id),
     user_id TEXT NOT NULL REFERENCES users(id),
     order_id TEXT NOT NULL REFERENCES orders(id),

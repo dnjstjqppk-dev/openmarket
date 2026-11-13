@@ -34,7 +34,7 @@ await t.test('M02 key columns exist on each table', async () => {
     pg_fee_policies: ['id', 'method', 'rate_bp', 'pass_to_seller'],
     coupon_definitions: ['id', 'owner_type', 'discount_type', 'discount_value'],
     coupon_issued: ['id', 'definition_id', 'user_id', 'status'],
-    coupon_redemptions: ['id', 'definition_id', 'user_id', 'order_id', 'discount_applied'],
+    coupon_redemptions: ['id', 'issued_id', 'definition_id', 'user_id', 'order_id', 'discount_applied'],
     customer_credits: ['id', 'user_id', 'balance'],
     credit_ledger: ['id', 'user_id', 'amount_delta', 'balance_after'],
     earn_policies: ['id', 'rate_bp', 'source'],
