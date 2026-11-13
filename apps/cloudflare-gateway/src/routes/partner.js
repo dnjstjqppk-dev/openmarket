@@ -10,6 +10,7 @@ import { logPiiView, maskLast4 } from '../services/privacy.js';
 import { sealPii, maybeOpenPii } from '../lib/pii-crypto.js';
 import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 import { pushOrderShipped } from '../services/push.js';
+import { priceHistoryStatements, skuIdsOfProduct } from '../lib/price-history.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 
 
@@ -288,13 +289,15 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         await env.DB.batch([
           env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(scoped.sale, scoped.orig, sku.id),
           env.DB.prepare(`UPDATE products SET lowest_sale_price = (SELECT MIN(sale_price) FROM product_skus WHERE product_id = ?),
-            lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id)
+            lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id),
+          ...priceHistoryStatements(env, [sku.id], { orig: scoped.orig, sale: scoped.sale, by: me.userId })
         ]);
         return json(corsHeaders, { success: true, product_id: product.id, sku_id: sku.id, sale_price: scoped.sale, original_price: scoped.orig, scope: 'SKU' });
       }
       await env.DB.batch([
         env.DB.prepare('UPDATE products SET lowest_sale_price = ?, lowest_original_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(sale, orig, product.id),
-        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+        env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id),
+        ...priceHistoryStatements(env, await skuIdsOfProduct(env, product.id), { orig, sale, by: me.userId })
       ]);
       return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig, scope: 'ALL_SKUS' });
     }
@@ -324,9 +327,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const skuStmts = scopedSku ? [
       env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(sale, orig, scopedSku.id),
       env.DB.prepare(`UPDATE products SET lowest_sale_price = (SELECT MIN(sale_price) FROM product_skus WHERE product_id = ?),
-        lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id)
+        lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id),
+      ...priceHistoryStatements(env, [scopedSku.id], { orig, sale, by: me.userId })
     ] : [
-      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id)
+      env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id),
+      ...priceHistoryStatements(env, await skuIdsOfProduct(env, product.id), { orig, sale, by: me.userId })
     ];
     await env.DB.batch([
       env.DB.prepare(

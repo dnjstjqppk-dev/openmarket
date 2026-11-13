@@ -5,6 +5,7 @@ import { requireAdmin, requireApprovedPartner, authenticate } from '../lib/auth.
 import { json, readJson, bad, notFound, conflict, forbidden, str, intParam } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
+import { priceHistoryStatements } from '../lib/price-history.js';
 
 export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
@@ -254,6 +255,12 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
 
     // If accepted, adjust the product sale price immediately!
     if (accept) {
+      const targetSkus = nego.sku_id ? [nego.sku_id] : (await env.DB.prepare(
+        'SELECT id FROM product_skus WHERE product_id = ?'
+      ).bind(nego.product_id).all()).results.map((r) => r.id);
+      const origRows = new Map((await env.DB.prepare(
+        'SELECT id, original_price FROM product_skus WHERE product_id = ?'
+      ).bind(nego.product_id).all()).results.map((r) => [r.id, r.original_price]));
       batch.push(
         env.DB.prepare(
           `UPDATE product_skus SET sale_price = ?, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ? AND (? IS NULL OR id = ?)`
@@ -262,6 +269,11 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
           `UPDATE products SET lowest_sale_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
         ).bind(nego.suggested_target_price, nego.product_id)
       );
+      for (const sid of targetSkus) {
+        batch.push(...priceHistoryStatements(env, [sid], {
+          orig: origRows.get(sid), sale: nego.suggested_target_price, by: partner.userId || null
+        }));
+      }
     }
 
     await env.DB.batch(batch);

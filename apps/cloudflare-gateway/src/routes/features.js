@@ -70,11 +70,18 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const body = await readJson(request);
     const kw = str(body.keyword, { max: 100 }).trim();
     if (kw) {
-      await env.DB.prepare(
-        `INSERT INTO search_keywords (id, keyword, normalized_keyword, search_count)
-         VALUES (?, ?, ?, 1)
-         ON CONFLICT(keyword) DO UPDATE SET search_count = search_count + 1, updated_at = CURRENT_TIMESTAMP`
-      ).bind(newId('kw'), kw, kw.toLowerCase()).run();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO search_keywords (id, keyword, normalized_keyword, search_count)
+           VALUES (?, ?, ?, 1)
+           ON CONFLICT(keyword) DO UPDATE SET search_count = search_count + 1, updated_at = CURRENT_TIMESTAMP`
+        ).bind(newId('kw'), kw, kw.toLowerCase()),
+        env.DB.prepare(
+          `INSERT INTO search_keyword_hourly (keyword, hour, search_count)
+           VALUES (?, strftime('%Y-%m-%d %H:00:00', 'now'), 1)
+           ON CONFLICT(keyword, hour) DO UPDATE SET search_count = search_count + 1`
+        ).bind(kw.toLowerCase())
+      ]);
     }
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }

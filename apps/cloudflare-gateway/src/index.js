@@ -34,6 +34,7 @@ import { handleClientErrorRoutes } from './routes/client-errors.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 import { purgeExpiredPii } from './services/privacy.js';
 import { computeMonthlyGrades } from './services/grading.js';
+import { purgeOldSearchHours } from './services/trending.js';
 import { enforceRateLimit, classify } from './lib/ratelimit.js';
 import { authenticate } from './lib/auth.js';
 
@@ -196,7 +197,18 @@ export default {
         grading = 'ERROR';
         console.error(JSON.stringify({ level: 'error', job: 'grading', error: String(e && e.message || e) }));
       }
-      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged, grading }));
+      // 2-8: drop hourly search rows older than 7 days (first tick of 03:00 UTC).
+      let searchPurged = 'NOT_DUE';
+      try {
+        const nowH = new Date(event.scheduledTime || Date.now());
+        if (nowH.getUTCHours() === 3 && nowH.getUTCMinutes() < 5) {
+          searchPurged = await purgeOldSearchHours(env);
+        }
+      } catch (e) {
+        searchPurged = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'search_purge', error: String(e && e.message || e) }));
+      }
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged, grading, searchPurged }));
     })());
   }
 };
