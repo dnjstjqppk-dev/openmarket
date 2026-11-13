@@ -1,0 +1,17 @@
+{
+  "name": "OLMOA Partner Center (올모아 판매자 센터)",
+  "short_name": "OLMOA Partner",
+  "description": "올모아(OLMOA) 입점 판매자 비즈니스 센터.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0F172A",
+  "icons": [
+    {
+      "src": "/olmoa-symbol.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

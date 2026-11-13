@@ -1,0 +1,60 @@
+name: OpenMarket D1 Remote Migrate (manual)
+
+# OPS-06: the ONLY sanctioned path for applying migrations to remote D1.
+# Manual dispatch exclusively — this workflow never runs on push, pull_request,
+# or schedule. The operator types APPLY to confirm, the job reads the remote
+# schema_migrations ledger, applies pending migrations/d1_*.sql files in
+# version order, stops at the first failure, and re-verifies the ledger.
+# Required repo secrets: CLOUDFLARE_API_TOKEN (same as deploy.yml) and
+# CLOUDFLARE_ACCOUNT_ID. Take a D1 export before running (see
+# docs/database/BACKUP_RECOVERY.md); some migrations rebuild tables.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY to run pending migrations against remote D1"
+        required: true
+        default: "NO"
+
+jobs:
+  migrate-remote:
+    name: Apply pending migrations to remote D1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply pending d1_*.sql files in version order
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm }}" = "APPLY"
+          CFG="apps/cloudflare-gateway/wrangler.jsonc"
+          DB="openmarket-db"
+          remote_max() {
+            npx -y wrangler d1 execute "$DB" --remote --config "$CFG" \
+              --command "SELECT MAX(version) AS v FROM schema_migrations" --json \
+              | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const j=JSON.parse(s);const r=(j[0]&&j[0].results&&j[0].results[0])||{};console.log(r.v||'');})"
+          }
+          before="$(remote_max)"
+          echo "Remote schema level before: ${before:-<no ledger>}"
+          applied=0
+          for f in migrations/d1_*.sql; do
+            base="$(basename "$f")"
+            if [[ "$base" > "$before" ]]; then
+              echo "--- applying $base"
+              npx -y wrangler d1 execute "$DB" --remote --config "$CFG" --file="$f"
+              applied=$((applied + 1))
+            fi
+          done
+          after="$(remote_max)"
+          echo "Remote schema level after: ${after:-<no ledger>} ($applied file(s) applied)"
+          test -n "$after"

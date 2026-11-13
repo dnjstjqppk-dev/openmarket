@@ -60,6 +60,26 @@ export async function loadOrderBundle(env, orderIdOrNo) {
   return { order, subs, items };
 }
 
+// P2-R1: the schema level this code was written against. /health reports the
+// applied level (NEW-16); K-1.4 pins this constant to the newest migration file
+// so the two cannot drift apart silently.
+export const REQUIRED_SCHEMA_VERSION = 'd1_52_wave_j_remote_zones.sql';
+
+// P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
+// code's schema level. Deploys are forward-only, so a code-first deploy must
+// fail closed instead of writing through an outdated schema.
+export async function assertSchemaLevel(env) {
+  let applied = null;
+  try {
+    applied = await env.DB.prepare('SELECT MAX(version) AS v FROM schema_migrations').first('v');
+  } catch {
+    applied = null;
+  }
+  if (applied !== REQUIRED_SCHEMA_VERSION) {
+    throw unavailable('SCHEMA_MISMATCH', `주문 서버 스키마(${applied || 'unknown'})가 코드 요구 수준(${REQUIRED_SCHEMA_VERSION})과 달라 주문을 받을 수 없습니다.`);
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Checkout
 // ---------------------------------------------------------------------------------------------
@@ -97,6 +117,8 @@ function parseAddress(body) {
 }
 
 export async function createOrder(env, principal, body, idemHeader, { dryRun = false, ip = null, ipCountry = null } = {}) {
+  // P2-R1: fail closed before any order work (replay included) when D1 lags the code.
+  await assertSchemaLevel(env);
   const idemKey = idempotencyKey(idemHeader || body.idempotency_key || null);
   if (idemKey && !dryRun) {
     const prev = await env.DB.prepare('SELECT * FROM orders WHERE customer_id = ? AND checkout_idempotency_key = ?').bind(principal.userId, idemKey).first();

@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sentry/sentry.dart';
+import 'l10n/app_localizations.dart';
 import 'models/cart_line.dart';
 import 'models/product.dart';
 import 'models/sentry_options.dart';
@@ -72,6 +73,7 @@ class OlmoaCustomerApp extends StatelessWidget {
       // P2-MOB-09: framework strings (dialogs, pickers, back labels) follow
       // the device locale; app copy stays Korean-first until EN strings land.
       localizationsDelegates: const [
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -116,9 +118,12 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
         hit.quantity += 1;
       }
     });
+    // P2-MOB-09: nullable lookup with Korean fallback (bare-context safe).
+    final t = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('[${p.title}] 장바구니에 담겼습니다.'),
+        content: Text(
+            t?.cartAdded(p.title) ?? '[${p.title}] 장바구니에 담겼습니다.'),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -170,6 +175,8 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // P2-MOB-09: nullable lookup with Korean fallback (bare-context safe).
+    final t = AppLocalizations.of(context);
     final views = [
       HomeView(onAddToCart: _addToCart),
       CartView(
@@ -212,9 +219,9 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
                 color: OlmoaColors.lagoon50,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text(
-                '올모아 글로벌',
-                style: TextStyle(
+              child: Text(
+                t?.appTag ?? '올모아 글로벌',
+                style: const TextStyle(
                     color: OlmoaColors.lagoon700,
                     fontSize: 10,
                     fontWeight: FontWeight.bold),
@@ -225,7 +232,7 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: '검색',
+            tooltip: t?.searchTooltip ?? '검색',
             onPressed: _openSearch,
           ),
         ],
@@ -234,10 +241,10 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
       currentIndex: _currentIndex,
       onDestinationSelected: (index) => setState(() => _currentIndex = index),
       destinations: [
-        const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: '홈'),
+        NavigationDestination(
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home),
+            label: t?.navHome ?? '홈'),
         NavigationDestination(
           icon: Badge(
             isLabelVisible: _cartLines.isNotEmpty,
@@ -249,16 +256,16 @@ class _OlmoaMainScreenState extends State<OlmoaMainScreen> {
             label: Text(_cartCount.toString()),
             child: const Icon(Icons.shopping_cart),
           ),
-          label: '장바구니',
+          label: t?.navCart ?? '장바구니',
         ),
-        const NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: '주문내역'),
-        const NavigationDestination(
-            icon: Icon(Icons.person_outlined),
-            selectedIcon: Icon(Icons.person),
-            label: '내 정보'),
+        NavigationDestination(
+            icon: const Icon(Icons.receipt_long_outlined),
+            selectedIcon: const Icon(Icons.receipt_long),
+            label: t?.navOrders ?? '주문내역'),
+        NavigationDestination(
+            icon: const Icon(Icons.person_outlined),
+            selectedIcon: const Icon(Icons.person),
+            label: t?.navAccount ?? '내 정보'),
       ],
     );
   }

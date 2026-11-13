@@ -75,7 +75,7 @@ paths:
         '401':
           description: Missing or expired customer JWT
         '503':
-          description: OPERATOR_NOT_CONFIGURED when no active business entity exists
+          description: OPERATOR_NOT_CONFIGURED when no active business entity exists; SCHEMA_MISMATCH when D1 lags the code schema level
 
   /api/v1/orders:
     get:

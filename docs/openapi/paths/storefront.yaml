@@ -193,7 +193,7 @@ paths:
       description: >
         Customer JWT required. POST /api/v1/orders is an alias with the identical
         contract. Server prices from product_skus (client totals are ignored).
-        Fails 503 OPERATOR_NOT_CONFIGURED when no operating entity is active.
+        Fails 503 OPERATOR_NOT_CONFIGURED when no operating entity is active, or SCHEMA_MISMATCH when D1 lags the code schema level.
       parameters:
         - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -320,7 +320,7 @@ paths:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
         '503':
-          description: OPERATOR_NOT_CONFIGURED
+          description: OPERATOR_NOT_CONFIGURED or SCHEMA_MISMATCH (D1 lags the code schema level)
           content:
             application/json:
               schema:

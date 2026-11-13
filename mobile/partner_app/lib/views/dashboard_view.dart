@@ -3,6 +3,7 @@
 // Every figure is a live server aggregate; failures show a retry state.
 
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../services/partner_api_service.dart';
 import '../theme/app_theme.dart';
 import 'bidding_view.dart';
@@ -64,6 +65,8 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    // P2-MOB-09: nullable lookup with Korean fallback (bare-context safe).
+    final t = AppLocalizations.of(context);
     if (!_authReady) return const Center(child: CircularProgressIndicator());
     if (!PartnerAuthSession.isAuthenticated) {
       return PartnerLoginView(
@@ -79,7 +82,7 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _load,
-              child: const Text('다시 시도'),
+              child: Text(t?.commonRetry ?? '다시 시도'),
             ),
           ],
         ),
@@ -104,8 +107,8 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
                       .toString(),
                   style: const TextStyle(color: Colors.white70, fontSize: 12)),
               const SizedBox(height: 6),
-              const Text('판매자 운영 현황',
-                  style: TextStyle(
+              Text(t?.dashTitle ?? '판매자 운영 현황',
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.bold)),
@@ -113,27 +116,41 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _statItem('누적 매출', '₩${m['total_sales_amount'] ?? 0}'),
-                  _statItem('주문', '${m['orders_count'] ?? 0}건'),
-                  _statItem('출고 대기', '${m['to_ship_count'] ?? 0}건'),
+                  _statItem(t?.statSales ?? '누적 매출',
+                      '₩${m['total_sales_amount'] ?? 0}'),
+                  _statItem(
+                      t?.statOrders ?? '주문',
+                      t?.countOrders(_asCount(m['orders_count'])) ??
+                          '${m['orders_count'] ?? 0}건'),
+                  _statItem(
+                      t?.statToShip ?? '출고 대기',
+                      t?.countOrders(_asCount(m['to_ship_count'])) ??
+                          '${m['to_ship_count'] ?? 0}건'),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _statItem('등록 상품', '${m['products_count'] ?? 0}개'),
                   _statItem(
-                      '정산 예정', '₩${m['settlement_expected_amount'] ?? 0}'),
-                  _statItem('미답변 Q&A', '${m['waiting_qna_count'] ?? 0}건'),
+                      t?.statProducts ?? '등록 상품',
+                      t?.countPieces(_asCount(m['products_count'])) ??
+                          '${m['products_count'] ?? 0}개'),
+                  _statItem(
+                      t?.statSettlement ?? '정산 예정',
+                      '₩${m['settlement_expected_amount'] ?? 0}'),
+                  _statItem(
+                      t?.statQna ?? '미답변 Q&A',
+                      t?.countOrders(_asCount(m['waiting_qna_count'])) ??
+                          '${m['waiting_qna_count'] ?? 0}건'),
                 ],
               ),
             ],
           ),
         ),
         const SizedBox(height: 20),
-        const Text('판매 관리',
-            style: TextStyle(
+        Text(t?.sectionManage ?? '판매 관리',
+            style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87)),
@@ -146,23 +163,23 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
           crossAxisSpacing: 10,
           childAspectRatio: 1.05,
           children: [
-            _manageTile(context, Icons.inventory_2_outlined, '상품 관리',
-                '상품 관리', const PartnerProductsView()),
-            _manageTile(context, Icons.assignment_return_outlined, '반품·교환',
-                '반품·교환', const PartnerReturnsView()),
-            _manageTile(context, Icons.question_answer_outlined, 'Q&A',
-                '상품 Q&A', const PartnerQnaView()),
-            _manageTile(context, Icons.gavel_outlined, '입찰·네고',
-                '입찰·네고', const PartnerBiddingView()),
-            _manageTile(context, Icons.hub_outlined, '멀티채널',
-                '멀티채널', const PartnerChannelsView()),
-            _manageTile(context, Icons.badge_outlined, '프로필',
-                '판매자 프로필', const PartnerProfileView()),
+            _manageTile(context, Icons.inventory_2_outlined,
+                t?.tileProducts ?? '상품 관리', t?.tileProducts ?? '상품 관리', const PartnerProductsView()),
+            _manageTile(context, Icons.assignment_return_outlined,
+                t?.tileReturns ?? '반품·교환', t?.tileReturns ?? '반품·교환', const PartnerReturnsView()),
+            _manageTile(context, Icons.question_answer_outlined, t?.tileQna ?? 'Q&A',
+                t?.tileQnaTitle ?? '상품 Q&A', const PartnerQnaView()),
+            _manageTile(context, Icons.gavel_outlined, t?.tileBidding ?? '입찰·네고',
+                t?.tileBidding ?? '입찰·네고', const PartnerBiddingView()),
+            _manageTile(context, Icons.hub_outlined, t?.tileChannels ?? '멀티채널',
+                t?.tileChannels ?? '멀티채널', const PartnerChannelsView()),
+            _manageTile(context, Icons.badge_outlined, t?.tileProfile ?? '프로필',
+                t?.tileProfileTitle ?? '판매자 프로필', const PartnerProfileView()),
           ],
         ),
         const SizedBox(height: 20),
-        const Text('빠른 작업',
-            style: TextStyle(
+        Text(t?.sectionQuick ?? '빠른 작업',
+            style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87)),
@@ -174,8 +191,8 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
                 onPressed: widget.onNavigateToShipments,
                 icon: const Icon(Icons.local_shipping,
                     color: OlmoaColors.lagoon600),
-                label: const Text('운송장 등록',
-                    style: TextStyle(color: OlmoaColors.lagoon700)),
+                label: Text(t?.quickTracking ?? '운송장 등록',
+                    style: const TextStyle(color: OlmoaColors.lagoon700)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   side: const BorderSide(color: OlmoaColors.lagoon600),
@@ -189,7 +206,7 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
               child: ElevatedButton.icon(
                 onPressed: () => widget.onNavigateToSettlements(),
                 icon: const Icon(Icons.account_balance_wallet),
-                label: const Text('정산 내역'),
+                label: Text(t?.quickSettlements ?? '정산 내역'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   elevation: 0,
@@ -203,6 +220,9 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
       ],
     );
   }
+
+  /// P2-MOB-09: server counts arrive dynamic; the ARB plural takes int.
+  static int _asCount(dynamic v) => (v as num?)?.toInt() ?? 0;
 
   /// Pushed screens are Scaffold-less bodies; the push site wraps them
   /// (customer-app convention).

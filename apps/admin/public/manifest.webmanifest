@@ -1,0 +1,17 @@
+{
+  "name": "OLMOA Admin Console (올모아 관리자)",
+  "short_name": "OLMOA Admin",
+  "description": "올모아(OLMOA) 플랫폼 운영자 관리자 콘솔.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0F172A",
+  "icons": [
+    {
+      "src": "/olmoa-symbol.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

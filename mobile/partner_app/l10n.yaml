@@ -1,0 +1,6 @@
+arb-dir: lib/l10n
+template-arb-file: app_ko.arb
+output-localization-file: app_localizations.dart
+# Nullable on purpose: pilot views fall back to the Korean literal when no
+# AppLocalizations delegate is present (P2-MOB-09 pilot).
+nullable-getter: true

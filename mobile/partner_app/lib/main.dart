@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sentry/sentry.dart';
+import 'l10n/app_localizations.dart';
 import 'models/sentry_options.dart';
 import 'services/partner_push_service.dart';
 import 'theme/app_theme.dart';
@@ -66,6 +67,7 @@ class OlmoaPartnerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: partnerNavigatorKey,
       localizationsDelegates: const [
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -90,6 +92,8 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // P2-MOB-09: nullable lookup with Korean fallback (bare-context safe).
+    final t = AppLocalizations.of(context);
     final views = [
       PartnerDashboardView(
           onNavigateToShipments: () => setState(() => _currentIndex = 1),
@@ -120,23 +124,23 @@ class _OlmoaPartnerMainScreenState extends State<OlmoaPartnerMainScreen> {
       body: views[_currentIndex],
       currentIndex: _currentIndex,
       onDestinationSelected: (index) => setState(() => _currentIndex = index),
-      destinations: const [
+      destinations: [
         NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: '대시보드'),
+            icon: const Icon(Icons.dashboard_outlined),
+            selectedIcon: const Icon(Icons.dashboard),
+            label: t?.navDashboard ?? '대시보드'),
         NavigationDestination(
-            icon: Icon(Icons.local_shipping_outlined),
-            selectedIcon: Icon(Icons.local_shipping),
-            label: '출고·배송'),
+            icon: const Icon(Icons.local_shipping_outlined),
+            selectedIcon: const Icon(Icons.local_shipping),
+            label: t?.navShipments ?? '출고·배송'),
         NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: '정산'),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: const Icon(Icons.account_balance_wallet),
+            label: t?.navSettlements ?? '정산'),
         NavigationDestination(
-            icon: Icon(Icons.person_outlined),
-            selectedIcon: Icon(Icons.person),
-            label: '내 정보'),
+            icon: const Icon(Icons.person_outlined),
+            selectedIcon: const Icon(Icons.person),
+            label: t?.navAccount ?? '내 정보'),
       ],
     );
   }

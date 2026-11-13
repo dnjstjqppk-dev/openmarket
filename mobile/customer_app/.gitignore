@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Generated localizations (flutter gen-l10n; ARB is the source)
+lib/l10n/app_localizations*.dart
+

@@ -9,6 +9,14 @@ const app = createApp(App);
 // helpers and has zero defineStore modules, so no store plugin is registered.
 app.use(router);
 import { API_BASE_URL, getAdminToken, getAdminRole, clearAdminToken, setAdminToken, getAdminRefreshToken, setAdminRefreshToken } from './config';
+
+// PWA (OPS-10): conservative shell worker, production only — a worker would
+// fight Vite HMR in dev. API/auth traffic always bypasses the cache.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 // P1-A01: token presence + per-route role check (server still enforces per-call;
 // an unknown role fails open to the server rather than locking operators out).
 router.beforeEach((to) => {

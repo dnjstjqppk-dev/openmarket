@@ -9,6 +9,14 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(router);
 import { API_BASE_URL, clearPartnerSession, getPartnerRefreshToken, updatePartnerToken } from './config';
+
+// PWA (OPS-10): conservative shell worker, production only — a worker would
+// fight Vite HMR in dev. API/auth traffic always bypasses the cache.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 // Session refresh (P2-SEC-07): access tokens live 1h. On 401, one single-flight
 // refresh is attempted and the original request retried once; only a failed
 // refresh ends the session. The x-olmoa-retried marker stops refresh loops.

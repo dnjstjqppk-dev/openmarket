@@ -86,6 +86,11 @@ const DANGLING_PAIRS = [
   ['journal_entries', 'order_id', 'orders'],
   ['tax_invoices', 'issuer_entity_id', 'business_entities'],
   ['bidding_campaigns', 'winning_bid_id', 'supplier_bids'],
+  // P1-D04: product_reviews.order_id has no REFERENCES (d1_18 adds it bare and
+  // SQLite cannot add FKs later without a rebuild). The sole writer already
+  // sources it from a server-side verified purchase (features.js), so the scan
+  // below is the backstop against future dangling writes.
+  ['product_reviews', 'order_id', 'orders'],
 ];
 // Intentionally unenforced (no D1 parent table; external or denormalized ids):
 // partners.payout_account_id, sub_orders.consolidation_hub_id,

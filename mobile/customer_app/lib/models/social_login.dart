@@ -71,8 +71,26 @@ const socialErrors = {
   'ACCOUNT_DISABLED': '비활성화된 계정입니다.',
 };
 
-String socialErrorMessage(String code) =>
-    socialErrors[code] ?? '소셜 로그인에 실패했습니다.';
+/// P2-MOB-09: English mirror of [socialErrors] (ARB socialErr* twin).
+const socialErrorsEn = {
+  'OAUTH_DENIED': 'Kakao sign-in was cancelled.',
+  'OAUTH_EXCHANGE_FAILED': 'Kakao authentication failed. Please try again.',
+  'OAUTH_PROFILE_FAILED': "Couldn't fetch your Kakao profile.",
+  'OAUTH_PROVIDER_ERROR':
+      "Couldn't reach the Kakao server. Please try again shortly.",
+  'OAUTH_EMAIL_REQUIRED':
+      'Please agree to share your Kakao account email to join.',
+  'EMAIL_TAKEN':
+      'This email is already registered. Please sign in with email and password.',
+  'ACCOUNT_DISABLED': 'This account is disabled.',
+};
+
+String socialErrorMessage(String code, {String locale = 'ko'}) {
+  if (locale.startsWith('en')) {
+    return socialErrorsEn[code] ?? 'Social sign-in failed.';
+  }
+  return socialErrors[code] ?? '소셜 로그인에 실패했습니다.';
+}
 
 /// Deep-link source seam. Production code uses the AppLinks-backed
 /// implementation; widget tests install [NoopSocialLinkSource] so no widget

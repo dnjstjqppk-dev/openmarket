@@ -461,4 +461,35 @@ await t.test('7. Supplier and carrier directories feed the dispatch forms', asyn
   assert.ok(car.json.data.every((c) => c.code && c.name), 'every carrier has code + name');
 });
 
+// Test 8: NEW-25 Wave I starting line — 19 registered connectors, zero live.
+// Any isLive flip is a Wave I contract event and must update this pin deliberately.
+await t.test('8. NEW-25 starting line: 19 stub connectors, zero live, seed in sync', async () => {
+  const env = { JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu', ENVIRONMENT: 'development', CONNECTOR_SIMULATION: 'true', PAYMENT_MODE: 'sandbox' };
+  const g = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env });
+
+  // A. Registry holds exactly the 19 scoped platforms (18 markets/B2B + 3PL).
+  const ids = registry.listRegisteredPlatforms();
+  assert.equal(ids.length, 19);
+  assert.ok(ids.includes('3pl_logistics'), '3PL logistics registered');
+
+  // B. Every connector reports stub until its Wave I contract lands.
+  for (const id of ids) {
+    assert.equal(registry.get(id).isLive, false, `${id} must stay stub until its Wave I contract lands`);
+  }
+
+  // C. Seed rows (18 commerce_platforms) each map to a registry connector; none claims integration.
+  const platRes = await g.call('/api/v1/channels/platforms');
+  assert.equal(platRes.status, 200);
+  assert.equal(platRes.json.count, 18);
+  const seedIds = platRes.json.data.map((p) => p.id);
+  for (const id of ids) {
+    if (id === '3pl_logistics') continue; // carriers live in fulfillment_providers, not commerce_platforms
+    assert.ok(seedIds.includes(id), `${id} has a commerce_platforms seed row`);
+  }
+  assert.ok(platRes.json.data.every((p) => p.api_integrated === false), 'no platform claims integration');
+
+  // D. Unknown platform falls back to a stub generic connector, never live.
+  assert.equal(registry.get('no_such_platform_xyz').isLive, false);
+});
+
 t.finish();

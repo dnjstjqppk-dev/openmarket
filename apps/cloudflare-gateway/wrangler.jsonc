@@ -20,7 +20,8 @@
   ],
   // Non-secret defaults. Production stays fail-closed until secrets are set with `wrangler secret put`:
   //   JWT_SECRET (>=32 chars), ALLOWED_ORIGINS, PAYMENT_MODE=live + TOSS_SECRET_KEY/TOSS_CLIENT_KEY,
-  //   CARRIER_WEBHOOK_SECRET, (optional) SOLAPI_API_KEY/SOLAPI_API_SECRET, PRICESCANNER_API_KEY.
+  //   CARRIER_WEBHOOK_SECRET, (optional) SOLAPI_API_KEY/SOLAPI_API_SECRET, PRICESCANNER_API_KEY,
+  //   (optional) UNIPASS_API_KEY for customs PCCC verification (FORMAT_ONLY without it).
   // Local development overrides these through apps/cloudflare-gateway/.dev.vars (git-ignored).
   "vars": {
     "ENVIRONMENT": "production",

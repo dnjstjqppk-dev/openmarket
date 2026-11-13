@@ -2,6 +2,7 @@
 // Temu-style Global E-Commerce Product Feed for Flutter Mobile App
 
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/paged_result.dart';
 import '../models/product.dart';
 import '../models/search.dart';
@@ -77,8 +78,12 @@ class _HomeViewState extends State<HomeView> {
       }
     } catch (_) {
       if (mounted) {
+        // P2-MOB-09: nullable lookup with Korean fallback.
+        final t = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('다음 페이지를 불러오지 못했습니다.')),
+          SnackBar(
+              content: Text(
+                  t?.homeNextPageFail ?? '다음 페이지를 불러오지 못했습니다.')),
         );
       }
     } finally {
@@ -96,6 +101,8 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   Widget build(BuildContext context) {
+    // P2-MOB-09: nullable lookup with Korean fallback (bare-context safe).
+    final t = AppLocalizations.of(context);
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -110,15 +117,16 @@ class _HomeViewState extends State<HomeView> {
             Icon(Icons.cloud_off_outlined,
                 size: 56, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            const Text('상품 목록을 불러오지 못했습니다.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            Text(t?.homeLoadFail ?? '상품 목록을 불러오지 못했습니다.',
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () {
                 setState(() => _isLoading = true);
                 _loadProducts();
               },
-              child: const Text('다시 시도'),
+              child: Text(t?.commonRetry ?? '다시 시도'),
             ),
           ],
         ),
@@ -160,7 +168,7 @@ class _HomeViewState extends State<HomeView> {
                         Text(
                           _banners.isNotEmpty && _banners[0]['title'] != null
                               ? _banners[0]['title']
-                              : '오늘의 추천 상품',
+                              : t?.homeTodayPick ?? '오늘의 추천 상품',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -170,7 +178,7 @@ class _HomeViewState extends State<HomeView> {
                         Text(
                           _banners.isNotEmpty && _banners[0]['subtitle'] != null
                               ? _banners[0]['subtitle']
-                              : '기획전 소식을 준비하고 있습니다',
+                              : t?.homeExhibitionEmpty ?? '기획전 소식을 준비하고 있습니다',
                           style: const TextStyle(
                               color: Colors.white, fontSize: 12),
                         ),
@@ -192,12 +200,13 @@ class _HomeViewState extends State<HomeView> {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (_) => Scaffold(
-                          appBar: AppBar(title: const Text('쇼핑 채널')),
+                          appBar: AppBar(
+                              title: Text(t?.homeChannels ?? '쇼핑 채널')),
                           body: ChannelsView(
                               onAddToCart: widget.onAddToCart)))),
                 icon: const Icon(Icons.grid_view_outlined, size: 18),
-                label: const Text('카테고리 · 베스트 · 특가',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                label: Text(t?.homeChannelsLabel ?? '카테고리 · 베스트 · 특가',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ),
@@ -212,7 +221,7 @@ class _HomeViewState extends State<HomeView> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   children: [
                     ChoiceChip(
-                      label: const Text('전체'),
+                      label: Text(t?.homeAll ?? '전체'),
                       selected: _categorySlug == null,
                       onSelected: (_) {
                         if (_categorySlug != null) _selectCategory(null);
@@ -242,10 +251,10 @@ class _HomeViewState extends State<HomeView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(12, 4, 12, 8),
-                    child: Text('맞춤 추천',
-                        style: TextStyle(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                    child: Text(t?.homeForYou ?? '맞춤 추천',
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w900)),
                   ),
                   SizedBox(
@@ -301,7 +310,7 @@ class _HomeViewState extends State<HomeView> {
                       ? const CircularProgressIndicator()
                       : OutlinedButton(
                           onPressed: _loadMore,
-                          child: const Text('상품 더 보기'),
+                          child: Text(t?.homeMore ?? '상품 더 보기'),
                         ),
                 ),
               ),
