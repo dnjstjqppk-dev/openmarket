@@ -62,4 +62,15 @@ await t.test('I02 every storefront img lives in a sized box', async () => {
   }
 })
 
+// Work order 1-11: missing product images fall back to a neutral icon, never a stock photo.
+await t.test('I03 order thumbnails use the neutral image fallback', async () => {
+  const v = readFileSync(join(ROOT, 'apps/storefront/src/views/OrdersView.vue'), 'utf8')
+  assert.ok(!v.includes('unsplash'), 'no stock-photo fallback in order thumbnails')
+  assert.ok(v.includes('<OmImage'), 'order thumbnails render through OmImage')
+  const img = readFileSync(join(ROOT, 'packages/ui/src/components/OmImage.vue'), 'utf8')
+  assert.ok(img.includes('ImageOff'), 'neutral error icon present')
+  assert.ok(img.includes('이미지 없음'), 'neutral fallback label present')
+  assert.ok(!/https?:\/\//.test(img), 'OmImage substitutes no remote fallback')
+})
+
 t.finish()

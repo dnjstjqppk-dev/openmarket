@@ -185,7 +185,8 @@ onMounted(loadOrders);
       <OmEmptyState
         v-if="filteredOrders.length === 0"
         compact
-        title="조건에 맞는 주문이 없습니다."
+        data-empty
+        title="선택한 조건에 맞는 주문이 없습니다."
         description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
       >
         <OmButton size="sm" @click="loadOrders">다시 불러오기</OmButton>

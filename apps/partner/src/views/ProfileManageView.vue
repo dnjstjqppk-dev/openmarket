@@ -226,7 +226,7 @@ onMounted(loadProfile);
             <input
               v-model="profile.cs_email"
               type="email"
-              placeholder="예: cs@example.com"
+              placeholder="example@olmoa.com"
               class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>

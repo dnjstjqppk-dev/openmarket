@@ -40,7 +40,17 @@ const BANNED = [
   '1초 원클릭',
   '공장 직발송',
   // P2-S16: the privacy-officer contact must come from /business-info, never hardcoded.
-  'privacy@olmoa.com'
+  'privacy@olmoa.com',
+  // Work order 1-11: removed dummy copy, fake sample addresses and leftover 'example' markers.
+  '홈으로 돌아가서',
+  '선택된 상품이 없습니다',
+  '선택된 상품들',
+  '오늘의 특가',
+  '공식 상품 영상이 없습니다',
+  '메뉴를 불러오는 중입니다',
+  '매출 통계를 불러오는 중',
+  '예시',
+  'example-supplier.com'
 ]
 
 function checkClean(label, text) {
@@ -125,6 +135,53 @@ await t.test('C05 privacy policy renders the officer contact from business-info'
   const v = read('apps/storefront/src/views/LegalPrivacyView.vue')
   assert.ok(!stripComments(v).includes('보호책임자: CPO'), 'officer name must not be hardcoded')
   assert.ok(v.includes('useBusinessStore') || v.includes('business-info'), 'officer contact must come from /business-info')
+})
+
+// ---- Work order 1-11: honest replacements ----
+await t.test('H11-01 not-found names the requested page', async () => {
+  const v = read('apps/storefront/src/views/NotFoundView.vue')
+  assert.ok(v.includes('title="요청한 페이지를 찾을 수 없습니다"'), 'honest 404 title present')
+  assert.ok(v.includes('data-empty'), 'empty marker present')
+})
+
+await t.test('H11-02 admin order empty names the selected filters', async () => {
+  const v = read('apps/admin/src/views/OrdersView.vue')
+  assert.ok(v.includes('title="선택한 조건에 맞는 주문이 없습니다."'), 'filter-aware empty title present')
+  assert.ok(v.includes('data-empty'), 'empty marker present')
+})
+
+await t.test('H11-03 seller product table marks loading, rows and empty', async () => {
+  const v = read('apps/partner/src/views/ProductManageView.vue')
+  assert.ok(v.includes('상품을 불러오는 중입니다...'), 'honest loading copy present')
+  assert.ok(v.includes('data-loading'), 'loading marker present')
+  assert.ok(v.includes('data-row'), 'row marker present')
+  assert.ok(v.includes('data-empty'), 'empty marker present')
+})
+
+await t.test('H11-04 placeholders show formats, never fake addresses', async () => {
+  const u = read('apps/partner/src/views/UrlImportView.vue')
+  assert.ok(!u.includes('example-supplier.com'), 'fake sample URLs gone from the import form')
+  assert.ok(!u.includes('another-shop.com'), 'second fake sample URL gone')
+  const p = read('apps/partner/src/views/ProfileManageView.vue')
+  assert.ok(p.includes('placeholder="example@olmoa.com"'), 'seller email shows the standard format')
+  // ProfileView keeps 010-1234-5678: S05 bans the 010-0000-0000 mask in that file.
+  const a = read('apps/storefront/src/views/AddressesView.vue')
+  assert.ok(a.includes('placeholder="010-0000-0000"'), 'AddressesView phone shows the format mask')
+  assert.ok(!a.includes('010-1234-5678'), 'AddressesView realistic sample number gone')
+})
+
+await t.test('H11-05 search empty never prompts the buyer to register products', async () => {
+  const v = read('apps/storefront/src/views/SearchView.vue')
+  const block = v.split('<OmEmptyState')[1].split('</OmEmptyState>')[0]
+  assert.ok(!block.includes('등록'), 'no registration prompt in the buyer empty state')
+})
+
+await t.test('H11-06 dev fixtures stay behind the DEV gate', async () => {
+  for (const f of ['apps/storefront/src/views/LoginView.vue', 'apps/admin/src/views/LoginView.vue', 'apps/partner/src/views/LoginView.vue']) {
+    assert.ok(read(f).includes('import.meta.env.DEV'), `${f} dev fill is DEV-gated`)
+  }
+  const u = read('apps/partner/src/views/UrlImportView.vue')
+  assert.ok(u.includes('v-if="isDev"') && u.includes('env?.DEV'), 'sample presets are DEV-gated')
 })
 
 t.finish()

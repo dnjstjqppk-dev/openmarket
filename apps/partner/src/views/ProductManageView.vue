@@ -656,8 +656,8 @@ onMounted(() => { loadProducts(); loadCategories() })
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
-          <tr v-if="loading">
-            <td colspan="8" class="py-10 px-5 text-center text-gray-400">상품 목록을 불러오는 중입니다...</td>
+          <tr v-if="loading" data-loading>
+            <td colspan="8" class="py-10 px-5 text-center text-gray-400">상품을 불러오는 중입니다...</td>
           </tr>
           <tr v-else-if="loadError">
             <td colspan="8" class="py-10 px-5 text-center">
@@ -666,10 +666,10 @@ onMounted(() => { loadProducts(); loadCategories() })
               <button @click="loadProducts" class="mt-2 px-3 py-1.5 rounded border font-bold">다시 불러오기</button>
             </td>
           </tr>
-          <tr v-else-if="!products.length">
+          <tr v-else-if="!products.length" data-empty>
             <td colspan="8" class="py-10 px-5 text-center text-gray-400">등록된 상품이 없습니다. 위 양식으로 첫 상품을 등록해 보세요.</td>
           </tr>
-          <tr v-for="p in products" :key="p.id + '_' + (p.sku_id || '')" class="hover:bg-gray-50/80 transition">
+          <tr v-for="p in products" :key="p.id + '_' + (p.sku_id || '')" data-row class="hover:bg-gray-50/80 transition">
             <td class="py-3 px-5">
               <div class="flex items-center gap-3">
                 <img :src="p.thumbnail_url" class="w-12 h-12 rounded-xl object-cover bg-gray-100 border border-gray-200 shrink-0" />

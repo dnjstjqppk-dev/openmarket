@@ -13,7 +13,8 @@ function goBack() {
 <template>
   <main class="mx-auto w-full max-w-2xl px-4 py-10" aria-label="페이지를 찾을 수 없음">
     <OmEmptyState
-      title="페이지를 찾을 수 없습니다"
+      data-empty
+      title="요청한 페이지를 찾을 수 없습니다"
       description="주소가 바뀌었거나 삭제된 페이지입니다. 입력하신 주소를 다시 확인해 주세요."
     >
       <template #icon>

@@ -507,7 +507,7 @@ onMounted(() => {
               <input
                 v-model="urlInput"
                 type="url"
-                placeholder="https://example-supplier.com/products/item-12345"
+                placeholder="수집할 공급사 상품 페이지 URL을 입력하세요"
                 class="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
               />
             </div>
@@ -814,9 +814,7 @@ onMounted(() => {
           <textarea
             v-model="bulkUrlsInput"
             rows="6"
-            placeholder="https://example-supplier.com/product/12345
-https://another-shop.com/items/67890
-https://demo-activewear.myshopify.com/products/sample"
+            placeholder="상품 URL 목록을 줄바꿈으로 구분해 입력하세요 (최대 50개)"
             class="w-full p-3 text-xs font-mono rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
           ></textarea>
         </div>

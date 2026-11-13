@@ -295,7 +295,7 @@ onMounted(loadAddresses)
                 v-model="form.phone"
                 required
                 type="tel"
-                placeholder="010-1234-5678"
+                placeholder="010-0000-0000"
                 class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
               />
             </div>

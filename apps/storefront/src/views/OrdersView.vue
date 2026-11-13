@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
-import { userErrorMessage, OmEmptyState, OmSkeleton } from '@olmoa/ui'
+import { userErrorMessage, OmEmptyState, OmImage, OmSkeleton } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -471,12 +471,10 @@ onMounted(loadOrders)
           >
             <!-- Product Thumbnail & Details -->
             <div class="flex items-start gap-3.5 flex-1 min-w-0">
-              <img
-                :src="item.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=160'"
+              <OmImage
+                :src="item.thumbnail_url"
                 :alt="item.product_title"
-                class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-gray-100 shrink-0 border border-gray-200"
-                loading="lazy"
-                decoding="async"
+                ratio="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-2xl border border-line"
               />
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">

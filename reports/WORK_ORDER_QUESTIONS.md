@@ -76,3 +76,26 @@
 - (g) 관찰(판정과 무관): 어드민 대시보드 KPI 카드가 로드 실패 시 0으로 표시된다.
   대시보드 재작성(4단계) 시 실패 상태 숨김 처리를 검토해 주세요.
 - 운영자 확인 필요: (a)~(f) 해석 승인, (d) 테스트 갱신 승인.
+
+## Q-1-11 (작업 1-11 재구현, 2026-11-13): 교체표 적용 결과와 제외 항목
+
+- 적용: NotFoundView 제목("요청한 페이지를 찾을 수 없습니다") + data-empty,
+  admin OrdersView 빈 문구("선택한 조건에 맞는 주문이 없습니다.") + data-empty,
+  partner ProductManageView 로딩 문구("상품을 불러오는 중입니다...") + data-loading/data-row/data-empty,
+  UrlImportView 예시 URL 2건 → 안내 문구, AddressesView 전화 마스크 통일,
+  ProfileManageView 이메일 "example@olmoa.com" 통일,
+  OrdersView 스톡 썸네일 → OmImage 중립 아이콘.
+- 제외 (a) SettlementView "해당 기간에…": 기간 필터가 없어 수식 불가. 목록 API도 기간 파라미터 없음.
+- 제외 (b) ReconciliationView "정산 배치를 먼저 선택하세요": 배치 선택 UI가 없어 안내 불가.
+- 제외 (c) 표 6·8·9행("매출 통계를 불러오는 중", "메뉴를 불러오는 중입니다",
+  "님, 오늘의 특가/선택된 상품들"): 문자열이 트리에 없음. 이미 정리됐거나 구버전 기술로 보인다.
+- 제외 (d) 표 10행(상품 영상): 이미 `v-if="product.video_url"` 조건부 + "판매자 등록 영상"이라 조치 불필요.
+- 제외 (e) 표 2행(SearchView): 등록 유도 문구가 없고 쿼리 포함 동적 제목이라 현행 유지.
+- 충돌 (f) ProfileView 전화 placeholder: S05가 "010-0000-0000" 포함을 금지해
+  "010-1234-5678"을 유지했다. S05를 placeholder 허용으로 바꿀지, 현행 유지할지 결정 필요.
+- 해석 (g) "예시 URL → 실제 업로드 URL": 수집 대상 URL 입력에는 단일 정답 URL이 없어
+  안내 문구로 교체했다. "CSP 폼"은 트리에서 확인 불가.
+- 범위 외 관찰 (h) BulkUploadView CSV 템플릿 예시행의 unsplash URL 3건,
+  crawler-service.js 폴백 썸네일(서버), 모바일 010-1234-5678 힌트 4건은 손대지 않았다.
+  결제 시뮬레이터 표시는 PAYMENT_MODE 조건부라 유지, 마진 시뮬레이터는 정상 계산기라 유지.
+- 운영자 확인 필요: (a)(b) 문구 확정, (c) 구버전 여부, (f) S05 처리, (g) URL 지침, (h) 후속 범위.
