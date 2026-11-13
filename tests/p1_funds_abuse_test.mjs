@@ -215,7 +215,8 @@ await t.test('P0-02 credit clamps to 20% of net goods', async () => {
   const tok = await g.login('funds4@test.com', 'TestPass!2026');
   const r = await g.call('/api/v1/orders/quote', { method: 'POST', token: tok, body: { ...ADDR, items: [{ sku_id: 'sku_002_65w', quantity: 2 }], use_credit_amount: 10000 } });
   assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.data.credit_used_amount, 9800); // floor(49000 * 0.20)
+  // 2-6: sku_002_65w rides the seed flash deal (18900), so the 20% cap applies to 37800.
+  assert.equal(r.json.data.credit_used_amount, 7560); // floor(37800 * 0.20)
 });
 
 await t.test('P0-02 UI copy matches the approval-gated, capped policy', async () => {

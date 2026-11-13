@@ -87,23 +87,24 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     ).bind(now, now).first();
     if (!campaign) return json(corsHeaders, { success: true, campaign: null, items: [], data: { campaign: null, deals: [], items: [] } });
     const { results: items } = await env.DB.prepare(
-      `SELECT f.id, f.product_id, f.sku_id, f.allocated_stock, f.sold_stock, f.sort_order, p.id as slug, p.title, p.thumbnail_url, p.partner_id,
-              pt.business_name AS brand, pt.business_name, COALESCE(s.sale_price, p.lowest_sale_price) AS charged_price,
+      `SELECT f.id, f.product_id, f.sku_id, f.deal_price, f.allocated_stock, f.sold_stock, f.sort_order, p.id as slug, p.title, p.thumbnail_url, p.partner_id,
+              pt.business_name AS brand, pt.business_name,
               COALESCE(s.original_price, p.lowest_original_price) AS original_price, s.stock_quantity AS sku_stock
        FROM flash_sale_items f JOIN products p ON f.product_id = p.id LEFT JOIN partners pt ON p.partner_id = pt.id LEFT JOIN product_skus s ON f.sku_id = s.id
-       WHERE f.campaign_id = ? AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' ORDER BY f.sort_order ASC`
+       WHERE f.campaign_id = ? AND f.status = 'APPROVED' AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' ORDER BY f.sort_order ASC`
     ).bind(campaign.id).all();
-    // NOTE: checkout charges product_skus.sale_price; a separate deal-price engine is not implemented, so the
-    // displayed deal price is the real charged price and the discount is computed from it (no fabricated numbers).
+    // 2-6: checkout charges f.deal_price, so the feed shows it with measured sell-through.
     const mappedDeals = items.map((it) => ({
       ...it,
-      deal_price: it.charged_price,
-      lowest_sale_price: it.charged_price,
+      charged_price: it.deal_price,
+      lowest_sale_price: it.deal_price,
       lowest_original_price: it.original_price,
       sold_quantity: it.sold_stock || 0,
-      discount_rate: it.original_price > it.charged_price ? Math.floor(((it.original_price - it.charged_price) * 100) / it.original_price) : 0,
+      discount_rate: it.original_price > it.deal_price ? Math.floor(((it.original_price - it.deal_price) * 100) / it.original_price) : 0,
       sold_percent: it.allocated_stock > 0 ? Math.min(100, Math.floor(((it.sold_stock || 0) * 100) / it.allocated_stock)) : 0,
-      remaining_stock: Math.max(0, Math.min(it.sku_stock ?? 0, (it.allocated_stock || 0) - (it.sold_stock || 0)))
+      remaining_stock: Math.max(0, it.sku_id == null
+        ? (it.allocated_stock || 0) - (it.sold_stock || 0)
+        : Math.min(it.sku_stock ?? 0, (it.allocated_stock || 0) - (it.sold_stock || 0)))
     }));
     return json(corsHeaders, { success: true, campaign, items: mappedDeals, data: { campaign, deals: mappedDeals, items: mappedDeals } });
   }

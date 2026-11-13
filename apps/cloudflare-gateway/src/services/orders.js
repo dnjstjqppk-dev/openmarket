@@ -28,6 +28,7 @@ export function mapDbError(e) {
   if (msg.includes('COUPON_LIMIT_REACHED')) return conflict('COUPON_LIMIT_REACHED', '1인 발급 한도를 초과했습니다.');
   if (msg.includes('COUPON_SELLER_INTEGRITY')) return conflict('COUPON_SELLER_INTEGRITY', '판매자 쿠폰은 판매자 지정·스토어 그룹·플랫폼 부담 0이어야 합니다.');
   if (msg.includes('user_coupons.user_id, user_coupons.coupon_id')) return conflict('COUPON_ALREADY_CLAIMED', '이미 받은 쿠폰입니다.');
+  if (msg.includes('FLASH_SALE_SOLD_OUT')) return conflict('FLASH_SALE_SOLD_OUT', '특가 수량이 소진되었습니다.');
   if (msg.includes('ILLEGAL_PAYMENT_TRANSITION')) return conflict('ORDER_STATE_CHANGED', '주문 상태가 변경되어 처리할 수 없습니다.');
   if (msg.includes('REFUND_EXCEEDS_PAID')) return conflict('REFUND_EXCEEDS_PAID', '환불 가능 금액/수량을 초과했습니다.');
   if (msg.includes('SHIPPING_ALREADY_REFUNDED')) return conflict('SHIPPING_ALREADY_REFUNDED', '배송비가 이미 환불되었습니다.');
@@ -69,7 +70,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_57_reviews_social.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_58_promotions.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -177,18 +178,30 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       if (!validMapping) throw conflict('DIRECT_SKU_NOT_SOURCEABLE', `공급사 재판매 권한이 확인되지 않은 직영 상품입니다: ${s.prod_title}`);
     }
     assertWon(s.sale_price, 'sale_price');
+    // 2-6: an approved flash item in a live campaign replaces the ticket price;
+    // deal lines take no volume discount. SKU-specific items win over product-wide ones.
+    const deal = await env.DB.prepare(
+      `SELECT f.id, f.deal_price FROM flash_sale_items f
+       JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+       WHERE f.status = 'APPROVED' AND c.status = 'ACTIVE' AND c.starts_at <= ? AND c.ends_at > ?
+         AND f.deal_price > 0
+         AND ((f.sku_id IS NOT NULL AND f.sku_id = ?) OR (f.sku_id IS NULL AND f.product_id = ?))
+       ORDER BY (f.sku_id IS NULL) ASC, f.deal_price ASC LIMIT 1`
+    ).bind(sqlNow(), sqlNow(), s.id, s.product_id).first();
     let optionSummary = '기본';
     try {
       const o = JSON.parse(s.option_combination_json || '{}');
       optionSummary = Object.entries(o).map(([k, v]) => `${k}:${v}`).join(' / ') || '기본';
     } catch { /* keep default */ }
-    const pct = volumeDiscountPct(l.quantity);
-    const unitPrice = s.sale_price - applyBps(s.sale_price, pct * 100);
+    const pct = deal ? 0 : volumeDiscountPct(l.quantity);
+    const ticketPrice = deal ? deal.deal_price : s.sale_price;
+    const unitPrice = ticketPrice - (deal ? 0 : applyBps(ticketPrice, pct * 100));
     resolved.push({
       skuId: s.id, productId: s.product_id, partnerId: s.partner_id, categoryId: s.category_id, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
-      title: s.prod_title, optionSummary, baseUnitPrice: s.sale_price, unitPrice, volumePct: pct,
+      title: s.prod_title, optionSummary, baseUnitPrice: ticketPrice, unitPrice, volumePct: pct,
+      flashSaleItemId: deal ? deal.id : null,
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
-      volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
+      volumeDiscount: (ticketPrice - unitPrice) * l.quantity,
       unitCost: s.sales_model === 'DIRECT' ? s.unit_cost : null,
       shippingPolicyId: s.shipping_policy_id || null, bundleKey: s.bundle_group_key || null, shippingGroupKey: null,
       shippingFee: s.base_shipping_fee ?? 3000, freeThreshold: s.free_shipping_threshold ?? 30000,
@@ -465,11 +478,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       st.push(env.DB.prepare(
         `INSERT INTO order_items (id, sub_order_id, sku_id, product_id, product_title, option_summary, base_unit_price, volume_discount_pct,
            unit_price, quantity, total_price, coupon_alloc, credit_alloc, pg_alloc, unit_cost, shipping_group_key,
-           store_coupon_alloc, platform_coupon_alloc, seller_burden_amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           store_coupon_alloc, platform_coupon_alloc, seller_burden_amount, flash_sale_item_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(newId('itm'), s.id, it.skuId, it.productId, it.title, it.optionSummary, it.baseUnitPrice, it.volumePct,
         it.unitPrice, it.quantity, it.lineTotal, it.couponAlloc, it.creditAlloc, it.pgAlloc, it.unitCost, it.shippingGroupKey,
-        it.storeCouponAlloc, it.platformCouponAlloc, it.sellerBurden));
+        it.storeCouponAlloc, it.platformCouponAlloc, it.sellerBurden, it.flashSaleItemId));
       st.push(env.DB.prepare(
         `UPDATE product_skus SET stock_quantity = stock_quantity - ?,
            status = CASE WHEN stock_quantity - ? <= 0 THEN 'OUT_OF_STOCK' ELSE status END, updated_at = CURRENT_TIMESTAMP
@@ -512,6 +525,12 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
 async function capturePayment(env, order, pg) {
   const bundle = await loadOrderBundle(env, order.id);
   const st = [];
+  // 2-6: deal allocations move inside the capture batch; the trigger aborts over-sells.
+  for (const it of bundle.items) {
+    if (it.flash_sale_item_id) {
+      st.push(env.DB.prepare('UPDATE flash_sale_items SET sold_stock = sold_stock + ? WHERE id = ?').bind(it.quantity, it.flash_sale_item_id));
+    }
+  }
   if (pg.amount > 0) {
     st.push(env.DB.prepare(
       `INSERT INTO payment_transactions (id, order_id, payment_key, provider, method, amount, currency, status, receipt_url, raw_response_json, approved_at, is_sandbox)
@@ -608,6 +627,19 @@ export async function confirmPayment(env, principal, { orderRef, paymentKey, amo
   if (order.payment_expires_at && order.payment_expires_at < sqlNow()) throw conflict('ORDER_EXPIRED', '결제 가능 시간이 지났습니다. 다시 주문해 주세요.');
   if (amount !== order.total_pay_amount) throw bad('AMOUNT_MISMATCH', `결제 금액 불일치: 주문 ${order.total_pay_amount}원 / 요청 ${amount}원`);
 
+  // 2-6: deal availability precheck — a clean 409 before the PG is touched.
+  // The in-batch increment plus trigger backstop the true race below.
+  const { results: dealLines } = await env.DB.prepare(
+    `SELECT i.quantity, f.allocated_stock, f.sold_stock FROM order_items i
+     JOIN flash_sale_items f ON f.id = i.flash_sale_item_id
+     WHERE i.sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)`
+  ).bind(order.id).all();
+  for (const d of dealLines) {
+    if (d.sold_stock + d.quantity > d.allocated_stock) {
+      throw conflict('FLASH_SALE_SOLD_OUT', '특가 수량이 소진되었습니다.');
+    }
+  }
+
   const pg = await pgConfirm(env, { paymentKey, orderNo: order.order_no, amount: order.total_pay_amount });
   if (!pg.ok) {
     if (pg.approvedButMismatched) {
@@ -636,6 +668,9 @@ export async function confirmPayment(env, principal, { orderRef, paymentKey, amo
        VALUES (?, ?, ?, 'CAPTURE_COMPENSATION', ?, ?, 1, ?, ?)`
     ).bind(newId('pev'), pg.sandbox ? 'SANDBOX' : 'TOSS', `comp:${order.id}:${paymentKey}`, order.id, paymentKey,
       comp.ok ? 'PG_CANCELLED' : 'PG_CANCEL_FAILED_MANUAL_ACTION', JSON.stringify({ error: String(e.message), comp })).run().catch(() => null);
+    if (String(e.message).includes('FLASH_SALE_SOLD_OUT')) {
+      throw conflict('FLASH_SALE_SOLD_OUT', '특가 수량이 소진되었습니다.');
+    }
     throw conflict('PAYMENT_COMPENSATED', comp.ok ? '주문 확정에 실패하여 결제가 자동 취소되었습니다.' : '주문 확정에 실패했습니다. 결제 취소가 수동 처리됩니다.');
   }
   return { replay: false, order: await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(order.id).first() };
@@ -676,7 +711,7 @@ export async function releaseUnpaidOrder(env, orderRef, target) {
   await runBatch(env, st);
 }
 
-function restockStatements(env, orderId, lines, changeType, keyPrefix) {
+function restockStatements(env, orderId, lines, changeType, keyPrefix, { restoreDeals = false } = {}) {
   const st = [];
   for (const { it, qty } of lines) {
     if (qty <= 0) continue;
@@ -684,6 +719,13 @@ function restockStatements(env, orderId, lines, changeType, keyPrefix) {
       `UPDATE product_skus SET stock_quantity = stock_quantity + ?, status = CASE WHEN stock_quantity + ? > 0 THEN 'IN_STOCK' ELSE status END,
          updated_at = CURRENT_TIMESTAMP WHERE id = ?`
     ).bind(qty, qty, it.sku_id));
+    // 2-6: deal allocations restore only when they were taken (paid flows).
+    // Unpaid release never incremented, so it must not decrement.
+    if (restoreDeals && it.flash_sale_item_id) {
+      st.push(env.DB.prepare(
+        'UPDATE flash_sale_items SET sold_stock = sold_stock - ? WHERE id = ?'
+      ).bind(qty, it.flash_sale_item_id));
+    }
     st.push(env.DB.prepare(
       `INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key)
        VALUES (?, ?, ?, ?, (SELECT stock_quantity FROM product_skus WHERE id = ?), ?, ?)`
@@ -820,7 +862,7 @@ export async function refundOrder(env, actor, orderRef, request) {
     `UPDATE tax_invoices SET issue_status = 'CANCEL_REQUIRED', memo = ?
      WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'ISSUED'`).bind(`환불 ${refundId} 확정 — PG 콘솔 취소 후 cancel-record로 기록`, o.id));
   if (credit > 0) fin.push(creditStatement(env, { userId: o.customer_id, amount: credit, reason: '환불 적립금 복원', referenceId: refundId }));
-  if (request.restock) fin.push(...restockStatements(env, o.id, plan.map((p) => ({ it: p.it, qty: p.qty })), request.reasonCode === 'RETURN' ? 'RETURN_RESTOCK' : 'ORDER_CANCEL', `restock:${refundId}`));
+  if (request.restock) fin.push(...restockStatements(env, o.id, plan.map((p) => ({ it: p.it, qty: p.qty })), request.reasonCode === 'RETURN' ? 'RETURN_RESTOCK' : 'ORDER_CANCEL', `restock:${refundId}`, { restoreDeals: true }));
 
   const journal = [
     { account: ACCOUNTS.PG_CLEARING, credit: pg },
