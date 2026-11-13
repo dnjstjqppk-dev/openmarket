@@ -203,6 +203,7 @@ const EXPECTED = [
   ['/api/v1/admin/finance/trial-balance', 'GET', 401],
   ['/api/v1/admin/finance/journal', 'GET', 401],
   ['/api/v1/admin/finance/payouts/{id}/transferred', 'POST', 401],
+  ['/api/v1/admin/finance/fees/recalc', 'POST', 401],
   ['/api/v1/admin/orders/{id}/refund', 'POST', 401],
   ['/api/v1/admin/sub-orders/{id}/delivered', 'POST', 401],
   ['/api/v1/business-info', 'GET', 200],

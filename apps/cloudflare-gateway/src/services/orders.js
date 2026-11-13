@@ -8,6 +8,7 @@ import { allocate, applyBps, proportionalPortion, assertWon } from '../lib/money
 import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement } from '../lib/ledger.js';
 import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
+import { feeForSub } from './fees.js';
 import { sealPii } from '../lib/pii-crypto.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
@@ -145,7 +146,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   for (const l of lines) {
     const s = await env.DB.prepare(
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
-              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code,
+              p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code, p.category_id,
               pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
@@ -178,7 +179,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const pct = volumeDiscountPct(l.quantity);
     const unitPrice = s.sale_price - applyBps(s.sale_price, pct * 100);
     resolved.push({
-      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
+      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, categoryId: s.category_id || null, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
       title: s.prod_title, optionSummary, baseUnitPrice: s.sale_price, unitPrice, volumePct: pct,
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
       volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
@@ -207,10 +208,18 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const base = its[0].freeThreshold > 0 && goods >= its[0].freeThreshold ? 0 : its[0].shippingFee;
     // NEW-20: the island surcharge rides on top even when base shipping is free.
     const fee = base + remoteSurcharge;
-    const commission = its[0].salesModel === 'MARKETPLACE' ? applyBps(goods, its[0].bps) : 0;
+    // 2-2: single fee engine. Uniform rates take the exact legacy one-shot
+    // formula, so amounts are unchanged until schedules exist.
+    const feeCalc = await feeForSub(env, {
+      partnerId,
+      lines: its.map((it) => ({ goods: it.lineTotal, categoryId: it.categoryId ?? null })),
+      rowBps: its[0].bps,
+      at: sqlNow(),
+      salesModel: its[0].salesModel
+    });
     subs.push({
-      id: newId('sub'), no: `${orderNo}-${idx++}`, partnerId, salesModel: its[0].salesModel, bps: its[0].bps,
-      goods, shipping: assertWon(fee, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission, items: its
+      id: newId('sub'), no: `${orderNo}-${idx++}`, partnerId, salesModel: its[0].salesModel, bps: feeCalc.bps,
+      goods, shipping: assertWon(fee, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission: feeCalc.commission, items: its
     });
   }
   const allItems = subs.flatMap((s) => s.items);

@@ -355,6 +355,8 @@ paths:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1journal'
   /api/v1/admin/finance/payouts/{id}/transferred:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1payouts~1{id}~1transferred'
+  /api/v1/admin/finance/fees/recalc:
+    $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1finance~1fees~1recalc'
   /api/v1/admin/orders/{id}/refund:
     $ref: './paths/finance.yaml#/paths/~1api~1v1~1admin~1orders~1{id}~1refund'
   /api/v1/admin/sub-orders/{id}/delivered:
