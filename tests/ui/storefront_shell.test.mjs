@@ -40,4 +40,44 @@ await t.test('H03 the worker never caches API or auth traffic', async () => {
   assert.ok(sw.includes('OFFLINE_HTML') && sw.includes("req.mode === 'navigate'"), 'offline navigation fallback present')
 })
 
+// Work order 1-8: storefront shell behaviors.
+await t.test('SH01 mega menu hover delays and keyboard support', async () => {
+  const m = read('src/components/MegaMenu.vue')
+  assert.ok(m.includes('150'), 'hover opens after 0.15s')
+  assert.ok(m.includes('120'), 'diagonal grace is 0.12s')
+  assert.ok(m.includes('Escape'), 'ESC closes')
+  assert.ok(m.includes('ArrowDown') && m.includes('ArrowRight'), 'arrow-key traversal')
+})
+
+await t.test('SH02 search idle panel shows recents, trending and deltas', async () => {
+  const app = read('src/App.vue')
+  assert.ok(app.includes('급상승 검색어'), 'trending column headed')
+  assert.ok(app.includes("'NEW'") || app.includes('"NEW"'), 'NEW movers labelled')
+  assert.ok(app.includes('recommended'), 'recommended categories surfaced while typing')
+})
+
+await t.test('SH03 bottom nav drops wishlist/cart for search', async () => {
+  const app = read('src/App.vue')
+  const nav = app.slice(app.indexOf('const bottomNav'), app.indexOf('const footerColumns'))
+  assert.ok(nav.includes("label: '검색'"), 'search tab present')
+  assert.ok(!nav.includes('/cart'), 'cart moved to the header icon')
+  assert.ok(!nav.includes('/wishlist'), 'wishlist leaves the tab bar')
+  assert.ok(app.includes('label="장바구니"'), 'header keeps the cart icon')
+})
+
+await t.test('SH04 recent-products rail on wide screens', async () => {
+  const app = read('src/App.vue')
+  assert.ok(app.includes('olmoa_recent_products'), 'guest store keyed')
+  assert.ok(app.includes('min-[1440px]'), 'rail shows at 1440px+')
+  assert.ok(app.includes('맨 위로'), 'back-to-top present')
+  const detail = read('src/views/ProductDetailView.vue')
+  assert.ok(detail.includes('olmoa_recent_products'), 'detail view records visits')
+})
+
+await t.test('SH05 category bar hides on scroll down', async () => {
+  const app = read('src/App.vue')
+  assert.ok(app.includes('scrollY'), 'scroll position tracked')
+  assert.ok(app.includes('categoryBarHidden'), 'bar visibility state exists')
+})
+
 t.finish()

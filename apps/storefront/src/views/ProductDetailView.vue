@@ -44,6 +44,17 @@ const qnaCount = ref(0)
 
 const loginTo = computed(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`)
 
+// Work order 1-8: guest recently-viewed store (max 50, newest first).
+function recordRecentVisit(p: any) {
+  try {
+    const key = 'olmoa_recent_products'
+    const raw: unknown = JSON.parse(localStorage.getItem(key) || '[]')
+    const list = (Array.isArray(raw) ? raw : []).filter((e: any) => e && typeof e.id === 'string' && e.id !== p.id)
+    list.unshift({ id: p.id, title: p.title || '', thumb: p.thumbnail_url || '', at: Date.now() })
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 50)))
+  } catch { /* storage unavailable: rail simply shows less */ }
+}
+
 // ---- load -------------------------------------------------------------------------------------------
 let seq = 0
 async function load() {
@@ -61,6 +72,7 @@ async function load() {
     if (res.status === 404) { notFound.value = true; product.value = null; return }
     if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다 (${res.status})`)
     product.value = json.data
+    recordRecentVisit(json.data)
     reviewSummary.value = { count: Number(json.data.review_count || 0), average: json.data.avg_rating ?? null }
     qnaCount.value = Number(json.data.qna_count || 0)
     // A single SKU is the only case where nothing has to be chosen.

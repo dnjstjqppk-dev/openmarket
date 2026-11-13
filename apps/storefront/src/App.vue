@@ -1,17 +1,17 @@
 <script setup lang="ts">
 // Buyer app shell (PHASE 2 redesign): utility bar, search-first header, category bar, mobile tab bar, footer.
 // Everything shown here comes from an API or the user's own state; no badges, counts or claims are invented.
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Bell, ChevronDown, Heart, House, LayoutGrid, LogOut, Monitor, Moon, Package, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
+import { Bell, ChevronUp, Heart, House, LayoutGrid, LogOut, Monitor, Moon, Package, Search, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
 import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
-import { useCatalogStore } from './stores/catalog'
 import { useBusinessStore } from './stores/business'
 import { API_BASE_URL, PARTNER_CONSOLE_URL, authHeader } from './config'
+import MegaMenu from './components/MegaMenu.vue'
 
 const cart = useCartStore()
 const auth = useAuthStore()
@@ -19,11 +19,7 @@ const locale = useLocaleStore()
 const router = useRouter()
 const route = useRoute()
 
-// ---- categories (mega menu) — shared store, one /categories request per page session -------------------
-const catalog = useCatalogStore()
-const activeRoot = ref<any>(null)
-const rootCategories = computed(() => catalog.roots)
-const subCategories = computed(() => (activeRoot.value ? catalog.childrenOf(activeRoot.value.id) : []))
+// ---- categories live in MegaMenu (own store load) ------------------------------------------------------
 
 // ---- notifications ----------------------------------------------------------------------------------
 const notifications = ref<any[]>([])
@@ -53,16 +49,25 @@ async function openNotification(n: any, close: () => void) {
 }
 
 // ---- search (real catalogue data from /search/autocomplete) ------------------------------------------
+// Recommended categories (empty-query response) lead the typing panel.
+const recommendedCats = ref<any[]>([])
 const searchFetcher: AcFetcher = async (q, signal) => {
   const res = await fetch(`${API_BASE_URL}/api/v1/search/autocomplete?q=${encodeURIComponent(q)}`, { signal })
   if (!res.ok) throw new Error(`검색 서버 오류 (${res.status})`)
   const j = await res.json()
   const d = j.data || {}
-  return [
+  const groups: { key: string; label: string; items: AcItem[] }[] = [
     { key: 'product', label: '상품', items: (d.products || []).map((p: any) => ({ id: p.id, type: 'product', label: p.title, sub: locale.formatPrice(p.lowest_sale_price), image: p.thumbnail_url, to: `/product/${p.slug || p.id}` })) },
     { key: 'category', label: '카테고리', items: (d.categories || []).map((c: any) => ({ id: c.id, type: 'category', label: c.name, to: `/category/${c.slug}` })) },
     { key: 'keyword', label: '검색어', items: (d.keywords || []).map((k: any) => ({ id: k.keyword, type: 'keyword', label: k.keyword, sub: k.category_name || undefined, to: `/search?q=${encodeURIComponent(k.keyword)}` })) }
   ].filter((g) => g.items.length)
+  if (q.trim() && recommendedCats.value.length) {
+    groups.unshift({
+      key: 'recommended', label: '추천 카테고리',
+      items: recommendedCats.value.map((c: any) => ({ id: c.slug || c.id, type: 'category', label: c.name, to: `/category/${c.slug}` }))
+    })
+  }
+  return groups
 }
 function logSearch(keyword: string) {
   fetch(`${API_BASE_URL}/api/v1/search/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword }) }).catch(() => {})
@@ -107,14 +112,20 @@ function runRecent(term: string, close: () => void) {
   router.push({ path: '/search', query: { q: term } })
 }
 // ---- trending searches (server top-10 by search_count, empty-query autocomplete) --
-const trendingSearches = ref<string[]>([])
+// Deltas arrive with 2-9 /search/trending; until then badges stay hidden.
+interface TrendingRow { term: string; delta: number | 'NEW' | null }
+const trendingSearches = ref<TrendingRow[]>([])
 async function fetchTrending() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/search/autocomplete?q=`)
     if (!res.ok) return
-    trendingSearches.value = parseTrendingKeywords(await res.json())
+    const json = await res.json()
+    trendingSearches.value = parseTrendingKeywords(json).map((term) => ({ term, delta: null }))
+    const rec = (json?.data?.recommended_categories ?? json?.recommended_categories ?? []) as any[]
+    if (Array.isArray(rec)) recommendedCats.value = rec.filter((c) => c && (c.slug || c.id) && c.name).slice(0, 8)
   } catch { /* idle panel simply shows recents only */ }
 }
+function runTrendingRow(row: TrendingRow, close: () => void) { runTrending(row.term, close) }
 function runTrending(term: string, close: () => void) {
   rememberSearch(term)
   logSearch(term)
@@ -129,6 +140,7 @@ const biz = computed(() => business.info)
 const bizLoaded = computed(() => business.loaded)
 
 function logout() { auth.logout(); router.push('/') }
+function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
 // ---- theme (light / dark / system, persisted per browser) -----------------------
 const { mode: themeMode, set: setTheme } = useTheme()
@@ -145,8 +157,7 @@ const categoryNav = computed<NavItem[]>(() => [
 const bottomNav = computed<NavItem[]>(() => [
   { to: '/', label: '홈', icon: House, exact: true },
   { to: '/categories', label: '카테고리', icon: LayoutGrid },
-  { to: '/wishlist', label: '찜', icon: Heart },
-  { to: '/cart', label: '장바구니', icon: ShoppingBag, badge: cart.totalCount || null },
+  { to: '/search', label: '검색', icon: Search },
   { to: auth.isAuthenticated ? '/profile' : '/login', label: auth.isAuthenticated ? '마이' : '로그인', icon: User }
 ])
 const footerColumns: FooterColumn[] = [
@@ -157,14 +168,37 @@ const footerColumns: FooterColumn[] = [
 // These pages have their own fixed purchase bar on mobile.
 const hideBottomNav = computed(() => route.path.startsWith('/product/') || route.path === '/checkout' || route.path === '/cart')
 
+// ---- recently viewed rail (guest localStorage until 2-9 server history) ----
+interface RecentProduct { id: string; title: string; thumb?: string; at: number }
+const RECENT_PRODUCTS_KEY = 'olmoa_recent_products'
+const recentProducts = ref<RecentProduct[]>([])
+function loadRecents() {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(RECENT_PRODUCTS_KEY) || '[]')
+    recentProducts.value = Array.isArray(raw)
+      ? raw.filter((p): p is RecentProduct => !!p && typeof (p as any).id === 'string').slice(0, 50)
+      : []
+  } catch { recentProducts.value = [] }
+}
+
+// ---- category bar hides on scroll down, returns on scroll up ----
+const categoryBarHidden = ref(false)
+let lastScrollY = 0
+function onScroll() {
+  const y = window.scrollY
+  categoryBarHidden.value = y > 200 && y > lastScrollY
+  lastScrollY = y
+}
+
 onMounted(async () => {
   fetchNotifications()
   fetchTrending()
   business.load()
-  // On failure the category bar still works; the menu just stays empty.
-  await catalog.load()
-  activeRoot.value = rootCategories.value[0] || null
+  loadRecents()
+  window.addEventListener('scroll', onScroll, { passive: true })
 })
+watch(() => route.fullPath, () => { loadRecents() })
+onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
 </script>
 
 <template>
@@ -208,66 +242,41 @@ onMounted(async () => {
           </svg>
           <span class="hidden text-xl font-bold tracking-tight sm:inline">olmoa</span>
         </RouterLink>
-        <OmPopover placement="bottom-start" width="w-[min(92vw,720px)]" role="dialog">
-          <template #trigger="{ toggle, attrs, open }">
-            <button type="button" v-bind="attrs" class="ml-2 hidden h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold text-ink hover:bg-surface-2 lg:inline-flex" @click="toggle">
-              <LayoutGrid :size="18" aria-hidden="true" />카테고리<ChevronDown :size="16" :class="['transition-transform', open ? 'rotate-180' : '']" aria-hidden="true" />
-            </button>
-          </template>
-          <template #default="{ close }">
-            <div v-if="rootCategories.length" class="flex max-h-[min(70vh,460px)]">
-              <ul class="w-56 shrink-0 overflow-y-auto border-r border-line py-1">
-                <li v-for="c in rootCategories" :key="c.id">
-                  <RouterLink :to="`/category/${c.slug}`" :class="['flex items-center justify-between px-4 py-2 text-sm', activeRoot?.id === c.id ? 'bg-primary-soft font-semibold text-primary-soft-ink' : 'text-ink hover:bg-surface-2']" @mouseenter="activeRoot = c" @focus="activeRoot = c" @click="close()">
-                    <span class="truncate">{{ c.name }}</span>
-                  </RouterLink>
-                </li>
-              </ul>
-              <div class="min-w-0 flex-1 overflow-y-auto p-4">
-                <div class="mb-3 flex items-center justify-between">
-                  <p class="font-semibold">{{ activeRoot?.name }}</p>
-                  <RouterLink v-if="activeRoot" :to="`/category/${activeRoot.slug}`" class="text-sm font-medium text-primary hover:underline" @click="close()">전체 보기</RouterLink>
-                </div>
-                <ul v-if="subCategories.length" class="grid grid-cols-2 gap-1">
-                  <li v-for="s in subCategories" :key="s.id">
-                    <RouterLink :to="`/category/${s.slug}`" class="flex items-center justify-between rounded-sm px-3 py-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink" @click="close()">
-                      <span class="truncate">{{ s.name }}</span><span v-if="s.product_count" class="text-xs text-ink-subtle om-num">{{ s.product_count }}</span>
-                    </RouterLink>
-                  </li>
-                </ul>
-                <p v-else class="py-8 text-center text-sm text-ink-subtle">하위 카테고리가 없습니다.</p>
-              </div>
-            </div>
-            <p v-else class="p-6 text-center text-sm text-ink-muted">카테고리를 불러오지 못했습니다.</p>
-          </template>
-        </OmPopover>
+        <MegaMenu />
       </template>
 
       <div class="mx-auto w-full max-w-2xl">
         <OmSearchBar :fetcher="searchFetcher" placeholder="상품, 브랜드, 카테고리 검색" label="상품 검색" empty-text="검색 결과가 없습니다." @select="onSearchSelect" @submit="onSearchSubmit">
           <template #idle="{ close }">
-            <div v-if="recentSearches.length" class="px-3 py-2">
-              <div class="flex items-center justify-between pb-1 pt-2">
-                <p class="text-2xs font-bold uppercase tracking-wider text-ink-subtle">최근 검색어</p>
-                <button type="button" class="text-2xs text-ink-muted underline hover:text-ink" @click="clearRecent">전체 삭제</button>
+            <div class="grid gap-4 px-3 py-2 sm:grid-cols-2">
+              <div v-if="recentSearches.length">
+                <div class="flex items-center justify-between pb-1 pt-2">
+                  <p class="text-2xs font-bold uppercase tracking-wider text-ink-subtle">최근 검색어</p>
+                  <button type="button" class="text-2xs text-ink-muted underline hover:text-ink" @click="clearRecent">전체 삭제</button>
+                </div>
+                <ul class="flex flex-wrap gap-1.5 pb-2">
+                  <li v-for="term in recentSearches" :key="term" class="flex items-center gap-0.5 rounded-full border border-line bg-surface-2 py-1 pl-3 pr-1.5 text-xs">
+                    <button type="button" class="hover:underline" @click="runRecent(term, close)">{{ term }}</button>
+                    <button type="button" class="flex h-5 w-5 items-center justify-center rounded-full text-ink-muted hover:bg-surface-3" :aria-label="`${term} 삭제`" @click="removeRecent(term)">×</button>
+                  </li>
+                </ul>
               </div>
-              <ul class="flex flex-wrap gap-1.5 pb-2">
-                <li v-for="term in recentSearches" :key="term" class="flex items-center gap-0.5 rounded-full border border-line bg-surface-2 py-1 pl-3 pr-1.5 text-xs">
-                  <button type="button" class="hover:underline" @click="runRecent(term, close)">{{ term }}</button>
-                  <button type="button" class="flex h-5 w-5 items-center justify-center rounded-full text-ink-muted hover:bg-surface-3" :aria-label="`${term} 삭제`" @click="removeRecent(term)">×</button>
-                </li>
-              </ul>
-            </div>
-            <div v-if="trendingSearches.length" class="px-3 py-2">
-              <p class="pb-1 pt-2 text-2xs font-bold uppercase tracking-wider text-ink-subtle">인기 검색어</p>
-              <ol>
-                <li v-for="(term, i) in trendingSearches" :key="term">
-                  <button type="button" class="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-2" @click="runTrending(term, close)">
-                    <span class="w-4 shrink-0 text-center text-xs font-bold om-num" :class="i < 3 ? 'text-primary' : 'text-ink-subtle'">{{ i + 1 }}</span>
-                    <span class="truncate">{{ term }}</span>
-                  </button>
-                </li>
-              </ol>
+              <div v-if="trendingSearches.length">
+                <p class="pb-1 pt-2 text-2xs font-bold uppercase tracking-wider text-ink-subtle">급상승 검색어</p>
+                <ol>
+                  <li v-for="(row, i) in trendingSearches" :key="row.term">
+                    <button type="button" class="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-2" @click="runTrendingRow(row, close)">
+                      <span class="w-4 shrink-0 text-center text-xs font-bold om-num" :class="i < 3 ? 'text-primary' : 'text-ink-subtle'">{{ i + 1 }}</span>
+                      <span class="min-w-0 flex-1 truncate">{{ row.term }}</span>
+                      <span v-if="row.delta === 'NEW'" class="shrink-0 rounded bg-accent-soft px-1 py-0.5 text-2xs font-bold text-accent">NEW</span>
+                      <span v-else-if="typeof row.delta === 'number' && row.delta !== 0" class="om-num shrink-0 text-2xs font-bold" :class="row.delta > 0 ? 'text-danger' : 'text-info'">
+                        {{ row.delta > 0 ? `▲${row.delta}` : `▼${Math.abs(row.delta)}` }}
+                      </span>
+                      <span v-else-if="row.delta === 0" class="shrink-0 text-2xs text-ink-subtle">-</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
             </div>
           </template>
         </OmSearchBar>
@@ -334,13 +343,49 @@ onMounted(async () => {
       </template>
 
       <template #bottom>
-        <div class="border-t border-line"><div class="om-container"><OmNavigation :items="categoryNav" label="쇼핑 메뉴" /></div></div>
+        <div
+          class="overflow-hidden border-t border-line transition-all duration-fast"
+          :class="categoryBarHidden ? 'max-h-0 border-transparent opacity-0' : 'max-h-12 opacity-100'"
+        >
+          <div class="om-container"><OmNavigation :items="categoryNav" label="쇼핑 메뉴" /></div>
+        </div>
       </template>
     </OmHeader>
 
     <main id="main" :class="['flex-1', hideBottomNav ? '' : 'pb-20 md:pb-0']">
       <RouterView />
     </main>
+
+    <aside
+      v-if="!hideBottomNav"
+      class="fixed right-4 top-1/3 z-30 hidden w-[68px] min-[1440px]:flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-2 shadow-md"
+      aria-label="최근 본 상품"
+    >
+      <RouterLink
+        v-for="p in recentProducts.slice(0, 3)"
+        :key="p.id"
+        :to="`/product/${p.id}`"
+        :aria-label="p.title"
+        class="block overflow-hidden rounded-lg border border-line hover:border-line-strong"
+      >
+        <img v-if="p.thumb" :src="p.thumb" :alt="p.title" loading="lazy" decoding="async" class="h-12 w-12 object-cover" />
+        <span v-else class="flex h-12 w-12 items-center justify-center bg-surface-2 text-ink-subtle">
+          <Package :size="20" aria-hidden="true" />
+        </span>
+      </RouterLink>
+      <RouterLink to="/cart" class="flex w-full flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-2xs font-bold text-ink-muted hover:bg-surface-2 hover:text-ink" aria-label="장바구니로 이동">
+        <ShoppingBag :size="18" aria-hidden="true" />
+        <span class="om-num">{{ cart.totalCount }}</span>
+      </RouterLink>
+      <button
+        type="button"
+        aria-label="맨 위로"
+        class="flex w-full flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-2xs font-bold text-ink-muted hover:bg-surface-2 hover:text-ink"
+        @click="scrollToTop"
+      >
+        <ChevronUp :size="18" aria-hidden="true" />맨 위로
+      </button>
+    </aside>
 
     <OmNavigation v-if="!hideBottomNav" variant="bottom" :items="bottomNav" label="하단 메뉴" />
 
