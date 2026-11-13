@@ -1,161 +1,111 @@
 <script setup lang="ts">
-import { Boxes, ChartPie, CloudDownload, LogOut, Menu, MessageSquare, Network, Receipt, Settings, Truck, X } from 'lucide-vue-next'
-import { ref, computed, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { getPartnerName, clearPartnerSession } from './config';
+import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Truck } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted } from 'vue';
+import { RouterLink, useRouter, useRoute } from 'vue-router';
+import { OmConsoleShell, type ConsoleMenuItem } from '@olmoa/ui';
+import { API_BASE_URL, getPartnerHeaders, getPartnerName, clearPartnerSession } from './config';
 
 const router = useRouter();
 const route = useRoute();
-const mobileMenuOpen = ref(false);
+const collapsed = ref(false);
 
 const isLoginPage = computed(() => ['/login', '/apply', '/application'].includes(route.path));
 const partnerName = computed(() => (route.path, getPartnerName()));
 
+// Work order 1-7: grouped menu. Items whose views land in stage 4 are added
+// with those views; every entry below opens a working screen today.
+const menu = computed<ConsoleMenuItem[]>(() => [
+  { to: '/', label: '대시보드', icon: ChartPie },
+  {
+    to: '/products', label: '상품', icon: Boxes,
+    children: [
+      { to: '/products', label: '목록' },
+      { to: '/bulk-upload', label: '대량 등록' },
+      { to: '/imports', label: 'URL 수집' }
+    ]
+  },
+  { to: '/shipments', label: '주문·배송', icon: Truck },
+  { to: '/returns', label: '클레임', icon: Reply },
+  { to: '/settlements', label: '정산', icon: Receipt },
+  { to: '/qna', label: '고객', icon: MessageSquare },
+  { to: '/profile', label: '스토어', icon: Settings },
+  {
+    to: '/channels', label: '확장', icon: Network,
+    children: [
+      { to: '/channels', label: '멀티채널' },
+      { to: '/bidding', label: '역경매' }
+    ]
+  }
+]);
+
+interface HeaderProfile { status: string; payout_account_verified: boolean }
+const profile = ref<HeaderProfile | null>(null);
+
+async function loadHeader() {
+  if (isLoginPage.value) return;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/profile`, { headers: getPartnerHeaders() });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.success && json.data) {
+      profile.value = { status: json.data.status ?? '', payout_account_verified: json.data.payout_account_verified === true };
+    }
+  } catch {
+    // Header badges stay hidden when the profile cannot load.
+  }
+}
+
 function handleLogout() {
   clearPartnerSession();
+  profile.value = null;
   router.push('/login');
 }
 
-watch(() => route.path, () => {
-  mobileMenuOpen.value = false;
-});
+watch(() => route.path, () => { loadHeader(); });
+onMounted(() => { loadHeader(); });
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-slate-50 font-sans">
-    <!-- Top Navigation Bar for Authenticated Partner -->
-    <header v-if="!isLoginPage" class="bg-indigo-950 text-white shadow-md sticky top-0 z-30">
-      <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div class="flex items-center gap-6">
-          <div class="flex items-center gap-2.5 font-black text-xl tracking-tight text-white">
-            <img src="/olmoa-symbol.svg" alt="OLMOA" class="w-8 h-8 object-contain" />
-            <span><span class="text-orange-500">O</span>LMOA <span class="text-indigo-300 font-normal text-sm">Partner Center</span></span>
-          </div>
-          <!-- Desktop Nav Links -->
-          <nav class="hidden md:flex items-center gap-1 text-xs font-semibold">
-            <router-link to="/" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대시보드</router-link>
-            <router-link to="/products" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">상품 관리</router-link>
-            <router-link to="/bidding" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">M2C 역경매·비딩</router-link>
-            <router-link to="/imports" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition flex items-center gap-1.5" active-class="bg-indigo-900 text-amber-400">
-              <CloudDownload class="h-4 w-4 text-emerald-400" aria-hidden="true" />URL 수집
-            </router-link>
-            <router-link to="/channels" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition flex items-center gap-1.5" active-class="bg-indigo-900 text-amber-400">
-              <Network class="h-4 w-4 text-cyan-400" aria-hidden="true" />멀티채널 연동
-            </router-link>
-            <router-link to="/bulk-upload" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">대량 등록</router-link>
-            <router-link to="/shipments" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">주문·배송</router-link>
-            <router-link to="/returns" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">반품·클레임</router-link>
-            <router-link to="/settlements" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">정산 내역</router-link>
-            <router-link to="/qna" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">Q&A 문의</router-link>
-            <router-link to="/profile" class="px-3 py-2 rounded-lg hover:bg-indigo-900 transition" active-class="bg-indigo-900 text-amber-400">스토어 설정</router-link>
-          </nav>
-        </div>
-
-        <div class="flex items-center gap-3 text-xs">
-          <div class="hidden sm:flex items-center gap-2 bg-indigo-900/80 px-3 py-1.5 rounded-full border border-indigo-700">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="text-xs text-indigo-200 font-mono">{{ partnerName }}</span>
-          </div>
-          <button @click="handleLogout" class="hidden sm:flex items-center text-xs text-indigo-300 hover:text-white transition cursor-pointer">
-            <LogOut class="h-4 w-4 mr-1" aria-hidden="true" />로그아웃
-          </button>
-          <!-- Mobile Hamburger Toggle -->
-          <button
-            @click="mobileMenuOpen = !mobileMenuOpen"
-            class="md:hidden p-2 text-indigo-200 hover:text-white focus:outline-none"
-            aria-label="Toggle Menu"
+  <router-view v-if="isLoginPage" />
+  <OmConsoleShell v-else v-model:collapsed="collapsed" :menu="menu">
+    <template #brand>
+      <span class="flex items-center gap-2">
+        <img src="/olmoa-symbol.svg" alt="OLMOA" class="h-8 w-8 object-contain" />
+        <span class="text-md font-black tracking-tight text-ink">OLMOA <span class="text-xs font-bold text-ink-muted">판매자 센터</span></span>
+      </span>
+    </template>
+    <template #header>
+      <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
+        <span class="truncate font-bold text-ink">{{ partnerName }}</span>
+        <template v-if="profile">
+          <span class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ profile.status || '확인 필요' }}</span>
+          <span
+            class="hidden shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold sm:inline-block"
+            :class="profile.payout_account_verified ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'"
           >
-            <X v-if="mobileMenuOpen" class="h-5 w-5" aria-hidden="true" /><Menu v-else class="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
+            정산계좌 {{ profile.payout_account_verified ? '확인됨' : '미확인' }}
+          </span>
+        </template>
       </div>
-
-      <!-- Mobile Dropdown Menu -->
-      <div v-if="mobileMenuOpen" class="md:hidden border-t border-indigo-900 bg-indigo-950 px-4 py-3 space-y-1">
-        <div class="flex items-center gap-2 pb-2 mb-2 border-b border-indigo-900 text-xs text-indigo-300">
-          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span class="font-mono">{{ partnerName }}</span>
-        </div>
-        <router-link to="/" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          대시보드
-        </router-link>
-        <router-link to="/products" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          상품 관리
-        </router-link>
-        <router-link to="/bidding" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          M2C 역경매·비딩
-        </router-link>
-        <router-link to="/imports" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          <CloudDownload class="h-4 w-4 text-emerald-400 mr-1.5" aria-hidden="true" />URL 자동 수집
-        </router-link>
-        <router-link to="/channels" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          <Network class="h-4 w-4 text-cyan-400 mr-1.5" aria-hidden="true" />멀티채널 연동
-        </router-link>
-        <router-link to="/bulk-upload" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          대량 등록 (CSV)
-        </router-link>
-        <router-link to="/shipments" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          주문·배송 관리
-        </router-link>
-        <router-link to="/returns" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          반품·클레임 관리
-        </router-link>
-        <router-link to="/settlements" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          정산 내역
-        </router-link>
-        <router-link to="/qna" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          고객 Q&A 문의
-        </router-link>
-        <router-link to="/profile" class="block px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200 hover:bg-indigo-900" active-class="bg-indigo-900 text-amber-400">
-          스토어·정산 계좌 설정
-        </router-link>
-        <div class="pt-2 border-t border-indigo-900">
-          <button @click="handleLogout" class="w-full text-left px-3 py-2 text-xs text-rose-300 hover:bg-indigo-900 rounded-lg">
-            <LogOut class="h-4 w-4 mr-1.5" aria-hidden="true" />로그아웃
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content Area (padding bottom on mobile for sticky bottom bar) -->
-    <main :class="['flex-1 max-w-7xl w-full mx-auto px-4 py-6 sm:py-8', !isLoginPage ? 'pb-24 md:pb-8' : '']">
-      <router-view />
-    </main>
-
-    <!-- Mobile Sticky Bottom Navigation Bar for Sellers -->
-    <nav
-      v-if="!isLoginPage"
-      class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-indigo-950/98 backdrop-blur border-t border-indigo-900 flex items-center justify-around py-2 px-1 text-slate-400 text-[10px]"
-    >
-      <router-link to="/" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <ChartPie class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>대시보드</span>
-      </router-link>
-      <router-link to="/products" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <Boxes class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>상품관리</span>
-      </router-link>
-      <router-link to="/shipments" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <Truck class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>주문배송</span>
-      </router-link>
-      <router-link to="/settlements" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <Receipt class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>정산내역</span>
-      </router-link>
-      <router-link to="/qna" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <MessageSquare class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>Q&A문의</span>
-      </router-link>
-      <router-link to="/profile" class="flex flex-col items-center gap-0.5 py-1 px-1.5 rounded hover:text-white" active-class="text-amber-400 font-bold">
-        <Settings class="h-4 w-4 text-sm" aria-hidden="true" />
-        <span>설정</span>
-      </router-link>
-    </nav>
-
-    <!-- Footer -->
-    <footer v-if="!isLoginPage" class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-      &copy; 2026 OLMOA Global Partner Portal. All Rights Reserved. • <span class="font-mono text-slate-400">v1.2.0</span> (partner.olmoa.com)
-    </footer>
-  </div>
+      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
+        <LogOut class="h-4 w-4" aria-hidden="true" />로그아웃
+      </button>
+    </template>
+    <router-view />
+    <!-- Mobile Dropdown Menu: explicit links (F-T16). -->
+    <template #mobile-nav>
+      <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">
+        <li><RouterLink to="/" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대시보드</RouterLink></li>
+        <li><RouterLink to="/products" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">상품 관리</RouterLink></li>
+        <li><RouterLink to="/bulk-upload" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대량 등록</RouterLink></li>
+        <li><RouterLink to="/imports" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">URL 수집</RouterLink></li>
+        <li><RouterLink to="/shipments" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">주문·배송</RouterLink></li>
+        <li><RouterLink to="/returns" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">반품·클레임</RouterLink></li>
+        <li><RouterLink to="/settlements" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">정산 내역</RouterLink></li>
+        <li><RouterLink to="/qna" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">Q&A 문의</RouterLink></li>
+        <li><RouterLink to="/profile" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 설정</RouterLink></li>
+        <li><RouterLink to="/channels" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">멀티채널 연동</RouterLink></li>
+        <li><RouterLink to="/bidding" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">역경매</RouterLink></li>
+      </ul>
+    </template>
+  </OmConsoleShell>
 </template>

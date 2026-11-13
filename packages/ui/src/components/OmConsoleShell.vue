@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Shared console frame for seller center and admin: 240px side menu
 // (64px icon rail when collapsed), 56px top header, drawer menu on mobile.
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Menu, X } from 'lucide-vue-next'
 
@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:collapsed': [v: boolean] }>()
 const route = useRoute()
 const drawer = ref(false)
+watch(() => route.path, () => { drawer.value = false })
 const isActive = (to: string) => route.path === to || route.path.startsWith(`${to}/`)
 </script>
 
@@ -47,7 +48,7 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
               <span v-if="!collapsed" class="truncate">{{ m.label }}</span>
             </RouterLink>
             <ul v-if="!collapsed && m.children?.length" class="ml-6 mt-0.5 space-y-0.5 border-l border-line-divider pl-2">
-              <li v-for="c in m.children" :key="c.to">
+              <li v-for="c in m.children" :key="`${c.to}::${c.label}`">
                 <RouterLink
                   :to="c.to"
                   :class="['block rounded px-2 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', isActive(c.to) ? 'font-bold text-ink' : 'text-ink-muted hover:text-ink']"
@@ -88,17 +89,19 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
               <X class="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
-          <ul class="flex-1 space-y-0.5 overflow-y-auto p-2" @click="drawer = false">
-            <li v-for="m in menu" :key="m.to">
-              <RouterLink
-                :to="m.to"
-                :class="['flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-semibold', isActive(m.to) ? 'bg-primary-soft text-primary-soft-ink' : 'text-ink-muted']"
-              >
-                <component :is="m.icon" v-if="m.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                {{ m.label }}
-              </RouterLink>
-            </li>
-          </ul>
+          <slot name="mobile-nav" :close="() => { drawer = false }">
+            <ul class="flex-1 space-y-0.5 overflow-y-auto p-2" @click="drawer = false">
+              <li v-for="m in menu" :key="m.to">
+                <RouterLink
+                  :to="m.to"
+                  :class="['flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-semibold', isActive(m.to) ? 'bg-primary-soft text-primary-soft-ink' : 'text-ink-muted']"
+                >
+                  <component :is="m.icon" v-if="m.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {{ m.label }}
+                </RouterLink>
+              </li>
+            </ul>
+          </slot>
         </nav>
       </div>
     </Teleport>

@@ -46,4 +46,46 @@ for (const app of ['admin', 'partner']) {
   })
 }
 
+// Work order 1-7: both consoles run on OmConsoleShell with grouped menus.
+await t.test('S01 partner shell uses OmConsoleShell with a live header', async () => {
+  const app = read('partner', 'src/App.vue')
+  assert.ok(app.includes('OmConsoleShell'), 'partner App renders OmConsoleShell')
+  assert.ok(!app.includes('Top Navigation Bar'), 'old top nav is gone')
+  assert.ok(app.includes('/api/v1/partner/profile'), 'header reads the partner profile')
+  for (const s of ['입점 상태', '정산계좌']) assert.ok(app.includes(s), `header shows ${s}`)
+})
+
+await t.test('S02 admin shell uses OmConsoleShell with role filtering', async () => {
+  const app = read('admin', 'src/App.vue')
+  assert.ok(app.includes('OmConsoleShell'), 'admin App renders OmConsoleShell')
+  assert.ok(app.includes('canSee('), 'role filtering kept')
+  assert.ok(app.includes('/api/v1/business-info'), 'header reads the operator entity')
+  assert.ok(app.includes('/api/v1/payments/config'), 'header reads the payment mode')
+})
+
+await t.test('S03 partner menu groups match the specified structure', async () => {
+  const app = read('partner', 'src/App.vue')
+  for (const s of ['대시보드', '상품', '주문·배송', '클레임', '정산', '고객', '스토어', '확장']) {
+    assert.ok(app.includes(`label: '${s}'`), `partner menu has ${s}`)
+  }
+})
+
+await t.test('S04 admin menu groups match the specified structure', async () => {
+  const app = read('admin', 'src/App.vue')
+  for (const s of ['대시보드', '입점·셀러', '상품', '주문·클레임', '정산·재무', '마케팅', '고객', '운영', '보안']) {
+    assert.ok(app.includes(`label: '${s}'`), `admin menu has ${s}`)
+  }
+})
+
+await t.test('S05 pre-existing routes still resolve', async () => {
+  const partner = read('partner', 'src/router/index.ts')
+  for (const p of ['/login', '/apply', '/application', '/', '/products', '/bidding', '/bulk-upload', '/imports', '/channels', '/shipments', '/returns', '/settlements', '/qna', '/profile']) {
+    assert.ok(partner.includes(`path: '${p}'`), `partner keeps ${p}`)
+  }
+  const admin = read('admin', 'src/router/index.ts')
+  for (const p of ['/login', '/', '/products', '/partners', '/ledger', '/orders', '/users', '/reviews', '/coupons', '/categories', '/marketing', '/business', '/suppliers', '/supplier-integrations', '/reconciliation', '/partner-applications', '/security', '/audit-log', '/inquiries', '/shipping-zones']) {
+    assert.ok(admin.includes(`path: '${p}'`), `admin keeps ${p}`)
+  }
+})
+
 t.finish()

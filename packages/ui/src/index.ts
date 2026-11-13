@@ -80,6 +80,7 @@ export const COMPONENT_CATALOG = [
   'OmFileUploader', 'OmSearchBar'
 ] as const
 
+export type { ConsoleMenuItem } from './components/OmConsoleShell.vue'
 export type { FooterColumn } from './components/OmFooter.vue'
 export type { NavItem } from './components/OmNavigation.vue'
 export type { DropdownItem } from './components/OmDropdown.vue'
