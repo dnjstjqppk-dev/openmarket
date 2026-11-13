@@ -12,4 +12,4 @@
 1-8 | 통과 | 1a7d558 | storefront_shell 8/8 + typecheck | 메가메뉴·검색패널·하단4탭·레일·스크롤바, 3건 분리 → Q-1-8
 1-9 | 실패 | 040ca81 | confirm_dialogs 5/5 + test:ui + typecheck 4종 | 47곳 전환, 테스트 고정 5곳 보류 → Q-1-9
 1-10 | 통과 | 4136380 | footer_unify 5/5 + test:ui + typecheck 3종 | 헤더 신원·3앱 푸터 통일, 3건 정의 대기 → Q-1-10
-1-11 | 통과 | PENDING | dummy_sweep 4/4 + test:ui + typecheck | 가짜 8건 제거·교체, 시뮬레이션 없음 확인
+1-11 | 통과 | 01181e2 | dummy_sweep 4/4 + test:ui + typecheck | 가짜 8건 제거·교체, 시뮬레이션 없음 확인
