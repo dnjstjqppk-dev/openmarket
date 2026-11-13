@@ -63,7 +63,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_53_catalog_media_notice.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_54_shipping_policies.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -146,6 +146,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const s = await env.DB.prepare(
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
               p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code,
+              p.shipping_policy_id, p.bundle_group_key,
               pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
@@ -183,6 +184,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
       volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
       unitCost: s.sales_model === 'DIRECT' ? s.unit_cost : null,
+      shippingPolicyId: s.shipping_policy_id || null, bundleKey: s.bundle_group_key || null, shippingGroupKey: null,
       shippingFee: s.base_shipping_fee ?? 3000, freeThreshold: s.free_shipping_threshold ?? 30000,
       bps: s.commission_rate_bps ?? Math.round(Number(s.commission_rate || 10) * 100)
     });
@@ -192,7 +194,28 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const orderRequiresPccc = resolved.some((it) => it.requiresPccc);
   if (orderRequiresPccc && !rawPccc && !dryRun) throw bad('PCCC_REQUIRED', '해외직구 상품이 포함되어 개인통관고유부호(PCCC)가 필요합니다.');
 
-  // 2. Split by seller, shipping per seller policy
+  // 2. Split by seller, then by shipping group (bundle key -> template -> seller default).
+  // A fully template-free seller collapses to one 'default' group priced exactly the legacy way.
+  function groupShipFee(tpl, goods, qty, fallbackFee, fallbackThreshold, zoneRemote) {
+    const remote = tpl && tpl.remote_surcharge != null ? tpl.remote_surcharge : zoneRemote;
+    if (!tpl) {
+      const base = fallbackThreshold > 0 && goods >= fallbackThreshold ? 0 : fallbackFee;
+      return { base, remote };
+    }
+    switch (tpl.fee_type) {
+      case 'FREE': return { base: 0, remote };
+      case 'CONDITIONAL': {
+        const th = tpl.free_threshold;
+        return { base: th != null && goods >= th ? 0 : tpl.base_fee, remote };
+      }
+      case 'PER_QTY': {
+        const unit = tpl.qty_unit && tpl.qty_unit > 0 ? tpl.qty_unit : 1;
+        return { base: tpl.base_fee * Math.ceil(qty / unit), remote };
+      }
+      case 'PAID':
+      default: return { base: tpl.base_fee, remote };
+    }
+  }
   const orderId = newId('ord');
   const orderNo = newOrderNo();
   const groups = new Map();
@@ -203,14 +226,42 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const subs = [];
   let idx = 1;
   for (const [partnerId, its] of groups) {
+    const { results: tplRows } = await env.DB.prepare(
+      "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE'"
+    ).bind(partnerId).all();
+    const templates = new Map(tplRows.map((r) => [r.id, r]));
+    const bundles = new Map();
+    for (const it of its) {
+      const key = it.bundleKey || (it.shippingPolicyId ? `tpl:${it.shippingPolicyId}` : 'default');
+      it.shippingGroupKey = key;
+      if (!bundles.has(key)) bundles.set(key, []);
+      bundles.get(key).push(it);
+    }
+    const breakdown = [];
+    let shipTotal = 0;
+    let maxProcessing = 0;
+    let hasTemplate = false;
+    for (const [key, lines] of bundles) {
+      const gGoods = lines.reduce((a, it) => a + it.lineTotal, 0);
+      const gQty = lines.reduce((a, it) => a + it.quantity, 0);
+      const tpl = lines[0].shippingPolicyId ? templates.get(lines[0].shippingPolicyId) || null : null;
+      if (tpl) {
+        hasTemplate = true;
+        if (tpl.processing_days > maxProcessing) maxProcessing = tpl.processing_days;
+      }
+      const { base, remote } = groupShipFee(tpl, gGoods, gQty, lines[0].shippingFee, lines[0].freeThreshold, remoteSurcharge);
+      // NEW-20: the island surcharge rides on top even when base shipping is free, once per group.
+      const fee = base + remote;
+      shipTotal += fee;
+      breakdown.push({ group_key: key, template_id: tpl ? tpl.id : null, fee_type: tpl ? tpl.fee_type : 'LEGACY',
+        goods: gGoods, quantity: gQty, base_fee: base, remote_surcharge: remote, shipping: assertWon(fee, 'shipping') });
+    }
     const goods = its.reduce((a, it) => a + it.lineTotal, 0);
-    const base = its[0].freeThreshold > 0 && goods >= its[0].freeThreshold ? 0 : its[0].shippingFee;
-    // NEW-20: the island surcharge rides on top even when base shipping is free.
-    const fee = base + remoteSurcharge;
     const commission = its[0].salesModel === 'MARKETPLACE' ? applyBps(goods, its[0].bps) : 0;
     subs.push({
       id: newId('sub'), no: `${orderNo}-${idx++}`, partnerId, salesModel: its[0].salesModel, bps: its[0].bps,
-      goods, shipping: assertWon(fee, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission, items: its
+      goods, shipping: assertWon(shipTotal, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission, items: its,
+      shippingGroups: breakdown, shipByDays: hasTemplate ? maxProcessing : null
     });
   }
   const allItems = subs.flatMap((s) => s.items);
@@ -272,7 +323,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     return { quote: {
       total_goods_amount: goodsBase, volume_discount_amount: volumeTotal, coupon_discount_amount: coupon, credit_used_amount: credit,
       total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW', requires_pccc: orderRequiresPccc, remote_zone: remoteZoneName,
-      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, remote_surcharge: s.remoteSurcharge, remote_zone: s.remoteZone, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
+      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, remote_surcharge: s.remoteSurcharge, remote_zone: s.remoteZone, shipping_groups: s.shippingGroups, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
     } };
   }
 
@@ -311,11 +362,15 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     fds.score, fds.decision, JSON.stringify(fds.rules), now, now, now));
 
   for (const s of subs) {
+    const shipBy = s.shipByDays == null ? null
+      : new Date(Date.parse(`${now.replace(' ', 'T')}Z`) + s.shipByDays * 86400000).toISOString().slice(0, 10);
     st.push(env.DB.prepare(
       `INSERT INTO sub_orders (id, parent_order_id, sub_order_no, partner_id, sales_model, operator_entity_id, shipping_fee, goods_amount,
-         discount_amount, total_amount, coupon_discount_allocated, shipping_credit_alloc, shipping_pg_alloc, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING')`
-    ).bind(s.id, orderId, s.no, s.partnerId, s.salesModel, operator.id, s.shipping, s.goods, s.couponAlloc, s.total, s.couponAlloc, s.shipCredit, s.shipPg));
+         discount_amount, total_amount, coupon_discount_allocated, shipping_credit_alloc, shipping_pg_alloc, status,
+         confirmed_at, ship_by_deadline, shipping_breakdown_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', NULL, ?, ?)`
+    ).bind(s.id, orderId, s.no, s.partnerId, s.salesModel, operator.id, s.shipping, s.goods, s.couponAlloc, s.total, s.couponAlloc, s.shipCredit, s.shipPg,
+      shipBy, JSON.stringify(s.shippingGroups)));
     if (s.salesModel === 'MARKETPLACE') {
       st.push(env.DB.prepare(
         `INSERT INTO settlements (id, sub_order_id, partner_id, operator_entity_id, gross_amount, shipping_fee, commission_rate, commission_rate_bps,
@@ -326,10 +381,10 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     for (const it of s.items) {
       st.push(env.DB.prepare(
         `INSERT INTO order_items (id, sub_order_id, sku_id, product_id, product_title, option_summary, base_unit_price, volume_discount_pct,
-           unit_price, quantity, total_price, coupon_alloc, credit_alloc, pg_alloc, unit_cost)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           unit_price, quantity, total_price, coupon_alloc, credit_alloc, pg_alloc, unit_cost, shipping_group_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(newId('itm'), s.id, it.skuId, it.productId, it.title, it.optionSummary, it.baseUnitPrice, it.volumePct,
-        it.unitPrice, it.quantity, it.lineTotal, it.couponAlloc, it.creditAlloc, it.pgAlloc, it.unitCost));
+        it.unitPrice, it.quantity, it.lineTotal, it.couponAlloc, it.creditAlloc, it.pgAlloc, it.unitCost, it.shippingGroupKey));
       st.push(env.DB.prepare(
         `UPDATE product_skus SET stock_quantity = stock_quantity - ?,
            status = CASE WHEN stock_quantity - ? <= 0 THEN 'OUT_OF_STOCK' ELSE status END, updated_at = CURRENT_TIMESTAMP
