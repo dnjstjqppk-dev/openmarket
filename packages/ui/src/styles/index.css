@@ -16,6 +16,13 @@
   :focus-visible { outline: 2px solid rgb(var(--om-focus)); outline-offset: 2px; }
   ::selection { background: rgb(var(--om-lagoon-200) / 0.6); }
   h1, h2, h3, h4 { @apply font-bold tracking-tight; }
+  /* Work order 1-3 type scale: h1 24 (mobile 20), h2 20, h3 17. Body is text-md (15) above. */
+  h1 { font-size: 1.5rem; line-height: 2rem; }
+  h2 { font-size: 1.25rem; line-height: 1.75rem; }
+  h3 { font-size: 1.0625rem; line-height: 1.625rem; }
+  @media (max-width: 767px) {
+    h1 { font-size: 1.25rem; line-height: 1.75rem; }
+  }
   img { max-width: 100%; height: auto; }
   button, [role='button'] { -webkit-tap-highlight-color: transparent; }
   input, select, textarea, button { font: inherit; color: inherit; }
@@ -24,6 +31,23 @@
 @layer components {
   /* prices and every number in tables line up */
   .om-num { font-variant-numeric: tabular-nums; }
+  /* Work order 1-3: amount cells are tabular and right-aligned. */
+  .om-amount { font-variant-numeric: tabular-nums; text-align: right; }
+  /* price sizes: detail final 30 bold, total 20, card 16, list 12 struck */
+  .om-price-final { font-size: 1.875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .om-price-total { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .om-price-card { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .om-price-list { font-size: 0.75rem; text-decoration: line-through; font-variant-numeric: tabular-nums; }
+  /* product grid columns: 2 / 3 / 4 / 5 / 6 across 375–1920 */
+  .om-product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; }
+  @media (min-width: 768px) { .om-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; } }
+  @media (min-width: 1024px) { .om-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 1366px) { .om-product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  @media (min-width: 1920px) { .om-product-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  /* console density: row 44, dense row 36, input 36 */
+  .om-row { height: 44px; }
+  .om-row-dense { height: 36px; }
+  .om-input { height: 36px; }
   .om-container { @apply mx-auto w-full max-w-container px-4 sm:px-6 lg:px-8; }
   .om-skeleton-bg {
     background: linear-gradient(90deg, rgb(var(--om-surface-3)) 0%, rgb(var(--om-surface-2)) 50%, rgb(var(--om-surface-3)) 100%);
