@@ -116,7 +116,7 @@ try {
   }
 } finally {
   await browser.close();
-  for (const p of servers) { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(p.pid), '/T', '/F']) : p.kill(); } catch { /* ignore */ } }
+  for (const p of servers) { try { if (process.platform === 'win32') { const killer = spawn('taskkill', ['/pid', String(p.pid), '/T', '/F']); killer.on('error', () => {}); } else p.kill(); } catch { /* ignore */ } }
 }
 fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ api: API, logged_in: LOGIN, generated: new Date().toISOString(), results }, null, 2));
