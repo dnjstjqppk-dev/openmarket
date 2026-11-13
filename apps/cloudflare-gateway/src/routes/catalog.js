@@ -336,7 +336,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
               p.id as slug,
               COALESCE(pt.business_name, 'OLMOA DIRECT') as brand,
               COALESCE(pt.business_name, 'Olmoa Official Flagship') as partner_name,
-              c.name as category_name, c.slug as category_slug,
+              c.name as category_name, c.slug as category_slug, c.notice_template_id as category_notice_template_id,
               pt.business_name, pt.business_reg_number, pt.base_shipping_fee, pt.free_shipping_threshold,
               (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
               COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count,
@@ -352,6 +352,22 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const { results: skus } = await env.DB.prepare(
       'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sale_price ASC'
     ).bind(prodId).all();
+
+    const { results: images } = await env.DB.prepare(
+      'SELECT id, image_url, alt_text, sort_order, width, height FROM product_images WHERE product_id = ? ORDER BY sort_order ASC'
+    ).bind(prodId).all();
+
+    // 2-1: the notice template resolves from the product, falling back to its
+    // category; input values come from the stored notice_info_json (d1_42).
+    const tplId = product.notice_template_id || product.category_notice_template_id || null;
+    let noticeTemplate = null;
+    if (tplId) {
+      noticeTemplate = await env.DB.prepare('SELECT * FROM notice_templates WHERE id = ?').bind(tplId).first() || null;
+    }
+    let noticeValues = null;
+    if (product.notice_info_json) {
+      try { noticeValues = JSON.parse(product.notice_info_json); } catch { noticeValues = null; }
+    }
 
     const optionsMap = {};
     const parsedSkus = skus.map(s => {
@@ -405,7 +421,10 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         skus: parsedSkus,
         attributes,
         buy_box: buyBox,
-        volume_discounts: volumeDiscounts
+        volume_discounts: volumeDiscounts,
+        images,
+        notice_template: noticeTemplate,
+        notice_values: noticeValues
       }
     }), { headers: corsHeaders });
   }

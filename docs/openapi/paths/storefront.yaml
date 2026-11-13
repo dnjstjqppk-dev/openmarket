@@ -179,6 +179,35 @@ paths:
                               type: integer
                             label:
                               type: string
+                      images:
+                        type: array
+                        description: Gallery rows ordered by sort_order (representative image first).
+                        items:
+                          type: object
+                          required: [id, image_url, sort_order]
+                          properties:
+                            id:
+                              type: string
+                            image_url:
+                              type: string
+                            alt_text:
+                              type: string
+                            sort_order:
+                              type: integer
+                            width:
+                              type: integer
+                              nullable: true
+                            height:
+                              type: integer
+                              nullable: true
+                      notice_template:
+                        type: object
+                        nullable: true
+                        description: Product notice template (product ref, else its category ref), else null.
+                      notice_values:
+                        type: object
+                        nullable: true
+                        description: Stored per-product notice inputs, else null.
         '404':
           description: Unknown product id
           content:
