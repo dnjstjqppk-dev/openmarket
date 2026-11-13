@@ -1,5 +1,7 @@
 # OLMOA 상용화 100% 보고서 (최종)
 
+> 2026-11-13 기준 이 문서의 상태 표기는 OPENMARKET_WORK_ORDER.md로 대체됨
+
 - 프로젝트: OLMOA (올모아) 글로벌 오픈마켓 · openmarket-monorepo
 - 작성일: 2026-11-07 · 기준 커밋: `22f07f5` + 본 미션 작업분(미커밋)
 - 범위: Vue 3 웹 3앱 + Cloudflare Workers/D1 API + Go 코어 + Flutter 2앱
@@ -15,13 +17,13 @@
 | 4 | API | 25 라우터, 약 150+ 엔드포인트 | 동작 | index.js ROUTERS, /api/v1 235 참조 |
 | 5 | DB | D1 35 마이그레이션, 약 80 테이블 | 동작 | migrations/d1_*.sql |
 | 6 | Go 코어 | 주문 상태머신·체크아웃·재고차감 | 동작 | backend + apps/api 테스트 통과 |
-| 7 | 디자인시스템 | @olmoa/ui 31종 + Lagoon 토큰 | 동작 | packages/ui, tokens.css |
+| 7 | 디자인시스템 | @olmoa/ui + Lagoon 토큰, 적용: 스토어 18/27, 관리자 1/21, 셀러 1/15 화면 | 부분 | packages/ui, tokens.css |
 | 8 | Flutter | 고객/파트너 앱, Lagoon 테마·태블릿 분기 | 동작(본 미션) | app_theme.dart, responsive.dart, 골든 4종 |
 | 9 | 검색 | LIKE+동의어+초성 자동완성 | 동작 | features.js, OmSearchBar, A01~A07 |
 | 10 | i18n | ko/en/ja 21키 TS 딕셔너리 | 부분 | packages/i18n/index.ts |
 | 11 | OpenAPI | 15 path 문서화 | 부분 | docs/openapi (약 135 미문서) |
 | 12 | SEO | 메타·OG·robots·sitemap·manifest | 동작 | index.html, gateway /sitemap.xml |
-| 13 | 더미 | lorem/TODO/플레이스홀더 박스 | 없음 | 전 뷰 grep 0건 |
+| 13 | 더미 | lorem/TODO/플레이스홀더 박스 | 있음 | 주문 썸네일 외부 사진 폴백 등 존재, 전수 제거는 작업지시서 1-11 |
 | 14 | 푸시(FCM) | 클라이언트 없음(인앱 알림만) | 미구현 | 계약 단계로 분리 |
 | 15 | PG 실결제 | Toss 구조+샌드박스, live 키 없음 | 부분 | 계약 단계로 분리 |
 
