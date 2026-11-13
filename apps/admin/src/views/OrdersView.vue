@@ -2,7 +2,7 @@
 import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm, formatNumber } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -37,10 +37,10 @@ async function loadOrders() {
       headers: getAdminHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success || !json.data) throw new Error(json.error || `주문 목록 조회 실패 (${res.status})`);
+    if (!res.ok || !json.success || !json.data) throw new Error(json.error || `주문 목록을 불러오지 못했습니다`);
     orders.value = json.data;
   } catch (e: any) {
-    loadError.value = e?.message || '주문 목록을 불러오지 못했습니다.';
+    loadError.value = userErrorMessage(e, '주문 목록을 불러오지 못했습니다.');
   } finally {
     loading.value = false;
   }
@@ -123,7 +123,8 @@ onMounted(loadOrders);
     </div>
 
     <div v-else-if="loadError" class="p-8 text-center text-xs">
-      <p class="text-rose-600 font-bold">{{ loadError }}</p>
+      <p class="text-rose-600 font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+      <p class="mt-1 text-xs text-ink-muted">{{ loadError }}</p>
       <button @click="loadOrders" class="mt-3 px-4 py-2 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-700 cursor-pointer">다시 시도</button>
     </div>
 
@@ -181,9 +182,14 @@ onMounted(loadOrders);
           </tr>
         </tbody>
       </table>
-      <div v-if="filteredOrders.length === 0" class="p-8 text-center text-slate-400">
-        조건에 맞는 주문이 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="filteredOrders.length === 0"
+        compact
+        title="조건에 맞는 주문이 없습니다."
+        description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
+      >
+        <OmButton size="sm" @click="loadOrders">다시 불러오기</OmButton>
+      </OmEmptyState>
     </div>
   </div>
 </template>

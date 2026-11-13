@@ -3,6 +3,7 @@ import { Globe, Images, LoaderCircle, Megaphone, Scale, ShieldCheck } from 'luci
 import { ref, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { OmButton, OmEmptyState } from '@olmoa/ui'
 
 const metrics = ref({
   totalProducts: 0,
@@ -116,7 +117,7 @@ async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RE
       setTimeout(() => { toastMsg.value = ''; }, 3500);
       await loadControlTower();
     } else {
-      toastMsg.value = `판정에 실패했습니다 (HTTP ${res.status}). 다시 시도해 주세요.`;
+      toastMsg.value = `판정에 실패했습니다. 잠시 후 다시 시도해주세요.`;
       setTimeout(() => { toastMsg.value = ''; }, 4000);
     }
   } catch (_) {
@@ -187,7 +188,7 @@ onMounted(loadControlTower);
     </div>
 
     <div v-if="loadError" role="alert" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex flex-wrap items-center justify-between gap-3">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button @click="loadControlTower" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
         다시 시도
       </button>
@@ -307,9 +308,14 @@ onMounted(loadControlTower);
           </span>
         </div>
 
-        <div v-if="disputes.length === 0" class="p-6 text-center text-slate-400">
-          현재 중재 대기 중인 분쟁 클레임이 없습니다.
-        </div>
+        <OmEmptyState
+          v-if="disputes.length === 0"
+          compact
+          title="현재 중재 대기 중인 분쟁 클레임이 없습니다."
+          description="새 분쟁이 접수되면 이곳에 표시됩니다."
+        >
+          <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
+        </OmEmptyState>
 
         <div v-else class="overflow-x-auto">
           <table class="w-full text-left">
@@ -377,9 +383,14 @@ onMounted(loadControlTower);
               <p class="text-[11px] text-slate-500 mt-0.5">M2C 직결 셀러 대량 입고 전 실물 시제품 품질 합격 여부를 판정합니다.</p>
             </div>
           </div>
-          <div v-if="sampleQcList.length === 0" class="p-6 text-center text-slate-400">
-            검수 대기 중인 샘플이 없습니다.
-          </div>
+          <OmEmptyState
+            v-if="sampleQcList.length === 0"
+            compact
+            title="검수 대기 중인 샘플이 없습니다."
+            description="새 검수 요청이 들어오면 이곳에 표시됩니다."
+          >
+            <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
+          </OmEmptyState>
           <div v-else class="divide-y divide-slate-100">
             <div v-for="qc in sampleQcList" :key="qc.id" class="py-3 flex items-center justify-between gap-3">
               <div>
@@ -416,9 +427,14 @@ onMounted(loadControlTower);
               <p class="text-[11px] text-slate-500 mt-0.5">상표권/가품 신고 접수 시 해당 상품을 즉시 블라인드하고 정산금을 동결합니다.</p>
             </div>
           </div>
-          <div v-if="iprReports.length === 0" class="p-6 text-center text-slate-400">
-            접수된 지식재산권 신고가 없습니다.
-          </div>
+          <OmEmptyState
+            v-if="iprReports.length === 0"
+            compact
+            title="접수된 지식재산권 신고가 없습니다."
+            description="새 신고가 접수되면 이곳에 표시됩니다."
+          >
+            <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
+          </OmEmptyState>
           <div v-else class="divide-y divide-slate-100">
             <div v-for="ipr in iprReports" :key="ipr.id" class="py-3 flex items-center justify-between gap-3">
               <div>

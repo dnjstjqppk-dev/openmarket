@@ -2,6 +2,7 @@
 import { Boxes, LoaderCircle, Truck } from 'lucide-vue-next'
 import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { OmButton, OmEmptyState } from '@olmoa/ui'
 
 const metrics = ref({
   totalProducts: 0,
@@ -222,9 +223,14 @@ onMounted(async () => {
         <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />주문 정보를 불러오는 중...
       </div>
 
-      <div v-else-if="recentOrders.length === 0" class="p-8 text-center text-slate-400 text-xs">
-        인입된 신규 주문이 없습니다.
-      </div>
+      <OmEmptyState
+        v-else-if="recentOrders.length === 0"
+        compact
+        title="인입된 신규 주문이 없습니다."
+        description="새 주문이 들어오면 이곳에 표시됩니다."
+      >
+        <OmButton size="sm" to="/shipments">출고 관리로 이동</OmButton>
+      </OmEmptyState>
 
       <div v-else class="overflow-x-auto">
         <table class="w-full text-left text-xs">

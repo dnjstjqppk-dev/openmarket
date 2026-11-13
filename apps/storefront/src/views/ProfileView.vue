@@ -4,7 +4,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
-import { useConfirm, useToast } from '@olmoa/ui'
+import { userErrorMessage, useConfirm, useToast } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 const toastApi = useToast()
@@ -111,7 +111,7 @@ const saveProfile = async () => {
       toastApi.error(json.error || '회원 정보 수정에 실패했습니다.')
     }
   } catch (e: any) {
-    toastApi.error(e.message || '네트워크 오류')
+    toastApi.error(userErrorMessage(e, '네트워크 오류'))
   } finally {
     savingProfile.value = false
   }
@@ -154,7 +154,7 @@ const handlePasswordChange = async () => {
       pwError.value = json.error || '비밀번호 변경에 실패했습니다.'
     }
   } catch (e: any) {
-    pwError.value = e.message || '네트워크 오류'
+    pwError.value = userErrorMessage(e, '네트워크 오류')
   } finally {
     changingPassword.value = false
   }
@@ -191,7 +191,7 @@ const downloadMyData = async () => {
     a.click()
     URL.revokeObjectURL(a.href)
   } catch (e: any) {
-    errorMsg.value = e.message || '네트워크 오류'
+    errorMsg.value = userErrorMessage(e, '네트워크 오류')
   } finally {
     exporting.value = false
   }
@@ -223,7 +223,7 @@ const submitWithdraw = async () => {
     auth.logout()
     router.push('/')
   } catch (e: any) {
-    withdrawError.value = e.message || '네트워크 오류'
+    withdrawError.value = userErrorMessage(e, '네트워크 오류')
   } finally {
     withdrawing.value = false
   }

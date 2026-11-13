@@ -5,7 +5,7 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { RouterLink } from 'vue-router'
-import { OmBreadcrumb, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, OmButton, discountRate, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, OmButton, discountRate, formatNumber } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { API_BASE_URL } from '../config'
@@ -49,10 +49,10 @@ async function load() {
     const res = await fetch(`${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(slug.value)}&limit=200`)
     const json = await res.json().catch(() => null)
     if (my !== seq) return // a newer category was opened meanwhile
-    if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     products.value = Array.isArray(json.data) ? json.data : []
   } catch (e: any) {
-    if (my === seq) loadError.value = e?.message || '상품을 불러오지 못했습니다'
+    if (my === seq) loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }

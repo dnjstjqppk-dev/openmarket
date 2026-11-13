@@ -4,7 +4,7 @@
 // seller). The old form sent a made-up asker name ("Alex Kim") that the server ignored, and had no secret option.
 import { ref, watch } from 'vue'
 import { Lock } from 'lucide-vue-next'
-import { OmButton, OmTextarea, OmCheckbox, OmBadge, OmEmptyState, OmErrorState, OmSkeleton, OmAlert, useToast, formatDate } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmTextarea, OmCheckbox, OmBadge, OmEmptyState, OmErrorState, OmSkeleton, OmAlert, useToast, formatDate } from '@olmoa/ui'
 import { useAuthStore } from '../../stores/auth'
 import { API_BASE_URL, authHeader } from '../../config'
 
@@ -23,11 +23,11 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(props.productId)}/qna`, { headers: { ...authHeader() } })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `문의를 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `문의를 불러오지 못했습니다`)
     items.value = json.data || []
     emit('count', items.value.length)
   } catch (e: any) {
-    loadError.value = e?.message || '문의를 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '문의를 불러오지 못했습니다')
   } finally {
     loading.value = false
   }
@@ -49,12 +49,12 @@ async function submit() {
       body: JSON.stringify({ question: question.value.trim(), is_secret: secret.value })
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `등록하지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `등록하지 못했습니다. 잠시 후 다시 시도해주세요.`)
     toast.success('문의를 등록했습니다. 판매자가 답변하면 이곳에 표시됩니다.')
     question.value = ''; secret.value = false
     await load()
   } catch (e: any) {
-    formError.value = e?.message || '등록하지 못했습니다'
+    formError.value = userErrorMessage(e, '등록하지 못했습니다')
   } finally {
     submitting.value = false
   }

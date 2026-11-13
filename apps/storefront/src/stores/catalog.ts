@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { API_BASE_URL } from '../config'
+import { userErrorMessage } from '@olmoa/ui'
 
 export interface Category {
   id: string
@@ -34,12 +35,12 @@ export const useCatalogStore = defineStore('catalog', () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/v1/categories`)
         const json = await res.json().catch(() => null)
-        if (!res.ok || !json?.success || !Array.isArray(json.data)) throw new Error(json?.error || `카테고리를 불러오지 못했습니다 (${res.status})`)
+        if (!res.ok || !json?.success || !Array.isArray(json.data)) throw new Error(json?.error || `카테고리를 불러오지 못했습니다`)
         categories.value = json.data
         loaded.value = true
         error.value = null
       } catch (e: any) {
-        error.value = e?.message || '카테고리를 불러오지 못했습니다'
+        error.value = userErrorMessage(e, '카테고리를 불러오지 못했습니다')
       } finally {
         inflight = null
       }

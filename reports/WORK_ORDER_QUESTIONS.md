@@ -55,3 +55,24 @@
 - 구 Q-1-10·Q-2-1·Q-2-2·Q-2-3은 작업지시서와 불일치하는 구현에 딸린 질문이라 함께 철회한다.
 - 상세 원문은 git 기록(4136380·7d88ed6·e1bd279·d41e7f5 이전 QUESTIONS.md)에 보존된다.
 - 해당 작업은 실제 지시대로 재구현하며, 새 질문이 생기면 같은 번호로 다시 기록한다.
+
+## Q-1-10 (작업 1-10 재구현, 2026-11-13): 에러·빈·로딩 표준화 해석 7건
+
+- (a) 토스트·액션 실패 문구는 전문이 아닌 "`<동작>하지 못했습니다. 잠시 후 다시 시도해주세요.`"로
+  통일했다(예: "판정에 실패했습니다. 잠시 후 다시 시도해주세요."). 전문을 그대로 쓰면
+  동작 맥락("판정에 실패")과 중복된다. 목록 로더 폴백은 상세 문구를 유지하고
+  통일 문장은 각 블록 제목·OmErrorState 기본 제목으로 둔다.
+- (b) 테이블 셀 한 줄 빈 표시(`<td>...없습니다.</td>`)는 "빈 화면"이 아니라 유지했다.
+  해당: admin LedgerAuditView·ReconciliationView·DashboardView(FDS)·SuppliersView(pos),
+  partner ProductManageView·BiddingView(myBids)·MultiChannelListingView(2곳)·UrlImportView.
+- (c) SupplierIntegrationView·UrlImportView는 블록형 빈 화면이 없고 테이블 셀만 있어
+  E05 대상에서 제외했다.
+- (d) CouponsView(스토어) 로딩은 기존 테스트 F-S08이 `animate-pulse` 마커를 고정하고 있어
+  공용 스켈레톤으로 바꾸지 못했다. F-S08을 공용 스켈레톤 허용으로 고쳐도 되는지 승인 필요.
+- (e) 콘솔 LoaderCircle+문구 로더(어드민 11·파트너 9곳)는 기존 화면 + 문구 동반이라 유지했다.
+  금지 조항의 "(신규 화면)" 한정으로 해석했다.
+- (f) 서버 메시지(json.error)는 그대로 표시하고, 브라우저·HTTP 기술 문구만
+  userErrorMessage가 폴백으로 바꾼다. 텔레메트리(main.ts)는 원문을 유지한다.
+- (g) 관찰(판정과 무관): 어드민 대시보드 KPI 카드가 로드 실패 시 0으로 표시된다.
+  대시보드 재작성(4단계) 시 실패 상태 숨김 처리를 검토해 주세요.
+- 운영자 확인 필요: (a)~(f) 해석 승인, (d) 테스트 갱신 승인.

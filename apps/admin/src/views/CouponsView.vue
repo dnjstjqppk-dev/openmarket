@@ -2,7 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm } from '@olmoa/ui'
+import { OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -162,9 +162,14 @@ onMounted(loadCoupons);
           </tr>
         </tbody>
       </table>
-      <div v-if="coupons.length === 0" class="p-8 text-center text-slate-400">
-        등록된 쿠폰이 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="coupons.length === 0"
+        compact
+        title="등록된 쿠폰이 없습니다."
+        description="상단 양식으로 첫 쿠폰을 만들어 보세요."
+      >
+        <OmButton size="sm" @click="loadCoupons">다시 불러오기</OmButton>
+      </OmEmptyState>
     </div>
   </div>
 </template>

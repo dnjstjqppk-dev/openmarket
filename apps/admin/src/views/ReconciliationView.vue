@@ -3,7 +3,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi, won } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -32,7 +32,7 @@ async function load() {
     const d = await adminApi('/api/v1/admin/finance/reconciliation-runs')
     runs.value = d.data?.data || runs.value
   } catch (e: any) {
-    loadError.value = e?.message || '대사 데이터를 불러오지 못했습니다.'
+    loadError.value = userErrorMessage(e, '대사 데이터를 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
@@ -69,7 +69,7 @@ onMounted(load)
     </div>
     <div v-if="msg" role="status" class="p-3 rounded-lg bg-indigo-50 text-indigo-900 font-bold">{{ msg }}</div>
     <div v-if="loadError" role="alert" class="p-3 rounded-lg bg-red-50 text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
     </div>
 

@@ -2,7 +2,7 @@
 // MODEL A 직영: 공급사 · SKU 소싱(원가·재판매 권한) · 발주서 & M2C 역경매 비딩 엔진
 import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -29,7 +29,7 @@ async function loadCampaigns() {
     campaigns.value = r.ok ? (r.data.data || []) : []
     if (!r.ok) msg.value = r.data.error || '캠페인 목록을 불러오지 못했습니다.'
   } catch (e: any) {
-    msg.value = e?.message || '캠페인 목록을 불러오지 못했습니다.'
+    msg.value = userErrorMessage(e, '캠페인 목록을 불러오지 못했습니다.')
   }
 }
 
@@ -59,7 +59,7 @@ async function viewBids(campaignId: string) {
     campaignBids.value = r.ok ? (r.data.data?.bids || []) : []
     if (!r.ok) msg.value = r.data.error || '입찰 목록을 불러오지 못했습니다.'
   } catch (e: any) {
-    msg.value = e?.message || '입찰 목록을 불러오지 못했습니다.'
+    msg.value = userErrorMessage(e, '입찰 목록을 불러오지 못했습니다.')
   }
 }
 
@@ -84,14 +84,14 @@ async function loadPos() {
     const r = await adminApi(`/api/v1/admin/purchase-orders${poFilter.value ? `?status=${poFilter.value}` : ''}`)
     pos.value = r.ok ? (r.data.data || []) : []
     if (!r.ok) msg.value = r.data.error || '발주 목록을 불러오지 못했습니다.'
-  } catch (e: any) { msg.value = e?.message || '발주 목록을 불러오지 못했습니다.' }
+  } catch (e: any) { msg.value = userErrorMessage(e, '발주 목록을 불러오지 못했습니다.') }
 }
 async function loadSuppliers() {
   try {
     const r = await adminApi('/api/v1/admin/suppliers')
     suppliers.value = r.ok ? (r.data.data || []) : []
     if (!r.ok) msg.value = r.data.error || '공급사 목록을 불러오지 못했습니다.'
-  } catch (e: any) { msg.value = e?.message || '공급사 목록을 불러오지 못했습니다.' }
+  } catch (e: any) { msg.value = userErrorMessage(e, '공급사 목록을 불러오지 못했습니다.') }
 }
 async function openSupplier(s: any) {
   selectedSupplier.value = s
@@ -99,7 +99,7 @@ async function openSupplier(s: any) {
     const r = await adminApi(`/api/v1/admin/suppliers/${s.id}/mappings`)
     mappings.value = r.ok ? (r.data.data || []) : []
     if (!r.ok) msg.value = r.data.error || '소싱 정보를 불러오지 못했습니다.'
-  } catch (e: any) { msg.value = e?.message || '소싱 정보를 불러오지 못했습니다.' }
+  } catch (e: any) { msg.value = userErrorMessage(e, '소싱 정보를 불러오지 못했습니다.') }
 }
 
 async function movePo(po: any, status: string) {
@@ -235,7 +235,14 @@ onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
             </div>
             <div class="text-[10px] text-indigo-600 font-bold">👉 클릭하여 입찰 제안서 {{ c.bid_count || 0 }}건 조회</div>
           </div>
-          <div v-if="campaigns.length === 0" class="py-8 text-center text-slate-400">개설된 캠페인이 없습니다.</div>
+          <OmEmptyState
+            v-if="campaigns.length === 0"
+            compact
+            title="개설된 캠페인이 없습니다."
+            description="상단 양식으로 첫 소싱 캠페인을 개설해 보세요."
+          >
+            <OmButton size="sm" @click="loadCampaigns">다시 불러오기</OmButton>
+          </OmEmptyState>
         </div>
 
         <!-- Bids for selected campaign -->
@@ -246,9 +253,14 @@ onMounted(() => { loadPos(); loadSuppliers(); loadCampaigns() })
           <div v-if="!activeCampaignId" class="py-12 text-center text-slate-400">
             좌측 캠페인을 선택하면 입찰 목록이 표시됩니다.
           </div>
-          <div v-else-if="campaignBids.length === 0" class="py-12 text-center text-slate-400">
-            아직 제출된 입찰 제안서가 없습니다.
-          </div>
+          <OmEmptyState
+            v-else-if="campaignBids.length === 0"
+            compact
+            title="아직 제출된 입찰 제안서가 없습니다."
+            description="공급사가 입찰하면 이곳에 표시됩니다."
+          >
+            <OmButton size="sm" @click="loadCampaigns">다시 불러오기</OmButton>
+          </OmEmptyState>
           <div v-else class="space-y-2">
             <div v-for="b in campaignBids" :key="b.id" class="p-3 rounded-lg border border-slate-100 space-y-1.5 bg-slate-50">
               <div class="flex items-center justify-between">

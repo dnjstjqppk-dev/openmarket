@@ -3,7 +3,7 @@
 // POST /api/v1/admin/inquiries/:id/reply. CS/OPERATIONS/SUPER_ADMIN read and reply.
 import { ref, onMounted } from 'vue'
 import { adminApi } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -38,7 +38,7 @@ async function load() {
       selected.value = rows.value.find((x: any) => x.id === selected.value.id) || null
     }
   } catch (e: any) {
-    loadError.value = e?.message || '문의 목록을 불러오지 못했습니다.'
+    loadError.value = userErrorMessage(e, '문의 목록을 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
@@ -66,7 +66,7 @@ async function reply() {
     setTimeout(() => { toast.value = '' }, 3000)
     await load()
   } catch (e: any) {
-    replyError.value = e?.message || '답변 등록에 실패했습니다.'
+    replyError.value = userErrorMessage(e, '답변 등록에 실패했습니다.')
   } finally {
     replying.value = false
   }
@@ -100,12 +100,19 @@ onMounted(load)
     </form>
 
     <div v-if="loadError" role="alert" class="p-3 rounded-lg bg-red-50 text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
     </div>
 
     <div v-if="loading" class="p-8 text-center text-slate-400 bg-white rounded-xl border">불러오는 중...</div>
-    <div v-else-if="!rows.length && !loadError" class="p-8 text-center text-slate-400 bg-white rounded-xl border">조건에 맞는 문의가 없습니다.</div>
+    <OmEmptyState
+      v-else-if="!rows.length && !loadError"
+      compact
+      title="조건에 맞는 문의가 없습니다."
+      description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
+    >
+      <OmButton size="sm" @click="load">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <div v-else class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
       <table class="w-full min-w-[760px]">

@@ -53,7 +53,7 @@ async function openNotification(n: any, close: () => void) {
 const recommendedCats = ref<any[]>([])
 const searchFetcher: AcFetcher = async (q, signal) => {
   const res = await fetch(`${API_BASE_URL}/api/v1/search/autocomplete?q=${encodeURIComponent(q)}`, { signal })
-  if (!res.ok) throw new Error(`검색 서버 오류 (${res.status})`)
+  if (!res.ok) throw new Error(`검색하지 못했습니다. 잠시 후 다시 시도해주세요.`)
   const j = await res.json()
   const d = j.data || {}
   const groups: { key: string; label: string; items: AcItem[] }[] = [

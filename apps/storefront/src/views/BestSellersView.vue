@@ -4,7 +4,7 @@
 // Leaderboard", "Ranked hourly by verified net non-cancelled order volume and buyer satisfaction") described a
 // ranking job that does not exist. Products without any order are not ranked.
 import { ref, computed, onMounted } from 'vue'
-import { OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL } from '../config'
 
@@ -19,10 +19,10 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/products?sort=popular&limit=${TOP}`)
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `베스트셀러를 불러오지 못했습니다`)
     products.value = Array.isArray(json.data) ? json.data : []
   } catch (e: any) {
-    loadError.value = e?.message || '불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '불러오지 못했습니다')
   } finally {
     loading.value = false
   }

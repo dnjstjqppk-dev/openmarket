@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
+import { userErrorMessage, OmEmptyState, OmSkeleton } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -92,10 +93,10 @@ const loadOrders = async () => {
       headers: { ...authHeader() }
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `주문 내역을 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `주문 내역을 불러오지 못했습니다`)
     orders.value = Array.isArray(json.data) ? json.data : []
   } catch (e: any) {
-    loadError.value = e?.message || '주문 내역을 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '주문 내역을 불러오지 못했습니다')
   } finally {
     loading.value = false
   }
@@ -383,7 +384,7 @@ onMounted(loadOrders)
 
     <!-- Loading Skeleton -->
     <div v-if="loading" class="space-y-4">
-      <div v-for="n in 3" :key="n" class="h-44 bg-white rounded-2xl border border-gray-200 animate-pulse p-6"></div>
+      <OmSkeleton variant="row" :count="3" />
     </div>
 
     <!-- Error State -->
@@ -391,7 +392,7 @@ onMounted(loadOrders)
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-2xl">
         <TriangleAlert class="h-4 w-4" aria-hidden="true" />
       </div>
-      <h3 class="text-base font-black text-gray-900 mb-1">주문 내역을 불러오지 못했습니다</h3>
+      <h3 class="text-base font-black text-gray-900 mb-1">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</h3>
       <p class="text-xs text-gray-500 mb-5">{{ loadError }}</p>
       <button
         @click="loadOrders"
@@ -403,14 +404,11 @@ onMounted(loadOrders)
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="filteredOrders.length === 0" class="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-xs">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-50 flex items-center justify-center text-[#FF5000] text-2xl">
-        <PackageOpen class="h-4 w-4" aria-hidden="true" />
-      </div>
-      <h3 class="text-base font-black text-gray-900 mb-1">
-        {{ searchQuery ? `'${searchQuery}' 검색 조건에 맞는 주문이 없습니다.` : '해당 탭에 표시할 주문 내역이 없습니다.' }}
-      </h3>
-      <p class="text-xs text-gray-500 mb-5">올모아 초특가 상품을 둘러보고 첫 주문을 시작해 보세요.</p>
+    <OmEmptyState
+      v-else-if="filteredOrders.length === 0"
+      :title="searchQuery ? `'${searchQuery}' 검색 조건에 맞는 주문이 없습니다.` : '해당 탭에 표시할 주문 내역이 없습니다.'"
+      description="올모아 초특가 상품을 둘러보고 첫 주문을 시작해 보세요."
+    >
       <RouterLink
         to="/"
         class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"
@@ -418,7 +416,7 @@ onMounted(loadOrders)
         <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         <span>인기 특가 쇼핑하러 가기</span>
       </RouterLink>
-    </div>
+    </OmEmptyState>
 
     <!-- Orders Cards List -->
     <div v-else class="space-y-5">

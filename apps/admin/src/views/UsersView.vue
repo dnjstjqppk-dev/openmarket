@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 interface AdminUser {
   id: string;
@@ -63,10 +64,10 @@ async function submitReset() {
       body: JSON.stringify({ new_password: resetPw.value })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `재설정 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `재설정하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     resetDone.value = true;
   } catch (e: any) {
-    resetError.value = e?.message || '재설정에 실패했습니다.';
+    resetError.value = userErrorMessage(e, '재설정에 실패했습니다.');
   } finally {
     resetBusy.value = false;
   }
@@ -136,9 +137,14 @@ onMounted(loadUsers);
           </tr>
         </tbody>
       </table>
-      <div v-if="filteredUsers.length === 0" class="p-8 text-center text-slate-400">
-        조건에 맞는 회원이 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="filteredUsers.length === 0"
+        compact
+        title="조건에 맞는 회원이 없습니다."
+        description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
+      >
+        <OmButton size="sm" @click="loadUsers">다시 불러오기</OmButton>
+      </OmEmptyState>
     </div>
   </div>
     <div v-if="resetTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="resetTarget = null">

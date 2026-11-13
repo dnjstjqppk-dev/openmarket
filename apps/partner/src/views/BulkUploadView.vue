@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
+import { userErrorMessage } from '@olmoa/ui'
 
 // The one-click sample batch is a development aid: production sellers only see the CSV template.
 const isDev = (import.meta as any).env?.DEV === true
@@ -120,7 +121,7 @@ const executeBulkUpload = async () => {
     }
     uploadResult.value = json.data
   } catch (err: any) {
-    errorMsg.value = err.message || 'Network error'
+    errorMsg.value = userErrorMessage(err, '업로드하지 못했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     uploading.value = false
   }

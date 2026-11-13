@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm } from '@olmoa/ui'
+import { OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -95,9 +95,14 @@ onMounted(loadReviews);
           </tr>
         </tbody>
       </table>
-      <div v-if="reviews.length === 0" class="p-8 text-center text-slate-400">
-        등록된 리뷰가 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="reviews.length === 0"
+        compact
+        title="등록된 리뷰가 없습니다."
+        description="구매자가 리뷰를 남기면 이곳에 표시됩니다."
+      >
+        <OmButton size="sm" @click="loadReviews">다시 불러오기</OmButton>
+      </OmEmptyState>
     </div>
 
     <div v-if="selectedReview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="selectedReview = null">

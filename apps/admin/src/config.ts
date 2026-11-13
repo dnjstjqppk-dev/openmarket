@@ -1,5 +1,6 @@
 // P2-A06: endpoints are required env. Production builds refuse to boot on an
 // implicit host; `vite dev` falls back to the local gateway (npm run dev:api).
+import { userErrorMessage } from '@olmoa/ui'
 function requiredEnv(name: string, devFallback: string): string {
   const env = (import.meta as any).env || {}
   if (env[name]) return env[name]
@@ -48,7 +49,7 @@ export async function adminApi<T = any>(path: string, init: RequestInit & { json
     const data = await res.json().catch(() => ({}))
     return { ok: res.ok && data.success !== false, status: res.status, data }
   } catch (err: any) {
-    return { ok: false, status: 0, data: { success: false, error: err?.message || '서버에 연결할 수 없습니다.' } }
+    return { ok: false, status: 0, data: { success: false, error: userErrorMessage(err, '서버에 연결할 수 없습니다.') } }
   }
 }
 

@@ -2,7 +2,7 @@
 import { ArrowUpRight, Boxes, CircleCheck, CloudDownload, Forklift, Globe, Key, LoaderCircle, Network, RotateCw, ShieldCheck, SlidersHorizontal, Store, ToggleRight, TriangleAlert, Truck, X } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { adminApi, won, API_BASE_URL } from '../config';
-import { useConfirm, useToast } from '@olmoa/ui'
+import { userErrorMessage, useConfirm, useToast } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 const toastApi = useToast()
@@ -141,7 +141,7 @@ async function loadOrders() {
     orders.value = r.data.data || [];
   } catch (err: any) {
     console.error('Failed to load supplier orders:', err);
-    errorMsg.value = err.message || '발주 목록을 불러오지 못했습니다.';
+    errorMsg.value = userErrorMessage(err, '발주 목록을 불러오지 못했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -155,7 +155,7 @@ async function loadImportJobs() {
     importJobs.value = r.data.data || [];
   } catch (err: any) {
     console.error('Failed to load import jobs:', err);
-    errorMsg.value = err.message || '수집 작업 목록을 불러오지 못했습니다.';
+    errorMsg.value = userErrorMessage(err, '수집 작업 목록을 불러오지 못했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -169,7 +169,7 @@ async function loadSyncLogs() {
     syncLogs.value = r.data.data || [];
   } catch (err: any) {
     console.error('Failed to load sync logs:', err);
-    errorMsg.value = err.message || '동기화 로그를 불러오지 못했습니다.';
+    errorMsg.value = userErrorMessage(err, '동기화 로그를 불러오지 못했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -183,7 +183,7 @@ async function loadFlags() {
     flags.value = r.data.data || [];
   } catch (err: any) {
     console.error('Failed to load feature flags:', err);
-    errorMsg.value = err.message || '기능 플래그를 불러오지 못했습니다.';
+    errorMsg.value = userErrorMessage(err, '기능 플래그를 불러오지 못했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -288,7 +288,7 @@ async function loadPlatforms() {
     }
   } catch (err: any) {
     console.error('Failed to load platforms:', err);
-    errorMsg.value = err.message || '플랫폼 목록을 불러오지 못했습니다.';
+    errorMsg.value = userErrorMessage(err, '플랫폼 목록을 불러오지 못했습니다.');
   } finally {
     isLoading.value = false;
   }

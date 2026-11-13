@@ -2,6 +2,7 @@
 import { CircleAlert, CircleCheck, LoaderCircle, Reply } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 interface QnAItem {
   id: string;
@@ -48,10 +49,10 @@ async function loadQnA() {
       headers: getPartnerHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `Q&A 조회 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `Q&A를 불러오지 못했습니다`);
     qnaList.value = Array.isArray(json.data) ? json.data : [];
   } catch (e: any) {
-    loadError.value = e?.message || 'Q&A 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
+    loadError.value = userErrorMessage(e, 'Q&A 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   } finally {
     loading.value = false;
   }
@@ -73,7 +74,7 @@ async function submitAnswer(qnaId: string) {
       body: JSON.stringify({ answer: answerText.value.trim() })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `답변 등록 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `답변을 등록하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     toastErr.value = false;
     toastMsg.value = '✓ 답변이 등록되어 상품 상세 페이지에 즉시 노출됩니다.';
     answeringId.value = null;
@@ -82,7 +83,7 @@ async function submitAnswer(qnaId: string) {
     setTimeout(() => { toastMsg.value = ''; }, 3000);
   } catch (e: any) {
     toastErr.value = true;
-    toastMsg.value = `답변 등록 실패 — ${e?.message || '네트워크 오류'}`;
+    toastMsg.value = `답변 등록 실패 — ${userErrorMessage(e, '네트워크 오류')}`;
   } finally {
     isSubmitting.value = false;
   }
@@ -150,15 +151,18 @@ onMounted(loadQnA);
 
     <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200 shadow-xs">
       <div class="text-3xl mb-2">⚠️</div>
-      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <h3 class="font-bold text-red-700 text-sm">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</h3>
+      <p class="text-xs text-ink-muted mt-1">{{ loadError }}</p>
       <button @click="loadQnA" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
     </div>
 
-    <div v-else-if="filteredList.length === 0" class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-xs">
-      <div class="text-3xl mb-2">💬</div>
-      <h3 class="font-bold text-slate-700 text-sm">해당 조건의 고객 문의가 없습니다.</h3>
-      <p class="text-xs text-slate-400 mt-1">고객이 상품에 문의를 남기면 실시간으로 수신됩니다.</p>
-    </div>
+    <OmEmptyState
+      v-else-if="filteredList.length === 0"
+      title="해당 조건의 고객 문의가 없습니다."
+      description="고객이 상품에 문의를 남기면 실시간으로 수신됩니다."
+    >
+      <OmButton size="sm" @click="loadQnA">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <div v-else class="space-y-4">
       <div

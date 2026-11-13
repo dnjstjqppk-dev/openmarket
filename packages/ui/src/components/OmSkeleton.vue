@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Loading placeholder. variant: text (n lines) | rect | circle | card (product card) | row (table rows).
-withDefaults(defineProps<{ variant?: 'text' | 'rect' | 'circle' | 'card' | 'row'; lines?: number; height?: string; count?: number }>(), { variant: 'text', lines: 3, height: 'h-32', count: 1 })
+withDefaults(defineProps<{ variant?: 'text' | 'rect' | 'circle' | 'card' | 'row' | 'detail'; lines?: number; height?: string; count?: number }>(), { variant: 'text', lines: 3, height: 'h-32', count: 1 })
 </script>
 
 <template>
@@ -16,6 +16,20 @@ withDefaults(defineProps<{ variant?: 'text' | 'rect' | 'circle' | 'card' | 'row'
         <span class="om-skeleton-bg block h-3.5 w-full animate-shimmer rounded-sm" />
         <span class="om-skeleton-bg block h-3.5 w-2/3 animate-shimmer rounded-sm" />
         <span class="om-skeleton-bg block h-5 w-1/3 animate-shimmer rounded-sm" />
+      </div>
+      <div v-else-if="variant === 'row'" class="flex items-center gap-4 border-b border-line-divider py-3">
+        <span class="om-skeleton-bg block h-4 w-1/6 animate-shimmer rounded-sm" />
+        <span class="om-skeleton-bg block h-4 flex-1 animate-shimmer rounded-sm" />
+        <span class="om-skeleton-bg block h-4 w-1/6 animate-shimmer rounded-sm" />
+      </div>
+      <div v-else-if="variant === 'detail'" class="grid w-full gap-8 lg:grid-cols-2">
+        <span class="om-skeleton-bg block aspect-square w-full animate-shimmer rounded-lg" />
+        <div class="flex w-full flex-col gap-3">
+          <span class="om-skeleton-bg block h-6 w-3/4 animate-shimmer rounded-sm" />
+          <span class="om-skeleton-bg block h-5 w-1/3 animate-shimmer rounded-sm" />
+          <span class="om-skeleton-bg block h-24 w-full animate-shimmer rounded" />
+          <span class="om-skeleton-bg block h-10 w-full animate-shimmer rounded-lg" />
+        </div>
       </div>
       <div v-else class="flex items-center gap-4 border-b border-line-divider py-3">
         <span class="om-skeleton-bg block h-4 w-1/6 animate-shimmer rounded-sm" />

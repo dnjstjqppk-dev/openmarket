@@ -2,7 +2,7 @@
 // 입점 신청 심사 (O05). 서류 열람은 개인정보 접속기록에 남는다. 승인 = 수수료율 + 사업자 상태 확인 근거 필수.
 import { ref, reactive, onMounted } from 'vue'
 import { adminApi, API_BASE_URL, getAdminToken } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -34,7 +34,7 @@ async function load() {
       forms[a.partner_id] = forms[a.partner_id] || { commission_rate: '', business_status_evidence: '', confirm_documents_checked: false, note: '', rejected: [] as string[] }
     }
   } catch (e: any) {
-    err.value = e?.message || '목록을 불러오지 못했습니다.'
+    err.value = userErrorMessage(e, '목록을 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
@@ -80,7 +80,14 @@ onMounted(load)
     </div>
     <p v-if="err" role="alert" class="p-3 rounded-lg bg-red-50 text-red-700 font-bold">{{ err }}</p>
     <p v-if="msg" role="status" class="p-3 rounded-lg bg-indigo-50 text-indigo-900 font-bold">{{ msg }}</p>
-    <p v-if="!loading && !apps.length" class="p-6 text-center text-slate-400 bg-white rounded-xl border">해당 상태의 입점 신청이 없습니다.</p>
+    <OmEmptyState
+      v-if="!loading && !apps.length"
+      compact
+      title="해당 상태의 입점 신청이 없습니다."
+      description="상태 필터를 바꾸거나 잠시 후 다시 확인해 보세요."
+    >
+      <OmButton size="sm" @click="load">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <article v-for="a in apps" :key="a.partner_id" class="bg-white rounded-xl border border-slate-200 p-4 space-y-3" data-testid="application-card">
       <div class="flex flex-wrap justify-between gap-2">

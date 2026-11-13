@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
@@ -30,7 +31,7 @@ const loadWallet = async () => {
     coupons.value = cJson.data || []
     creditData.value = crJson.data || { balance: 0, history: [] }
   } catch (e: any) {
-    loadError.value = e?.message || '지갑 정보를 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '지갑 정보를 불러오지 못했습니다')
   } finally {
     loading.value = false
   }
@@ -80,7 +81,7 @@ onMounted(loadWallet)
     </div>
 
     <div v-if="loadError" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 flex items-center justify-between gap-3">
-      <span>{{ loadError }}</span>
+      <span><span class="block">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</span><span class="block font-normal">{{ loadError }}</span></span>
       <button @click="loadWallet" class="shrink-0 px-4 py-2 rounded-full bg-gray-900 text-white hover:bg-[#FF5000] transition">다시 시도</button>
     </div>
 
@@ -90,9 +91,13 @@ onMounted(loadWallet)
       <div v-if="loading" class="grid grid-cols-1 md:grid-cols-3 gap-4" aria-label="쿠폰 목록을 불러오는 중">
         <div v-for="n in 3" :key="n" class="h-44 rounded-2xl bg-gray-100 animate-pulse border border-gray-200"></div>
       </div>
-      <div v-else-if="!coupons.length && !loadError" class="rounded-2xl border border-gray-200 bg-white p-8 text-center text-xs text-gray-500">
-        사용 가능한 쿠폰이 없습니다.
-      </div>
+      <OmEmptyState
+        v-else-if="!coupons.length && !loadError"
+        title="사용 가능한 쿠폰이 없습니다."
+        description="새 쿠폰이 발급되면 이곳에 표시됩니다."
+      >
+        <OmButton size="sm" @click="loadWallet">다시 불러오기</OmButton>
+      </OmEmptyState>
       <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div
           v-for="c in coupons"

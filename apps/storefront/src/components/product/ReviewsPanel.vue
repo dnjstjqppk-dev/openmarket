@@ -4,7 +4,7 @@
 // The reviewer name is masked by the server; the buyer must pick the rating (no pre-selected 5 stars).
 import { ref, computed, watch } from 'vue'
 import { Star } from 'lucide-vue-next'
-import { OmButton, OmTextarea, OmEmptyState, OmErrorState, OmSkeleton, OmBadge, OmAlert, useToast, formatDate, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmTextarea, OmEmptyState, OmErrorState, OmSkeleton, OmBadge, OmAlert, useToast, formatDate, formatNumber } from '@olmoa/ui'
 import { useAuthStore } from '../../stores/auth'
 import { API_BASE_URL, authHeader } from '../../config'
 
@@ -39,12 +39,12 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(props.productId)}/reviews`)
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `후기를 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `후기를 불러오지 못했습니다`)
     reviews.value = Array.isArray(json.data) ? json.data : json.data?.reviews || []
     average.value = json.avg_rating ?? json.data?.summary?.average_rating ?? null
     emit('summary', { count: reviews.value.length, average: reviews.value.length ? average.value : null })
   } catch (e: any) {
-    loadError.value = e?.message || '후기를 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '후기를 불러오지 못했습니다')
   } finally {
     loading.value = false
   }
@@ -91,13 +91,13 @@ async function submit() {
       })
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `등록하지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `등록하지 못했습니다. 잠시 후 다시 시도해주세요.`)
     toast.success('후기를 등록했습니다.')
     formOpen.value = false
     rating.value = null; content.value = ''; height.value = ''; weight.value = ''; fitInput.value = ''
     await load()
   } catch (e: any) {
-    formError.value = e?.message || '등록하지 못했습니다'
+    formError.value = userErrorMessage(e, '등록하지 못했습니다')
   } finally {
     submitting.value = false
   }

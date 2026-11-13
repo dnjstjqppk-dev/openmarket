@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
-import { useToast } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useToast } from '@olmoa/ui'
 
 const toastApi = useToast()
 
@@ -31,7 +31,7 @@ const loadSettlements = async () => {
     payouts.value = json.data.payouts || []
     summary.value = json.data.summary || summary.value
   } catch (e: any) {
-    loadError.value = e?.message || '정산 내역을 불러오지 못했습니다. 다시 시도해 주세요.'
+    loadError.value = userErrorMessage(e, '정산 내역을 불러오지 못했습니다. 다시 시도해 주세요.')
   } finally {
     loading.value = false
   }
@@ -85,7 +85,7 @@ const loadTaxInvoices = async () => {
     if (!res.ok || !json.success) throw new Error(json.error || '세금계산서 내역을 불러오지 못했습니다.')
     taxInvoices.value = json.data || []
   } catch (e: any) {
-    taxError.value = e?.message || '세금계산서 내역을 불러오지 못했습니다. 다시 시도해 주세요.'
+    taxError.value = userErrorMessage(e, '세금계산서 내역을 불러오지 못했습니다. 다시 시도해 주세요.')
   } finally {
     taxLoading.value = false
   }
@@ -119,7 +119,7 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
 
     <div v-else-if="loadError" class="bg-white rounded-2xl border border-red-200 p-12 text-center">
       <div class="text-3xl mb-2">⚠️</div>
-      <p class="text-sm font-bold text-gray-800">정산 내역을 불러오지 못했습니다</p>
+      <p class="text-sm font-bold text-gray-800">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
       <p class="text-xs text-gray-500 mt-1">{{ loadError }}</p>
       <button @click="loadSettlements" class="mt-4 px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold cursor-pointer">
         다시 불러오기
@@ -154,11 +154,13 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
         </div>
       </div>
 
-      <div v-if="settlements.length === 0" class="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-        <div class="text-3xl mb-2">🧾</div>
-        <p class="text-sm font-bold text-gray-700">정산 내역이 없습니다</p>
-        <p class="text-xs text-gray-400 mt-1">구매확정된 주문이 생기면 정산 내역이 표시됩니다.</p>
-      </div>
+      <OmEmptyState
+        v-if="settlements.length === 0"
+        title="정산 내역이 없습니다"
+        description="구매확정된 주문이 생기면 정산 내역이 표시됩니다."
+      >
+        <OmButton size="sm" @click="loadSettlements">다시 불러오기</OmButton>
+      </OmEmptyState>
 
       <div v-else class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
@@ -207,7 +209,14 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
           <h3 class="text-sm font-black text-gray-900">정산 지급 내역</h3>
           <p class="text-[11px] text-gray-500">운영자가 승인·송금한 정산 지급 건입니다. 송금 참조번호는 실제 이체 완료 후 표시됩니다.</p>
         </div>
-        <div v-if="payouts.length === 0" class="p-8 text-center text-xs text-gray-400">아직 지급된 정산이 없습니다.</div>
+        <OmEmptyState
+          v-if="payouts.length === 0"
+          compact
+          title="아직 지급된 정산이 없습니다."
+          description="운영자가 지급을 승인하면 이곳에 표시됩니다."
+        >
+          <OmButton size="sm" @click="loadSettlements">다시 불러오기</OmButton>
+        </OmEmptyState>
         <table v-else class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
@@ -247,9 +256,16 @@ onMounted(() => { loadSettlements(); loadTaxInvoices() })
         <div v-if="taxLoading" class="p-8 text-center text-xs text-gray-500 font-bold">세금계산서 내역을 불러오는 중입니다...</div>
         <div v-else-if="taxError" class="p-8 text-center">
           <p class="text-xs text-red-600 font-bold">{{ taxError }}</p>
-          <button @click="loadTaxInvoices" class="mt-3 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
+          <OmButton size="sm" @click="loadTaxInvoices">다시 불러오기</OmButton>
         </div>
-        <div v-else-if="taxInvoices.length === 0" class="p-8 text-center text-xs text-gray-400">발행된 수수료 세금계산서가 없습니다.</div>
+        <OmEmptyState
+          v-else-if="taxInvoices.length === 0"
+          compact
+          title="발행된 수수료 세금계산서가 없습니다."
+          description="수수료 세금계산서가 발행되면 이곳에 표시됩니다."
+        >
+          <OmButton size="sm" @click="loadTaxInvoices">다시 불러오기</OmButton>
+        </OmEmptyState>
         <table v-else class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">

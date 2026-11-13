@@ -5,7 +5,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CircleCheck, CircleX, FlaskConical } from 'lucide-vue-next'
-import { OmButton, OmAlert, OmSpinner } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmAlert, OmSpinner } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { useCartStore } from '../stores/cart'
@@ -87,7 +87,7 @@ async function retryPayment() {
     }
     resumeError.value = '결제 수단이 연동되지 않았습니다.'
   } catch (e: any) {
-    resumeError.value = e?.message || '결제를 다시 시작하지 못했습니다.'
+    resumeError.value = userErrorMessage(e, '결제를 다시 시작하지 못했습니다.')
   } finally {
     resuming.value = false
   }

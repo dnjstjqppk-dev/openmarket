@@ -2,6 +2,7 @@
 import { Check, Copy, FileSpreadsheet, Forklift, LoaderCircle, Printer, Receipt, Search, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 interface OrderItem {
   id: string;
@@ -126,10 +127,10 @@ async function loadShipments() {
       headers: getPartnerHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `목록 조회 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `발송 목록을 불러오지 못했습니다`);
     shipments.value = json.data || [];
   } catch (e: any) {
-    loadError.value = e?.message || '발송 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
+    loadError.value = userErrorMessage(e, '발송 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   } finally {
     loading.value = false;
   }
@@ -165,12 +166,12 @@ async function doSaveTracking() {
       })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.success === false) throw new Error(json.error || `출고 등록 실패 (${res.status})`);
+    if (!res.ok || json.success === false) throw new Error(json.error || `출고를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     order.status = 'SHIPPED';
     selectedIds.value = selectedIds.value.filter(id => id !== order.id);
     say(`[${order.sub_order_no || order.order_no}] 출고 등록되었습니다.`);
   } catch (e: any) {
-    say(e?.message || '출고 등록에 실패했습니다.', 'err');
+    say(userErrorMessage(e, '출고 등록에 실패했습니다.'), 'err');
   } finally {
     isSaving.value = null;
   }
@@ -212,7 +213,7 @@ async function doBulkShipment() {
       body: JSON.stringify({ shipments: shipmentsPayload })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.success === false) throw new Error(json.error || `일괄 출고 실패 (${res.status})`);
+    if (!res.ok || json.success === false) throw new Error(json.error || `일괄 출고를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     const failed = (json.results || []).filter((r: any) => !r.ok);
     if (failed.length > 0) {
       bulkError.value = `${failed.length}건 실패: ${failed.map((r: any) => `${r.sub_order_id}(${r.error || '오류'})`).join(', ')}`;
@@ -224,7 +225,7 @@ async function doBulkShipment() {
     await loadShipments();
     say(`일괄 출고 ${json.updated_count ?? c.lines.length}건이 등록되었습니다.`);
   } catch (e: any) {
-    bulkError.value = e?.message || '일괄 출고에 실패했습니다.';
+    bulkError.value = userErrorMessage(e, '일괄 출고에 실패했습니다.');
   } finally {
     isBulkSaving.value = false;
   }
@@ -383,16 +384,19 @@ onMounted(() => {
     <!-- T03: load errors are explicit, with retry -->
     <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200">
       <div class="text-3xl mb-2">⚠️</div>
-      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <h3 class="font-bold text-red-700 text-sm">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</h3>
+      <p class="text-xs text-ink-muted mt-1">{{ loadError }}</p>
       <button @click="loadShipments" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="filteredShipments.length === 0" class="bg-white rounded-2xl p-12 text-center border border-slate-200">
-      <Truck class="h-4 w-4 text-4xl text-slate-300 mb-2" aria-hidden="true" />
-      <h3 class="font-bold text-slate-700 text-sm">해당 조건의 발송 건이 없습니다.</h3>
-      <p class="text-xs text-slate-400 mt-1">고객의 신규 주문이 체결되면 실시간으로 표시됩니다.</p>
-    </div>
+    <OmEmptyState
+      v-else-if="filteredShipments.length === 0"
+      title="해당 조건의 발송 건이 없습니다."
+      description="고객의 신규 주문이 체결되면 실시간으로 표시됩니다."
+    >
+      <OmButton size="sm" @click="loadShipments">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <!-- Shipments Content -->
     <div v-else class="space-y-4">

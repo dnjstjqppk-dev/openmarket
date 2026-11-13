@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const faqs = ref<any[]>([])
@@ -29,7 +30,7 @@ const loadSupport = async () => {
     faqs.value = fJson.data || []
     inquiries.value = iJson.data || []
   } catch (e: any) {
-    loadError.value = e?.message || '고객센터 정보를 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '고객센터 정보를 불러오지 못했습니다')
   }
 }
 
@@ -114,10 +115,18 @@ onMounted(loadSupport)
       <div class="lg:col-span-6 bg-white rounded-2xl p-6 border border-gray-200/80">
         <h2 class="text-base font-black text-gray-900 mb-4">My 1:1 Tickets ({{ inquiries.length }})</h2>
         <div v-if="loadError" class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
-          {{ loadError }}
+          <p class="font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+          <p class="mt-1">{{ loadError }}</p>
           <button @click="loadSupport" class="block mx-auto mt-2 px-4 py-1.5 rounded-full bg-gray-900 text-white font-bold">다시 시도</button>
         </div>
-        <div v-else-if="inquiries.length === 0" class="text-xs text-gray-400 py-8 text-center">No support tickets submitted yet.</div>
+        <OmEmptyState
+          v-else-if="inquiries.length === 0"
+          compact
+          title="No support tickets submitted yet."
+          description="Use the form to send your first 1:1 inquiry."
+        >
+          <OmButton size="sm" @click="loadSupport">다시 불러오기</OmButton>
+        </OmEmptyState>
         <div v-else class="space-y-3">
           <div v-for="inq in inquiries" :key="inq.id" class="p-4 rounded-xl border border-gray-200 text-xs">
             <div class="flex items-center justify-between mb-1">

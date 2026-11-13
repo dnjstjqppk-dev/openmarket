@@ -50,7 +50,7 @@ export async function fetchQuote(body: QuoteRequest, signal?: AbortSignal): Prom
     signal
   })
   const json = await res.json().catch(() => null)
-  if (!res.ok || !json?.success) throw new Error(json?.error || `주문 금액을 계산하지 못했습니다 (${res.status})`)
+  if (!res.ok || !json?.success) throw new Error(json?.error || `주문 금액을 계산하지 못했습니다. 잠시 후 다시 시도해주세요.`)
   return json.data as Quote
 }
 

@@ -95,7 +95,7 @@ export { useTheme, nextThemeMode } from './composables/useTheme'
 export type { ThemeMode } from './composables/useTheme'
 export { useBreakpoint, BREAKPOINTS, BREAKPOINT_ORDER, breakpointOf, deviceOf, matches, matchesDevice } from './composables/useBreakpoint'
 export type { BreakpointKey, DeviceClass, BreakpointState } from './composables/useBreakpoint'
-export { formatKrw, formatNumber, formatDate, formatDateTime, discountRate } from './format'
+export { formatKrw, formatNumber, formatDate, formatDateTime, discountRate, userErrorMessage } from './format'
 export { priceDisplayLines, clampQuantity, countdownParts, ratingVisible, tablePages, soldoutPct } from './commerce'
 export type { PriceLines, Countdown } from './commerce'
 

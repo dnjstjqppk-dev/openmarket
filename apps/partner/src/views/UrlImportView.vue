@@ -3,6 +3,7 @@ import { ArrowUpRight, Bot, Check, CircleAlert, CircleCheck, CloudDownload, Glob
 import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 import { stripToSafeHtml } from '../utils/stripHtml';
+import { userErrorMessage } from '@olmoa/ui';
 
 // Quick-fill presets are a development aid and hidden in production builds.
 const isDev = (import.meta as any).env?.DEV === true;
@@ -202,7 +203,7 @@ async function loadHistory() {
     jobsHistory.value = data.data || [];
   } catch (err: any) {
     jobsHistory.value = [];
-    historyError.value = err.message || '수집 이력을 불러오는 중 오류가 발생했습니다.';
+    historyError.value = userErrorMessage(err, '수집 이력을 불러오는 중 오류가 발생했습니다.');
   }
 }
 
@@ -229,7 +230,7 @@ async function loadJobIntoEditor(jobId: string) {
     aiInfo.value = null;
     successMsg.value = `✓ 이전 수집 결과 불러옴 (품질 점수: ${preview?.quality_score ?? '-'}점) — 검수 후 상품 등록을 진행하세요.`;
   } catch (err: any) {
-    errorMsg.value = err.message || '수집 결과를 불러오는 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, '수집 결과를 불러오는 중 오류가 발생했습니다.');
   } finally {
     isRecalling.value = false;
   }
@@ -276,7 +277,7 @@ async function handleCrawl() {
     successMsg.value = `✓ 상품 정보 추출 완료! (품질 점수: ${data.data.quality_score}점)`;
     loadHistory();
   } catch (err: any) {
-    errorMsg.value = err.message || '요청 처리 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, '요청 처리 중 오류가 발생했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -307,7 +308,7 @@ async function handleAiEnhance() {
     // GenAI rewriting is not used — never claim "AI 마케팅 가공 완료".
     successMsg.value = `✔️ 타이틀 사전식 번역 완료 (${data.data.provider}) · 외부 AI 가공 상태: ${data.data.live_external_api_status} — ${data.data.note || '상세설명은 원문 그대로, 판매자 직접 입력 필요'}`;
   } catch (err: any) {
-    errorMsg.value = err.message || 'AI 가공 처리 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, 'AI 가공 처리 중 오류가 발생했습니다.');
   } finally {
     isAiEnhancing.value = false;
   }
@@ -358,7 +359,7 @@ async function handleBulkCrawl() {
     successMsg.value = `✓ 대량 수집 완료! (요청 ${data.total_requested}개 / 성공 ${data.successful}개 / 실패 ${data.failed}개)`;
     loadHistory();
   } catch (err: any) {
-    errorMsg.value = err.message || '대량 수집 처리 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, '대량 수집 처리 중 오류가 발생했습니다.');
   } finally {
     isBulkLoading.value = false;
   }
@@ -401,7 +402,7 @@ async function handlePublish() {
     successMsg.value = `상품이 심사 대기(DRAFT)로 등록되었습니다. 운영자 승인 후 판매가 시작됩니다. (상품 ID: ${data.product_id}, SKU: ${data.sku_count}개)`;
     loadHistory();
   } catch (err: any) {
-    errorMsg.value = err.message || '등록 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, '등록 중 오류가 발생했습니다.');
   } finally {
     isPublishing.value = false;
   }

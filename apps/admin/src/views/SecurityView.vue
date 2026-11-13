@@ -2,7 +2,7 @@
 // 계정 보안 (O11): 내 2단계 인증 설정 + (최고관리자) 운영자 계정·권한 관리.
 import { ref, reactive, computed, onMounted } from 'vue'
 import { adminApi, setAdminToken, setAdminRole, ADMIN_ROLE_LABEL } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -31,7 +31,7 @@ async function load() {
       if (!o.ok) err.value = o.data.error || '운영자 목록을 불러오지 못했습니다.'
     }
   } catch (e: any) {
-    err.value = e?.message || '계정 정보를 불러오지 못했습니다.'
+    err.value = userErrorMessage(e, '계정 정보를 불러오지 못했습니다.')
   }
 }
 

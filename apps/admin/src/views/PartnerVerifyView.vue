@@ -79,7 +79,7 @@ async function verify(p: Partner, newStatus: 'APPROVED' | 'REJECTED' | 'SUSPENDE
       setTimeout(() => { toastMsg.value = ''; }, 3500);
     } else {
       const errJson = await res.json().catch(() => ({}));
-      toastMsg.value = `⚠ [${p.business_name}] 처리에 실패했습니다 (${errJson.error || `HTTP ${res.status}`}). 다시 시도해 주세요.`;
+      toastMsg.value = `⚠ [${p.business_name}] ${errJson.error || '처리하지 못했습니다. 잠시 후 다시 시도해주세요.'}`;
       setTimeout(() => { toastMsg.value = ''; }, 4000);
     }
   } catch (_) {

@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Store } from 'lucide-vue-next'
-import { OmBreadcrumb, OmBadge, OmSkeleton, OmEmptyState, OmErrorState, OmButton, formatNumber, formatDate } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmBadge, OmSkeleton, OmEmptyState, OmErrorState, OmButton, formatNumber, formatDate } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
@@ -28,10 +28,10 @@ async function load() {
     const json = await res.json().catch(() => null)
     if (my !== seq) return
     if (res.status === 404) { notFound.value = true; store.value = null; return }
-    if (!res.ok || !json?.success) throw new Error(json?.error || `스토어를 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `스토어를 불러오지 못했습니다`)
     store.value = json.data
   } catch (e: any) {
-    if (my === seq) loadError.value = e?.message || '스토어를 불러오지 못했습니다'
+    if (my === seq) loadError.value = userErrorMessage(e, '스토어를 불러오지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }

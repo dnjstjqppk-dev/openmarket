@@ -2,7 +2,7 @@
 import { LoaderCircle, RotateCw } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm, useToast } from '@olmoa/ui'
+import { OmButton, OmEmptyState, useConfirm, useToast } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 const toastApi = useToast()
@@ -62,7 +62,7 @@ async function updateStatus(p: AdminProduct, newStatus: 'ACTIVE' | 'HIDDEN') {
       toast(`✓ [${p.title}] ${label} 처리되었습니다.`, 3000);
     } else {
       const errJson = await res.json().catch(() => ({}));
-      toast(`⚠ 상태 변경에 실패했습니다 (${errJson.error || `HTTP ${res.status}`}). 다시 시도해 주세요.`);
+      toast(`⚠ ${errJson.error || '상태를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.'}`);
     }
   } catch (_) {
     toast('⚠ 요청 중 네트워크 오류가 발생했습니다. 다시 시도해 주세요.');
@@ -110,9 +110,14 @@ onMounted(() => {
       <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />상품 목록을 불러오는 중...
     </div>
 
-    <div v-else-if="products.length === 0" class="p-12 text-center text-slate-400 text-xs">
-      등록된 상품이 없습니다.
-    </div>
+    <OmEmptyState
+      v-else-if="products.length === 0"
+      compact
+      title="등록된 상품이 없습니다."
+      description="판매자가 상품을 등록하면 이곳에 표시됩니다."
+    >
+      <OmButton size="sm" @click="loadProducts">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <div v-else class="overflow-x-auto">
       <table class="w-full text-left text-xs border-collapse">

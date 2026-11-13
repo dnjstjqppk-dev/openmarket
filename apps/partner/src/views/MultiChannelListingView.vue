@@ -2,6 +2,7 @@
 import { ArrowUpRight, Calculator, CircleCheck, Key, Network, Plug, RotateCw, Share2, ShoppingCart, TriangleAlert, X } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 interface Platform {
   id: string;
@@ -116,7 +117,7 @@ async function loadData() {
     const oRes = await fetch(`${API_BASE}/api/v1/channels/orders`, { headers });
     if (oRes.ok) channelOrders.value = (await oRes.json()).data || [];
   } catch (err: any) {
-    errorMsg.value = err.message || '데이터 로드 중 오류가 발생했습니다.';
+    errorMsg.value = userErrorMessage(err, '데이터 로드 중 오류가 발생했습니다.');
   } finally {
     isLoading.value = false;
   }
@@ -149,7 +150,7 @@ async function handleSaveCredential() {
     credSecretKey.value = '';
     loadData();
   } catch (err: any) {
-    errorMsg.value = err.message || '저장 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '저장 중 오류 발생');
   }
 }
 
@@ -164,7 +165,7 @@ async function handleVerify(credId: string) {
     successMsg.value = data.message || '플랫폼 연결 검증이 완료되었습니다.';
     loadData();
   } catch (err: any) {
-    errorMsg.value = err.message || '검증 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '검증 중 오류 발생');
   }
 }
 
@@ -186,7 +187,7 @@ async function openDeployModal() {
     deployChannelId.value = channels.value[0]?.id || '';
     showDeployModal.value = true;
   } catch (err: any) {
-    errorMsg.value = err.message || '상품 목록 조회 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '상품 목록 조회 중 오류 발생');
   }
 }
 
@@ -233,11 +234,11 @@ async function handleDeploy() {
           failed.push(`${pid}: ${data.error || '외부 API 미연동'}`);
           continue;
         }
-        if (!res.ok || (data.simulated === false && data.success === false)) throw new Error(data.error || data.message || `배포 실패 (${res.status})`);
+        if (!res.ok || (data.simulated === false && data.success === false)) throw new Error(data.error || data.message || `배포하지 못했습니다. 잠시 후 다시 시도해주세요.`);
         if (data.simulated) sawSim = true;
         ok.push(pid);
       } catch (err: any) {
-        failed.push(`${pid}: ${err.message || '배포 실패'}`);
+        failed.push(`${pid}: ${userErrorMessage(err, '배포 실패')}`);
       }
     }
     if (failed.length === 0) {
@@ -268,7 +269,7 @@ async function handleSyncOrders(channelId: string) {
     successMsg.value = data.message || '신규 주문이 동기화되었습니다.';
     loadData();
   } catch (err: any) {
-    errorMsg.value = err.message || '주문 동기화 실패';
+    errorMsg.value = userErrorMessage(err, '주문 동기화 실패');
   }
 }
 
@@ -316,7 +317,7 @@ async function openDispatchModal(orderId: string) {
     dispatchSupplierId.value = suppliers.value[0]?.id || '';
     showDispatchModal.value = true;
   } catch (err: any) {
-    errorMsg.value = err.message || '공급사 목록 조회 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '공급사 목록 조회 중 오류 발생');
   }
 }
 
@@ -343,7 +344,7 @@ async function handleDispatchPo() {
     showDispatchModal.value = false;
     loadData();
   } catch (err: any) {
-    errorMsg.value = err.message || '발주 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '발주 중 오류 발생');
   } finally {
     isDispatching.value = false;
   }
@@ -361,7 +362,7 @@ async function openFulfillModal(orderId: string) {
     fulfillCarrierCode.value = carriers.value[0]?.code || '';
     showFulfillModal.value = true;
   } catch (err: any) {
-    errorMsg.value = err.message || '택배사 목록 조회 중 오류 발생';
+    errorMsg.value = userErrorMessage(err, '택배사 목록 조회 중 오류 발생');
   }
 }
 
@@ -388,7 +389,7 @@ async function handleFulfill() {
     showFulfillModal.value = false;
     loadData();
   } catch (err: any) {
-    errorMsg.value = err.message || '출고 처리 실패';
+    errorMsg.value = userErrorMessage(err, '출고 처리 실패');
   } finally {
     isFulfilling.value = false;
   }
@@ -870,7 +871,14 @@ onMounted(() => {
               <input type="checkbox" :value="p.id" v-model="deploySelected" class="rounded accent-indigo-600" />
               <span class="font-medium text-slate-800 truncate">{{ p.title }}</span>
             </label>
-            <p v-if="deployProducts.length === 0" class="px-3 py-4 text-center text-slate-400 text-xs">배포 가능한 상품이 없습니다.</p>
+            <OmEmptyState
+              v-if="deployProducts.length === 0"
+              compact
+              title="배포 가능한 상품이 없습니다."
+              description="상품 관리에서 판매 중인 상품을 먼저 등록해 주세요."
+            >
+              <OmButton size="sm" @click="openDeployModal">다시 불러오기</OmButton>
+            </OmEmptyState>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">

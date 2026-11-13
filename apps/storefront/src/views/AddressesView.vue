@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
 import { validateKrPhone } from '../utils/phone'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmEmptyState, OmSkeleton, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 const formError = ref('')
@@ -73,13 +73,13 @@ const setDefault = async (addrId: string) => {
       headers: { ...authHeader() }
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success) throw new Error(json.error || `기본 배송지 변경 실패 (${res.status})`)
+    if (!res.ok || !json.success) throw new Error(json.error || `기본 배송지를 변경하지 못했습니다. 잠시 후 다시 시도해주세요.`)
     msg.value = '✓ 기본 배송지로 변경되었습니다.'
     lastAction = null
     await loadAddresses()
     setTimeout(() => (msg.value = ''), 2500)
   } catch (e: any) {
-    actionError.value = e?.message || '기본 배송지 변경에 실패했습니다.'
+    actionError.value = userErrorMessage(e, '기본 배송지 변경에 실패했습니다.')
   }
 }
 
@@ -92,13 +92,13 @@ const deleteAddress = async (addrId: string) => {
       headers: { ...authHeader() }
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success) throw new Error(json.error || `배송지 삭제 실패 (${res.status})`)
+    if (!res.ok || !json.success) throw new Error(json.error || `배송지를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.`)
     msg.value = '✓ 배송지가 삭제되었습니다.'
     lastAction = null
     await loadAddresses()
     setTimeout(() => (msg.value = ''), 2500)
   } catch (e: any) {
-    actionError.value = e?.message || '배송지 삭제에 실패했습니다.'
+    actionError.value = userErrorMessage(e, '배송지 삭제에 실패했습니다.')
   }
 }
 
@@ -192,21 +192,22 @@ onMounted(loadAddresses)
 
     <!-- Loading Skeleton -->
     <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div v-for="n in 2" :key="n" class="h-40 bg-white rounded-2xl animate-pulse border border-gray-200"></div>
+      <OmSkeleton variant="rect" height="h-40" :count="2" />
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="addresses.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200">
-      <div class="text-4xl mb-3">📍</div>
-      <h3 class="text-base font-bold text-gray-800 mb-1">등록된 배송지가 없습니다.</h3>
-      <p class="text-xs text-gray-500 mb-5">자주 사용하는 배송지를 등록하여 빠른 주문 결제를 진행해보세요.</p>
+    <OmEmptyState
+      v-else-if="addresses.length === 0"
+      title="등록된 배송지가 없습니다."
+      description="자주 사용하는 배송지를 등록하여 빠른 주문 결제를 진행해보세요."
+    >
       <button
         @click="showModal = true"
         class="px-5 py-2.5 rounded-full bg-[#FF5000] text-white text-xs font-black hover:bg-orange-600"
       >
         새 배송지 등록하기
       </button>
-    </div>
+    </OmEmptyState>
 
     <!-- Address Card Grid -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">

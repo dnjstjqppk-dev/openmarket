@@ -22,7 +22,7 @@ const loadLedgers = async () => {
       fetch(`${API_BASE_URL}/api/v1/admin/claims`, { headers: getAdminHeaders() }),
       fetch(`${API_BASE_URL}/api/v1/finance/tax-invoices`, { headers: getAdminHeaders() }).catch(() => null)
     ])
-    if (!res.ok || !claimRes.ok) throw new Error(`원장 조회 실패 (HTTP ${res.status}/${claimRes.status})`)
+    if (!res.ok || !claimRes.ok) throw new Error(`원장을 불러오지 못했습니다`)
     const json = await res.json()
     const claimJson = await claimRes.json()
     if (json.success) {
@@ -83,7 +83,7 @@ onMounted(loadLedgers)
     </div>
 
     <div v-if="loadError" role="alert" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex flex-wrap items-center justify-between gap-3">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button @click="loadLedgers" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
         다시 시도
       </button>

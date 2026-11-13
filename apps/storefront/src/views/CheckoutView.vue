@@ -7,7 +7,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { MapPin, ShoppingCart, Store } from 'lucide-vue-next'
-import { OmButton, OmInput, OmSelect, OmCheckbox, OmRadio, OmAlert, OmBadge, OmEmptyState, OmSkeleton, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmInput, OmSelect, OmCheckbox, OmRadio, OmAlert, OmBadge, OmEmptyState, OmSkeleton, formatNumber } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
@@ -118,7 +118,7 @@ function requestQuote() {
     } catch (e: any) {
       if (my.signal.aborted || e?.name === 'AbortError') return
       quote.value = null
-      quoteError.value = e?.message || '주문 금액을 계산하지 못했습니다'
+      quoteError.value = userErrorMessage(e, '주문 금액을 계산하지 못했습니다')
     } finally {
       if (!my.signal.aborted) quoting.value = false
     }
@@ -151,7 +151,7 @@ async function loadSides() {
     try {
       const r = await fetch(url, headers)
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || (j && j.success === false)) throw new Error(j?.error || `HTTP ${r.status}`)
+      if (!r.ok || (j && j.success === false)) throw new Error(j?.error || `불러오지 못했습니다. 잠시 후 다시 시도해주세요.`)
       return j
     } catch {
       failed.push(label)
@@ -271,7 +271,7 @@ async function submitOrder() {
     }
     throw new Error('결제 수단이 연동되지 않았습니다.')
   } catch (e: any) {
-    errorMsg.value = e?.message || '결제를 진행하지 못했습니다.'
+    errorMsg.value = userErrorMessage(e, '결제를 진행하지 못했습니다.')
   } finally {
     submitting.value = false
   }

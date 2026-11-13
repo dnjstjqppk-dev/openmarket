@@ -2,7 +2,7 @@
 import { ArrowUpRight, CloudUpload, Image, Pencil, Plus } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerAuthHeaders } from '../config'
-import { useToast } from '@olmoa/ui'
+import { userErrorMessage, useToast } from '@olmoa/ui'
 
 const toastApi = useToast()
 
@@ -201,7 +201,7 @@ const saveProductChanges = async (p: any) => {
   const send = async (url: string, body: any) => {
     const res = await fetch(url, { method: 'PUT', headers: getPartnerHeaders(), body: JSON.stringify(body) })
     const json = await res.json().catch(() => ({}))
-    return res.ok && json.success !== false ? null : (json.error || `요청 실패 (${res.status})`)
+    return res.ok && json.success !== false ? null : (json.error || `요청하지 못했습니다. 잠시 후 다시 시도해주세요.`)
   }
   try {
     // T06: row edits carry the row's sku_id so only that SKU moves.
@@ -215,7 +215,7 @@ const saveProductChanges = async (p: any) => {
     setTimeout(() => { toast.value = '' }, 5000)
     if (!priceErr || !stockErr) await loadProducts()
   } catch (e: any) {
-    toast.value = `저장 실패 — ${e?.message || '네트워크 오류'}`
+    toast.value = `저장 실패 — ${userErrorMessage(e, '네트워크 오류')}`
   }
 }
 
@@ -661,7 +661,8 @@ onMounted(() => { loadProducts(); loadCategories() })
           </tr>
           <tr v-else-if="loadError">
             <td colspan="8" class="py-10 px-5 text-center">
-              <p class="text-red-600 font-bold">{{ loadError }}</p>
+              <p class="text-red-600 font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+              <p class="mt-1 text-xs text-ink-muted">{{ loadError }}</p>
               <button @click="loadProducts" class="mt-2 px-3 py-1.5 rounded border font-bold">다시 불러오기</button>
             </td>
           </tr>

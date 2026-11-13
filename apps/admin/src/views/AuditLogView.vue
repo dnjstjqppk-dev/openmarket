@@ -3,6 +3,7 @@
 // Filtered read access to admin_audit_log (SUPER_ADMIN + PRIVACY_OFFICER).
 import { ref, onMounted } from 'vue'
 import { adminApi } from '../config'
+import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 const rows = ref<any[]>([])
 const loading = ref(false)
@@ -21,7 +22,7 @@ async function load() {
     if (!r.ok) throw new Error(r.data.error || '감사 로그를 불러오지 못했습니다.')
     rows.value = r.data.data || []
   } catch (e: any) {
-    loadError.value = e?.message || '감사 로그를 불러오지 못했습니다.'
+    loadError.value = userErrorMessage(e, '감사 로그를 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
@@ -60,12 +61,19 @@ onMounted(load)
     </form>
 
     <div v-if="loadError" role="alert" class="p-3 rounded-lg bg-red-50 text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
     </div>
 
     <div v-if="loading" class="p-8 text-center text-slate-400 bg-white rounded-xl border">불러오는 중...</div>
-    <div v-else-if="!rows.length && !loadError" class="p-8 text-center text-slate-400 bg-white rounded-xl border">조건에 맞는 감사 기록이 없습니다.</div>
+    <OmEmptyState
+      v-else-if="!rows.length && !loadError"
+      compact
+      title="조건에 맞는 감사 기록이 없습니다."
+      description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
+    >
+      <OmButton size="sm" @click="load">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <div v-else class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
       <table class="w-full min-w-[760px]">

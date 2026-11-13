@@ -5,7 +5,7 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { SearchX } from 'lucide-vue-next'
-import { OmButton, OmInput, OmTabs, OmSkeleton, OmEmptyState, OmErrorState, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmInput, OmTabs, OmSkeleton, OmEmptyState, OmErrorState, formatNumber } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL } from '../config'
 
@@ -51,10 +51,10 @@ async function load() {
     const res = await fetch(`${API_BASE_URL}/api/v1/products?${params}`)
     const json = await res.json().catch(() => null)
     if (my !== seq) return
-    if (!res.ok || !json?.success) throw new Error(json?.error || `검색하지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `검색하지 못했습니다`)
     products.value = Array.isArray(json.data) ? json.data : []
   } catch (e: any) {
-    if (my === seq) loadError.value = e?.message || '검색하지 못했습니다'
+    if (my === seq) loadError.value = userErrorMessage(e, '검색하지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }

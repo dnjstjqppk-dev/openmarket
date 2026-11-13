@@ -2,6 +2,7 @@
 import { Building, CircleAlert, CircleCheck, LoaderCircle, PiggyBank, Save, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
+import { userErrorMessage } from '@olmoa/ui';
 
 interface PartnerProfile {
   id: string;
@@ -81,13 +82,13 @@ async function loadProfile() {
       headers: getPartnerHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `설정 조회 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `설정을 불러오지 못했습니다`);
     profile.value = json.data;
     // T10: legacy underscore value reads as the canonical enum.
     if ((profile.value.settlement_cycle as string) === 'BI_WEEKLY') profile.value.settlement_cycle = 'BIWEEKLY';
     loadedBank.value = { bank_code: json.data.bank_code, bank_account_number: json.data.bank_account_number, bank_account_holder: json.data.bank_account_holder };
   } catch (e: any) {
-    loadError.value = e?.message || '판매자 설정을 불러오지 못했습니다. 다시 시도해 주세요.';
+    loadError.value = userErrorMessage(e, '판매자 설정을 불러오지 못했습니다. 다시 시도해 주세요.');
   } finally {
     loading.value = false;
   }
@@ -116,14 +117,14 @@ async function saveProfile() {
       body: JSON.stringify(settingsPayload())
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `저장 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `저장하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     toastErr.value = false;
     toastMsg.value = `✓ ${json.message || '설정이 저장되었습니다.'}`;
     await loadProfile();
     setTimeout(() => { toastMsg.value = ''; }, 3500);
   } catch (e: any) {
     toastErr.value = true;
-    toastMsg.value = `저장 실패 — ${e?.message || '네트워크 오류'}`;
+    toastMsg.value = `저장 실패 — ${userErrorMessage(e, '네트워크 오류')}`;
   } finally {
     isSaving.value = false;
   }
@@ -155,7 +156,8 @@ onMounted(loadProfile);
 
     <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200">
       <div class="text-3xl mb-2">⚠️</div>
-      <h3 class="font-bold text-red-700 text-sm">{{ loadError }}</h3>
+      <h3 class="font-bold text-red-700 text-sm">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</h3>
+      <p class="text-xs text-ink-muted mt-1">{{ loadError }}</p>
       <p class="text-xs text-slate-400 mt-1">불러오지 못한 상태에서는 저장할 수 없습니다.</p>
       <button @click="loadProfile" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
     </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -52,10 +52,10 @@ async function createCategory() {
       form.value = { name: '', slug: '', parent_id: '', sort_order: 0 };
       await loadCategories();
     } else {
-      formError.value = json.error || `카테고리 생성에 실패했습니다. (${res.status})`;
+      formError.value = json.error || `카테고리를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.`;
     }
   } catch (e: any) {
-    formError.value = e?.message || '카테고리 생성 중 네트워크 오류가 발생했습니다.';
+    formError.value = userErrorMessage(e, '카테고리 생성 중 네트워크 오류가 발생했습니다.');
   }
 }
 
@@ -128,9 +128,9 @@ onMounted(loadCategories);
           </tr>
         </tbody>
       </table>
-      <div v-if="categories.length === 0" class="p-8 text-center text-slate-400">
-        등록된 카테고리가 없습니다.
-      </div>
+      <OmEmptyState v-if="categories.length === 0" compact title="등록된 카테고리가 없습니다." description="상단 양식으로 첫 카테고리를 만들어 보세요.">
+        <OmButton size="sm" @click="loadCategories">다시 불러오기</OmButton>
+      </OmEmptyState>
     </div>
   </div>
 </template>

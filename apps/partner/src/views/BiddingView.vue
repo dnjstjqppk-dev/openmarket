@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL, getPartnerHeaders } from '../config'
-import { useToast } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useToast } from '@olmoa/ui'
 
 const toastApi = useToast()
 
@@ -53,10 +53,10 @@ async function loadData() {
     try {
       const res = await fetch(url, { headers: getPartnerHeaders() })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok || json.success === false) throw new Error(json.error || `HTTP ${res.status}`)
+      if (!res.ok || json.success === false) throw new Error(json.error || '불러오지 못했습니다')
       return json.data || []
     } catch (e: any) {
-      failures.push(`${label}: ${e?.message || '불러오기 실패'}`)
+      failures.push(`${label}: ${userErrorMessage(e, '불러오기 실패')}`)
       return null
     }
   }
@@ -106,7 +106,7 @@ async function submitBid() {
       toastApi.error(json.error || '입찰 제출 실패')
     }
   } catch (e: any) {
-    toastApi.error(e.message || '입찰 처리 중 오류')
+    toastApi.error(userErrorMessage(e, '입찰 처리 중 오류'))
   } finally {
     submittingBid.value = false
   }
@@ -139,7 +139,7 @@ async function respondNego(action: 'ACCEPT' | 'REJECT' | 'COUNTER', counter?: nu
       toastApi.error(json.error || '협상 처리 실패')
     }
   } catch (e: any) {
-    toastApi.error(e.message || '처리 오류')
+    toastApi.error(userErrorMessage(e, '처리 오류'))
   } finally {
     submittingNego.value = false
   }
@@ -202,9 +202,14 @@ onMounted(loadData)
 
     <!-- Tab 1: Campaigns List -->
     <div v-else-if="activeTab === 'campaigns'" class="space-y-4">
-      <div v-if="campaigns.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200 text-gray-400 font-medium">
-        현재 진행 중인 공장 소싱 역경매 캠페인이 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="campaigns.length === 0"
+        compact
+        title="현재 진행 중인 공장 소싱 역경매 캠페인이 없습니다."
+        description="새 캠페인이 열리면 이곳에 표시됩니다."
+      >
+        <OmButton size="sm" @click="loadData">다시 불러오기</OmButton>
+      </OmEmptyState>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="c in campaigns"
@@ -291,9 +296,14 @@ onMounted(loadData)
 
     <!-- Tab 3: MD Price Negotiations -->
     <div v-else class="space-y-3">
-      <div v-if="negotiations.length === 0" class="bg-white rounded-2xl p-12 text-center border border-gray-200 text-gray-400">
-        진행 중인 MD 가격 협상 건이 없습니다.
-      </div>
+      <OmEmptyState
+        v-if="negotiations.length === 0"
+        compact
+        title="진행 중인 MD 가격 협상 건이 없습니다."
+        description="새 협상 요청이 들어오면 이곳에 표시됩니다."
+      >
+        <OmButton size="sm" @click="loadData">다시 불러오기</OmButton>
+      </OmEmptyState>
       <div v-for="n in negotiations" :key="n.id" class="bg-white rounded-2xl p-5 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-center gap-2">

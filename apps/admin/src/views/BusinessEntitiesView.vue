@@ -2,7 +2,7 @@
 // 운영 사업자 관리: 개인사업자 → 법인 전환. 기존 거래는 당시 사업자에 귀속된 채 보존되고, 전환 시점 이후 거래만 새 사업자에 귀속된다.
 import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -36,7 +36,7 @@ async function load() {
     entities.value = r.data.data || []
     for (const e of entities.value) if (e.status !== 'DRAFT') loadObligations(e.id)
   } catch (e: any) {
-    loadError.value = e?.message || '사업자 목록을 불러오지 못했습니다.'
+    loadError.value = userErrorMessage(e, '사업자 목록을 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
@@ -88,12 +88,17 @@ onMounted(load)
 
     <div v-if="loading" class="text-xs text-slate-500">불러오는 중...</div>
     <div v-if="loadError" role="alert" class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
-      <span>{{ loadError }}</span>
+      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
       <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
     </div>
-    <div v-else-if="!entities.length" class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-xs text-amber-900 font-bold">
-      등록된 운영 사업자가 없습니다. 사업자 정보를 등록·활성화하기 전에는 주문을 받을 수 없습니다.
-    </div>
+    <OmEmptyState
+      v-else-if="!entities.length"
+      compact
+      title="등록된 운영 사업자가 없습니다."
+      description="사업자 정보를 등록·활성화하기 전에는 주문을 받을 수 없습니다."
+    >
+      <OmButton size="sm" @click="load">다시 불러오기</OmButton>
+    </OmEmptyState>
 
     <div v-for="e in entities" :key="e.id" class="bg-white rounded-xl border p-5 text-xs" :class="e.status === 'ACTIVE' ? 'border-emerald-400' : 'border-slate-200'">
       <div class="flex flex-wrap items-center justify-between gap-2">

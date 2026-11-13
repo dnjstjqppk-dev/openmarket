@@ -7,7 +7,7 @@
 //    "N개 판매" / progress bar / "특가 수량 소진" were static numbers and are no longer shown.
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Clock } from 'lucide-vue-next'
-import { OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmAlert, formatDateTime } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmAlert, formatDateTime } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL } from '../config'
 
@@ -34,11 +34,11 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/campaigns/lightning`)
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `번개특가를 불러오지 못했습니다`)
     campaign.value = json.data?.campaign || null
     deals.value = json.data?.deals || []
   } catch (e: any) {
-    loadError.value = e?.message || '불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '불러오지 못했습니다')
   } finally {
     loading.value = false
   }

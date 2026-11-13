@@ -65,7 +65,7 @@ function fillDev(which: 1 | 2) {
           <span class="text-xs text-gray-500">상품 · 주문 · 배송 · 정산 관리</span>
         </div>
       </div>
-      <p v-if="route.query.expired === '1'" role="status" class="mb-4 p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-bold">세션이 만료되었습니다. 다시 로그인해 주세요.</p>
+      <p v-if="route.query.expired === '1'" role="status" class="mb-4 p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-bold">세션이 만료되었습니다. 다시 로그인해주세요.</p>
       <form @submit.prevent="handlePartnerLogin" class="space-y-4 text-xs">
         <div>
           <label for="pt-email" class="block font-bold text-gray-700 mb-1">판매자 계정 이메일</label>

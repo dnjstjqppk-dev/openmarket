@@ -15,7 +15,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Minus, Plus, ShoppingCart, Store, Trash2, X } from 'lucide-vue-next'
-import { OmButton, OmIconButton, OmCheckbox, OmAlert, OmBadge, OmEmptyState, OmSpinner, useToast, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmIconButton, OmCheckbox, OmAlert, OmBadge, OmEmptyState, OmSpinner, useToast, formatNumber } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import ProductCard from '../components/ProductCard.vue'
 import { useCartStore, type CartItem } from '../stores/cart'
@@ -58,7 +58,7 @@ async function runQuote() {
     quote.value = q
   } catch (e: any) {
     if (my.signal.aborted || e?.name === 'AbortError') return
-    quoteError.value = e?.message || '주문 금액을 확인하지 못했습니다'
+    quoteError.value = userErrorMessage(e, '주문 금액을 확인하지 못했습니다')
   } finally {
     if (!my.signal.aborted) quoting.value = false
   }

@@ -36,3 +36,14 @@ export function discountRate(original: number | null | undefined, sale: number |
   if (!Number.isFinite(o) || !Number.isFinite(s) || o <= 0 || s >= o) return 0
   return Math.floor(((o - s) * 100) / o)
 }
+
+// Browser / HTTP failure signatures that must never reach the screen as-is
+// (work order 1-10: no technical jargon in user-facing copy).
+const TECH_MESSAGE = /failed to fetch|network\s?error|load failed|the operation was abort|unexpected (token|end)|http\s*\/?\s*\d|status\s*\d{3}|\(\d{3}\)|\.js\b|query\s*\(|stack\b|abort/i
+
+/** Pass a server message through; replace raw technical failures with the friendly fallback. */
+export function userErrorMessage(err: unknown, fallback: string): string {
+  const m = typeof err === 'string' ? err : (err as { message?: unknown } | null | undefined)?.message
+  if (typeof m !== 'string' || !m.trim()) return fallback
+  return TECH_MESSAGE.test(m) ? fallback : m
+}

@@ -166,7 +166,7 @@ onMounted(consumeSocialReturn)
 
 <template>
   <AuthCard title="로그인" :subtitle="fromCheckout ? '주문을 계속하려면 로그인해 주세요.' : undefined">
-    <OmAlert v-if="expired" tone="warning" class="mb-4">로그인 세션이 만료되었습니다. 다시 로그인해 주세요.</OmAlert>
+    <OmAlert v-if="expired" tone="warning" class="mb-4">세션이 만료되었습니다. 다시 로그인해주세요.</OmAlert>
 
     <form class="space-y-4" novalidate @submit.prevent="handleLogin">
       <OmInput id="login-email" v-model="email" label="이메일" type="email" autocomplete="username" placeholder="example@olmoa.com" required :error="emailError" />

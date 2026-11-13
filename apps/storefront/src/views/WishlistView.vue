@@ -5,7 +5,7 @@
 // The old empty-state promise of "price-drop alerts" described a feature that does not exist.
 import { ref, computed, onMounted } from 'vue'
 import { Heart, X } from 'lucide-vue-next'
-import { OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmIconButton, OmBadge, useToast, formatDate } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmIconButton, OmBadge, useToast, formatDate } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { API_BASE_URL, authHeader } from '../config'
 
@@ -21,10 +21,10 @@ async function load() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, { headers: { ...authHeader() } })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `찜 목록을 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `찜 목록을 불러오지 못했습니다`)
     items.value = json.data || []
   } catch (e: any) {
-    loadError.value = e?.message || '찜 목록을 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '찜 목록을 불러오지 못했습니다')
   } finally {
     loading.value = false
   }
@@ -41,13 +41,13 @@ async function remove(item: any) {
       body: JSON.stringify({ product_id: id })
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `삭제하지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `삭제하지 못했습니다. 잠시 후 다시 시도해주세요.`)
     // The endpoint toggles; if it reports "ADDED" the item had already been removed elsewhere — re-sync.
     if (json.wished) { await load(); return }
     items.value = items.value.filter((i) => i.product_id !== id)
     toast.success('찜 목록에서 삭제했습니다.')
   } catch (e: any) {
-    toast.error(e?.message || '삭제하지 못했습니다')
+    toast.error(userErrorMessage(e, '삭제하지 못했습니다'))
   } finally {
     const s = new Set(removing.value); s.delete(id); removing.value = s
   }

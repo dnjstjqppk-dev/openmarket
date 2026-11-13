@@ -59,7 +59,7 @@ const fillDev = () => { if (import.meta.env.DEV) { email.value = 'admin@openmark
       </div>
 
       <form @submit.prevent="handleAdminLogin" class="space-y-4 text-xs">
-        <p v-if="route.query.expired === '1'" role="status" class="p-3 rounded-xl bg-amber-50 text-amber-800 font-bold">세션이 만료되었습니다. 다시 로그인해 주세요.</p>
+        <p v-if="route.query.expired === '1'" role="status" class="p-3 rounded-xl bg-amber-50 text-amber-800 font-bold">세션이 만료되었습니다. 다시 로그인해주세요.</p>
         <div>
           <label for="adm-email" class="block font-bold text-gray-700 mb-1">운영자 계정 이메일</label>
           <input id="adm-email" v-model="email" type="email" autocomplete="username" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />

@@ -8,7 +8,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronLeft, ChevronRight, Clock, Zap } from 'lucide-vue-next'
-import { OmButton, OmIconButton, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, discountRate } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmIconButton, OmSelect, OmSkeleton, OmEmptyState, OmErrorState, discountRate } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { WELCOME_CREDIT, LATE_COMPENSATION, RETURN_WINDOW_DAYS, fmtKRW } from '../config/policy'
@@ -67,7 +67,7 @@ function goBanner(i: number) { bannerIdx.value = i; startRotation() }
 async function getJson(path: string) {
   const res = await fetch(`${API_BASE_URL}${path}`)
   const json = await res.json().catch(() => null)
-  if (!res.ok || !json?.success) throw new Error(json?.error || `${path} (${res.status})`)
+  if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
   return json
 }
 
@@ -82,7 +82,7 @@ async function load() {
     const j = await getJson('/api/v1/products')
     products.value = Array.isArray(j.data) ? j.data : []
   } catch (e: any) {
-    loadError.value = e?.message || '상품을 불러오지 못했습니다'
+    loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다')
   } finally {
     loading.value = false
   }

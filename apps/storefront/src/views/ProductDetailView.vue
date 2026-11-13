@@ -11,7 +11,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { Heart, Minus, Plus, Play, ShoppingBag, Star, Store, Truck, RotateCcw, BadgePercent } from 'lucide-vue-next'
 import {
   OmBreadcrumb, OmButton, OmIconButton, OmTabs, OmAlert, OmSkeleton, OmErrorState, OmEmptyState, OmModal,
-  useToast, discountRate, formatNumber
+  useToast, discountRate, formatNumber, userErrorMessage
 } from '@olmoa/ui'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
@@ -70,7 +70,7 @@ async function load() {
     const json = await res.json().catch(() => null)
     if (my !== seq) return
     if (res.status === 404) { notFound.value = true; product.value = null; return }
-    if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다 (${res.status})`)
+    if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     product.value = json.data
     recordRecentVisit(json.data)
     reviewSummary.value = { count: Number(json.data.review_count || 0), average: json.data.avg_rating ?? null }
@@ -80,7 +80,7 @@ async function load() {
     loadSideData(json.data.id)
     loadRelated(json.data.id, json.data.category_slug)
   } catch (e: any) {
-    if (my === seq) loadError.value = e?.message || '상품을 불러오지 못했습니다'
+    if (my === seq) loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }
@@ -191,7 +191,7 @@ async function toggleWishlist() {
     isWishlisted.value = !!json.wished
     toast.success(json.wished ? '찜 목록에 저장했습니다.' : '찜 목록에서 삭제했습니다.')
   } catch (e: any) {
-    toast.error(e?.message || '찜하지 못했습니다')
+    toast.error(userErrorMessage(e, '찜하지 못했습니다'))
   } finally {
     wishBusy.value = false
   }
@@ -246,9 +246,8 @@ watch(() => route.hash, applyHash)
 
 <template>
   <div class="mx-auto max-w-container px-4 pb-28 pt-4 sm:px-6 lg:pb-12">
-    <div v-if="loading" class="grid gap-8 lg:grid-cols-2">
-      <OmSkeleton variant="rect" height="aspect-square" />
-      <div class="space-y-4"><OmSkeleton :lines="2" /><OmSkeleton variant="rect" height="h-24" /><OmSkeleton :lines="4" /></div>
+    <div v-if="loading">
+      <OmSkeleton variant="detail" />
     </div>
     <OmEmptyState v-else-if="notFound" class="mt-8" title="상품을 찾을 수 없습니다" description="삭제되었거나 주소가 잘못되었습니다.">
       <OmButton to="/" variant="outline" size="sm">홈으로</OmButton>

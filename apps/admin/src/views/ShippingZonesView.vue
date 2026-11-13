@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 
@@ -27,10 +27,10 @@ async function loadZones() {
       headers: getAdminHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.success === false) throw new Error(json.error || `조회 실패 (${res.status})`);
+    if (!res.ok || json.success === false) throw new Error(json.error || `조회하지 못했습니다`);
     zones.value = Array.isArray(json.data) ? json.data : [];
   } catch (e: any) {
-    loadError.value = e?.message || '지역 목록을 불러오지 못했습니다.';
+    loadError.value = userErrorMessage(e, '지역 목록을 불러오지 못했습니다.');
   } finally {
     loading.value = false;
   }
@@ -58,13 +58,13 @@ async function saveZone() {
       body: JSON.stringify({ postal_prefix: form.value.postal_prefix.trim(), zone_name: form.value.zone_name.trim(), surcharge_amount: amount })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.success === false) throw new Error(json.error || `저장 실패 (${res.status})`);
+    if (!res.ok || json.success === false) throw new Error(json.error || `저장하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     form.value = { postal_prefix: '', zone_name: '', surcharge_amount: 3000 };
     toast.value = '도서산간 지역을 저장했습니다. 다음 주문부터 즉시 적용됩니다.';
     setTimeout(() => { toast.value = ''; }, 3500);
     await loadZones();
   } catch (e: any) {
-    formError.value = e?.message || '저장에 실패했습니다.';
+    formError.value = userErrorMessage(e, '저장에 실패했습니다.');
   }
 }
 
@@ -76,12 +76,12 @@ async function deleteZone(prefix: string) {
       headers: getAdminHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json.success === false) throw new Error(json.error || `삭제 실패 (${res.status})`);
+    if (!res.ok || json.success === false) throw new Error(json.error || `삭제하지 못했습니다. 잠시 후 다시 시도해주세요.`);
     toast.value = '지역을 삭제했습니다.';
     setTimeout(() => { toast.value = ''; }, 3500);
     await loadZones();
   } catch (e: any) {
-    toast.value = e?.message || '삭제에 실패했습니다.';
+    toast.value = userErrorMessage(e, '삭제에 실패했습니다.');
     setTimeout(() => { toast.value = ''; }, 4000);
   }
 }
@@ -112,10 +112,18 @@ onMounted(loadZones);
       <h2 class="font-black text-sm mb-2">등록된 지역 ({{ zones.length }})</h2>
       <p v-if="loading" class="text-gray-500">불러오는 중...</p>
       <div v-else-if="loadError" class="space-y-2">
-        <p role="alert" class="text-red-600 font-bold">{{ loadError }}</p>
+        <p role="alert" class="text-red-600 font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+        <p class="text-ink-muted">{{ loadError }}</p>
         <button @click="loadZones" class="px-3 py-1.5 rounded border font-bold">다시 시도</button>
       </div>
-      <p v-else-if="!zones.length" class="text-gray-500">등록된 도서산간 지역이 없습니다.</p>
+      <OmEmptyState
+        v-else-if="!zones.length"
+        compact
+        title="등록된 도서산간 지역이 없습니다."
+        description="상단 양식으로 첫 지역을 등록해 보세요."
+      >
+        <OmButton size="sm" @click="loadZones">다시 불러오기</OmButton>
+      </OmEmptyState>
       <table v-else class="w-full text-left">
         <thead class="text-slate-500"><tr><th class="p-1">앞자리</th><th class="p-1">지역명</th><th class="p-1">추가배송비</th><th></th></tr></thead>
         <tbody>

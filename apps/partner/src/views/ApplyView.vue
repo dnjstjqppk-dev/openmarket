@@ -3,6 +3,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL, savePartnerSession } from '../config'
+import { userErrorMessage } from '@olmoa/ui'
 
 const router = useRouter()
 const BANKS = [
@@ -52,7 +53,7 @@ async function validateBrn() {
       brnStatus.value = { valid: false, message: json.reason || json.error || '사업자등록번호를 확인하지 못했습니다.' }
     }
   } catch (e: any) {
-    brnStatus.value = { valid: false, message: e.message || '검증 서버 연결 오류' }
+    brnStatus.value = { valid: false, message: userErrorMessage(e, '검증 서버 연결 오류') }
   } finally {
     brnValidating.value = false
   }

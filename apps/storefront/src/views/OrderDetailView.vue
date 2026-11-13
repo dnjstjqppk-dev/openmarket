@@ -5,7 +5,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
-import { useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmSkeleton, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 import { validateKrMobile, validateBrnDigits } from '../utils/phone'
@@ -127,7 +127,7 @@ const submitCashReceipt = async () => {
       cashReceiptError.value = json.message || json.error || '현금영수증 신청에 실패했습니다.'
     }
   } catch (e: any) {
-    cashReceiptError.value = e.message || '요청 처리 중 오류가 발생했습니다.'
+    cashReceiptError.value = userErrorMessage(e, '요청 처리 중 오류가 발생했습니다.')
   } finally {
     cashReceiptLoading.value = false
   }
@@ -172,7 +172,7 @@ const loadCommercialInvoice = async () => {
       if (json.missing_fields) invoiceMissingFields.value = json.missing_fields
     }
   } catch (e: any) {
-    invoiceError.value = e.message || '인보이스 로딩 오류'
+    invoiceError.value = userErrorMessage(e, '인보이스 로딩 오류')
   } finally {
     invoiceLoading.value = false
   }
@@ -314,7 +314,7 @@ async function resumePayment() {
     }
     say('결제 수단이 연동되지 않았습니다.', 'warn')
   } catch (e: any) {
-    say(e?.message || '결제를 다시 시작하지 못했습니다.', 'warn')
+    say(userErrorMessage(e, '결제를 다시 시작하지 못했습니다.'), 'warn')
   } finally {
     resuming.value = false
   }
@@ -372,7 +372,7 @@ onMounted(loadOrderDetail)
       <button @click="statusBanner = ''" class="text-green-600 hover:text-green-800">✕</button>
     </div>
 
-    <div v-if="loading" class="bg-white rounded-2xl p-8 animate-pulse h-64"></div>
+    <div v-if="loading" class="bg-white rounded-2xl p-8"><OmSkeleton variant="rect" height="h-64" /></div>
 
     <div v-else-if="order" class="space-y-6">
       <!-- Order header -->

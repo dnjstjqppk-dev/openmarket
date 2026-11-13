@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
-import { useToast } from '@olmoa/ui';
+import { userErrorMessage, OmButton, OmEmptyState, useToast } from '@olmoa/ui';
 
 const toastApi = useToast();
 
@@ -62,10 +62,10 @@ const loadReturns = async () => {
       headers: getPartnerHeaders()
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `반품 조회 실패 (${res.status})`);
+    if (!res.ok || !json.success) throw new Error(json.error || `반품 내역을 불러오지 못했습니다`);
     returns.value = Array.isArray(json.data) ? json.data : [];
   } catch (e: any) {
-    loadError.value = e?.message || '반품 목록을 불러오지 못했습니다. 다시 시도해 주세요.';
+    loadError.value = userErrorMessage(e, '반품 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   } finally {
     loading.value = false;
   }
@@ -134,7 +134,7 @@ const confirmStatusUpdate = async () => {
       toastApi.error(json.error || '상태 변경 중 오류가 발생했습니다.');
     }
   } catch (e: any) {
-    toastApi.error(e.message || '네트워크 통신 오류');
+    toastApi.error(userErrorMessage(e, '네트워크 통신 오류'));
   } finally {
     processing.value = false;
   }
@@ -279,15 +279,18 @@ onMounted(() => {
 
       <div v-else-if="loadError" class="p-12 text-center">
         <div class="text-3xl mb-2">⚠️</div>
-        <p class="font-bold text-red-700 text-xs">{{ loadError }}</p>
+        <p class="font-bold text-red-700 text-xs">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+        <p class="text-[11px] text-ink-muted mt-1">{{ loadError }}</p>
         <button @click="loadReturns" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
       </div>
 
-      <div v-else-if="filteredReturns.length === 0" class="p-12 text-center text-xs text-gray-500">
-        <div class="text-3xl mb-2">📦</div>
-        <p class="font-bold text-gray-700">해당 조건의 반품·클레임 내역이 없습니다.</p>
-        <p class="text-[11px] text-gray-400 mt-1">고객 클레임이 발생하면 이곳에 실시간으로 집계됩니다.</p>
-      </div>
+      <OmEmptyState
+        v-else-if="filteredReturns.length === 0"
+        title="해당 조건의 반품·클레임 내역이 없습니다."
+        description="고객 클레임이 발생하면 이곳에 실시간으로 집계됩니다."
+      >
+        <OmButton size="sm" @click="loadReturns">다시 불러오기</OmButton>
+      </OmEmptyState>
 
       <div v-else class="overflow-x-auto">
         <table class="w-full text-left text-xs">

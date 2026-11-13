@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Failed load. Shows the server's message (never a fake success) and a retry action.
 import OmButton from './OmButton.vue'
-withDefaults(defineProps<{ title?: string; message?: string | null; code?: string | null; retrying?: boolean; compact?: boolean }>(), { title: '불러오지 못했습니다', retrying: false, compact: false })
+withDefaults(defineProps<{ title?: string; message?: string | null; code?: string | null; retrying?: boolean; compact?: boolean }>(), { title: '문제가 발생했습니다. 잠시 후 다시 시도해주세요.', retrying: false, compact: false })
 const emit = defineEmits<{ retry: [] }>()
 </script>
 
