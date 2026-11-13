@@ -65,7 +65,7 @@ const onTouchEnd = (e: TouchEvent) => {
           type="button"
           :aria-label="`${i}번으로 이동`"
           class="h-1.5 rounded-full transition-all"
-          :class="(i - 1) === index ? 'w-5 bg-white' : 'w-1.5 bg-white/60 hover:bg-white'"
+          :class="(i - 1) === index ? 'w-5 bg-ink-inverse' : 'w-1.5 bg-ink-inverse/60 hover:bg-ink-inverse'"
           @click="go(i - 1)"
         />
         <button type="button" :aria-label="playing ? '일시정지' : '재생'" class="ml-1 rounded-full bg-overlay/40 p-1 text-white hover:bg-overlay/60" @click="playing = !playing">

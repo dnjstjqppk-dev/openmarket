@@ -35,7 +35,7 @@ useOverlay(open, panel, () => { if (current.value) settle(current.value.id, fals
           </button>
           <button
             type="button"
-            :class="['h-10 rounded-lg px-4 text-sm font-bold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', current.danger ? 'bg-danger hover:opacity-90 active:opacity-80' : 'bg-secondary hover:bg-secondary-hover active:bg-secondary-active']"
+            :class="['h-10 rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', current.danger ? 'border border-danger bg-danger-soft text-danger hover:bg-danger-soft/70 active:bg-danger-soft/50' : 'bg-secondary text-secondary-on hover:bg-secondary-hover active:bg-secondary-active']"
             @click="settle(current.id, true)"
           >
             {{ current.confirmLabel }}
