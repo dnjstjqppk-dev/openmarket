@@ -60,6 +60,7 @@ backups/
 apps/*/dist-local/
 reports/v4/phase2/**/*.png
 reports/v4/phase3/**/*.png
+reports/v4/stage1-gate/**/*.png
 
 # production row dumps (may contain personal data) - keep local, never commit
 .ops-backups/
