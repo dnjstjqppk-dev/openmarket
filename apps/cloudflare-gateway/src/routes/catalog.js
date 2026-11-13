@@ -156,8 +156,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
              pc.slug as parent_category_slug,
              pt.business_name, pt.base_shipping_fee, pt.free_shipping_threshold,
              (SELECT s.id FROM product_skus s WHERE s.product_id = p.id AND s.stock_quantity > 0 ORDER BY s.sale_price ASC LIMIT 1) as default_sku_id,
-             (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
-             COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count`;
+             (p.avg_rating_x10 / 10.0) as avg_rating,
+             p.review_count as review_count`;
     const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
@@ -197,7 +197,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       if (sort === 'price_asc') return ` ORDER BY ${col}lowest_sale_price ASC`;
       if (sort === 'price_desc') return ` ORDER BY ${col}lowest_sale_price DESC`;
       if (sort === 'newest') return ` ORDER BY ${col}created_at DESC`;
-      if (sort === 'rating') return ` ORDER BY ${col}avg_rating DESC, ${col}total_sold_count DESC`;
+      if (sort === 'rating') return ` ORDER BY avg_rating DESC, ${col}total_sold_count DESC`;
+      if (sort === 'reviews') return ` ORDER BY review_count DESC, ${col}total_sold_count DESC`;
       if (sort === 'relevance' && col === '') return ` ORDER BY CASE WHEN _rank IS NULL THEN 1 ELSE 0 END, _rank ASC, total_sold_count DESC`;
       return ` ORDER BY ${col}total_sold_count DESC`;
     };

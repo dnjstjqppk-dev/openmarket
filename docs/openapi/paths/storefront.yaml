@@ -24,7 +24,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [popular, price_asc, price_desc, newest, rating, relevance]
+            enum: [popular, price_asc, price_desc, newest, rating, reviews, relevance]
             default: popular
           description: Keyword searches (q) default to relevance (FTS bm25, then units sold); without q the default is popular.
         - name: q

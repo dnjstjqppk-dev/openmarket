@@ -16,4 +16,5 @@
 2-1 | 통과 | 40c9026 | catalog_media_notice 8/8 + migrations + p1 + openapi 3/3 + e2e 26/26 | 이미지 갤러리·고시 템플릿·상세 확장, URL 강제 연기 → Q-2-1
 2-2 | 통과 | a9324f1 | shipping_policy 9/9 + migrations + p1 + openapi 3/3 + e2e 26/26 | 배송 템플릿·묶음 그룹·내역 저장, 경계값 해석 → Q-2-2
 2-3 | 통과 | 155aa37 | coupon_engine 12/12 + migrations + p1 + openapi 3/3 + e2e 26/26 | 플랫폼/스토어 분리·분담·환불·발급, 해석 → Q-2-3
-2-4 | 통과 | PENDING | settlement_policy 10/10 + migrations + p1 + payouts + openapi 3/3 + e2e 26/26 | 정책 정산식·출금 신청·승인 지급, 해석 → Q-2-4
+2-4 | 통과 | b1919fc | settlement_policy 10/10 + migrations + p1 + payouts + openapi 3/3 + e2e 26/26 | 정책 정산식·출금 신청·승인 지급, 해석 → Q-2-4
+2-5 | 통과 | PENDING | reviews_social 8/8 + migrations + products + p1 + openapi 3/3 + e2e 26/26 | 리뷰 집계 트리거·정렬·소셜 테이블, 해석 → Q-2-5
