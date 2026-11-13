@@ -77,6 +77,17 @@
   --om-danger: var(--om-red-600);     --om-danger-soft: var(--om-red-50);
   --om-info: var(--om-blue-600);      --om-info-soft: var(--om-blue-50);
 
+  /* ---- commerce (work order 1-2; final price stays near-black, only the rate is accent) ---- */
+  --om-price: 23 23 22;
+  --om-discount: 214 48 74;
+  --om-urgent: 232 93 4;       --om-urgent-soft: 255 237 222;
+  --om-ship-fast: 36 99 209;
+  --om-ship-free: 22 128 74;
+  --om-rating: 242 169 0;
+  --om-benefit: 9 90 99;
+  --om-soldout: 154 154 146;
+  --om-direct: 23 23 22;
+
   --om-focus: var(--om-lagoon-400);
   --om-overlay: 15 18 20;
 
@@ -158,6 +169,15 @@
   --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
   --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
   --om-info: 110 160 245;    --om-info-soft: 18 36 70;
+  --om-price: 236 237 235;
+  --om-discount: 240 98 118;
+  --om-urgent: 255 140 66;   --om-urgent-soft: 66 33 10;
+  --om-ship-fast: 110 160 245;
+  --om-ship-free: 74 196 128;
+  --om-rating: 248 204 98;
+  --om-benefit: 138 213 221;
+  --om-soldout: 105 108 105;
+  --om-direct: 255 255 255;
   --om-overlay: 0 0 0;
   color-scheme: dark;
 }
@@ -191,6 +211,15 @@
     --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
     --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
     --om-info: 110 160 245;    --om-info-soft: 18 36 70;
+    --om-price: 236 237 235;
+    --om-discount: 240 98 118;
+    --om-urgent: 255 140 66;   --om-urgent-soft: 66 33 10;
+    --om-ship-fast: 110 160 245;
+    --om-ship-free: 74 196 128;
+    --om-rating: 248 204 98;
+    --om-benefit: 138 213 221;
+    --om-soldout: 105 108 105;
+    --om-direct: 255 255 255;
     --om-overlay: 0 0 0;
     color-scheme: dark;
   }
