@@ -717,47 +717,6 @@ paths:
         '403':
           description: Not an admin session
 
-  /api/v1/admin/finance/fees/recalc:
-    post:
-      summary: Verify-only fee recomputation over explicit orders (never rewrites)
-      tags: [Finance]
-      description: >
-        Recomputes each order's commission under the schedules valid at its own
-        time and compares with the recorded settlements. Mismatches and failures
-        are reported; nothing is rewritten (no retroactive application).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [order_ids]
-              properties:
-                order_ids:
-                  type: array
-                  maxItems: 5000
-                  items:
-                    type: string
-      responses:
-        '200':
-          description: Verification report (processed/matched/mismatched/failed)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [success, data]
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-        '400':
-          description: Missing or oversized order_ids
-        '401':
-          description: Missing or expired JWT
-        '403':
-          description: Not an admin session
-
   /api/v1/admin/finance/payouts/{id}/transferred:
     post:
       summary: Record the manual bank transfer reference for an APPROVED payout

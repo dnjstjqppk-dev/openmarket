@@ -2,8 +2,8 @@
 import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Truck } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { OmConsoleShell, OmConfirmDialog, OmToast, formatNumber, type ConsoleMenuItem } from '@olmoa/ui';
-import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, clearPartnerSession } from './config';
+import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
+import { API_BASE_URL, getPartnerHeaders, getPartnerName, clearPartnerSession } from './config';
 
 const router = useRouter();
 const route = useRoute();
@@ -40,8 +40,6 @@ const menu = computed<ConsoleMenuItem[]>(() => [
 
 interface HeaderProfile { status: string; payout_account_verified: boolean }
 const profile = ref<HeaderProfile | null>(null);
-const operator = ref<any>(null);
-const remoteZones = ref<{ zone_name: string; surcharge_amount: number }[]>([]);
 
 async function loadHeader() {
   if (isLoginPage.value) return;
@@ -56,28 +54,14 @@ async function loadHeader() {
   }
 }
 
-async function loadFooter() {
-  if (isLoginPage.value) return;
-  try {
-    const biz = await (await fetch(`${API_BASE_URL}/api/v1/business-info`, { headers: getPartnerHeaders() })).json().catch(() => ({}));
-    if (biz?.success && biz?.data?.legal_name) operator.value = biz.data;
-  } catch { /* footer stays hidden */ }
-  try {
-    const zones = await (await fetch(`${API_BASE_URL}/api/v1/shipping/remote-zones`, { headers: getPartnerHeaders() })).json().catch(() => ({}));
-    if (zones?.success && Array.isArray(zones.data)) remoteZones.value = zones.data;
-  } catch { /* surcharge line stays hidden */ }
-}
-
 function handleLogout() {
   clearPartnerSession();
   profile.value = null;
-  operator.value = null;
-  remoteZones.value = [];
   router.push('/login');
 }
 
-watch(() => route.path, () => { loadHeader(); loadFooter(); });
-onMounted(() => { loadHeader(); loadFooter(); });
+watch(() => route.path, () => { loadHeader(); });
+onMounted(() => { loadHeader(); });
 </script>
 
 <template>
@@ -126,17 +110,4 @@ onMounted(() => { loadHeader(); loadFooter(); });
       </ul>
     </template>
   </OmConsoleShell>
-  <footer v-if="!isLoginPage && operator" class="border-t border-line-divider bg-surface px-4 py-4 text-xs leading-relaxed text-ink-muted">
-    <p>상호 {{ operator.legal_name }} · 대표자 {{ operator.representative_name }} · 사업자등록번호 {{ operator.business_reg_number }} · 통신판매업신고 {{ operator.mail_order_reg_number }}</p>
-    <p>주소 {{ operator.address }} · 고객센터 {{ operator.cs_phone }} · {{ operator.cs_email }}</p>
-    <p v-if="operator.escrow_service_ref">구매안전서비스 {{ operator.escrow_service_ref }}</p>
-    <p v-else><a :href="`${STOREFRONT_URL}/policy/escrow`" target="_blank" rel="noopener" class="underline hover:text-ink">구매안전서비스 안내</a></p>
-    <!-- defaults mirror services/orders.js:186 (per-seller fallback) -->
-    <p>배송비는 판매자별로 다르며, 미설정 시 기본 배송비 3,000원 · 30,000원 이상 무료배송이 적용됩니다.<template v-if="remoteZones.length"> 도서산간 추가: {{ remoteZones.map((z) => `${z.zone_name} +${formatNumber(z.surcharge_amount)}원`).join(' · ') }}</template></p>
-    <p class="pt-1">
-      © {{ new Date().getFullYear() }} {{ operator.legal_name }} ·
-      <a :href="`${STOREFRONT_URL}/legal/terms`" target="_blank" rel="noopener" class="underline hover:text-ink">이용약관</a> ·
-      <a :href="`${STOREFRONT_URL}/legal/privacy`" target="_blank" rel="noopener" class="underline hover:text-ink">개인정보처리방침</a>
-    </p>
-  </footer>
 </template>

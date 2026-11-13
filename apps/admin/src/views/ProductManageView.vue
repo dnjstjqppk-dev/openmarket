@@ -131,7 +131,7 @@ onMounted(() => {
         <tbody class="divide-y divide-slate-100">
           <tr v-for="p in products" :key="p.id" class="hover:bg-slate-50/60 transition">
             <td class="p-3 font-medium text-slate-900 max-w-xs truncate">{{ p.title }}</td>
-            <td class="p-3 text-slate-600">{{ p.business_name || '-' }}</td>
+            <td class="p-3 text-slate-600">{{ p.business_name || '직영점' }}</td>
             <td class="p-3 text-slate-500">{{ p.category_name || '미분류' }}</td>
             <td class="p-3 text-right font-mono font-bold text-slate-800">₩{{ p.lowest_sale_price.toLocaleString() }}</td>
             <td class="p-3 text-center font-mono">{{ p.sku_count || 1 }}개</td>

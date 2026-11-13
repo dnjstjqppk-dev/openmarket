@@ -12,7 +12,6 @@ const CASH_RECEIPT_METHODS = new Set(['가상계좌', '계좌이체', 'TRANSFER'
 const maskId = (v) => { const t = String(v || ''); return t.length <= 4 ? '****' : '*'.repeat(t.length - 4) + t.slice(-4); };
 const maskReceipt = (r) => (r ? { ...r, buyer_identifier: maskId(r.buyer_identifier) } : r);
 import { refundOrder, runBatch, loadOrderBundle } from '../services/orders.js';
-import { recalcBatch } from '../services/fees.js';
 import { pushOrderDelivered } from '../services/push.js';
 
 // A payout is always for ONE operating entity: after a 개인사업자 -> 법인 switch, settlements of each entity are
@@ -682,18 +681,6 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
       if (ord) await pushOrderDelivered(env, { orderNo: ord.order_no, customerId: ord.customer_id });
     } catch { /* push must never fail the delivery marking */ }
     return json(corsHeaders, { success: true });
-  }
-
-  // 2-2: verify-only fee recalculation over explicit order ids (never rewrites).
-  if (p === '/api/v1/admin/finance/fees/recalc' && request.method === 'POST') {
-    const b = await readJson(request);
-    const orderIds = Array.isArray(b.order_ids) ? b.order_ids.map(String).filter(Boolean) : [];
-    if (!orderIds.length) throw bad('ORDER_IDS_REQUIRED', 'order_ids 배열이 필요합니다.');
-    if (orderIds.length > 5000) throw bad('TOO_MANY_ORDERS', '한 번에 최대 5000건까지 검증할 수 있습니다.');
-    const report = await recalcBatch(env, { orderIds, batchSize: 1000 });
-    await env.DB.prepare('INSERT INTO admin_audit_log (id, actor_user_id, actor_role, action, target_type, after_json) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(newId('aud'), admin.userId, admin.role, 'FEE_RECALC', 'batch', JSON.stringify({ processed: report.processed, matched: report.matched, mismatched: report.mismatched.length, failed: report.failed.length })).run();
-    return json(corsHeaders, { success: true, data: report });
   }
 
   return null;

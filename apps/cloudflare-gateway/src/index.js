@@ -8,7 +8,6 @@ import { handleSocialAuthRoutes } from './routes/social-auth.js';
 import { handleCatalogRoutes } from './routes/catalog.js';
 import { handleOrderRoutes } from './routes/orders.js';
 import { handlePartnerRoutes } from './routes/partner.js';
-import { handlePartnerCouponRoutes } from './routes/partner-coupons.js';
 import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
 import { handleFeatureRoutes } from './routes/features.js';
@@ -65,7 +64,6 @@ const ROUTERS = [
   handleCatalogRoutes,
   handleOrderRoutes,
   handlePartnerRoutes,
-  handlePartnerCouponRoutes,
   handleAdminRoutes,
   handleIntegrationRoutes,
   handleClientErrorRoutes

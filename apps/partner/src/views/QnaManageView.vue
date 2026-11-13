@@ -176,7 +176,7 @@ onMounted(loadQnA);
             >
               {{ q.status === 'ANSWERED' ? '✓ 답변완료' : '● 답변대기' }}
             </span>
-            <span v-if="q.product_title" class="font-bold text-slate-900">{{ q.product_title }}</span>
+            <span class="font-bold text-slate-900">{{ q.product_title || '상품 문의' }}</span>
             <span class="text-slate-400">•</span>
             <span class="text-slate-500 font-medium">{{ q.questioner_name }}</span>
             <span v-if="q.is_secret" class="text-amber-600 text-[11px] font-bold">🔒 비밀글</span>

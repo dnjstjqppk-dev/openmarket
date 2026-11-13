@@ -474,14 +474,12 @@ onMounted(loadOrders)
             <!-- Product Thumbnail & Details -->
             <div class="flex items-start gap-3.5 flex-1 min-w-0">
               <img
-                v-if="item.thumbnail_url"
-                :src="item.thumbnail_url"
+                :src="item.thumbnail_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=160'"
                 :alt="item.product_title"
                 class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-gray-100 shrink-0 border border-gray-200"
                 loading="lazy"
                 decoding="async"
               />
-              <span v-else class="flex w-16 h-16 sm:w-20 sm:h-20 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface-3 px-1 text-center text-[10px] font-bold text-ink-subtle">이미지 준비 중</span>
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span v-if="item.partner_name" class="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -501,8 +499,8 @@ onMounted(loadOrders)
                   {{ item.product_title }}
                 </RouterLink>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <span v-if="item.option_summary" class="bg-orange-50/80 text-[#FF5000] px-2 py-0.5 rounded text-[11px] font-medium">
-                    옵션: {{ item.option_summary }}
+                  <span class="bg-orange-50/80 text-[#FF5000] px-2 py-0.5 rounded text-[11px] font-medium">
+                    옵션: {{ item.option_summary || '기본 표준형' }}
                   </span>
                   <span class="font-bold text-gray-700">x {{ item.quantity }}개</span>
                   <span class="font-bold text-gray-900">{{ locale.formatPrice(item.unit_price) }}</span>

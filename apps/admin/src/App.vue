@@ -2,7 +2,7 @@
 import { Bell, Boxes, ChartPie, LogOut, Megaphone, MessageSquare, Receipt, Settings, ShieldCheck, Users } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { OmConsoleShell, OmConfirmDialog, OmToast, formatNumber, type ConsoleMenuItem } from '@olmoa/ui';
+import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
 import { API_BASE_URL, getAdminToken, getAdminHeaders, clearAdminToken, getAdminRole, ADMIN_ROLE_LABEL } from './config';
 
 const router = useRouter();
@@ -98,27 +98,14 @@ const menu = computed<ConsoleMenuItem[]>(() =>
 );
 
 const operatorName = ref('');
-const operatorReg = ref('');
-const entityLabel = ref('');
 const payMode = ref('');
-const operator = ref<any>(null);
-const remoteZones = ref<{ zone_name: string; surcharge_amount: number }[]>([]);
 
 async function loadHeader() {
   if (!isLoggedIn.value) return;
   try {
     const biz = await (await fetch(`${API_BASE_URL}/api/v1/business-info`, { headers: getAdminHeaders() })).json().catch(() => ({}));
-    if (biz?.success && biz?.data?.legal_name) {
-      operator.value = biz.data;
-      operatorName.value = biz.data.legal_name;
-      operatorReg.value = biz.data.business_reg_number || '';
-      entityLabel.value = biz.data.entity_type === 'CORPORATION' ? '법인' : biz.data.entity_type === 'INDIVIDUAL' ? '개인사업자' : '';
-    }
+    if (biz?.success && biz?.data?.legal_name) operatorName.value = biz.data.legal_name;
   } catch { /* badge stays hidden */ }
-  try {
-    const zones = await (await fetch(`${API_BASE_URL}/api/v1/shipping/remote-zones`, { headers: getAdminHeaders() })).json().catch(() => ({}));
-    if (zones?.success && Array.isArray(zones.data)) remoteZones.value = zones.data;
-  } catch { /* surcharge line stays hidden */ }
   try {
     const cfg = await (await fetch(`${API_BASE_URL}/api/v1/payments/config`, { headers: getAdminHeaders() })).json().catch(() => ({}));
     if (cfg?.success && cfg?.mode) payMode.value = cfg.mode === 'TOSS' ? '실결제' : cfg.mode === 'SANDBOX_SIMULATOR' ? '테스트' : '비활성';
@@ -129,11 +116,7 @@ const handleLogout = () => {
   clearAdminToken();
   isLoggedIn.value = false;
   operatorName.value = '';
-  operatorReg.value = '';
-  entityLabel.value = '';
   payMode.value = '';
-  operator.value = null;
-  remoteZones.value = [];
   router.push('/login');
 };
 
@@ -159,8 +142,7 @@ onMounted(() => {
     </template>
     <template #header>
       <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
-        <span v-if="operatorName" class="truncate font-bold text-ink" aria-label="운영 사업자">{{ operatorName }}<span v-if="operatorReg" class="font-semibold text-ink-muted">({{ operatorReg }})</span></span>
-        <span v-if="entityLabel" class="hidden shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted sm:inline-block">{{ entityLabel }}</span>
+        <span v-if="operatorName" class="truncate font-bold text-ink" aria-label="운영 사업자">{{ operatorName }}</span>
         <span v-if="payMode" class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">결제 {{ payMode }}</span>
         <span class="hidden shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">
           {{ ADMIN_ROLE_LABEL[adminRole] || '운영자' }}
@@ -201,13 +183,4 @@ onMounted(() => {
       </ul>
     </template>
   </OmConsoleShell>
-  <footer v-if="isLoggedIn && operator" class="border-t border-line-divider bg-surface px-4 py-4 text-xs leading-relaxed text-ink-muted">
-    <p>상호 {{ operator.legal_name }} · 대표자 {{ operator.representative_name }} · 사업자등록번호 {{ operator.business_reg_number }} · 통신판매업신고 {{ operator.mail_order_reg_number }}</p>
-    <p>주소 {{ operator.address }} · 고객센터 {{ operator.cs_phone }} · {{ operator.cs_email }}</p>
-    <p v-if="operator.escrow_service_ref">구매안전서비스 {{ operator.escrow_service_ref }}</p>
-    <p v-else>구매안전서비스 안내</p>
-    <!-- defaults mirror services/orders.js:186 (per-seller fallback) -->
-    <p>배송비는 판매자별로 다르며, 미설정 시 기본 배송비 3,000원 · 30,000원 이상 무료배송이 적용됩니다.<template v-if="remoteZones.length"> 도서산간 추가: {{ remoteZones.map((z) => `${z.zone_name} +${formatNumber(z.surcharge_amount)}원`).join(' · ') }}</template></p>
-    <p class="pt-1">© {{ new Date().getFullYear() }} {{ operator.legal_name }}</p>
-  </footer>
 </template>

@@ -138,14 +138,6 @@ function runTrending(term: string, close: () => void) {
 const business = useBusinessStore()
 const biz = computed(() => business.info)
 const bizLoaded = computed(() => business.loaded)
-const remoteZones = ref<{ zone_name: string; surcharge_amount: number }[]>([])
-async function fetchRemoteZones() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/shipping/remote-zones`)
-    const json = await res.json().catch(() => ({}))
-    if (json?.success && Array.isArray(json.data)) remoteZones.value = json.data
-  } catch { /* surcharge line stays hidden */ }
-}
 
 function logout() { auth.logout(); router.push('/') }
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
@@ -202,7 +194,6 @@ onMounted(async () => {
   fetchNotifications()
   fetchTrending()
   business.load()
-  fetchRemoteZones()
   loadRecents()
   window.addEventListener('scroll', onScroll, { passive: true })
 })
@@ -415,8 +406,6 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
           </p>
           <p>주소 {{ biz.address }} · 고객센터 {{ biz.cs_phone }} · {{ biz.cs_email }}<template v-if="biz.privacy_officer_name"> · 개인정보보호책임자 {{ biz.privacy_officer_name }}</template></p>
           <p v-if="biz.escrow_service_ref">구매안전서비스 {{ biz.escrow_service_ref }}</p>
-          <p v-else><RouterLink to="/policy/escrow" class="underline hover:text-ink">구매안전서비스 안내</RouterLink></p>
-          <p>배송비는 판매자별로 다르며, 미설정 시 기본 배송비 {{ locale.formatPrice(3000) }} · {{ locale.formatPrice(30000) }} 이상 무료배송이 적용됩니다.<template v-if="remoteZones.length"> 도서산간 추가: {{ remoteZones.map((z) => `${z.zone_name} +${locale.formatPrice(z.surcharge_amount)}`).join(' · ') }}</template></p>
           <p class="pt-1 text-ink-subtle">
             '올모아 직영' 표시 상품은 {{ biz.legal_name }}가 직접 판매합니다. 입점 판매자 상품의 경우 {{ biz.legal_name }}는 통신판매중개자로서 거래 당사자가 아니며,
             상품 정보와 거래에 대한 책임은 각 판매자에게 있습니다. 판매자 정보는 상품 상세에서 확인할 수 있습니다.
