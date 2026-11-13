@@ -82,3 +82,11 @@ export async function getActiveOperator(env) {
     "SELECT * FROM business_entities WHERE role = 'PLATFORM_OPERATOR' AND status = 'ACTIVE' LIMIT 1"
   ).first();
 }
+
+/** Read an effective platform policy value, or null when absent or not yet effective. */
+export async function getPolicy(env, key) {
+  const row = await env.DB.prepare(
+    "SELECT value FROM platform_policies WHERE key = ? AND effective_from <= date('now')"
+  ).bind(key).first();
+  return row ? row.value : null;
+}

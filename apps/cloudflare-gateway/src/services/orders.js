@@ -5,7 +5,7 @@
 import { HttpError, bad, conflict, notFound, forbidden, unavailable, str, idempotencyKey } from '../lib/http.js';
 import { newId, newOrderNo, newPoNo, sqlNow } from '../lib/ids.js';
 import { allocate, applyBps, proportionalPortion, assertWon } from '../lib/money.js';
-import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement } from '../lib/ledger.js';
+import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement, getPolicy } from '../lib/ledger.js';
 import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
 import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } from './coupons.js';
@@ -53,6 +53,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
   const { results: subs } = await env.DB.prepare(
     `SELECT s.*, st.id AS settlement_id, st.gross_amount AS st_gross, st.commission_amount AS st_commission,
             st.commission_rate_bps AS st_bps, st.shipping_fee AS st_shipping, st.net_payout_amount AS st_net, st.status AS st_status,
+            st.pg_fee_amount AS st_pg_fee,
             pt.business_name, pt.base_shipping_fee AS partner_base_fee, pt.return_shipping_fee AS partner_return_fee
      FROM sub_orders s
      LEFT JOIN settlements st ON st.sub_order_id = s.id
@@ -68,7 +69,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_55_coupon_engine.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_56_settlement_payout_policy.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -230,6 +231,14 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   }
   const subs = [];
   let idx = 1;
+  const { results: catRateRows } = await env.DB.prepare(
+    'SELECT id, commission_rate_bps FROM categories WHERE commission_rate_bps IS NOT NULL'
+  ).all();
+  const catRates = new Map(catRateRows.map((r) => [r.id, r.commission_rate_bps]));
+  const commBasePolicy = await getPolicy(env, 'commission.base');
+  const pgFeeBpsRaw = await getPolicy(env, 'pg.fee_bps');
+  const pgFeeBps = pgFeeBpsRaw != null && /^\d+$/.test(String(pgFeeBpsRaw)) && Number(pgFeeBpsRaw) <= 10000
+    ? Number(pgFeeBpsRaw) : null;
   for (const [partnerId, its] of groups) {
     const { results: tplRows } = await env.DB.prepare(
       "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE'"
@@ -266,7 +275,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     subs.push({
       id: newId('sub'), no: `${orderNo}-${idx++}`, partnerId, salesModel: its[0].salesModel, bps: its[0].bps,
       goods, shipping: assertWon(shipTotal, 'shipping'), remoteSurcharge, remoteZone: remoteZoneName, commission, items: its,
-      shippingGroups: breakdown, shipByDays: hasTemplate ? maxProcessing : null
+      shippingGroups: breakdown, shipByDays: hasTemplate ? maxProcessing : null, feeSource: 'SELLER'
     });
   }
   const allItems = subs.flatMap((s) => s.items);
@@ -372,6 +381,21 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     s.couponAlloc = s.items.reduce((a, it) => a + it.couponAlloc, 0);
     s.sellerCouponBurden = s.items.reduce((a, it) => a + it.sellerBurden, 0);
     s.appliedStoreCouponId = appliedStoreIds.get(s.partnerId) || null;
+    // 2-4: category rates win per item; the NET base needs store allocs, so the
+    // override lands here. Without any category rate or base policy the legacy
+    // single-call value above stands byte-identically.
+    if (s.salesModel === 'MARKETPLACE' && (s.items.some((it) => catRates.has(it.categoryId)) || commBasePolicy != null)) {
+      s.feeSource = s.items.every((it) => catRates.has(it.categoryId)) ? 'CATEGORY' : 'SELLER';
+      const netBase = commBasePolicy === 'NET';
+      s.commission = s.items.reduce((a, it) => {
+        const bps = catRates.get(it.categoryId) ?? it.bps;
+        const base = netBase ? it.lineTotal - it.storeCouponAlloc : it.lineTotal;
+        return a + applyBps(base, bps);
+      }, 0);
+    }
+    const subPg = s.items.reduce((a, it) => a + it.pgAlloc, 0) + s.shipPg;
+    s.pgFeeBps = pgFeeBps;
+    s.pgFee = pgFeeBps == null ? 0 : applyBps(subPg, pgFeeBps);
     s.total = s.goods + s.shipping;
   });
   const pgTotal = allItems.reduce((a, it) => a + it.pgAlloc, 0) + subs.reduce((a, s) => a + s.shipPg, 0);
@@ -431,10 +455,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     if (s.salesModel === 'MARKETPLACE') {
       st.push(env.DB.prepare(
         `INSERT INTO settlements (id, sub_order_id, partner_id, operator_entity_id, gross_amount, shipping_fee, commission_rate, commission_rate_bps,
-           commission_amount, net_payout_amount, seller_coupon_burden, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HOLD')`
+           commission_amount, net_payout_amount, seller_coupon_burden, pg_fee_bps, pg_fee_amount, fee_source, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HOLD')`
       ).bind(newId('stl'), s.id, s.partnerId, operator.id, s.goods, s.shipping, s.bps / 10000, s.bps, s.commission,
-        s.goods - s.commission + s.shipping - s.sellerCouponBurden, s.sellerCouponBurden));
+        s.goods - s.commission + s.shipping - s.sellerCouponBurden - s.pgFee, s.sellerCouponBurden,
+        s.pgFeeBps, s.pgFee, s.feeSource));
     }
     for (const it of s.items) {
       st.push(env.DB.prepare(
@@ -508,10 +533,13 @@ async function capturePayment(env, order, pg) {
   // Only the platform-funded coupon share is promotion expense; the seller-funded
   // share is already deducted from the seller payable (settlements.seller_coupon_burden).
   const platformPromo = bundle.items.reduce((a, i) => a + (i.coupon_alloc - i.seller_burden_amount), 0);
+  const pgFeeTotal = bundle.subs.reduce((a, s) => a + (s.st_pg_fee || 0), 0);
   const lines = [
     { account: ACCOUNTS.PG_CLEARING, debit: order.total_pay_amount },
     { account: ACCOUNTS.CUSTOMER_CREDIT_LIABILITY, debit: order.credit_used_amount },
-    { account: ACCOUNTS.PROMOTION_EXPENSE, debit: platformPromo }
+    { account: ACCOUNTS.PROMOTION_EXPENSE, debit: platformPromo },
+    // 2-4: the seller-funded PG fee is owed to the PG through clearing (netted from remittance).
+    { account: ACCOUNTS.PG_CLEARING, credit: pgFeeTotal }
   ];
   for (const s of bundle.subs) {
     if (s.sales_model === 'MARKETPLACE') {

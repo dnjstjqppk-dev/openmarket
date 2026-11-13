@@ -13,58 +13,9 @@ const maskId = (v) => { const t = String(v || ''); return t.length <= 4 ? '****'
 const maskReceipt = (r) => (r ? { ...r, buyer_identifier: maskId(r.buyer_identifier) } : r);
 import { refundOrder, runBatch, loadOrderBundle } from '../services/orders.js';
 import { pushOrderDelivered } from '../services/push.js';
+import { payablePreview, payoutPayload, createPayout, markRequestTransferred, reserveBpsOf } from '../services/payouts.js';
 
-// A payout is always for ONE operating entity: after a 개인사업자 -> 법인 switch, settlements of each entity are
-// paid (and journalled) separately, oldest entity first. `other_entities_pending` tells the caller to run again.
-async function payablePreview(env, partnerId) {
-  const { results: allSettlements } = await env.DB.prepare(
-    `SELECT st.id, st.sub_order_id, st.net_payout_amount, st.operator_entity_id,
-            COALESCE((SELECT SUM(a.net_delta) FROM settlement_adjustments a WHERE a.settlement_id = st.id AND a.applied_payout_id IS NULL), 0) AS adj
-     FROM settlements st WHERE st.partner_id = ? AND st.status = 'ELIGIBLE_FOR_PAYOUT' ORDER BY st.created_at`
-  ).bind(partnerId).all();
-  const { results: allCarried } = await env.DB.prepare(
-    `SELECT a.id, a.net_delta, st.operator_entity_id FROM settlement_adjustments a JOIN settlements st ON st.id = a.settlement_id
-     WHERE a.partner_id = ? AND a.applied_payout_id IS NULL AND st.status = 'PAID_OUT' ORDER BY a.created_at`
-  ).bind(partnerId).all();
-  // Rolling reserve (O18): holds whose release date has passed flow back into a payout.
-  const { results: allReleasable } = await env.DB.prepare(
-    "SELECT id, amount, operator_entity_id FROM payout_reserve_holds WHERE partner_id = ? AND released_payout_id IS NULL AND release_after <= datetime('now') ORDER BY created_at"
-  ).bind(partnerId).all();
-  const partner = await env.DB.prepare('SELECT rolling_reserve_pct, rolling_reserve_days FROM partners WHERE id = ?').bind(partnerId).first();
-  const reserveBps = reserveBpsOf(partner && partner.rolling_reserve_pct);
-  const reserveDays = Math.max(1, Math.min(365, Number(partner && partner.rolling_reserve_days) || 90));
-  const { results: openHolds } = await env.DB.prepare(
-    'SELECT COALESCE(SUM(amount),0) AS a, MIN(release_after) AS next_release FROM payout_reserve_holds WHERE partner_id = ? AND released_payout_id IS NULL'
-  ).bind(partnerId).all();
-
-  const byEntity = (entity) => {
-    const same = (r) => (r.operator_entity_id ?? null) === entity;
-    const settlements = allSettlements.filter(same);
-    const carried = allCarried.filter(same);
-    const releasable = allReleasable.filter(same);
-    const gross = settlements.reduce((s, r) => s + r.net_payout_amount + r.adj, 0) + carried.reduce((s, r) => s + r.net_delta, 0);
-    const released = releasable.reduce((s, h) => s + h.amount, 0);
-    // Only a positive gross is reserved; a net deduction is never "reserved" on top of being carried.
-    const held = gross > 0 ? Math.floor((gross * reserveBps) / 10000) : 0;
-    return { entity, settlements, carried, releasable, gross, released, held, amount: gross + released - held };
-  };
-  const entities = [...new Set([...allSettlements, ...allCarried, ...allReleasable].map((r) => r.operator_entity_id ?? null))];
-  const candidates = entities.map(byEntity);
-  // Pay the first entity that has something positive to pay; a negative balance of one entity must not block another.
-  const chosen = candidates.find((c) => c.amount > 0) || candidates[0] || byEntity(null);
-  return {
-    ...chosen, reserveBps, reserveDays,
-    other_entities_pending: candidates.some((c) => c !== chosen && (c.settlements.length || c.carried.length || c.releasable.length)),
-    reserve_outstanding: openHolds[0].a, next_release: openHolds[0].next_release
-  };
-}
-
-/** partners.rolling_reserve_pct (REAL percent) -> integer basis points, capped at 50%. */
-export function reserveBpsOf(pct) {
-  const bps = Math.round(Number(pct || 0) * 100);
-  if (!Number.isFinite(bps) || bps <= 0) return 0;
-  return Math.min(bps, 5000);
-}
+export { reserveBpsOf };
 
 export async function reconcile(env) {
   const checks = [];
@@ -562,68 +513,12 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, data: { payouts: results, pending } });
   }
 
-  function payoutPayload(p) {
-    return { payout_id: p.id, amount: p.amount, gross_amount: p.gross_amount, reserve_held: p.reserve_held, reserve_released: p.reserve_released, reserve_release_days: p.reserve_release_days ?? null, operator_entity_id: p.operator_entity_id, other_entities_pending: Boolean(p.other_entities_pending), settlement_count: p.settlement_count, bank_transfer: 'MANUAL — 은행 이체 후 /transferred 로 이체 참조번호를 기록하세요.' };
-  }
-
   if (p === '/api/v1/admin/finance/payouts' && request.method === 'POST') {
     const b = await readJson(request);
-    const idemKey = idempotencyKey(request.headers.get('X-Idempotency-Key') || b.idempotency_key || null);
-    if (idemKey) {
-      const prior = await env.DB.prepare('SELECT * FROM payouts WHERE idempotency_key = ?').bind(idemKey).first();
-      if (prior) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(prior) });
-    }
-    const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(String(b.partner_id || '')).first();
-    if (!partner) throw notFound('입점사를 찾을 수 없습니다.');
-    if (!Number(partner.payout_account_verified)) throw conflict('PAYOUT_ACCOUNT_UNVERIFIED', '정산 계좌 실명 확인이 완료되지 않았습니다.');
-    const pv = await payablePreview(env, partner.id);
-    if (!pv.settlements.length && !pv.carried.length && !pv.releasable.length) throw conflict('NOTHING_TO_PAY', '지급 대상 정산이 없습니다.');
-    if (pv.amount <= 0) throw conflict('NEGATIVE_BALANCE_CARRIED', `정산 후 환불 차감으로 지급액이 ${pv.amount}원입니다. 다음 정산으로 이월됩니다.`, { amount: pv.amount });
-    const payoutId = newId('pay');
-    const entityId = pv.entity;
-    const ids = pv.settlements.map((s) => s.id);
-    const releaseDays = pv.held ? pv.reserveDays : null;
-    const st = [
-      env.DB.prepare('INSERT INTO payouts (id, partner_id, operator_entity_id, amount, gross_amount, reserve_held, reserve_released, settlement_count, adjustment_count, status, approved_by, idempotency_key, reserve_release_days, other_entities_pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(payoutId, partner.id, entityId, pv.amount, pv.gross, pv.held, pv.released, ids.length, pv.carried.length, 'APPROVED', admin.userId, idemKey, releaseDays, pv.other_entities_pending ? 1 : 0)
-    ];
-    if (pv.held > 0) {
-      st.push(env.DB.prepare(`INSERT INTO payout_reserve_holds (id, partner_id, operator_entity_id, held_by_payout_id, amount, reserve_bps, release_after)
-                              VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`)
-        .bind(newId('rsv'), partner.id, entityId, payoutId, pv.held, pv.reserveBps, `+${pv.reserveDays} days`));
-    }
-    for (const h of pv.releasable) {
-      st.push(env.DB.prepare('UPDATE payout_reserve_holds SET released_payout_id = ?, released_at = CURRENT_TIMESTAMP WHERE id = ? AND released_payout_id IS NULL').bind(payoutId, h.id));
-    }
-    for (const id of ids) {
-      st.push(env.DB.prepare("UPDATE settlements SET status = 'PAID_OUT', payout_id = ?, settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'ELIGIBLE_FOR_PAYOUT'").bind(payoutId, id));
-      st.push(env.DB.prepare('UPDATE settlement_adjustments SET applied_payout_id = ? WHERE settlement_id = ? AND applied_payout_id IS NULL').bind(payoutId, id));
-    }
-    for (const a of pv.carried) st.push(env.DB.prepare('UPDATE settlement_adjustments SET applied_payout_id = ? WHERE id = ? AND applied_payout_id IS NULL').bind(payoutId, a.id));
-    // Abort if anything changed between preview and commit (concurrent refund/cancel).
-    st.push(env.DB.prepare(
-      `INSERT INTO batch_assertions (code) SELECT 'PAYOUT_DRIFT' WHERE
-         (SELECT COUNT(*) FROM settlements WHERE payout_id = ?) != ? OR
-         (SELECT COALESCE(SUM(st.net_payout_amount),0) FROM settlements st WHERE st.payout_id = ?) + (SELECT COALESCE(SUM(net_delta),0) FROM settlement_adjustments WHERE applied_payout_id = ?) != ? OR
-         (SELECT COALESCE(SUM(amount),0) FROM payout_reserve_holds WHERE released_payout_id = ?) != ?`
-    ).bind(payoutId, ids.length, payoutId, payoutId, pv.gross, payoutId, pv.released));
-    st.push(...journalStatements(env, { txnType: 'SELLER_PAYOUT', entityId, lines: [
-      { account: ACCOUNTS.SELLER_PAYABLE, debit: pv.amount, partner_id: partner.id },
-      { account: ACCOUNTS.BANK, credit: pv.amount, partner_id: partner.id, memo: payoutId }
-    ] }));
-    st.push(auditStatement(env, admin, { action: 'PAYOUT_APPROVE', targetType: 'partner', targetId: partner.id, after: { payoutId, amount: pv.amount, gross: pv.gross, reserveHeld: pv.held, reserveReleased: pv.released, settlements: ids }, request }));
-    try {
-      await runBatch(env, st);
-    } catch (e) {
-      // Lost a same-key race: the winner's row is the answer, not an error.
-      if (idemKey && String(e.message).includes('idempotency_key')) {
-        const winner = await env.DB.prepare('SELECT * FROM payouts WHERE idempotency_key = ?').bind(idemKey).first();
-        if (winner) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(winner) });
-      }
-      throw e;
-    }
-    const created = await env.DB.prepare('SELECT * FROM payouts WHERE id = ?').bind(payoutId).first();
-    return json(corsHeaders, { success: true, data: payoutPayload(created) }, 201);
+    const made = await createPayout(env, { partnerId: b.partner_id, adminId: admin.userId,
+      adminRole: admin.adminRole ?? null, idemKey: request.headers.get('X-Idempotency-Key') || b.idempotency_key || null });
+    if (made.replay) return json(corsHeaders, { success: true, idempotent_replay: true, data: payoutPayload(made.payout) });
+    return json(corsHeaders, { success: true, data: payoutPayload(made.payout) }, 201);
   }
 
   const trM = p.match(/^\/api\/v1\/admin\/finance\/payouts\/([^/]+)\/transferred$/);
@@ -635,6 +530,7 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
       auditStatement(env, admin, { action: 'PAYOUT_TRANSFERRED', targetType: 'payout', targetId: trM[1], after: { ref }, request })
     ]);
     if (r[0].meta.changes !== 1) throw conflict('PAYOUT_NOT_APPROVED', '승인 상태의 지급 건이 아닙니다.');
+    await markRequestTransferred(env, trM[1]);
     return json(corsHeaders, { success: true });
   }
 
