@@ -113,7 +113,8 @@ async function movePo(po: any, status: string) {
   if (status === 'SHIPPED' && po.fulfillment_mode === 'DROP_SHIP') {
     body.tracking_number = prompt('공급사 직배송 송장번호')
     if (!body.tracking_number) return
-    body.carrier = prompt('택배사', 'CJ대한통운') || 'CJ대한통운'
+    body.carrier = (prompt('택배사', '') || '').trim()
+    if (!body.carrier) return
   }
   const r = await adminApi(`/api/v1/admin/purchase-orders/${po.id}/status`, { method: 'PUT', json: body })
   msg.value = r.ok ? `${po.po_no} → ${LABEL[status]}${r.data.next_action ? ` · ${r.data.next_action}` : ''}` : (r.data.error || '변경 실패')

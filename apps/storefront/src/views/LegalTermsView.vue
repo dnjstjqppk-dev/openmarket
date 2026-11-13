@@ -4,14 +4,14 @@
 import { ref, onMounted } from 'vue'
 import { API_BASE_URL } from '../config'
 
-const companyName = ref('올모아')
+const companyName = ref('')
 const escrowRef = ref<string | null>(null)
 onMounted(() => {
   fetch(`${API_BASE_URL}/api/v1/business-info`)
     .then((r) => r.json())
     .then((j) => {
       if (j?.configured && j.data) {
-        companyName.value = j.data.legal_name || '올모아'
+        companyName.value = j.data.legal_name || ''
         escrowRef.value = j.data.escrow_service_ref || null
       }
     })
@@ -30,7 +30,7 @@ onMounted(() => {
 
     <section class="space-y-2">
       <h2 class="text-base font-bold text-slate-900">제1조 (목적)</h2>
-      <p>본 약관은 {{ companyName }}(이하 "회사")가 운영하는 OLMOA 글로벌 전자상거래 플랫폼(이하 "몰")에서 제공하는 전자상거래 관련 서비스(이하 "서비스")를 이용함에 있어 몰과 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+      <p>본 약관은 {{ companyName || '(상호 미등록)' }}(이하 "회사")가 운영하는 OLMOA 글로벌 전자상거래 플랫폼(이하 "몰")에서 제공하는 전자상거래 관련 서비스(이하 "서비스")를 이용함에 있어 몰과 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
     </section>
 
     <section class="space-y-2">
