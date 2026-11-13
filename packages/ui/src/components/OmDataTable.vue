@@ -7,6 +7,7 @@ import OmCheckbox from './OmCheckbox.vue'
 import OmSkeleton from './OmSkeleton.vue'
 import OmEmptyState from './OmEmptyState.vue'
 import OmErrorState from './OmErrorState.vue'
+import OmPagination from './OmPagination.vue'
 
 export interface Column { key: string; label: string; align?: 'left' | 'right' | 'center'; width?: string; sortable?: boolean; mobileHidden?: boolean; primary?: boolean }
 export interface SortState { key: string; dir: 'asc' | 'desc' }
@@ -23,7 +24,11 @@ const props = withDefaults(defineProps<{
   dense?: boolean
   caption?: string
   rowClickable?: boolean
-}>(), { rowKey: 'id', loading: false, error: null, selectable: false, emptyTitle: '표시할 데이터가 없습니다', dense: false, rowClickable: false })
+  total?: number | null
+  pageSize?: number
+  stickyActions?: boolean
+}>(), { rowKey: 'id', loading: false, error: null, selectable: false, emptyTitle: '표시할 데이터가 없습니다', dense: false, rowClickable: false, total: null, pageSize: 50, stickyActions: false })
+const page = defineModel<number>('page', { default: 1 })
 
 const selected = defineModel<(string | number)[]>('selected', { default: () => [] })
 const sort = defineModel<SortState | null>('sort', { default: null })
@@ -77,7 +82,7 @@ const align = (c: Column) => (c.align === 'right' ? 'text-right' : c.align === '
                 </button>
                 <span v-else>{{ c.label }}</span>
               </th>
-              <th v-if="$slots.actions" scope="col" class="w-px border-b border-line px-3 py-2.5"><span class="sr-only">작업</span></th>
+              <th v-if="$slots.actions" scope="col" :class="['w-px border-b border-line bg-surface-2 px-3 py-2.5', stickyActions ? 'sticky right-0 z-[1]' : '']"><span class="sr-only">작업</span></th>
             </tr>
           </thead>
           <tbody v-if="loading">
@@ -94,11 +99,14 @@ const align = (c: Column) => (c.align === 'right' ? 'text-right' : c.align === '
               <td v-for="c in columns" :key="c.key" :class="[dense ? 'py-2' : 'py-3', 'px-3 align-middle', align(c), c.align === 'right' ? 'om-num' : '']">
                 <slot :name="`cell-${c.key}`" :row="r" :value="r[c.key]">{{ r[c.key] ?? '-' }}</slot>
               </td>
-              <td v-if="$slots.actions" class="whitespace-nowrap px-3 text-right" @click.stop><slot name="actions" :row="r" /></td>
+              <td v-if="$slots.actions" :class="['whitespace-nowrap bg-surface px-3 text-right', stickyActions ? 'sticky right-0 z-[1]' : '']" @click.stop><slot name="actions" :row="r" /></td>
             </tr>
           </tbody>
         </table>
         <OmEmptyState v-if="!loading && !rows.length" compact :title="emptyTitle" :description="emptyDescription"><slot name="empty" /></OmEmptyState>
+      </div>
+      <div v-if="total !== null && total !== undefined" class="mt-3">
+        <OmPagination v-model="page" :total="total" :page-size="pageSize" />
       </div>
 
       <!-- cards (below md) -->
