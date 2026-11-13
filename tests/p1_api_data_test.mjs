@@ -94,7 +94,7 @@ await t.test('P04 customer-feature bare errors use envelopes', async () => {
   const cust = await g.login('customer@example.com', 'CUSTOMER');
   const adm = await g.login('admin@openmarket.com', 'ADMIN');
   assertEnvelope(await g.call('/api/v1/products/prod_001/qna', { method: 'POST', token: cust, body: {} }), 400, 'QUESTION_REQUIRED');
-  assertEnvelope(await g.call('/api/v1/coupons/claim', { method: 'POST', token: cust, body: { code: 'NOPE' } }), 404, 'NOT_FOUND');
+  assertEnvelope(await g.call('/api/v1/coupons/claim', { method: 'POST', token: cust, headers: { 'X-Idempotency-Key': 'p1-claim-nope' }, body: { code: 'NOPE' } }), 404, 'NOT_FOUND');
   assertEnvelope(await g.call('/api/v1/wishlist', { method: 'POST', token: cust, body: {} }), 400, 'PRODUCT_REQUIRED');
   assertEnvelope(await g.call('/api/v1/support/inquiries', { method: 'POST', token: cust, body: {} }), 400, 'INQUIRY_REQUIRED');
   assertEnvelope(await g.call('/api/v1/addresses', { method: 'POST', token: cust, body: {} }), 400, 'ADDRESS_REQUIRED');

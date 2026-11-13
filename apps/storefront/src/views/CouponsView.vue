@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
-import { API_BASE_URL, authHeader } from '../config'
+import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
 
 const auth = useAuthStore()
@@ -44,7 +44,7 @@ const claimCoupon = async (couponId: string) => {
     const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/coupons/claim`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      headers: { 'Content-Type': 'application/json', ...authHeader(), 'X-Idempotency-Key': newIdempotencyKey('clm') },
       body: JSON.stringify({ customer_id: cid, coupon_id: couponId })
     })
     const json = await res.json().catch(() => null)

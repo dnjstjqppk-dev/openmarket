@@ -1,8 +1,9 @@
 // apps/cloudflare-gateway/src/routes/features.js
 // Customer engagement features. Identity = verified JWT (requireCustomer / authenticate).
 import { requireCustomer, requireAdmin, authenticate } from '../lib/auth.js';
-import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl } from '../lib/http.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl, idempotencyKey } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
+import { claimCoupon } from '../services/coupons.js';
 import { auditStatement } from '../lib/ledger.js';
 import { sha256Hex } from '../utils/crypto-auth.js';
 import { sealPii } from '../lib/pii-crypto.js';
@@ -249,11 +250,11 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/coupons/claim' && request.method === 'POST') {
     const b = await readJson(request);
     const customerId = (await requireCustomer(request, env)).userId;
-    const codeOrId = (b.coupon_id || b.code || '').trim();
-    const coupon = codeOrId ? await env.DB.prepare('SELECT * FROM coupons WHERE (id = ? OR UPPER(code) = UPPER(?)) AND is_active = 1 AND expires_at > ?').bind(codeOrId, codeOrId, sqlNow()).first() : null;
-    if (!coupon) throw notFound('유효하지 않은 쿠폰 코드입니다.');
-    await env.DB.prepare('INSERT OR IGNORE INTO user_coupons (id, user_id, coupon_id, is_used) VALUES (?, ?, ?, 0)').bind(newId('uc'), customerId, coupon.id).run();
-    return new Response(JSON.stringify({ success: true, coupon, data: coupon, message: '쿠폰이 쿠폰함에 발급되었습니다.' }), { headers: corsHeaders });
+    const key = idempotencyKey(request.headers.get('X-Idempotency-Key') ?? b.idempotency_key ?? null);
+    const out = await claimCoupon(env, customerId, b.coupon_id || b.code, key);
+    const coupon = await env.DB.prepare('SELECT * FROM coupons WHERE id = ?').bind(out.userCoupon.coupon_id).first();
+    return new Response(JSON.stringify({ success: true, coupon, data: coupon, user_coupon_id: out.userCoupon.id,
+      ...(out.replay ? { idempotent_replay: true } : {}), message: '쿠폰이 쿠폰함에 발급되었습니다.' }), { headers: corsHeaders });
   }
 
   // 7. User Credits Balance & Ledger

@@ -66,6 +66,8 @@ paths:
     post:
       summary: Claim a coupon into my coupon wallet
       tags: [Features]
+      parameters:
+        - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -81,7 +83,7 @@ paths:
                   description: Alias of coupon_id.
       responses:
         '200':
-          description: Coupon issued (idempotent; re-claim returns the same coupon)
+          description: Coupon issued (idempotent; same-key replay returns the same grant)
           content:
             application/json:
               schema:
@@ -94,12 +96,20 @@ paths:
                     type: object
                   data:
                     type: object
+                  user_coupon_id:
+                    type: string
+                  idempotent_replay:
+                    type: boolean
                   message:
                     type: string
+        '400':
+          description: Missing idempotency key (IDEMPOTENCY_KEY_REQUIRED)
         '401':
           description: Missing or expired JWT (UNAUTHENTICATED)
         '404':
           description: Invalid, inactive or expired coupon code
+        '409':
+          description: Sold out (COUPON_SOLD_OUT), per-user limit (COUPON_LIMIT_REACHED) or already claimed (COUPON_ALREADY_CLAIMED)
 
   /api/v1/credits:
     get:

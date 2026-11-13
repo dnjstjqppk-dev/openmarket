@@ -52,9 +52,9 @@ function pickSku(g) {
 }
 
 function lagSchema(g) {
-  // Simulate an operator that deployed new code without applying d1_54.
-  const info = g.db.prepare("DELETE FROM schema_migrations WHERE version = 'd1_54_shipping_policies.sql'").run();
-  assert.equal(info.changes, 1, 'seeded schema ledger carries d1_54');
+  // Simulate an operator that deployed new code without applying d1_55.
+  const info = g.db.prepare("DELETE FROM schema_migrations WHERE version = 'd1_55_coupon_engine.sql'").run();
+  assert.equal(info.changes, 1, 'seeded schema ledger carries d1_55');
 }
 
 // ---------- K-1: checkout schema guard (P2-R1) ----------

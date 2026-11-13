@@ -14,5 +14,5 @@
 1-10 | 통과 | a061dfd | error_states 18/18 + test:ui + typecheck 4종 + 육안 5종 | 문구통일·401 3앱·빈 24곳·스켈레톤 detail·기술문구 88곳 차단, 해석 7건 → Q-1-10
 1-11 | 통과 | 10c64d4 | copy_honesty 11/11 + image_policy 3/3 + test:ui + typecheck 4종 | 표 10행 중 3행 적용·2행 현행적합·3행 부재·2행 제외, 예시 0건 → Q-1-11
 2-1 | 통과 | 40c9026 | catalog_media_notice 8/8 + migrations + p1 + openapi 3/3 + e2e 26/26 | 이미지 갤러리·고시 템플릿·상세 확장, URL 강제 연기 → Q-2-1
-2-2 | 통과 | PENDING | shipping_policy 9/9 + migrations + p1 + openapi 3/3 + e2e 26/26 | 배송 템플릿·묶음 그룹·내역 저장, 경계값 해석 → Q-2-2
-2-3 | 미실행 | - | - | 구 d41e7f5는 허구(쿠폰 엔진) → 되돌림. 실제 지시(결제·PG추가·위시리스트)로 재구현 예정
+2-2 | 통과 | a9324f1 | shipping_policy 9/9 + migrations + p1 + openapi 3/3 + e2e 26/26 | 배송 템플릿·묶음 그룹·내역 저장, 경계값 해석 → Q-2-2
+2-3 | 통과 | PENDING | coupon_engine 12/12 + migrations + p1 + openapi 3/3 + e2e 26/26 | 플랫폼/스토어 분리·분담·환불·발급, 해석 → Q-2-3

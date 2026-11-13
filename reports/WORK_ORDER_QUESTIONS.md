@@ -123,3 +123,18 @@
 - (e) 검수 결과 코드는 NORMAL·DEFECTIVE·MISMATCH(기존 enum 영어 관례), DB CHECK 없음.
 - (f) 발주확인 시각은 판매자 확인 동작(미구현)이 채우며 생성 시 비움.
 - 운영자 확인 필요: (a)~(f) 해석 승인.
+
+## Q-2-3 (작업 2-3, 2026-11-13): 쿠폰 분담·환불·발급 해석
+
+- (a) 판매자 부담은 마켓플레이스 품목에만 생긴다. 직영 품목은 정산 지급이 없어
+  부담금을 매기면 분개가 맞지 않으므로 플랫폼이 전액 부담한다.
+- (b) 플랫폼 쿠폰 최소주문은 스토어 차감 전 대상 합계로 보고, 할인액은 차감 후 잔액에 건다.
+- (c) 플랫폼 분담 끝전은 판매자 몫을 반올림(applyBps)하고 나머지를 플랫폼 몫으로 둔다.
+- (d) 환불 추적용으로 refunded_store_coupon_amount·refunded_platform_coupon_amount·
+  refunded_seller_burden_amount를 추가했다(지시서 외, 부분환불 정확성에 필요).
+  정산 조정에는 별도 쿠폰 컬럼 없이 net_delta에 판매자 복원분을 합산한다.
+- (e) 1인 제한 트리거가 있으나 기존 UNIQUE(user_id, coupon_id)가 1회를 강제한다.
+  실효 상한은 min(1인 제한, 1)이다. 다회 보유가 필요하면 UNIQUE 제거 결정이 먼저다.
+- (f) 발급 API는 DOWNLOAD·CODE만 받고 AUTO는 거부한다.
+  스토어 쿠폰 기록(sub_orders.applied_store_coupon_id)은 user_coupons ID를 저장한다.
+- 운영자 확인 필요: (a)~(f) 해석 승인, 특히 (e) UNIQUE 유지 여부.

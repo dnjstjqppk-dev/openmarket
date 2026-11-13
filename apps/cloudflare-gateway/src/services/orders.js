@@ -8,6 +8,7 @@ import { allocate, applyBps, proportionalPortion, assertWon } from '../lib/money
 import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement } from '../lib/ledger.js';
 import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
+import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } from './coupons.js';
 import { sealPii } from '../lib/pii-crypto.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
@@ -23,6 +24,10 @@ export function mapDbError(e) {
   if (msg.includes('STOCK_INSUFFICIENT')) return conflict('STOCK_INSUFFICIENT', '재고가 부족하여 주문할 수 없습니다.');
   if (msg.includes('CREDIT_INSUFFICIENT')) return conflict('CREDIT_INSUFFICIENT', '적립금 잔액이 부족합니다.');
   if (msg.includes('COUPON_ALREADY_USED')) return conflict('COUPON_ALREADY_USED', '이미 사용된 쿠폰입니다.');
+  if (msg.includes('COUPON_SOLD_OUT')) return conflict('COUPON_SOLD_OUT', '쿠폰이 모두 소진되었습니다.');
+  if (msg.includes('COUPON_LIMIT_REACHED')) return conflict('COUPON_LIMIT_REACHED', '1인 발급 한도를 초과했습니다.');
+  if (msg.includes('COUPON_SELLER_INTEGRITY')) return conflict('COUPON_SELLER_INTEGRITY', '판매자 쿠폰은 판매자 지정·스토어 그룹·플랫폼 부담 0이어야 합니다.');
+  if (msg.includes('user_coupons.user_id, user_coupons.coupon_id')) return conflict('COUPON_ALREADY_CLAIMED', '이미 받은 쿠폰입니다.');
   if (msg.includes('ILLEGAL_PAYMENT_TRANSITION')) return conflict('ORDER_STATE_CHANGED', '주문 상태가 변경되어 처리할 수 없습니다.');
   if (msg.includes('REFUND_EXCEEDS_PAID')) return conflict('REFUND_EXCEEDS_PAID', '환불 가능 금액/수량을 초과했습니다.');
   if (msg.includes('SHIPPING_ALREADY_REFUNDED')) return conflict('SHIPPING_ALREADY_REFUNDED', '배송비가 이미 환불되었습니다.');
@@ -63,7 +68,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_54_shipping_policies.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_55_coupon_engine.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -146,7 +151,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const s = await env.DB.prepare(
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
               p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code,
-              p.shipping_policy_id, p.bundle_group_key,
+              p.shipping_policy_id, p.bundle_group_key, p.category_id,
               pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
@@ -179,7 +184,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     const pct = volumeDiscountPct(l.quantity);
     const unitPrice = s.sale_price - applyBps(s.sale_price, pct * 100);
     resolved.push({
-      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
+      skuId: s.id, productId: s.product_id, partnerId: s.partner_id, categoryId: s.category_id, hsCode: s.hs_code || null, salesModel: s.sales_model, requiresPccc: Number(s.requires_pccc) === 1,
       title: s.prod_title, optionSummary, baseUnitPrice: s.sale_price, unitPrice, volumePct: pct,
       quantity: l.quantity, lineTotal: unitPrice * l.quantity,
       volumeDiscount: (s.sale_price - unitPrice) * l.quantity,
@@ -270,27 +275,77 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const volumeTotal = goodsBase - goodsAfterVolume;
   const shippingTotal = subs.reduce((a, s) => a + s.shipping, 0);
 
-  // 3. Coupon (must be owned, unused, active, unexpired)
+  // 3. Coupons: at most one platform coupon per order, one store coupon per seller.
+  // Order: volume discount (already in lineTotal) -> store coupons -> platform coupon.
+  // Legacy user_coupon_id/coupon_code requests apply as platform coupons.
   let coupon = 0;
   let userCouponId = null;
-  const couponRef = body.user_coupon_id || body.coupon_code;
-  if (couponRef) {
-    const uc = await env.DB.prepare(
-      `SELECT uc.id, c.discount_type, c.discount_value, c.min_order_amount, c.max_discount_amount
-       FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
-       WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?
-         AND (uc.id = ? OR UPPER(c.code) = UPPER(?))
-       LIMIT 1`
-    ).bind(principal.userId, sqlNow(), String(couponRef), String(couponRef)).first();
-    if (!uc) throw conflict('COUPON_NOT_AVAILABLE', '사용할 수 있는 쿠폰이 아닙니다. (미보유·사용완료·만료)');
-    if (goodsAfterVolume < (uc.min_order_amount || 0)) throw conflict('COUPON_MIN_ORDER', `쿠폰 최소 주문금액(${uc.min_order_amount}원) 미달입니다.`);
-    coupon = uc.discount_type === 'PERCENT' ? applyBps(goodsAfterVolume, uc.discount_value * 100) : uc.discount_value;
-    if (uc.max_discount_amount) coupon = Math.min(coupon, uc.max_discount_amount);
-    coupon = Math.min(assertWon(coupon, 'coupon'), goodsAfterVolume);
-    userCouponId = uc.id;
+  const appliedStoreIds = new Map();
+  allItems.forEach((it) => { it.storeCouponAlloc = 0; it.platformCouponAlloc = 0; it.sellerBurden = 0; });
+  const legacyRef = body.user_coupon_id || body.coupon_code || null;
+  const platformRef = body.platform_coupon_id || body.platform_coupon_code || null;
+  if (legacyRef && platformRef && String(legacyRef) !== String(platformRef)) {
+    throw conflict('COUPON_DUPLICATE_GROUP', '플랫폼 쿠폰은 주문당 1장까지 사용할 수 있습니다.');
   }
-  const couponAllocs = allocate(coupon, allItems.map((it) => it.lineTotal));
-  allItems.forEach((it, i) => { it.couponAlloc = couponAllocs[i]; it.net = it.lineTotal - couponAllocs[i]; });
+  const storeRefs = []
+    .concat(body.store_coupon_ids || [], body.store_coupon_id ? [body.store_coupon_id] : [],
+      body.store_coupon_codes || [], body.store_coupon_code ? [body.store_coupon_code] : [])
+    .map(String);
+  const storeCoupons = [];
+  for (const ref of storeRefs) {
+    const held = await loadHeldCouponByRef(env, principal.userId, ref);
+    if (held.dup_group !== 'STORE') throw conflict('COUPON_DUPLICATE_GROUP', '스토어 쿠폰 칸에는 스토어 쿠폰만 사용할 수 있습니다.');
+    if (appliedStoreIds.has(held.seller_id)) throw conflict('COUPON_DUPLICATE_GROUP', '판매자마다 스토어 쿠폰은 1장까지 사용할 수 있습니다.');
+    appliedStoreIds.set(held.seller_id, held.user_coupon_id);
+    storeCoupons.push(held);
+  }
+  for (const sc of storeCoupons) {
+    const eligible = [];
+    for (const it of allItems) {
+      if (it.partnerId !== sc.seller_id) continue;
+      if (await matchScope(env, sc, it)) eligible.push(it);
+    }
+    if (!eligible.length) throw conflict('COUPON_NOT_AVAILABLE', '쿠폰 적용 대상 상품이 주문에 없습니다.');
+    const amount = couponAmount(sc, eligible.reduce((a, it) => a + it.lineTotal, 0));
+    const parts = allocate(amount, eligible.map((it) => it.lineTotal));
+    eligible.forEach((it, i) => { it.storeCouponAlloc = parts[i]; });
+  }
+  let platformCoupon = null;
+  const platRef = platformRef || legacyRef;
+  if (platRef) {
+    platformCoupon = await loadHeldCouponByRef(env, principal.userId, platRef);
+    if (platformCoupon.dup_group !== 'PLATFORM') throw conflict('COUPON_DUPLICATE_GROUP', '플랫폼 쿠폰 칸에는 플랫폼 쿠폰만 사용할 수 있습니다.');
+    const eligible = [];
+    for (const it of allItems) {
+      if (await matchScope(env, platformCoupon, it)) eligible.push(it);
+    }
+    if (!eligible.length) throw conflict('COUPON_NOT_AVAILABLE', '쿠폰 적용 대상 상품이 주문에 없습니다.');
+    const remain = (it) => it.lineTotal - it.storeCouponAlloc;
+    const minBase = eligible.reduce((a, it) => a + it.lineTotal, 0);
+    if (minBase < (platformCoupon.min_order_amount || 0)) {
+      throw conflict('COUPON_MIN_ORDER', `쿠폰 최소 주문금액(${platformCoupon.min_order_amount}원) 미달입니다.`);
+    }
+    const targetSum = eligible.reduce((a, it) => a + remain(it), 0);
+    const computed = platformCoupon.discount_type === 'PERCENT'
+      ? applyBps(targetSum, platformCoupon.discount_value * 100) : platformCoupon.discount_value;
+    let amount = computed;
+    if (platformCoupon.max_discount_amount != null) amount = Math.min(amount, platformCoupon.max_discount_amount);
+    amount = Math.min(assertWon(amount, 'coupon'), targetSum);
+    const parts = allocate(amount, eligible.map(remain));
+    eligible.forEach((it, i) => { it.platformCouponAlloc = parts[i]; });
+    userCouponId = platformCoupon.user_coupon_id;
+  }
+  const platShare = platformCoupon ? platformCoupon.platform_share_bps : 10000;
+  allItems.forEach((it) => {
+    it.couponAlloc = it.storeCouponAlloc + it.platformCouponAlloc;
+    it.net = it.lineTotal - it.couponAlloc;
+    // Seller burden exists only on marketplace lines (there is no seller payout
+    // to deduct from on direct lines, and the journal would not balance).
+    it.sellerBurden = it.salesModel === 'MARKETPLACE'
+      ? it.storeCouponAlloc + splitPlatformBurden(it.platformCouponAlloc, platShare).seller
+      : 0;
+  });
+  coupon = allItems.reduce((a, it) => a + it.couponAlloc, 0);
 
   // 4. Credits (allocated over item nets and shipping lines)
   const payableBeforeCredit = goodsAfterVolume - coupon + shippingTotal;
@@ -315,6 +370,8 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     s.shipCredit = creditAllocs[allItems.length + j];
     s.shipPg = s.shipping - s.shipCredit;
     s.couponAlloc = s.items.reduce((a, it) => a + it.couponAlloc, 0);
+    s.sellerCouponBurden = s.items.reduce((a, it) => a + it.sellerBurden, 0);
+    s.appliedStoreCouponId = appliedStoreIds.get(s.partnerId) || null;
     s.total = s.goods + s.shipping;
   });
   const pgTotal = allItems.reduce((a, it) => a + it.pgAlloc, 0) + subs.reduce((a, s) => a + s.shipPg, 0);
@@ -367,24 +424,27 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     st.push(env.DB.prepare(
       `INSERT INTO sub_orders (id, parent_order_id, sub_order_no, partner_id, sales_model, operator_entity_id, shipping_fee, goods_amount,
          discount_amount, total_amount, coupon_discount_allocated, shipping_credit_alloc, shipping_pg_alloc, status,
-         confirmed_at, ship_by_deadline, shipping_breakdown_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', NULL, ?, ?)`
+         confirmed_at, ship_by_deadline, shipping_breakdown_json, applied_store_coupon_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', NULL, ?, ?, ?)`
     ).bind(s.id, orderId, s.no, s.partnerId, s.salesModel, operator.id, s.shipping, s.goods, s.couponAlloc, s.total, s.couponAlloc, s.shipCredit, s.shipPg,
-      shipBy, JSON.stringify(s.shippingGroups)));
+      shipBy, JSON.stringify(s.shippingGroups), s.appliedStoreCouponId));
     if (s.salesModel === 'MARKETPLACE') {
       st.push(env.DB.prepare(
         `INSERT INTO settlements (id, sub_order_id, partner_id, operator_entity_id, gross_amount, shipping_fee, commission_rate, commission_rate_bps,
-           commission_amount, net_payout_amount, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HOLD')`
-      ).bind(newId('stl'), s.id, s.partnerId, operator.id, s.goods, s.shipping, s.bps / 10000, s.bps, s.commission, s.goods - s.commission + s.shipping));
+           commission_amount, net_payout_amount, seller_coupon_burden, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HOLD')`
+      ).bind(newId('stl'), s.id, s.partnerId, operator.id, s.goods, s.shipping, s.bps / 10000, s.bps, s.commission,
+        s.goods - s.commission + s.shipping - s.sellerCouponBurden, s.sellerCouponBurden));
     }
     for (const it of s.items) {
       st.push(env.DB.prepare(
         `INSERT INTO order_items (id, sub_order_id, sku_id, product_id, product_title, option_summary, base_unit_price, volume_discount_pct,
-           unit_price, quantity, total_price, coupon_alloc, credit_alloc, pg_alloc, unit_cost, shipping_group_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           unit_price, quantity, total_price, coupon_alloc, credit_alloc, pg_alloc, unit_cost, shipping_group_key,
+           store_coupon_alloc, platform_coupon_alloc, seller_burden_amount)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(newId('itm'), s.id, it.skuId, it.productId, it.title, it.optionSummary, it.baseUnitPrice, it.volumePct,
-        it.unitPrice, it.quantity, it.lineTotal, it.couponAlloc, it.creditAlloc, it.pgAlloc, it.unitCost, it.shippingGroupKey));
+        it.unitPrice, it.quantity, it.lineTotal, it.couponAlloc, it.creditAlloc, it.pgAlloc, it.unitCost, it.shippingGroupKey,
+        it.storeCouponAlloc, it.platformCouponAlloc, it.sellerBurden));
       st.push(env.DB.prepare(
         `UPDATE product_skus SET stock_quantity = stock_quantity - ?,
            status = CASE WHEN stock_quantity - ? <= 0 THEN 'OUT_OF_STOCK' ELSE status END, updated_at = CURRENT_TIMESTAMP
@@ -397,8 +457,9 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       st.push(env.DB.prepare('UPDATE products SET total_sold_count = total_sold_count + ? WHERE id = ?').bind(it.quantity, it.productId));
     }
   }
-  if (userCouponId) {
-    st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 1, used_at = CURRENT_TIMESTAMP, used_order_id = ? WHERE id = ?').bind(orderId, userCouponId));
+  const usedCouponIds = [...(userCouponId ? [userCouponId] : []), ...appliedStoreIds.values()];
+  for (const ucid of usedCouponIds) {
+    st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 1, used_at = CURRENT_TIMESTAMP, used_order_id = ? WHERE id = ?').bind(orderId, ucid));
   }
   if (credit > 0) st.push(creditStatement(env, { userId: principal.userId, amount: -credit, reason: '주문 결제 적립금 사용(예약)', referenceId: orderId }));
 
@@ -443,11 +504,14 @@ async function capturePayment(env, order, pg) {
     st.push(env.DB.prepare("UPDATE settlements SET status = 'PENDING', updated_at = CURRENT_TIMESTAMP WHERE status = 'HOLD' AND sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(order.id));
   }
 
-  // Journal: cash + credit liability + promotion = seller payable + commission + direct revenue
+  // Journal: cash + credit liability + promotion = seller payable + commission + direct revenue.
+  // Only the platform-funded coupon share is promotion expense; the seller-funded
+  // share is already deducted from the seller payable (settlements.seller_coupon_burden).
+  const platformPromo = bundle.items.reduce((a, i) => a + (i.coupon_alloc - i.seller_burden_amount), 0);
   const lines = [
     { account: ACCOUNTS.PG_CLEARING, debit: order.total_pay_amount },
     { account: ACCOUNTS.CUSTOMER_CREDIT_LIABILITY, debit: order.credit_used_amount },
-    { account: ACCOUNTS.PROMOTION_EXPENSE, debit: order.coupon_discount_amount }
+    { account: ACCOUNTS.PROMOTION_EXPENSE, debit: platformPromo }
   ];
   for (const s of bundle.subs) {
     if (s.sales_model === 'MARKETPLACE') {
@@ -640,8 +704,15 @@ export async function refundOrder(env, actor, orderRef, request) {
     if (!Number.isSafeInteger(qty) || qty < 1 || qty > remaining) throw conflict('REFUND_EXCEEDS_PAID', '환불 가능 수량을 초과했습니다.', { order_item_id: it.id, remaining });
     const pgPart = proportionalPortion(it.pg_alloc, it.refunded_pg_amount, qty, it.quantity, it.refunded_quantity);
     const crPart = proportionalPortion(it.credit_alloc, it.refunded_credit_amount, qty, it.quantity, it.refunded_quantity);
-    const cpPart = proportionalPortion(it.coupon_alloc, it.refunded_coupon_amount, qty, it.quantity, it.refunded_quantity);
-    plan.push({ it, qty, pgPart, crPart, cpPart, goods: pgPart + crPart + cpPart });
+    const storePart = proportionalPortion(it.store_coupon_alloc, it.refunded_store_coupon_amount, qty, it.quantity, it.refunded_quantity);
+    const platPart = proportionalPortion(it.platform_coupon_alloc, it.refunded_platform_coupon_amount, qty, it.quantity, it.refunded_quantity);
+    const cpPart = storePart + platPart;
+    const platBurden = it.seller_burden_amount - it.store_coupon_alloc;
+    const restoredPlatBurden = it.refunded_seller_burden_amount - it.refunded_store_coupon_amount;
+    const platSellerPart = proportionalPortion(platBurden, restoredPlatBurden, qty, it.quantity, it.refunded_quantity);
+    const burdenPart = storePart + platSellerPart;
+    const platFundedPart = platPart - platSellerPart;
+    plan.push({ it, qty, pgPart, crPart, cpPart, storePart, platPart, burdenPart, platFundedPart, goods: pgPart + crPart + cpPart });
   }
   const shipSubs = (request.shippingSubOrderIds || []).map((id) => b.subs.find((s) => s.id === id)).filter((s) => s && !s.shipping_refunded && s.shipping_fee > 0);
   if (!plan.length && !shipSubs.length) throw bad('NOTHING_TO_REFUND', '환불할 항목이 없습니다.');
@@ -657,10 +728,11 @@ export async function refundOrder(env, actor, orderRef, request) {
   const pg = pgGross - feeFromPg;
   const credit = creditGross - (returnFee - feeFromPg);
   const coupon = plan.reduce((a, p) => a + p.cpPart, 0);
+  const couponPlatform = plan.reduce((a, p) => a + p.platFundedPart, 0);
   const goods = plan.reduce((a, p) => a + p.goods, 0);
   const shipping = shipSubs.reduce((a, s) => a + s.shipping_fee, 0);
   const refundId = newId('rfd');
-  const itemsJson = JSON.stringify(plan.map((p) => ({ order_item_id: p.it.id, sub_order_id: p.it.sub_order_id, sku_id: p.it.sku_id, quantity: p.qty, pg: p.pgPart, credit: p.crPart, coupon: p.cpPart })).concat(shipSubs.map((s) => ({ shipping_sub_order_id: s.id, pg: s.shipping_pg_alloc, credit: s.shipping_credit_alloc, amount: s.shipping_fee }))));
+  const itemsJson = JSON.stringify(plan.map((p) => ({ order_item_id: p.it.id, sub_order_id: p.it.sub_order_id, sku_id: p.it.sku_id, quantity: p.qty, pg: p.pgPart, credit: p.crPart, coupon: p.cpPart, store_coupon: p.storePart, platform_coupon: p.platPart })).concat(shipSubs.map((s) => ({ shipping_sub_order_id: s.id, pg: s.shipping_pg_alloc, credit: s.shipping_credit_alloc, amount: s.shipping_fee }))));
 
   // Phase 1: reserve (caps enforced by triggers/CHECKs; concurrent over-refund aborts here)
   const reserve = [
@@ -676,8 +748,10 @@ export async function refundOrder(env, actor, orderRef, request) {
   for (const p of plan) {
     reserve.push(env.DB.prepare(
       `UPDATE order_items SET refunded_quantity = refunded_quantity + ?, refunded_pg_amount = refunded_pg_amount + ?,
-         refunded_credit_amount = refunded_credit_amount + ?, refunded_coupon_amount = refunded_coupon_amount + ? WHERE id = ?`
-    ).bind(p.qty, p.pgPart, p.crPart, p.cpPart, p.it.id));
+         refunded_credit_amount = refunded_credit_amount + ?, refunded_coupon_amount = refunded_coupon_amount + ?,
+         refunded_store_coupon_amount = refunded_store_coupon_amount + ?, refunded_platform_coupon_amount = refunded_platform_coupon_amount + ?,
+         refunded_seller_burden_amount = refunded_seller_burden_amount + ? WHERE id = ?`
+    ).bind(p.qty, p.pgPart, p.crPart, p.cpPart, p.storePart, p.platPart, p.burdenPart, p.it.id));
   }
   for (const s of shipSubs) reserve.push(env.DB.prepare('UPDATE sub_orders SET shipping_refunded = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(s.id));
   await runBatch(env, reserve);
@@ -696,8 +770,10 @@ export async function refundOrder(env, actor, orderRef, request) {
     for (const p of plan) {
       release.push(env.DB.prepare(
         `UPDATE order_items SET refunded_quantity = refunded_quantity - ?, refunded_pg_amount = refunded_pg_amount - ?,
-           refunded_credit_amount = refunded_credit_amount - ?, refunded_coupon_amount = refunded_coupon_amount - ? WHERE id = ?`
-      ).bind(p.qty, p.pgPart, p.crPart, p.cpPart, p.it.id));
+           refunded_credit_amount = refunded_credit_amount - ?, refunded_coupon_amount = refunded_coupon_amount - ?,
+           refunded_store_coupon_amount = refunded_store_coupon_amount - ?, refunded_platform_coupon_amount = refunded_platform_coupon_amount - ?,
+           refunded_seller_burden_amount = refunded_seller_burden_amount - ? WHERE id = ?`
+      ).bind(p.qty, p.pgPart, p.crPart, p.cpPart, p.storePart, p.platPart, p.burdenPart, p.it.id));
     }
     for (const s of shipSubs) release.push(env.DB.prepare('UPDATE sub_orders SET shipping_refunded = 0 WHERE id = ?').bind(s.id));
     await runBatch(env, release);
@@ -721,7 +797,7 @@ export async function refundOrder(env, actor, orderRef, request) {
   const journal = [
     { account: ACCOUNTS.PG_CLEARING, credit: pg },
     { account: ACCOUNTS.CUSTOMER_CREDIT_LIABILITY, credit },
-    { account: ACCOUNTS.PROMOTION_EXPENSE, credit: coupon }
+    { account: ACCOUNTS.PROMOTION_EXPENSE, credit: couponPlatform }
   ];
   const touchedSubIds = new Set([...plan.map((p) => p.it.sub_order_id), ...shipSubs.map((s) => s.id)]);
   const warnings = [];
@@ -737,7 +813,8 @@ export async function refundOrder(env, actor, orderRef, request) {
       const grossNew = grossNow - goodsRefund;
       const commDelta = applyBps(grossNew, s.st_bps) - commNow;
       const shipDelta = -shipRefund + feeHere; // seller keeps the return-shipping fee it pays the courier with
-      const netDelta = -goodsRefund - commDelta + shipDelta;
+      const burdenRestored = plan.filter((p) => p.it.sub_order_id === sid).reduce((a, p) => a + p.burdenPart, 0);
+      const netDelta = -goodsRefund - commDelta + shipDelta + burdenRestored;
       fin.push(env.DB.prepare(
         `INSERT INTO settlement_adjustments (id, settlement_id, partner_id, refund_id, gross_delta, commission_delta, shipping_delta, net_delta, reason)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -772,6 +849,13 @@ export async function refundOrder(env, actor, orderRef, request) {
   fin.push(env.DB.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP, cancelled_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE cancelled_at END WHERE id = ?').bind(nextOrder, full ? 1 : 0, o.id));
   if (full && request.restoreCoupon && o.applied_user_coupon_id) {
     fin.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(o.applied_user_coupon_id, o.id));
+  }
+  if (full && request.restoreCoupon) {
+    for (const s of after.subs) {
+      if (s.applied_store_coupon_id) {
+        fin.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(s.applied_store_coupon_id, o.id));
+      }
+    }
   }
   if (request.claimId) {
     fin.push(env.DB.prepare("UPDATE returns SET status = 'REFUNDED', refund_amount = ?, refund_id = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ?").bind(pg + credit, refundId, actor.userId, request.claimId));
