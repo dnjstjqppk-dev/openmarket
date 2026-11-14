@@ -80,17 +80,27 @@ async function buildProductFilters(env, url) {
   const minRatingParam = url.searchParams.get('min_rating');
   const todayShipParam = url.searchParams.get('today_shipment');
   const exhibitionParam = url.searchParams.get('exhibition_id') || url.searchParams.get('exhibition');
+  const saleParam = url.searchParams.get('has_discount');
+  const domesticParam = url.searchParams.get('exclude_overseas');
   const binds = [];
   let filterSql = '';
 
   if (catParam && catParam !== 'all') {
-    const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(catParam, catParam).first();
-    if (catRow) {
-      filterSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
-      binds.push(catRow.id, catRow.id);
-    } else {
-      filterSql += ` AND (c.slug = ? OR p.category_id = ?)`;
-      binds.push(catParam, catParam);
+    // 3-2: comma multi-select (tree checkboxes), each with direct children.
+    const cats = [...new Set(String(catParam).split(',').map((s) => s.trim()).filter(Boolean))].slice(0, 20);
+    if (cats.length) {
+      const ors = [];
+      for (const one of cats) {
+        const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(one, one).first();
+        if (catRow) {
+          ors.push('(p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))');
+          binds.push(catRow.id, catRow.id);
+        } else {
+          ors.push('(c.slug = ? OR p.category_id = ?)');
+          binds.push(one, one);
+        }
+      }
+      filterSql += ` AND (${ors.join(' OR ')})`;
     }
   }
 
@@ -134,9 +144,21 @@ async function buildProductFilters(env, url) {
           WHERE t.coupon_id = c.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id))))`;
   }
   if (salesModelParam) {
-    if (!['DIRECT', 'MARKETPLACE'].includes(salesModelParam)) throw bad('INVALID_SALES_MODEL', '직영/입점 구분이 올바르지 않습니다.');
-    filterSql += ` AND pt.sales_model = ?`;
-    binds.push(salesModelParam);
+    // 3-2: comma multi-select (both boxes ticked = no narrowing).
+    const models = [...new Set(String(salesModelParam).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean))];
+    for (const m of models) {
+      if (!['DIRECT', 'MARKETPLACE'].includes(m)) throw bad('INVALID_SALES_MODEL', '직영/입점 구분이 올바르지 않습니다.');
+    }
+    if (models.length === 1) {
+      filterSql += ` AND pt.sales_model = ?`;
+      binds.push(models[0]);
+    }
+  }
+  if (saleParam === 'true' || saleParam === '1') {
+    filterSql += ` AND p.lowest_sale_price < p.lowest_original_price`;
+  }
+  if (domesticParam === 'true' || domesticParam === '1') {
+    filterSql += ` AND pt.country_code = 'KR'`;
   }
   if (minRatingParam) {
     const minR = Number(minRatingParam);

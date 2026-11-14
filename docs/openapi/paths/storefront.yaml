@@ -15,7 +15,7 @@ paths:
           in: query
           schema:
             type: string
-          description: Category slug or id ('all' disables the filter). Matches the category and its direct children.
+          description: Category slug or id ('all' disables the filter). Matches the category and its direct children. 3-2: comma multi-select (max 20).
         - name: partner_id
           in: query
           schema:
@@ -61,8 +61,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [DIRECT, MARKETPLACE]
-          description: '2-9: seller type; anything else is 400 INVALID_SALES_MODEL.'
+          description: '2-9: seller type; anything else is 400 INVALID_SALES_MODEL. 3-2: comma multi (both = unfiltered).'
         - name: min_rating
           in: query
           schema:
@@ -78,6 +77,16 @@ paths:
           schema:
             type: string
           description: '2-9: keeps only products in the given live exhibition (alias: exhibition).'
+        - name: has_discount
+          in: query
+          schema:
+            type: string
+          description: '3-2: true/1 keeps only rows priced below original.'
+        - name: exclude_overseas
+          in: query
+          schema:
+            type: string
+          description: '3-2: true/1 keeps only KR-fulfilling sellers (partners.country_code).'
         - name: page
           in: query
           schema:

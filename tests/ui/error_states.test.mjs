@@ -185,8 +185,12 @@ await t.test('E06 product surfaces load behind skeletons', async () => {
   for (const v of ["variant === 'card'", "variant === 'row'", "variant === 'detail'"]) {
     assert.ok(sk.includes(v), `skeleton has the ${v} variant`)
   }
-  for (const f of ['HomeView', 'CategoryView', 'BestSellersView', 'LightningDealsView']) {
+  for (const f of ['HomeView', 'BestSellersView', 'LightningDealsView']) {
     assert.ok(read(`apps/storefront/src/views/${f}.vue`).includes('variant="card"'), `${f} grids load behind card skeletons`)
+  }
+  // 3-2: search/category grids moved into the shared PLP layout.
+  for (const f of ['apps/storefront/src/components/plp/PlpLayout.vue']) {
+    assert.ok(read(f).includes('variant="card"'), 'PLP grids load behind card skeletons')
   }
   assert.ok(read('apps/storefront/src/views/ProductDetailView.vue').includes('variant="detail"'), 'detail loads behind the detail skeleton')
   assert.ok(read('apps/storefront/src/views/CheckoutView.vue').includes('variant="row"'), 'quote lines load behind row skeletons')
