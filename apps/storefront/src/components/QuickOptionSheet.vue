@@ -5,7 +5,7 @@ import { ref, computed, watch } from 'vue'
 import { OmModal, OmBottomSheet, OmQuantityStepper, OmPrice, OmButton, useToast, useBreakpoint } from '@olmoa/ui'
 import { useCartStore } from '../stores/cart'
 
-const props = defineProps<{ product: any; skus: any[] }>()
+const props = defineProps<{ product: any; skus: any[]; replaceSkuId?: string | null }>()
 const open = defineModel<boolean>('open', { default: false })
 const cart = useCartStore()
 const toast = useToast()
@@ -39,7 +39,9 @@ function add() {
   if (!chosen.value) return
   const ok = cart.addItem(props.product, chosen.value, Math.min(qty.value, ceiling.value))
   if (ok) {
-    toast.success('장바구니에 담았습니다', { title: props.product?.title })
+    // 3-5 option change: the replaced line leaves once the new one lands.
+    if (props.replaceSkuId && props.replaceSkuId !== chosen.value.id) cart.removeItem(props.replaceSkuId)
+    toast.success(props.replaceSkuId ? '옵션을 변경했습니다' : '장바구니에 담았습니다', { title: props.product?.title })
     open.value = false
   } else {
     toast.error('장바구니에 담지 못했습니다. 품절 여부를 확인해 주세요.')

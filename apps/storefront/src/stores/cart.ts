@@ -25,6 +25,7 @@ export interface CartItem {
   stock_quantity?: number;
   partner_id: string;
   business_name?: string;
+  sales_model?: string;
   base_shipping_fee?: number;
   free_shipping_threshold?: number;
   requires_pccc?: number;
@@ -34,6 +35,7 @@ export interface PartnerCartGroup {
   partner_id: string;
   partner_name: string;
   business_name: string;
+  sales_model: string | null;
   items: CartItem[];
   goods_amount: number;
   shipping_fee: number;
@@ -89,6 +91,7 @@ function groupBySeller(list: CartItem[]): PartnerCartGroup[] {
       partner_id: pid,
       partner_name: name,
       business_name: name,
+      sales_model: groupItems[0].sales_model || null,
       items: groupItems,
       goods_amount: goods,
       shipping_fee: fee,
@@ -143,6 +146,7 @@ export const useCartStore = defineStore('cart', () => {
         stock_quantity: sku.stock_quantity != null ? Number(sku.stock_quantity) : undefined,
         partner_id: product.partner_id,
         business_name: product.business_name || product.partner_name || '',
+        sales_model: product.sales_model || undefined,
         base_shipping_fee: product.base_shipping_fee ?? undefined,
         free_shipping_threshold: product.free_shipping_threshold ?? undefined,
         requires_pccc: product.requires_pccc != null ? Number(product.requires_pccc) : undefined
@@ -214,14 +218,17 @@ export const useCartStore = defineStore('cart', () => {
     return before - items.value.length;
   }
 
-  /** Updates saved sale prices from a server quote ({ sku_id: base unit price }). Returns the changed lines. */
-  function applyServerPrices(prices: Record<string, number>): CartItem[] {
-    const changed: CartItem[] = [];
+  /**
+   * Updates saved sale prices from a server quote ({ sku_id: base unit price }).
+   * Returns [{ sku_id, from, to }] so the view can state the old -> new move.
+   */
+  function applyServerPrices(prices: Record<string, number>): { sku_id: string; from: number; to: number }[] {
+    const changed: { sku_id: string; from: number; to: number }[] = [];
     for (const it of items.value) {
       const p = prices[it.sku_id];
       if (p != null && Number.isFinite(Number(p)) && Number(p) !== it.price) {
+        changed.push({ sku_id: it.sku_id, from: it.price, to: Number(p) });
         it.price = Number(p);
-        changed.push(it);
       }
     }
     if (changed.length) save();

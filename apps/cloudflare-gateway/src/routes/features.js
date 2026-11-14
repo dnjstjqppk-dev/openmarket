@@ -393,11 +393,33 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/coupons/best' && request.method === 'POST') {
     const me = await requireCustomer(request, env);
     const now = sqlNow();
-    const { results: cartRows } = await env.DB.prepare(
-      `SELECT c.sku_id, c.quantity, s.product_id, s.sale_price, p.partner_id, p.category_id
-       FROM cart_items c JOIN product_skus s ON s.id = c.sku_id JOIN products p ON p.id = s.product_id
-       WHERE c.user_id = ? AND p.status = 'ACTIVE'`
-    ).bind(me.userId).all();
+    // 3-5: device-local carts estimate by sending their lines; omitted body
+    // falls back to the server cart.
+    const bestBody = await readJson(request);
+    let cartRows;
+    if (bestBody.items !== undefined) {
+      if (!Array.isArray(bestBody.items)) throw bad('INVALID_ITEMS', 'items는 배열이어야 합니다.');
+      if (bestBody.items.length > 100) throw bad('CART_TOO_LARGE', '한 번에 최대 100개 품목까지 계산할 수 있습니다.');
+      cartRows = [];
+      for (const it of bestBody.items) {
+        const skuId = String(it.sku_id || '').trim();
+        const qty = Number(it.quantity);
+        if (!skuId) throw bad('SKU_REQUIRED', 'sku_id가 비어 있는 품목이 있습니다.');
+        if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw bad('INVALID_QUANTITY', `수량은 1~99 사이의 정수여야 합니다. (${skuId})`);
+        const row = await env.DB.prepare(
+          `SELECT s.id AS sku_id, s.product_id, s.sale_price, p.partner_id, p.category_id
+           FROM product_skus s JOIN products p ON p.id = s.product_id WHERE s.id = ? AND p.status = 'ACTIVE'`
+        ).bind(skuId).first();
+        if (!row) throw bad('INVALID_SKU', `존재하지 않는 상품 옵션입니다. (${skuId})`);
+        cartRows.push({ ...row, quantity: qty });
+      }
+    } else {
+      ({ results: cartRows } = await env.DB.prepare(
+        `SELECT c.sku_id, c.quantity, s.product_id, s.sale_price, p.partner_id, p.category_id
+         FROM cart_items c JOIN product_skus s ON s.id = c.sku_id JOIN products p ON p.id = s.product_id
+         WHERE c.user_id = ? AND p.status = 'ACTIVE'`
+      ).bind(me.userId).all());
+    }
     const lines = cartRows.map((r) => ({
       skuId: r.sku_id, productId: r.product_id, partnerId: r.partner_id, categoryId: r.category_id,
       lineTotal: Number(r.sale_price) * Number(r.quantity), storeAlloc: 0

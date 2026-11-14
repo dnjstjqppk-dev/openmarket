@@ -86,4 +86,21 @@ await t.test('F6. price history reads newest-first per product', async () => {
   assert.equal(gone.status, 404, 'unknown product hidden');
 });
 
+await t.test('F7. best-coupon search takes explicit cart lines', async () => {
+  const g = await newGateway();
+  const login = await g.call('/api/v1/auth/login', {
+    method: 'POST', body: { email: 'customer@example.com', password: 'DevPass!2026#', role: 'CUSTOMER' }
+  });
+  const cust = login.json.token;
+  const r = await g.call('/api/v1/coupons/best', {
+    method: 'POST', token: cust, body: { items: [{ sku_id: 'sku_001_w', quantity: 1 }] }
+  });
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.data.total_discount >= 0, 'estimate computed over the sent lines');
+  const bad = await g.call('/api/v1/coupons/best', {
+    method: 'POST', token: cust, body: { items: [{ sku_id: 'sku_missing', quantity: 1 }] }
+  });
+  assert.equal(bad.status, 400, 'unknown skus rejected, never skipped');
+});
+
 t.finish();

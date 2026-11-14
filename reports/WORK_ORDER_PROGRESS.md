@@ -26,4 +26,5 @@
 3-1 | 통과 | c32a8d7 | home_sections 6/6 + test:ui + typecheck + 빌드 | 7구역·무한40·요청6 이하·일시정지, 해석 → Q-3-1
 3-2 | 통과 | efa9677 | plp 5/5 + plp_sections 6/6 + test:ui + typecheck | 공용 목록·필터7종·주소왕복·빈화면, 해석 → Q-3-2
 3-3 | 통과 | 07bb4f5 | card 7/7 + test:ui + typecheck 2종 | 카드·찜·퀵담기·옵션시트·E2E B04b, 해석 → Q-3-3
-3-4 | 통과 | PENDING | detail 6/6 + plp 6/6 + test:ui + typecheck + 빌드 | 7:5·구매패널·단계옵션·쿠폰·하이라이트, 해석 → Q-3-4
+3-4 | 통과 | f09f6d1 | detail 6/6 + plp 6/6 + test:ui + typecheck + 빌드 | 7:5·구매패널·단계옵션·쿠폰·하이라이트, 해석 → Q-3-4
+3-5 | 통과 | PENDING | cart 5/5 + plp 7/7 + test:ui + typecheck | 판매자박스·게이지·견적요약·가격표시, 해석 → Q-3-5
