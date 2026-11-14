@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { createGateway, createRunner } from './lib/harness.mjs';
 
-const t = createRunner('PLP filters (3-2)');
+const t = createRunner('PLP filters (3-2/3-3)');
 
 async function newGateway() {
   return createGateway({
@@ -56,6 +56,20 @@ await t.test('F4. facets follow the new filters', async () => {
   assert.equal(r.status, 200, r.text);
   assert.ok(r.json.data.brands.length >= 0, 'facets respond under filters');
   assert.ok(Number(r.json.data.badges.sale) > 0, 'sale badge counted');
+});
+
+await t.test('F5. list rows carry card badge facts', async () => {
+  const g = await newGateway();
+  const r = await g.call('/api/v1/products?per_page=5');
+  assert.equal(r.status, 200, r.text);
+  const p = r.json.data[0];
+  for (const k of ['sales_model', 'in_stock', 'has_today', 'has_coupon', 'earn_bps', 'sales_30d', 'badges']) {
+    assert.ok(k in p, `row carries ${k}`);
+  }
+  assert.equal(p.earn_bps, null, 'no earn policy in seed');
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('credit.earn_bps', '100', date('now'))").run();
+  const r2 = await g.call('/api/v1/products?per_page=1');
+  assert.equal(r2.json.data[0].earn_bps, '100', 'earn policy surfaces');
 });
 
 t.finish();

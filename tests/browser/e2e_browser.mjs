@@ -82,6 +82,20 @@ await step('B04 add a direct-sales (MODEL A) product -> mixed cart', page, async
   await page.goto(`${STORE}/cart`);
   await shots(page, 'store_cart', ['desktop', 'mobile']);
 });
+await step('B04b quick-add from the home grid grows the cart', page, async () => {
+  await page.goto(`${STORE}/`, { waitFor: "document.querySelector('[data-testid=quick-add]')" });
+  const before = await page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
+  await page.eval("document.querySelector('[data-testid=quick-add]').click()");
+  await page.idle(800);
+  const sheeted = await page.eval("!!document.querySelector('[data-testid=quick-sheet]')");
+  if (sheeted) {
+    await page.eval("document.querySelector('[data-testid=quick-sku]:not([disabled])').click()");
+    await page.eval("document.querySelector('[data-testid=quick-confirm]').click()");
+    await page.idle(500);
+  }
+  const after = await page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
+  if (after !== before + 1) throw new Error(`cart grew ${before} -> ${after}`);
+});
 await step('B05 checkout requires login; login through the real form', page, async () => {
   await page.goto(`${STORE}/checkout`);
   await page.waitFor("location.pathname === '/login'");

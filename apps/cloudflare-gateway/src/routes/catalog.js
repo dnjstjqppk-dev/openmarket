@@ -286,7 +286,22 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
               WHERE i.product_id = p.id AND o.payment_status = 'PAID' AND o.paid_at >= datetime('now', '-30 days')) as sales_30d_raw,
              EXISTS (SELECT 1 FROM flash_sale_items f JOIN flash_sale_campaigns c ON c.id = f.campaign_id
               WHERE f.product_id = p.id AND f.status = 'APPROVED' AND c.status = 'ACTIVE'
-              AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP) as has_deal`;
+              AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP) as has_deal,
+             pt.sales_model as sales_model,
+             EXISTS (SELECT 1 FROM product_skus s WHERE s.product_id = p.id AND s.stock_quantity > 0) as in_stock,
+             EXISTS (SELECT 1 FROM shipping_policies sp WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL) as has_today,
+             (SELECT sp.today_cutoff FROM shipping_policies sp WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL ORDER BY sp.is_default DESC, sp.today_cutoff ASC LIMIT 1) as today_cutoff,
+             EXISTS (SELECT 1 FROM coupons cpn WHERE cpn.is_active = 1 AND cpn.expires_at > CURRENT_TIMESTAMP
+              AND (cpn.starts_at IS NULL OR cpn.starts_at <= CURRENT_TIMESTAMP)
+              AND (cpn.total_quantity IS NULL OR cpn.issued_count < cpn.total_quantity)
+              AND (cpn.scope = 'ALL'
+                OR (cpn.scope = 'SELLER' AND (cpn.seller_id = p.partner_id OR EXISTS (SELECT 1 FROM coupon_targets t
+                  WHERE t.coupon_id = cpn.id AND t.target_type = 'SELLER' AND t.target_id = p.partner_id)))
+                OR (cpn.scope = 'CATEGORY' AND EXISTS (SELECT 1 FROM coupon_targets t
+                  WHERE t.coupon_id = cpn.id AND t.target_type = 'CATEGORY' AND t.target_id = p.category_id))
+                OR (cpn.scope = 'PRODUCT' AND EXISTS (SELECT 1 FROM coupon_targets t
+                  WHERE t.coupon_id = cpn.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id)))) as has_coupon,
+             (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')) as earn_bps`;
     const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id

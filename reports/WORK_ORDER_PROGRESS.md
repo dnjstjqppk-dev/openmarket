@@ -24,4 +24,5 @@
 2-9 | 통과 | e7fda48 | buyer 18/18 + partner 15/15 + admin 12/12 + openapi 3/3 + e2e 26/26 | 구매자·판매자·관리자 API, d1_61 예외, 해석 → Q-2-9
 2-10 | 통과 | 8f89190 | security 88/88 + abuse 5/5 + rehearsal 15쌍 + npm test 전체 | 인증·금액·경합·시산표·RL_WRITE, 관문 조정 → Q-2-10
 3-1 | 통과 | c32a8d7 | home_sections 6/6 + test:ui + typecheck + 빌드 | 7구역·무한40·요청6 이하·일시정지, 해석 → Q-3-1
-3-2 | 통과 | PENDING | plp 4/4 + plp_sections 6/6 + test:ui + typecheck | 공용 목록·필터7종·주소왕복·빈화면, 해석 → Q-3-2
+3-2 | 통과 | efa9677 | plp 5/5 + plp_sections 6/6 + test:ui + typecheck | 공용 목록·필터7종·주소왕복·빈화면, 해석 → Q-3-2
+3-3 | 통과 | PENDING | card 7/7 + test:ui + typecheck 2종 | 카드·찜·퀵담기·옵션시트·E2E B04b, 해석 → Q-3-3
