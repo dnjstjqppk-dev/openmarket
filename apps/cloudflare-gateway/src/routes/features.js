@@ -3,7 +3,9 @@
 import { requireCustomer, requireAdmin, authenticate } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl, idempotencyKey } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
-import { claimCoupon } from '../services/coupons.js';
+import { claimCoupon, couponAmount, matchScope } from '../services/coupons.js';
+import { computeTrending } from '../services/trending.js';
+import { allocate } from '../lib/money.js';
 import { auditStatement } from '../lib/ledger.js';
 import { sha256Hex } from '../utils/crypto-auth.js';
 import { sealPii } from '../lib/pii-crypto.js';
@@ -86,6 +88,12 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
+  // 2b. Trending searches (2-9): top 10 of the last 24h with rank deltas.
+  if (url.pathname === '/api/v1/search/trending' && request.method === 'GET') {
+    const trending = await computeTrending(env);
+    return json(corsHeaders, { success: true, count: trending.length, trending, data: { trending } });
+  }
+
   // 3. Lightning Deals Campaigns (only a real, currently running campaign; prices shown = prices charged)
   if (url.pathname === '/api/v1/campaigns/lightning' && request.method === 'GET') {
     const now = sqlNow();
@@ -120,14 +128,65 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   if (url.pathname.match(/^\/api\/v1\/products\/[^\/]+\/reviews$/)) {
     const prodId = url.pathname.split('/')[4];
     if (request.method === 'GET') {
+      // 2-9: page, sort, photo/rating/option filters, measured summary, seller
+      // replies. Blind reviews stay out of the list, the total and the summary.
+      const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+      const perPage = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '20', 10) || 20));
+      const sortKey = String(url.searchParams.get('sort') || 'latest').toLowerCase();
+      const sortSql = {
+        latest: 'created_at DESC, rowid ASC',
+        helpful: 'helpful_count DESC, created_at DESC, rowid ASC',
+        rating_high: 'rating DESC, created_at DESC, rowid ASC',
+        rating_low: 'rating ASC, created_at DESC, rowid ASC'
+      }[sortKey];
+      if (!sortSql) throw bad('INVALID_SORT', 'sort는 latest·helpful·rating_high·rating_low 중 하나여야 합니다.');
+      const ratingRaw = url.searchParams.get('rating');
+      let ratingFilter = null;
+      if (ratingRaw !== null && ratingRaw !== '') {
+        ratingFilter = Number(ratingRaw);
+        if (!Number.isInteger(ratingFilter) || ratingFilter < 1 || ratingFilter > 5) {
+          throw bad('INVALID_RATING', 'rating 필터는 1~5 사이의 정수여야 합니다.');
+        }
+      }
+      const photosOnly = ['true', '1'].includes(String(url.searchParams.get('photos_only') || '').toLowerCase());
+      const optionFilter = str(url.searchParams.get('option') || '', { max: 100 });
+      const where = ['product_id = ?', "visibility = 'VISIBLE'"];
+      const params = [prodId];
+      if (ratingFilter !== null) { where.push('rating = ?'); params.push(ratingFilter); }
+      if (photosOnly) where.push("COALESCE(images_json, '') NOT IN ('', '[]', 'null')");
+      if (optionFilter) {
+        where.push('sku_option_summary LIKE ? ESCAPE \'\\\'');
+        params.push(`%${optionFilter.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      }
+      const whereSql = where.join(' AND ');
+      const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM product_reviews WHERE ${whereSql}`).bind(...params).first('c') || 0;
       const { results: reviews } = await env.DB.prepare(
-        'SELECT * FROM product_reviews WHERE product_id = ? ORDER BY created_at DESC'
+        `SELECT * FROM product_reviews WHERE ${whereSql} ORDER BY ${sortSql} LIMIT ? OFFSET ?`
+      ).bind(...params, perPage, (page - 1) * perPage).all();
+      const { results: allVisible } = await env.DB.prepare(
+        "SELECT rating, images_json, fit_type FROM product_reviews WHERE product_id = ? AND visibility = 'VISIBLE'"
       ).bind(prodId).all();
-
-      const avgRow = await env.DB.prepare(
-        'SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM product_reviews WHERE product_id = ?'
-      ).bind(prodId).first();
-
+      const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      let photoCount = 0;
+      const fit = { TRUE_TO_SIZE: 0, RUNS_SMALL: 0, RUNS_LARGE: 0 };
+      let ratingSum = 0;
+      for (const r of allVisible) {
+        const bucket = Math.min(5, Math.max(1, Math.round(Number(r.rating))));
+        distribution[bucket] += 1;
+        ratingSum += Number(r.rating);
+        const imgs = String(r.images_json || '');
+        if (imgs !== '' && imgs !== '[]' && imgs !== 'null') photoCount += 1;
+        if (r.fit_type && fit[r.fit_type] !== undefined) fit[r.fit_type] += 1;
+      }
+      const cntVal = allVisible.length;
+      const avgVal = cntVal > 0 ? parseFloat((ratingSum / cntVal).toFixed(1)) : null;
+      const replies = {};
+      if (reviews.length) {
+        const { results: replyRows } = await env.DB.prepare(
+          `SELECT review_id, body, created_at FROM review_replies WHERE review_id IN (${reviews.map(() => '?').join(',')})`
+        ).bind(...reviews.map((r) => r.id)).all();
+        for (const rr of replyRows) replies[rr.review_id] = { body: rr.body, created_at: rr.created_at };
+      }
       const parsedReviews = reviews.map(r => {
         let images = [];
         try { images = JSON.parse(r.images_json || '[]'); } catch (_) {}
@@ -135,12 +194,10 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
           ...r,
           comment: r.content,
           customer_name: r.reviewer_name,
-          images
+          images,
+          reply: replies[r.id] || null
         };
       });
-
-      const avgVal = avgRow && avgRow.review_count > 0 && avgRow.avg_rating != null ? parseFloat(Number(avgRow.avg_rating).toFixed(1)) : null;
-      const cntVal = avgRow ? avgRow.review_count : parsedReviews.length;
 
       return new Response(JSON.stringify({
         success: true, brand: 'OLMOA', product_id: prodId,
@@ -149,7 +206,8 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         reviews: parsedReviews,
         data: {
           reviews: parsedReviews,
-          summary: { count: cntVal, average_rating: avgVal }
+          summary: { count: cntVal, average_rating: avgVal, distribution, photo_count: photoCount, fit },
+          pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }
         }
       }), { headers: corsHeaders });
     }
@@ -200,6 +258,62 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
+  // 4b. Review helpful toggle (2-9): second call untoggles; own reviews rejected.
+  const helpfulMatch = url.pathname.match(/^\/api\/v1\/reviews\/([^/]+)\/helpful$/);
+  if (helpfulMatch && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const review = await env.DB.prepare('SELECT id, user_id, helpful_count FROM product_reviews WHERE id = ?').bind(helpfulMatch[1]).first();
+    if (!review) throw notFound('리뷰를 찾을 수 없습니다.');
+    if (review.user_id === me.userId) throw forbidden('본인이 작성한 리뷰에는 도움돼요를 누를 수 없습니다.');
+    const existing = await env.DB.prepare('SELECT id FROM review_helpful_votes WHERE review_id = ? AND user_id = ?').bind(review.id, me.userId).first();
+    let helpful;
+    if (existing) {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM review_helpful_votes WHERE id = ?').bind(existing.id),
+        env.DB.prepare('UPDATE product_reviews SET helpful_count = MAX(0, helpful_count - 1) WHERE id = ?').bind(review.id)
+      ]);
+      helpful = false;
+    } else {
+      try {
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO review_helpful_votes (id, review_id, user_id) VALUES (?, ?, ?)').bind(newId('rhv'), review.id, me.userId),
+          env.DB.prepare('UPDATE product_reviews SET helpful_count = helpful_count + 1 WHERE id = ?').bind(review.id)
+        ]);
+      } catch (e) {
+        // Lost a concurrent first vote; the stored count already moved once.
+        if (!String(e && e.message || '').includes('UNIQUE constraint failed')) throw e;
+      }
+      helpful = true;
+    }
+    const count = await env.DB.prepare('SELECT helpful_count AS c FROM product_reviews WHERE id = ?').bind(review.id).first('c');
+    const data = { helpful, count: Number(count) || 0 };
+    return json(corsHeaders, { success: true, ...data, data });
+  }
+
+  // 4c. Review reports (2-9): reason validated, one report per member per review.
+  const reportMatch = url.pathname.match(/^\/api\/v1\/reviews\/([^/]+)\/report$/);
+  if (reportMatch && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const body = await readJson(request);
+    const reason = String(body.reason || '').toUpperCase();
+    if (!['PROFANITY', 'PRIVACY', 'AD', 'IRRELEVANT', 'OTHER'].includes(reason)) {
+      throw bad('INVALID_REASON', 'reason은 PROFANITY·PRIVACY·AD·IRRELEVANT·OTHER 중 하나여야 합니다.');
+    }
+    const review = await env.DB.prepare('SELECT id FROM product_reviews WHERE id = ?').bind(reportMatch[1]).first();
+    if (!review) throw notFound('리뷰를 찾을 수 없습니다.');
+    const dup = await env.DB.prepare('SELECT id FROM review_reports WHERE review_id = ? AND reporter_user_id = ?').bind(review.id, me.userId).first();
+    if (dup) throw conflict('REPORT_EXISTS', '이미 신고한 리뷰입니다.');
+    const reportId = newId('rrp');
+    try {
+      await env.DB.prepare('INSERT INTO review_reports (id, review_id, reporter_user_id, reason) VALUES (?, ?, ?, ?)').bind(reportId, review.id, me.userId, reason).run();
+    } catch (e) {
+      if (String(e && e.message || '').includes('UNIQUE constraint failed')) throw conflict('REPORT_EXISTS', '이미 신고한 리뷰입니다.');
+      throw e;
+    }
+    const data = { report_id: reportId, review_id: review.id, reason };
+    return json(corsHeaders, { success: true, ...data, data }, 201);
+  }
+
   // 5. Product Q&A List & Create (GET/POST /api/v1/products/:id/qna)
   if (url.pathname.match(/^\/api\/v1\/products\/[^\/]+\/qna$/)) {
     const prodId = url.pathname.split('/')[4];
@@ -232,27 +346,34 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
-  // 6. Coupons & Claim Coupon
+  // 6. Coupon wallet (2-9): usable holdings, claimable offers, used/expired holdings.
   if (url.pathname === '/api/v1/coupons' && request.method === 'GET') {
     const me = await authenticate(request, env);
-    const { results: coupons } = await env.DB.prepare("SELECT * FROM coupons WHERE is_active = 1 AND expires_at > ?").bind(sqlNow()).all();
-    const userCoupons = me ? (await env.DB.prepare("SELECT id AS user_coupon_id, coupon_id, is_used FROM user_coupons WHERE user_id = ?").bind(me.userId).all()).results : [];
-    const claimedMap = {};
-    for (const uc of userCoupons) claimedMap[uc.coupon_id] = uc;
-
-    return new Response(JSON.stringify({
-      success: true,
-      count: coupons.length,
-      data: coupons.map(c => ({
-        ...c,
-        name: c.title || c.code,
-        valid_until: c.expires_at,
-        claimed_status: claimedMap[c.id] ? (claimedMap[c.id].is_used ? 'USED' : 'CLAIMED') : null,
-        is_claimed: !!claimedMap[c.id],
-        user_coupon_id: claimedMap[c.id] ? claimedMap[c.id].user_coupon_id : null,
-        is_used: claimedMap[c.id] ? !!claimedMap[c.id].is_used : false
-      }))
-    }), { headers: corsHeaders });
+    const now = sqlNow();
+    const { results: coupons } = await env.DB.prepare('SELECT * FROM coupons ORDER BY expires_at ASC').all();
+    const { results: holdings } = me
+      ? await env.DB.prepare('SELECT uc.id AS user_coupon_id, uc.is_used, uc.used_at, uc.created_at AS held_at, c.* FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id WHERE uc.user_id = ? ORDER BY uc.created_at DESC').bind(me.userId).all()
+      : { results: [] };
+    const live = (c) => Number(c.is_active) === 1 && c.expires_at > now && (!c.starts_at || c.starts_at <= now);
+    const usable = [];
+    const usedExpired = [];
+    const heldCounts = {};
+    const unusedHeld = new Set();
+    for (const h of holdings) {
+      heldCounts[h.coupon_id] = (heldCounts[h.coupon_id] || 0) + 1;
+      const row = { ...h, name: h.title || h.code, valid_until: h.expires_at };
+      if (Number(h.is_used) === 0 && live(h)) { usable.push(row); unusedHeld.add(h.coupon_id); }
+      else usedExpired.push(row);
+    }
+    // Claimable = a live downloadable offer with quantity left that the viewer
+    // has no unused holding of (and has not hit the per-user limit). AUTO
+    // coupons never appear: they cannot be claimed by hand.
+    const claimable = coupons.filter((c) =>
+      live(c) && c.issue_method !== 'AUTO' && (c.total_quantity == null || Number(c.issued_count) < Number(c.total_quantity)) &&
+      !unusedHeld.has(c.id) && (c.per_user_limit == null || (heldCounts[c.id] || 0) < Number(c.per_user_limit))
+    ).map((c) => ({ ...c, name: c.title || c.code, valid_until: c.expires_at }));
+    const data = { usable, claimable, used_expired: usedExpired };
+    return json(corsHeaders, { success: true, count: usable.length + claimable.length + usedExpired.length, ...data, data });
   }
 
   if (url.pathname === '/api/v1/coupons/claim' && request.method === 'POST') {
@@ -263,6 +384,90 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const coupon = await env.DB.prepare('SELECT * FROM coupons WHERE id = ?').bind(out.userCoupon.coupon_id).first();
     return new Response(JSON.stringify({ success: true, coupon, data: coupon, user_coupon_id: out.userCoupon.id,
       ...(out.replay ? { idempotent_replay: true } : {}), message: '쿠폰이 쿠폰함에 발급되었습니다.' }), { headers: corsHeaders });
+  }
+
+  // 6b. Best coupon combination (2-9): max savings over the current cart —
+  // one platform coupon plus the best store coupon per seller, evaluated in
+  // checkout order (store first, platform on the remainder). An estimate:
+  // checkout re-verifies min-order and scope at order time.
+  if (url.pathname === '/api/v1/coupons/best' && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const now = sqlNow();
+    const { results: cartRows } = await env.DB.prepare(
+      `SELECT c.sku_id, c.quantity, s.product_id, s.sale_price, p.partner_id, p.category_id
+       FROM cart_items c JOIN product_skus s ON s.id = c.sku_id JOIN products p ON p.id = s.product_id
+       WHERE c.user_id = ? AND p.status = 'ACTIVE'`
+    ).bind(me.userId).all();
+    const lines = cartRows.map((r) => ({
+      skuId: r.sku_id, productId: r.product_id, partnerId: r.partner_id, categoryId: r.category_id,
+      lineTotal: Number(r.sale_price) * Number(r.quantity), storeAlloc: 0
+    }));
+    const empty = { platform: null, store: [], total_discount: 0 };
+    if (!lines.length) return json(corsHeaders, { success: true, ...empty, data: empty });
+    const { results: held } = await env.DB.prepare(
+      `SELECT uc.id AS user_coupon_id, c.* FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
+       WHERE uc.user_id = ? AND uc.is_used = 0 AND c.is_active = 1 AND c.expires_at > ?
+       AND (c.starts_at IS NULL OR c.starts_at <= ?)`
+    ).bind(me.userId, now, now).all();
+    const discountOf = async (coupon, eligibleLines, baseOf) => {
+      const sum = eligibleLines.reduce((a, l) => a + baseOf(l), 0);
+      if (sum < (coupon.min_order_amount || 0)) return null;
+      try {
+        return couponAmount(coupon, sum);
+      } catch {
+        return null;
+      }
+    };
+    const storeBest = [];
+    const sellers = [...new Set(lines.map((l) => l.partnerId))];
+    for (const sellerId of sellers) {
+      const mine = held.filter((h) => h.dup_group === 'STORE');
+      let best = null;
+      for (const h of mine) {
+        const eligible = [];
+        for (const l of lines) {
+          if (l.partnerId !== sellerId) continue;
+          if (await matchScope(env, h, l)) eligible.push(l);
+        }
+        if (!eligible.length) continue;
+        const amount = await discountOf(h, eligible, (l) => l.lineTotal);
+        if (amount == null || amount <= 0) continue;
+        if (!best || amount > best.discount_amount) {
+          best = { seller_id: sellerId, user_coupon_id: h.user_coupon_id, coupon_id: h.id, code: h.code, discount_amount: amount, _eligible: eligible };
+        }
+      }
+      if (best) {
+        const parts = allocate(best.discount_amount, best._eligible.map((l) => l.lineTotal));
+        best._eligible.forEach((l, i) => { l.storeAlloc = parts[i]; });
+        delete best._eligible;
+        storeBest.push(best);
+      }
+    }
+    storeBest.sort((a, b) => (a.seller_id < b.seller_id ? -1 : 1));
+    let platformBest = null;
+    for (const h of held.filter((x) => x.dup_group === 'PLATFORM')) {
+      const eligible = [];
+      for (const l of lines) {
+        if (await matchScope(env, h, l)) eligible.push(l);
+      }
+      if (!eligible.length) continue;
+      const rawSum = eligible.reduce((a, l) => a + l.lineTotal, 0);
+      if (rawSum < (h.min_order_amount || 0)) continue;
+      const targetSum = eligible.reduce((a, l) => a + (l.lineTotal - l.storeAlloc), 0);
+      let amount;
+      try {
+        amount = couponAmount({ ...h, min_order_amount: 0 }, targetSum);
+      } catch {
+        continue;
+      }
+      if (amount <= 0) continue;
+      if (!platformBest || amount > platformBest.discount_amount) {
+        platformBest = { user_coupon_id: h.user_coupon_id, coupon_id: h.id, code: h.code, discount_amount: amount };
+      }
+    }
+    const total = (platformBest ? platformBest.discount_amount : 0) + storeBest.reduce((a, s) => a + s.discount_amount, 0);
+    const data = { platform: platformBest, store: storeBest, total_discount: total };
+    return json(corsHeaders, { success: true, ...data, data });
   }
 
   // 7. User Credits Balance & Ledger
@@ -582,6 +787,102 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const customerId = (await requireCustomer(request, env)).userId;
     await env.DB.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').bind(notiId, customerId).run();
     return new Response(JSON.stringify({ success: true, message: '알림을 읽음 처리했습니다.' }), { headers: corsHeaders });
+  }
+
+  // 13. Store follows (2-9).
+  const followMatch = url.pathname.match(/^\/api\/v1\/stores\/([^/]+)\/follow$/);
+  if (followMatch && (request.method === 'POST' || request.method === 'DELETE')) {
+    const me = await requireCustomer(request, env);
+    const partner = await env.DB.prepare('SELECT id FROM partners WHERE id = ?').bind(followMatch[1]).first();
+    if (!partner) throw notFound('판매자를 찾을 수 없습니다.');
+    let following;
+    if (request.method === 'POST') {
+      await env.DB.prepare('INSERT OR IGNORE INTO store_follows (id, user_id, partner_id) VALUES (?, ?, ?)')
+        .bind(newId('sf'), me.userId, partner.id).run();
+      following = true;
+    } else {
+      await env.DB.prepare('DELETE FROM store_follows WHERE user_id = ? AND partner_id = ?').bind(me.userId, partner.id).run();
+      following = false;
+    }
+    const data = { following, partner_id: partner.id };
+    return json(corsHeaders, { success: true, ...data, data });
+  }
+  if (url.pathname === '/api/v1/me/followed-stores' && request.method === 'GET') {
+    const me = await requireCustomer(request, env);
+    const { results } = await env.DB.prepare(
+      `SELECT f.partner_id, f.created_at AS followed_at, p.business_name,
+              (SELECT COUNT(*) FROM products WHERE partner_id = p.id AND status = 'ACTIVE') AS product_count
+       FROM store_follows f JOIN partners p ON p.id = f.partner_id
+       WHERE f.user_id = ? ORDER BY f.created_at DESC`
+    ).bind(me.userId).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
+  // 14. Recently viewed products (2-9): newest first, one card per product.
+  if (url.pathname === '/api/v1/me/recently-viewed' && request.method === 'GET') {
+    const me = await requireCustomer(request, env);
+    const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10) || 20));
+    const { results } = await env.DB.prepare(
+      `SELECT p.id, p.title, p.thumbnail_url, p.lowest_sale_price, p.lowest_original_price,
+              p.status, p.partner_id, MAX(v.viewed_at) AS viewed_at
+       FROM product_views v JOIN products p ON p.id = v.product_id
+       WHERE v.user_id = ?
+       GROUP BY v.product_id ORDER BY viewed_at DESC, MAX(v.rowid) DESC LIMIT ?`
+    ).bind(me.userId, limit).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+  if (url.pathname === '/api/v1/me/recently-viewed/merge' && request.method === 'POST') {
+    const me = await requireCustomer(request, env);
+    const body = await readJson(request);
+    if (!Array.isArray(body.product_ids)) throw bad('PRODUCT_IDS_REQUIRED', 'product_ids 배열을 보내 주세요.');
+    if (body.product_ids.length > 50) throw bad('MERGE_TOO_LARGE', '한 번에 최대 50개까지 합칠 수 있습니다.');
+    const ids = [...new Set(body.product_ids.map((x) => String(x || '').trim()).filter(Boolean))];
+    let merged = 0;
+    const base = Date.now();
+    for (let i = 0; i < ids.length; i++) {
+      const prod = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(ids[i]).first();
+      if (!prod) continue; // browser history may hold removed products; skip, never fail
+      const stamp = new Date(base + i).toISOString().replace('T', ' ').slice(0, 23);
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM product_views WHERE user_id = ? AND product_id = ?').bind(me.userId, prod.id),
+        env.DB.prepare('INSERT INTO product_views (id, product_id, user_id, day, viewed_at) VALUES (?, ?, ?, date(?), ?)')
+          .bind(newId('pvw'), prod.id, me.userId, stamp, stamp)
+      ]);
+      merged += 1;
+    }
+    const data = { merged };
+    return json(corsHeaders, { success: true, ...data, data });
+  }
+  const recentDelMatch = url.pathname.match(/^\/api\/v1\/me\/recently-viewed\/([^/]+)$/);
+  if (recentDelMatch && request.method === 'DELETE') {
+    const me = await requireCustomer(request, env);
+    const r = await env.DB.prepare('DELETE FROM product_views WHERE user_id = ? AND product_id = ?').bind(me.userId, recentDelMatch[1]).run();
+    const data = { removed: r.meta.changes > 0, product_id: recentDelMatch[1] };
+    return json(corsHeaders, { success: true, ...data, data });
+  }
+
+  // 15. Restock subscriptions (2-9): only genuinely stocked-out SKUs.
+  if (url.pathname === '/api/v1/restock-subscriptions' && (request.method === 'POST' || request.method === 'DELETE')) {
+    const me = await requireCustomer(request, env);
+    const body = await readJson(request);
+    const skuId = str(body.sku_id, { field: 'sku_id', max: 64 });
+    if (!skuId) throw bad('SKU_REQUIRED', 'sku_id를 지정해 주세요.');
+    const sku = await env.DB.prepare('SELECT id, stock_quantity FROM product_skus WHERE id = ?').bind(skuId).first();
+    if (!sku) throw notFound('상품 옵션을 찾을 수 없습니다.');
+    if (request.method === 'POST') {
+      if (Number(sku.stock_quantity) > 0) throw conflict('STOCK_AVAILABLE', '재고가 있는 상품은 재입고 알림을 신청할 수 없습니다.');
+      const prior = await env.DB.prepare('SELECT id FROM restock_subscriptions WHERE user_id = ? AND sku_id = ?').bind(me.userId, skuId).first();
+      if (prior) {
+        const data = { subscribed: true, sku_id: skuId, idempotent_replay: true };
+        return json(corsHeaders, { success: true, ...data, data }, 200);
+      }
+      await env.DB.prepare('INSERT INTO restock_subscriptions (id, user_id, sku_id) VALUES (?, ?, ?)').bind(newId('rst'), me.userId, skuId).run();
+      const data = { subscribed: true, sku_id: skuId };
+      return json(corsHeaders, { success: true, ...data, data }, 201);
+    }
+    await env.DB.prepare('DELETE FROM restock_subscriptions WHERE user_id = ? AND sku_id = ?').bind(me.userId, skuId).run();
+    const data = { subscribed: false, sku_id: skuId };
+    return json(corsHeaders, { success: true, ...data, data });
   }
 
   return null;

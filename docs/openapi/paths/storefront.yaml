@@ -42,6 +42,42 @@ paths:
           schema:
             type: integer
             minimum: 0
+        - name: brand
+          in: query
+          schema:
+            type: string
+          description: '2-9: comma-separated brands, max 10 (BRAND_FILTER_LIMIT over).'
+        - name: free_shipping
+          in: query
+          schema:
+            type: string
+          description: '2-9: true/1 keeps only free-shipping sellers (zero base fee or an ACTIVE FREE template).'
+        - name: coupon_eligible
+          in: query
+          schema:
+            type: string
+          description: '2-9: true/1 keeps only products with a live claimable coupon in scope.'
+        - name: sales_model
+          in: query
+          schema:
+            type: string
+            enum: [DIRECT, MARKETPLACE]
+          description: '2-9: seller type; anything else is 400 INVALID_SALES_MODEL.'
+        - name: min_rating
+          in: query
+          schema:
+            type: number
+          description: '2-9: minimum stored average rating 0..5 (400 outside).'
+        - name: today_shipment
+          in: query
+          schema:
+            type: string
+          description: '2-9: true/1 keeps only sellers with an ACTIVE template carrying today_cutoff.'
+        - name: exhibition_id
+          in: query
+          schema:
+            type: string
+          description: '2-9: keeps only products in the given live exhibition (alias: exhibition).'
         - name: page
           in: query
           schema:
@@ -208,6 +244,17 @@ paths:
                         type: object
                         nullable: true
                         description: Stored per-product notice inputs, else null.
+                      shipping_policy:
+                        type: object
+                        nullable: true
+                        description: '2-9: effective shipping template (product ref, else seller default), else null.'
+                      seller:
+                        type: object
+                        description: '2-9: seller summary (grade, rating, followers, inquiry_response_rate).'
+                      max_coupon_discount:
+                        type: integer
+                        nullable: true
+                        description: '2-9: best claimable coupon discount over the floor price, else null.'
         '404':
           description: Unknown product id
           content:
@@ -597,6 +644,10 @@ paths:
                             type: integer
                           free_shipping_threshold:
                             type: integer
+                      profile:
+                        type: object
+                        nullable: true
+                        description: '2-9: store decor profile, null until the seller saves one.'
                       stats:
                         type: object
                         properties:
@@ -610,6 +661,13 @@ paths:
                             description: Average of reviews on this partner's products; null when there are none.
                           review_count:
                             type: integer
+                          followers:
+                            type: integer
+                            description: '2-9: store follow count.'
+                          grade:
+                            type: string
+                            nullable: true
+                            description: '2-9: latest monthly grade, null until computed.'
                       metrics:
                         type: object
                       products:
@@ -686,12 +744,45 @@ paths:
       summary: Review list with average rating summary
       tags: [Storefront]
       security: []
+      description: '2-9: page/per_page, sort (latest, helpful, rating_high, rating_low), photos_only, rating and option filters; blind reviews stay out of list, total and summary; seller replies attached.'
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [latest, helpful, rating_high, rating_low]
+            default: latest
+        - name: photos_only
+          in: query
+          schema:
+            type: string
+          description: 'true/1 keeps only reviews with photos.'
+        - name: rating
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5
+        - name: option
+          in: query
+          schema:
+            type: string
+          description: Substring match on the SKU option summary.
       responses:
         '200':
           description: Reviews newest-first; avg_rating is null when there are none
@@ -731,6 +822,18 @@ paths:
                           average_rating:
                             type: number
                             nullable: true
+                          distribution:
+                            type: object
+                            description: '2-9: star buckets 1..5 over visible reviews.'
+                          photo_count:
+                            type: integer
+                          fit:
+                            type: object
+                            description: '2-9: fit-type counts over visible reviews.'
+                      pagination:
+                        $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
+        '400':
+          description: Unknown sort or out-of-range rating filter
     post:
       summary: Write a verified-purchase review
       tags: [Storefront]
@@ -1238,3 +1341,83 @@ paths:
           description: NOT_IN_TRANSIT_STATE
         '503':
           description: WEBHOOK_NOT_CONFIGURED when the server secret is unset
+
+  /api/v1/products/facets:
+    get:
+      summary: Facet counts under the current product filters
+      tags: [Storefront]
+      security: []
+      description: '2-9: accepts the same filters as GET /api/v1/products; returns category counts, top 20 brands, price min/max and badge counts.'
+      responses:
+        '200':
+          description: Facet summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [categories, brands, price, badges]
+                    properties:
+                      categories:
+                        type: array
+                        items:
+                          type: object
+                      brands:
+                        type: array
+                        items:
+                          type: object
+                      price:
+                        type: object
+                      badges:
+                        type: object
+
+  /api/v1/products/{id}/coupons:
+    get:
+      summary: Coupons applicable to one product
+      tags: [Storefront]
+      security: []
+      description: '2-9: coupons in scope for the product; with a customer JWT each row carries claimed=true when held.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Applicable coupons with claimed flags
+        '404':
+          description: Unknown product id
+
+  /api/v1/exhibitions:
+    get:
+      summary: Live exhibitions
+      tags: [Storefront]
+      security: []
+      description: '2-9: ACTIVE exhibitions inside their window, newest first.'
+      responses:
+        '200':
+          description: Live exhibitions
+
+  /api/v1/exhibitions/{id}:
+    get:
+      summary: One live exhibition with products
+      tags: [Storefront]
+      security: []
+      description: '2-9: ended or draft exhibitions answer 404.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Exhibition with attached products
+        '404':
+          description: Unknown or ended exhibition

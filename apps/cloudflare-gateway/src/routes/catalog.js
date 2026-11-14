@@ -1,7 +1,10 @@
 // apps/cloudflare-gateway/src/routes/catalog.js
 // OLMOA Catalog Engine: Categories Tree Rollup, Products, Honest Partner Dispatch & Quality Score
 
-import { notFound, HttpError } from '../lib/http.js';
+import { bad, notFound, HttpError } from '../lib/http.js';
+import { authenticate } from '../lib/auth.js';
+import { matchScope } from '../services/coupons.js';
+import { newId } from '../lib/ids.js';
 
 export function computeServerQualityScore(product) {
   if (!product) return 0;
@@ -62,6 +65,96 @@ export function shortSearchTerms(raw) {
 
 export function escapeLike(term) {
   return String(term).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+// Shared by the product list and the facets endpoint (2-9).
+async function buildProductFilters(env, url) {
+  const catParam = url.searchParams.get('category');
+  const partnerParam = url.searchParams.get('partner_id');
+  const minPrice = url.searchParams.get('min_price');
+  const maxPrice = url.searchParams.get('max_price');
+  const brandParam = url.searchParams.get('brand');
+  const freeShipParam = url.searchParams.get('free_shipping');
+  const couponParam = url.searchParams.get('coupon_eligible');
+  const salesModelParam = url.searchParams.get('sales_model');
+  const minRatingParam = url.searchParams.get('min_rating');
+  const todayShipParam = url.searchParams.get('today_shipment');
+  const exhibitionParam = url.searchParams.get('exhibition_id') || url.searchParams.get('exhibition');
+  const binds = [];
+  let filterSql = '';
+
+  if (catParam && catParam !== 'all') {
+    const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(catParam, catParam).first();
+    if (catRow) {
+      filterSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
+      binds.push(catRow.id, catRow.id);
+    } else {
+      filterSql += ` AND (c.slug = ? OR p.category_id = ?)`;
+      binds.push(catParam, catParam);
+    }
+  }
+
+  if (partnerParam) {
+    filterSql += ` AND p.partner_id = ?`;
+    binds.push(partnerParam);
+  }
+
+  if (minPrice) {
+    filterSql += ` AND p.lowest_sale_price >= ?`;
+    binds.push(Number.isSafeInteger(Number.parseInt(minPrice, 10)) ? Number.parseInt(minPrice, 10) : 0);
+  }
+  if (maxPrice) {
+    filterSql += ` AND p.lowest_sale_price <= ?`;
+    binds.push(Number.isSafeInteger(Number.parseInt(maxPrice, 10)) ? Number.parseInt(maxPrice, 10) : 100_000_000);
+  }
+
+  // 2-9 buyer filters.
+  if (brandParam) {
+    const brands = brandParam.split(',').map((s) => s.trim()).filter(Boolean);
+    if (brands.length > 10) throw bad('BRAND_FILTER_LIMIT', '브랜드는 최대 10개까지 선택할 수 있습니다.');
+    if (brands.length) {
+      filterSql += ` AND p.brand IN (${brands.map(() => '?').join(', ')})`;
+      binds.push(...brands);
+    }
+  }
+  if (freeShipParam === 'true' || freeShipParam === '1') {
+    filterSql += ` AND (pt.base_shipping_fee = 0 OR EXISTS (SELECT 1 FROM shipping_policies sp
+      WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.fee_type = 'FREE'))`;
+  }
+  if (couponParam === 'true' || couponParam === '1') {
+    filterSql += ` AND EXISTS (SELECT 1 FROM coupons c WHERE c.is_active = 1 AND c.expires_at > CURRENT_TIMESTAMP
+      AND (c.starts_at IS NULL OR c.starts_at <= CURRENT_TIMESTAMP)
+      AND (c.total_quantity IS NULL OR c.issued_count < c.total_quantity)
+      AND (c.scope = 'ALL'
+        OR (c.scope = 'SELLER' AND (c.seller_id = p.partner_id OR EXISTS (SELECT 1 FROM coupon_targets t
+          WHERE t.coupon_id = c.id AND t.target_type = 'SELLER' AND t.target_id = p.partner_id)))
+        OR (c.scope = 'CATEGORY' AND EXISTS (SELECT 1 FROM coupon_targets t
+          WHERE t.coupon_id = c.id AND t.target_type = 'CATEGORY' AND t.target_id = p.category_id))
+        OR (c.scope = 'PRODUCT' AND EXISTS (SELECT 1 FROM coupon_targets t
+          WHERE t.coupon_id = c.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id))))`;
+  }
+  if (salesModelParam) {
+    if (!['DIRECT', 'MARKETPLACE'].includes(salesModelParam)) throw bad('INVALID_SALES_MODEL', '직영/입점 구분이 올바르지 않습니다.');
+    filterSql += ` AND pt.sales_model = ?`;
+    binds.push(salesModelParam);
+  }
+  if (minRatingParam) {
+    const minR = Number(minRatingParam);
+    if (!Number.isFinite(minR) || minR < 0 || minR > 5) throw bad('INVALID_MIN_RATING', '평점 기준이 올바르지 않습니다.');
+    filterSql += ` AND p.avg_rating_x10 >= ?`;
+    binds.push(Math.round(minR * 10));
+  }
+  if (todayShipParam === 'true' || todayShipParam === '1') {
+    filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
+      WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL)`;
+  }
+  if (exhibitionParam) {
+    filterSql += ` AND EXISTS (SELECT 1 FROM exhibition_products ep JOIN exhibitions e ON e.id = ep.exhibition_id
+      WHERE ep.product_id = p.id AND ep.exhibition_id = ? AND e.status = 'ACTIVE'
+      AND e.starts_at <= CURRENT_TIMESTAMP AND e.ends_at > CURRENT_TIMESTAMP)`;
+    binds.push(exhibitionParam);
+  }
+  return { filterSql, binds };
 }
 
 export async function handleCatalogRoutes(request, url, env, corsHeaders) {
@@ -141,6 +234,13 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const sortParam = url.searchParams.get('sort') || (searchParam ? 'relevance' : 'popular');
     const minPrice = url.searchParams.get('min_price');
     const maxPrice = url.searchParams.get('max_price');
+    const brandParam = url.searchParams.get('brand');
+    const freeShipParam = url.searchParams.get('free_shipping');
+    const couponParam = url.searchParams.get('coupon_eligible');
+    const salesModelParam = url.searchParams.get('sales_model');
+    const minRatingParam = url.searchParams.get('min_rating');
+    const todayShipParam = url.searchParams.get('today_shipment');
+    const exhibitionParam = url.searchParams.get('exhibition_id') || url.searchParams.get('exhibition');
     // Offset pagination. `limit` stays as a legacy alias of `per_page`; invalid values fall back to defaults.
     const perPageRaw = Number.parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '100', 10);
     const perPage = Math.min(200, Math.max(1, Number.isSafeInteger(perPageRaw) ? perPageRaw : 100));
@@ -157,40 +257,20 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
              pt.business_name, pt.base_shipping_fee, pt.free_shipping_threshold,
              (SELECT s.id FROM product_skus s WHERE s.product_id = p.id AND s.stock_quantity > 0 ORDER BY s.sale_price ASC LIMIT 1) as default_sku_id,
              (p.avg_rating_x10 / 10.0) as avg_rating,
-             p.review_count as review_count`;
+             p.review_count as review_count,
+             (SELECT COALESCE(SUM(i.quantity - i.refunded_quantity), 0) FROM order_items i
+              JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+              WHERE i.product_id = p.id AND o.payment_status = 'PAID' AND o.paid_at >= datetime('now', '-30 days')) as sales_30d_raw,
+             EXISTS (SELECT 1 FROM flash_sale_items f JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+              WHERE f.product_id = p.id AND f.status = 'APPROVED' AND c.status = 'ACTIVE'
+              AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP) as has_deal`;
     const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
       LEFT JOIN partners pt ON p.partner_id = pt.id`;
     const baseWhere = `WHERE p.status = 'ACTIVE'`;
-    const binds = [];
-    let filterSql = '';
-
-    if (catParam && catParam !== 'all') {
-      const catRow = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? OR id = ?').bind(catParam, catParam).first();
-      if (catRow) {
-        filterSql += ` AND (p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
-        binds.push(catRow.id, catRow.id);
-      } else {
-        filterSql += ` AND (c.slug = ? OR p.category_id = ?)`;
-        binds.push(catParam, catParam);
-      }
-    }
-
-    if (partnerParam) {
-      filterSql += ` AND p.partner_id = ?`;
-      binds.push(partnerParam);
-    }
-
-    if (minPrice) {
-      filterSql += ` AND p.lowest_sale_price >= ?`;
-      binds.push(Number.isSafeInteger(Number.parseInt(minPrice, 10)) ? Number.parseInt(minPrice, 10) : 0);
-    }
-    if (maxPrice) {
-      filterSql += ` AND p.lowest_sale_price <= ?`;
-      binds.push(Number.isSafeInteger(Number.parseInt(maxPrice, 10)) ? Number.parseInt(maxPrice, 10) : 100_000_000);
-    }
+    const { filterSql, binds } = await buildProductFilters(env, url);
 
     // col prefixes data columns: 'p.' inside the product query, '' in the UNION wrapper.
     const sortOrder = (sort, col) => {
@@ -209,7 +289,15 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       count: rows.length,
       filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam },
       pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
-      data: rows
+      data: rows.map((p) => {
+        const sales30 = Number(p.sales_30d_raw) || 0;
+        const badges = [];
+        if (p.lowest_original_price > p.lowest_sale_price) badges.push('SALE');
+        if (Number(p.has_deal)) badges.push('DEAL');
+        if (p.created_at && p.created_at >= new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ')) badges.push('NEW');
+        const { sales_30d_raw, has_deal, ...rest } = p;
+        return { ...rest, sales_30d: sales30 >= 10 ? sales30 : null, badges };
+      })
     }), { headers: corsHeaders });
 
     const runQuery = async (sql, sqlBinds) => {
@@ -329,6 +417,74 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     }), { headers: corsHeaders });
   }
 
+  // 3b. Product facets under the current filters (2-9).
+  if (url.pathname === '/api/v1/products/facets' && request.method === 'GET') {
+    const { filterSql, binds } = await buildProductFilters(env, url);
+    const fromSql = `FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN categories pc ON c.parent_id = pc.id
+      LEFT JOIN partners pt ON p.partner_id = pt.id`;
+    const baseWhere = `WHERE p.status = 'ACTIVE'`;
+    const q = async (sql) => (await env.DB.prepare(sql).bind(...binds).all()).results;
+    const categories = await q(`SELECT c.id, c.name, COUNT(*) AS count ${fromSql} ${baseWhere} ${filterSql} GROUP BY c.id, c.name ORDER BY count DESC`);
+    const brands = await q(`SELECT p.brand AS brand, COUNT(*) AS count ${fromSql} ${baseWhere} ${filterSql} AND p.brand IS NOT NULL AND p.brand != '' GROUP BY p.brand ORDER BY count DESC LIMIT 20`);
+    const price = await q(`SELECT MIN(p.lowest_sale_price) AS min, MAX(p.lowest_sale_price) AS max ${fromSql} ${baseWhere} ${filterSql}`).then((r) => r[0]);
+    const badges = await q(`SELECT
+      COALESCE(SUM(CASE WHEN p.lowest_original_price > p.lowest_sale_price THEN 1 ELSE 0 END), 0) AS sale,
+      COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM flash_sale_items f JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+        WHERE f.product_id = p.id AND f.status = 'APPROVED' AND c.status = 'ACTIVE'
+        AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP) THEN 1 ELSE 0 END), 0) AS deal,
+      COALESCE(SUM(CASE WHEN p.created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END), 0) AS is_new
+      ${fromSql} ${baseWhere} ${filterSql}`).then((r) => r[0]);
+    return new Response(JSON.stringify({ success: true, data: { categories, brands, price, badges } }), { headers: corsHeaders });
+  }
+
+  // 3c. Coupons applicable to one product, with claimed flags when logged in (2-9).
+  const prodCouponsM = url.pathname.match(/^\/api\/v1\/products\/([^/]+)\/coupons$/);
+  if (prodCouponsM && request.method === 'GET') {
+    const prod = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND status = ?').bind(decodeURIComponent(prodCouponsM[1]), 'ACTIVE').first();
+    if (!prod) throw notFound('상품을 찾을 수 없습니다.');
+    const me = await authenticate(request, env);
+    const { results: coupons } = await env.DB.prepare(
+      `SELECT * FROM coupons WHERE is_active = 1 AND expires_at > CURRENT_TIMESTAMP
+       AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+       AND (total_quantity IS NULL OR issued_count < total_quantity)`
+    ).all();
+    const held = new Set();
+    if (me) {
+      const { results: rows } = await env.DB.prepare('SELECT coupon_id FROM user_coupons WHERE user_id = ?').bind(me.userId).all();
+      for (const r of rows) held.add(r.coupon_id);
+    }
+    const line = { partnerId: prod.partner_id, categoryId: prod.category_id, productId: prod.id };
+    const applicable = [];
+    for (const c of coupons) {
+      if (await matchScope(env, c, line)) {
+        applicable.push({ ...c, claimed: held.has(c.id) });
+      }
+    }
+    return new Response(JSON.stringify({ success: true, count: applicable.length, data: applicable }), { headers: corsHeaders });
+  }
+
+  // 3d. Live exhibitions and their products (2-9).
+  if (url.pathname === '/api/v1/exhibitions' && request.method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM exhibitions WHERE status = 'ACTIVE' AND starts_at <= CURRENT_TIMESTAMP AND ends_at > CURRENT_TIMESTAMP ORDER BY sort_order ASC`
+    ).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+  const exM = url.pathname.match(/^\/api\/v1\/exhibitions\/([^/]+)$/);
+  if (exM && request.method === 'GET') {
+    const ex = await env.DB.prepare(
+      `SELECT * FROM exhibitions WHERE id = ? AND status = 'ACTIVE' AND starts_at <= CURRENT_TIMESTAMP AND ends_at > CURRENT_TIMESTAMP`
+    ).bind(decodeURIComponent(exM[1])).first();
+    if (!ex) throw notFound('기획전을 찾을 수 없습니다.');
+    const { results: products } = await env.DB.prepare(
+      `SELECT p.* FROM exhibition_products ep JOIN products p ON p.id = ep.product_id
+       WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' ORDER BY ep.sort_order ASC`
+    ).bind(ex.id).all();
+    return new Response(JSON.stringify({ success: true, data: { ...ex, products } }), { headers: corsHeaders });
+  }
+
   // 4. Single Product with SKUs, Partner Shipping Rules, Real Rating & QnA Count
   if (url.pathname.startsWith('/api/v1/products/') && !url.pathname.includes('/reviews') && !url.pathname.includes('/qna') && !url.pathname.includes('/buy-box') && !url.pathname.includes('/live-activity') && request.method === 'GET') {
     const prodId = url.pathname.replace('/api/v1/products/', '').trim();
@@ -412,6 +568,69 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
 
     const qualityScore = computeServerQualityScore(product);
 
+    // 2-9: effective shipping template, seller summary, max claimable discount.
+    let shippingPolicy = null;
+    if (product.shipping_policy_id) {
+      shippingPolicy = await env.DB.prepare("SELECT * FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'")
+        .bind(product.shipping_policy_id).first() || null;
+    }
+    if (!shippingPolicy) {
+      shippingPolicy = await env.DB.prepare(
+        "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' AND is_default = 1"
+      ).bind(product.partner_id).first() || null;
+    }
+    const gradeRow = await env.DB.prepare(
+      'SELECT grade_code FROM partner_grades WHERE partner_id = ? ORDER BY month DESC LIMIT 1'
+    ).bind(product.partner_id).first();
+    const followers = await env.DB.prepare('SELECT COUNT(*) AS n FROM store_follows WHERE partner_id = ?').bind(product.partner_id).first('n');
+    const storeRating = await env.DB.prepare(
+      `SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE ROUND(AVG(r.rating), 1) END AS a
+       FROM product_reviews r JOIN products p ON p.id = r.product_id
+       WHERE p.partner_id = ? AND r.visibility = 'VISIBLE'`
+    ).bind(product.partner_id).first();
+    const qna = await env.DB.prepare(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 'ANSWERED' THEN 1 ELSE 0 END), 0) AS answered
+       FROM product_qna WHERE partner_id = ?`
+    ).bind(product.partner_id).first();
+    const sellerSummary = {
+      grade: gradeRow ? gradeRow.grade_code : null,
+      rating: storeRating ? storeRating.a : null,
+      followers,
+      inquiry_response_rate: qna.total > 0 ? qna.answered / qna.total : null
+    };
+    const { results: candCoupons } = await env.DB.prepare(
+      `SELECT * FROM coupons WHERE is_active = 1 AND expires_at > CURRENT_TIMESTAMP
+       AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+       AND (total_quantity IS NULL OR issued_count < total_quantity)
+       AND issue_method IN ('DOWNLOAD', 'CODE')`
+    ).all();
+    let maxCouponDiscount = null;
+    {
+      const line = { partnerId: product.partner_id, categoryId: product.category_id, productId: product.id };
+      for (const c of candCoupons) {
+        if (!(await matchScope(env, c, line))) continue;
+        const base = product.lowest_sale_price;
+        let amt = c.discount_type === 'PERCENT' ? Math.floor((base * c.discount_value + 50) / 100) : c.discount_value;
+        if (base < (c.min_order_amount || 0)) continue;
+        if (c.max_discount_amount != null) amt = Math.min(amt, c.max_discount_amount);
+        amt = Math.min(amt, base);
+        if (maxCouponDiscount == null || amt > maxCouponDiscount) maxCouponDiscount = amt;
+      }
+    }
+    // 2-9: record the view for signed-in members. Re-insert (rather than
+    // update) so recency order stays exact even for same-second re-views.
+    try {
+      const viewer = await authenticate(request, env);
+      if (viewer && viewer.role === 'ROLE_CUSTOMER') {
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 23);
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM product_views WHERE user_id = ? AND product_id = ?').bind(viewer.userId, prodId),
+          env.DB.prepare('INSERT INTO product_views (id, product_id, user_id, day, viewed_at) VALUES (?, ?, ?, date(?), ?)')
+            .bind(newId('pvw'), prodId, viewer.userId, stamp, stamp)
+        ]);
+      }
+    } catch { /* view logging never breaks the detail page */ }
+
     return new Response(JSON.stringify({
       success: true,
       brand: 'OLMOA',
@@ -425,7 +644,10 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         volume_discounts: volumeDiscounts,
         images,
         notice_template: noticeTemplate,
-        notice_values: noticeValues
+        notice_values: noticeValues,
+        shipping_policy: shippingPolicy,
+        seller: sellerSummary,
+        max_coupon_discount: maxCouponDiscount
       }
     }), { headers: corsHeaders });
   }
@@ -458,10 +680,17 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     // Store rating = average of the reviews actually written on this partner's products; null when there are none.
     const rv = await env.DB.prepare(
       `SELECT ROUND(AVG(r.rating), 1) AS avg_rating, COUNT(*) AS review_count
-       FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.partner_id = ?`
+       FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.partner_id = ? AND r.visibility = 'VISIBLE'`
     ).bind(partnerId).first();
     const storeReviewCount = rv ? Number(rv.review_count) || 0 : 0;
     const storeRating = storeReviewCount > 0 && rv.avg_rating != null ? Number(rv.avg_rating) : null;
+    // 2-9: store profile, followers, latest grade, effective shipping summary.
+    const profile = await env.DB.prepare('SELECT * FROM partner_store_profiles WHERE partner_id = ?').bind(partnerId).first() || null;
+    const followers = await env.DB.prepare('SELECT COUNT(*) AS n FROM store_follows WHERE partner_id = ?').bind(partnerId).first('n');
+    const gradeRow = await env.DB.prepare('SELECT grade_code FROM partner_grades WHERE partner_id = ? ORDER BY month DESC LIMIT 1').bind(partnerId).first();
+    const defaultTpl = await env.DB.prepare(
+      "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' AND is_default = 1"
+    ).bind(partnerId).first() || null;
 
     return new Response(JSON.stringify({
       success: true,
@@ -472,15 +701,18 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
           company_name: partner.business_name,
           business_number: partner.business_reg_number
         },
-        shipping_policy: {
+        shipping_policy: defaultTpl || {
           base_fee: partner.base_shipping_fee,
           free_shipping_threshold: partner.free_shipping_threshold
         },
+        profile,
         stats: {
           product_count: products.length,
           total_sold_count: totalSold,
           store_rating: storeRating,
-          review_count: storeReviewCount
+          review_count: storeReviewCount,
+          followers,
+          grade: gradeRow ? gradeRow.grade_code : null
         },
         metrics: {
           product_count: products.length,

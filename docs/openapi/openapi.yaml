@@ -495,6 +495,112 @@ paths:
     $ref: './paths/ops.yaml#/paths/~1api~1v1~1feature-flags~1public'
   /api/v1/client-errors:
     $ref: './paths/ops.yaml#/paths/~1api~1v1~1client-errors'
+  /api/v1/coupons/best:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1coupons~1best'
+  /api/v1/reviews/{id}/helpful:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1reviews~1{id}~1helpful'
+  /api/v1/reviews/{id}/report:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1reviews~1{id}~1report'
+  /api/v1/stores/{partnerId}/follow:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1stores~1{partnerId}~1follow'
+  /api/v1/me/followed-stores:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1followed-stores'
+  /api/v1/me/recently-viewed:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1recently-viewed'
+  /api/v1/me/recently-viewed/merge:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1recently-viewed~1merge'
+  /api/v1/me/recently-viewed/{productId}:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1recently-viewed~1{productId}'
+  /api/v1/restock-subscriptions:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1restock-subscriptions'
+  /api/v1/products/facets:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1facets'
+  /api/v1/products/{id}/coupons:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1coupons'
+  /api/v1/exhibitions:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1exhibitions'
+  /api/v1/exhibitions/{id}:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1exhibitions~1{id}'
+  /api/v1/search/trending:
+    $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1trending'
+  /api/v1/partner/dashboard/pipeline:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1dashboard~1pipeline'
+  /api/v1/partner/orders/{id}/contact:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1{id}~1contact'
+  /api/v1/partner/orders/confirm:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1confirm'
+  /api/v1/partner/orders/{id}/delay-notice:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1orders~1{id}~1delay-notice'
+  /api/v1/partner/shipping-policies:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1shipping-policies'
+  /api/v1/partner/shipping-policies/{id}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1shipping-policies~1{id}'
+  /api/v1/partner/products/bulk-update:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1bulk-update'
+  /api/v1/partner/coupons:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons'
+  /api/v1/partner/coupons/{id}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons~1{id}'
+  /api/v1/partner/flash-sales:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1flash-sales'
+  /api/v1/partner/flash-sales/{id}/apply:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1flash-sales~1{id}~1apply'
+  /api/v1/partner/payout-requests:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1payout-requests'
+  /api/v1/partner/payout-requests/{id}/cancel:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1payout-requests~1{id}~1cancel'
+  /api/v1/partner/store-profile:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1store-profile'
+  /api/v1/partner/reviews/{id}/reply:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1reviews~1{id}~1reply'
+  /api/v1/partner/reviews/{id}/report:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1reviews~1{id}~1report'
+  /api/v1/partner/penalties:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1penalties'
+  /api/v1/partner/penalties/{id}/appeal:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1penalties~1{id}~1appeal'
+  /api/v1/partner/returns/{id}/pickup:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}~1pickup'
+  /api/v1/partner/returns/{id}/inspect:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1returns~1{id}~1inspect'
+  /api/v1/admin/notice-templates:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1notice-templates'
+  /api/v1/admin/notice-templates/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1notice-templates~1{id}'
+  /api/v1/admin/platform-policies:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1platform-policies'
+  /api/v1/admin/flash-sales:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1flash-sales'
+  /api/v1/admin/flash-sales/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1flash-sales~1{id}'
+  /api/v1/admin/flash-sales/{id}/items:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1flash-sales~1{id}~1items'
+  /api/v1/admin/flash-sales/{id}/items/{itemId}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1flash-sales~1{id}~1items~1{itemId}'
+  /api/v1/admin/exhibitions:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1exhibitions'
+  /api/v1/admin/exhibitions/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1exhibitions~1{id}'
+  /api/v1/admin/coupons/{id}/suspend:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1coupons~1{id}~1suspend'
+  /api/v1/admin/payout-requests:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1payout-requests'
+  /api/v1/admin/payout-requests/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1payout-requests~1{id}'
+  /api/v1/admin/penalty-rules:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1penalty-rules'
+  /api/v1/admin/partners/{id}/penalties:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1penalties'
+  /api/v1/admin/penalties/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1penalties~1{id}'
+  /api/v1/admin/grade-policies:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1grade-policies'
+  /api/v1/admin/grades/compute:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1grades~1compute'
+  /api/v1/admin/review-reports:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1review-reports'
+  /api/v1/admin/reviews/{id}/visibility:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1reviews~1{id}~1visibility'
 
 components:
   securitySchemes:

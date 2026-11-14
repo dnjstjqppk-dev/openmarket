@@ -1,0 +1,381 @@
+// tests/api_admin_2_9_test.mjs
+// Work order 2-9 admin APIs.
+import assert from 'node:assert/strict';
+import { createGateway, createRunner } from './lib/harness.mjs';
+
+const t = createRunner('Admin APIs (2-9)');
+
+async function newGateway() {
+  return createGateway({
+    seedFiles: ['migrations/dev/seed_local_dev.sql'],
+    env: {
+      JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu',
+      ENVIRONMENT: 'development',
+      CONNECTOR_SIMULATION: 'true',
+      PAYMENT_MODE: 'sandbox'
+    }
+  });
+}
+
+const PW = 'DevPass!2026#';
+
+async function login(g, email, role) {
+  const r = await g.call('/api/v1/auth/login', { method: 'POST', body: { email, password: PW, role } });
+  assert.equal(r.status, 200, `login ${email}: ${r.text}`);
+  return r.json.token;
+}
+
+await t.test('A1. dashboard carries waiting queues', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare("INSERT INTO users (id, email, password_hash, full_name, phone, role) VALUES ('u_pa1', 'pa1@example.com', 'x', 'P', '010', 'ROLE_PARTNER')").run();
+  g.db.prepare("INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, bank_code, bank_account_number, bank_account_holder, status, applied_at) VALUES ('pt_pa1', 'u_pa1', 't', '111-11-11111', '004', '123', '예금주', 'PENDING', CURRENT_TIMESTAMP)").run();
+  const r = await g.call('/api/v1/admin/dashboard', { token: adm });
+  assert.equal(r.status, 200, r.text);
+  const w = r.json.waiting;
+  assert.ok(w, 'waiting block present');
+  assert.equal(w.partner_applications, 1, 'pending partner counted');
+  assert.ok(Number.isInteger(w.product_reviews), 'product queue counted');
+  assert.ok(Number.isInteger(w.disputes), 'disputes counted');
+  assert.ok(Number.isInteger(w.payout_requests), 'payout queue counted');
+  assert.ok(Number.isInteger(w.fds_reviews), 'fds queue counted');
+});
+
+await t.test('A2. notice templates version up, products keep theirs', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const bad = await g.call('/api/v1/admin/notice-templates', {
+    method: 'POST', token: adm, body: { name: 'x', items: [{ label: 'no key' }] }
+  });
+  assert.equal(bad.status, 400, 'items need keys');
+  const c = await g.call('/api/v1/admin/notice-templates', {
+    method: 'POST', token: adm, body: { name: '가전', items: [{ key: '모델명', label: '모델명', required: 1 }] }
+  });
+  assert.equal(c.status, 201, c.text);
+  assert.equal(c.json.data.version, 1, 'starts at version 1');
+  g.db.prepare('UPDATE products SET notice_template_id = ?, notice_template_version = 1 WHERE id = ?').run(c.json.data.id, 'prod_001');
+  const u = await g.call(`/api/v1/admin/notice-templates/${c.json.data.id}`, {
+    method: 'PUT', token: adm, body: { items: [{ key: '모델명', label: '모델명', required: 1 }, { key: '제조사', label: '제조사' }] }
+  });
+  assert.equal(u.status, 200, u.text);
+  assert.equal(u.json.data.version, 2, 'edit bumps the version');
+  assert.equal(g.db.prepare('SELECT notice_template_version FROM products WHERE id = ?').get('prod_001').notice_template_version, 1, 'product keeps its version');
+  const list = await g.call('/api/v1/admin/notice-templates', { token: adm });
+  assert.ok(list.json.data.find((x) => x.id === c.json.data.id), 'template listed');
+});
+
+await t.test('A3. category commission bounds and forward-only rates', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const over = await g.call('/api/v1/admin/categories/cat_e_audio', {
+    method: 'PUT', token: adm, body: { commission_rate_bps: 3001 }
+  });
+  assert.equal(over.status, 400, 'commission capped at 3000bps');
+  const neg = await g.call('/api/v1/admin/categories/cat_e_audio', {
+    method: 'PUT', token: adm, body: { commission_rate_bps: -1 }
+  });
+  assert.equal(neg.status, 400, 'commission is non-negative');
+  const missing = await g.call('/api/v1/admin/categories/cat_missing', {
+    method: 'PUT', token: adm, body: { commission_rate_bps: 100 }
+  });
+  assert.equal(missing.status, 404, 'unknown category rejected');
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
+    VALUES ('prod_a3', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
+    VALUES ('sku_a3', 'prod_a3', 'C-A3', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
+  const co1 = await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: { recipient_name: '홍길동', recipient_phone: '010-1234-5678', shipping_address_line1: '서울 강남구', shipping_postal_code: '06236', items: [{ sku_id: 'sku_a3', quantity: 1 }] }
+  });
+  assert.equal(co1.status, 201, co1.text);
+  const oldAmt = g.db.prepare('SELECT commission_amount AS a FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)').get(co1.json.order_id).a;
+  const ok = await g.call('/api/v1/admin/categories/cat_e_audio', {
+    method: 'PUT', token: adm, body: { commission_rate_bps: 2500, icon_key: 'audio' }
+  });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(g.db.prepare('SELECT icon_key FROM categories WHERE id = ?').get('cat_e_audio').icon_key, 'audio', 'icon stored');
+  const co2 = await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: { recipient_name: '홍길동', recipient_phone: '010-1234-5678', shipping_address_line1: '서울 강남구', shipping_postal_code: '06236', items: [{ sku_id: 'sku_a3', quantity: 1 }] }
+  });
+  assert.equal(co2.status, 201, co2.text);
+  const fresh = g.db.prepare('SELECT commission_amount AS a, fee_source AS f FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)').get(co2.json.order_id);
+  assert.equal(fresh.a, 3750, 'new orders price the new rate');
+  assert.equal(fresh.f, 'CATEGORY', 'category source recorded');
+  assert.equal(g.db.prepare('SELECT commission_amount AS a FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)').get(co1.json.order_id).a, oldAmt, 'old settlements untouched');
+});
+
+await t.test('A4. platform policies record history, future only', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const past = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '100', effective_from: '2001-01-01' }
+  });
+  assert.equal(past.status, 400, 'backdates refused');
+  const nokey = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { value: '100', effective_from: '2999-01-01' }
+  });
+  assert.equal(nokey.status, 400, 'key required');
+  const c = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '100', effective_from: '2999-01-01' }
+  });
+  assert.equal(c.status, 200, c.text);
+  const u = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '200', effective_from: '2999-06-01' }
+  });
+  assert.equal(u.status, 200, u.text);
+  const hist = g.db.prepare('SELECT old_value, new_value FROM platform_policy_history WHERE policy_key = ? ORDER BY created_at DESC').get('credit.earn_bps');
+  assert.deepEqual([hist.old_value, hist.new_value], ['100', '200'], 'history recorded');
+  const list = await g.call('/api/v1/admin/platform-policies', { token: adm });
+  assert.ok(list.json.data.find((x) => x.key === 'credit.earn_bps'), 'policy listed');
+});
+
+await t.test('A5. flash campaigns, direct picks and application review', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const bad = await g.call('/api/v1/admin/flash-sales', {
+    method: 'POST', token: adm, body: { title: 'x', starts_at: '2999-02-01 00:00:00', ends_at: '2999-01-01 00:00:00' }
+  });
+  assert.equal(bad.status, 400, 'campaign window ordered');
+  const hourAgo = new Date(Date.now() - 3600000).toISOString().replace('T', ' ').slice(0, 19);
+  const hourLater = new Date(Date.now() + 3600000).toISOString().replace('T', ' ').slice(0, 19);
+  const c = await g.call('/api/v1/admin/flash-sales', {
+    method: 'POST', token: adm, body: { title: '설 특가', starts_at: hourAgo, ends_at: hourLater, status: 'ACTIVE' }
+  });
+  assert.equal(c.status, 201, c.text);
+  const camp = c.json.data.id;
+  const direct = await g.call(`/api/v1/admin/flash-sales/${camp}/items`, {
+    method: 'POST', token: adm, body: { sku_id: 'sku_001_w', deal_price: 39900, allocated_stock: 5 }
+  });
+  assert.equal(direct.status, 201, direct.text);
+  assert.equal(g.db.prepare('SELECT status FROM flash_sale_items WHERE id = ?').get(direct.json.data.id).status, 'APPROVED', 'direct picks skip review');
+  const pricey = await g.call(`/api/v1/admin/flash-sales/${camp}/items`, {
+    method: 'POST', token: adm, body: { sku_id: 'sku_001_b', deal_price: 49900, allocated_stock: 5 }
+  });
+  assert.equal(pricey.status, 400, 'deal below sale enforced');
+  g.db.prepare(`INSERT INTO flash_sale_items (id, campaign_id, product_id, sku_id, deal_price, discount_rate, allocated_stock, sold_stock, sort_order, status, applicant_partner_id)
+    VALUES ('fsi_a5', ?, 'prod_001', 'sku_001_b', 39900, 20, 5, 0, 9, 'REQUESTED', 'pt_001')`).run(camp);
+  const rej = await g.call(`/api/v1/admin/flash-sales/${camp}/items/fsi_a5`, {
+    method: 'PUT', token: adm, body: { decision: 'REJECT' }
+  });
+  assert.equal(rej.status, 200, rej.text);
+  assert.equal(g.db.prepare('SELECT status FROM flash_sale_items WHERE id = ?').get('fsi_a5').status, 'REJECTED', 'application rejected');
+  g.db.prepare("UPDATE flash_sale_items SET status = 'REQUESTED' WHERE id = 'fsi_a5'").run();
+  const ok = await g.call(`/api/v1/admin/flash-sales/${camp}/items/fsi_a5`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE' }
+  });
+  assert.equal(ok.status, 200, ok.text);
+  const live = await g.call(`/api/v1/admin/flash-sales/${camp}/items/fsi_a5`, {
+    method: 'PUT', token: adm, body: { deal_price: 35000 }
+  });
+  assert.equal(live.status, 409, 'live deal prices stay put');
+  const list = await g.call('/api/v1/admin/flash-sales', { token: adm });
+  assert.ok(list.json.data.find((x) => x.id === camp), 'campaign listed');
+});
+
+await t.test('A6. exhibitions manage windows and products', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const bad = await g.call('/api/v1/admin/exhibitions', {
+    method: 'POST', token: adm, body: { title: 'x', starts_at: '2999-02-01 00:00:00', ends_at: '2999-01-01 00:00:00' }
+  });
+  assert.equal(bad.status, 400, 'window ordered');
+  const ghost = await g.call('/api/v1/admin/exhibitions', {
+    method: 'POST', token: adm, body: { title: 'x', starts_at: '2999-01-01 00:00:00', ends_at: '2999-02-01 00:00:00', product_ids: ['prod_missing'] }
+  });
+  assert.equal(ghost.status, 400, 'products must exist');
+  const c = await g.call('/api/v1/admin/exhibitions', {
+    method: 'POST', token: adm, body: { title: '봄 기획전', starts_at: '2999-01-01 00:00:00', ends_at: '2999-02-01 00:00:00', product_ids: ['prod_001', 'prod_002'] }
+  });
+  assert.equal(c.status, 201, c.text);
+  const id = c.json.data.id;
+  const u = await g.call(`/api/v1/admin/exhibitions/${id}`, {
+    method: 'PUT', token: adm, body: { status: 'ACTIVE', product_ids: ['prod_003'] }
+  });
+  assert.equal(u.status, 200, u.text);
+  assert.deepEqual(g.db.prepare('SELECT product_id AS p FROM exhibition_products WHERE exhibition_id = ? ORDER BY sort_order').all(id).map((r) => r.p), ['prod_003'], 'products replaced');
+  const list = await g.call('/api/v1/admin/exhibitions', { token: adm });
+  assert.ok(list.json.data.find((x) => x.id === id), 'exhibition listed');
+});
+
+await t.test('A7. platform coupons split burden and suspend sellers too', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const noseller = await g.call('/api/v1/admin/coupons', {
+    method: 'POST', token: adm,
+    body: { code: 'PLAT5K', title: 't', discount_type: 'FIXED_AMOUNT', discount_value: 5000, scope: 'SELLER', platform_share_bps: 8000 }
+  });
+  assert.equal(noseller.status, 400, 'seller burden needs target sellers');
+  const c = await g.call('/api/v1/admin/coupons', {
+    method: 'POST', token: adm,
+    body: { code: 'PLAT5K', title: 't', discount_type: 'FIXED_AMOUNT', discount_value: 5000, scope: 'SELLER', platform_share_bps: 8000, seller_ids: ['pt_002'] }
+  });
+  assert.equal(c.status, 201, c.text);
+  const row = g.db.prepare('SELECT issuer, dup_group, scope, platform_share_bps FROM coupons WHERE id = ?').get(c.json.data.id);
+  assert.deepEqual([row.issuer, row.dup_group, row.scope, row.platform_share_bps], ['PLATFORM', 'PLATFORM', 'SELLER', 8000], 'platform split stored');
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM coupon_targets WHERE coupon_id = ? AND target_id = ?').get(c.json.data.id, 'pt_002').n, 1, 'target sellers stored');
+  const u = await g.call(`/api/v1/admin/coupons/${c.json.data.id}`, {
+    method: 'PUT', token: adm, body: { title: '바뀐 제목' }
+  });
+  assert.equal(u.status, 200, u.text);
+  g.db.prepare("INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, expires_at, is_active, issuer, seller_id, scope, platform_share_bps, dup_group, issue_method, issued_count) VALUES ('cp_a7s', 'SELLERA7', 't', 'FIXED_AMOUNT', 500, 0, '2099-01-01 00:00:00', 1, 'SELLER', 'pt_001', 'SELLER', 0, 'STORE', 'DOWNLOAD', 0)").run();
+  const susp = await g.call('/api/v1/admin/coupons/cp_a7s/suspend', { method: 'PUT', token: adm });
+  assert.equal(susp.status, 200, susp.text);
+  assert.equal(g.db.prepare('SELECT is_active FROM coupons WHERE id = ?').get('cp_a7s').is_active, 0, 'seller coupon suspended by the operator');
+});
+
+await t.test('A8. payout requests approve, reject and complete', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const pt2 = await login(g, 'partner2@olmoa-tech.com', 'PARTNER');
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
+    VALUES ('prod_a8', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
+    VALUES ('sku_a8', 'prod_a8', 'C-A8', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
+  const co = await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: { recipient_name: '홍길동', recipient_phone: '010-1234-5678', shipping_address_line1: '서울 강남구', shipping_postal_code: '06236', items: [{ sku_id: 'sku_a8', quantity: 1 }] }
+  });
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust, body: { order_id: co.json.order_id, payment_key: `sandbox_${co.json.order_id.slice(-8)}xx`, amount: co.json.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  g.db.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT' WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)").run(co.json.order_id);
+  g.db.prepare('UPDATE partners SET payout_account_verified = 1 WHERE id = ?').run('pt_002');
+  const avail = g.db.prepare("SELECT net_payout_amount FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)").get(co.json.order_id).net_payout_amount;
+  const req1 = await g.call('/api/v1/partner/payout-requests', {
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'a8-req-1' }, body: { amount: 1 }
+  });
+  assert.equal(req1.status, 201, req1.text);
+  const list = await g.call('/api/v1/admin/payout-requests', { token: adm });
+  assert.ok(list.json.data.find((x) => x.id === req1.json.data.id), 'request queued');
+  const noReason = await g.call(`/api/v1/admin/payout-requests/${req1.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'REJECT', idempotency_key: 'a8-rej-0' }
+  });
+  assert.equal(noReason.status, 400, 'reject needs a reason');
+  const rej = await g.call(`/api/v1/admin/payout-requests/${req1.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'REJECT', reason: '계좌 확인 중', idempotency_key: 'a8-rej-1' }
+  });
+  assert.equal(rej.status, 200, rej.text);
+  const req = await g.call('/api/v1/partner/payout-requests', {
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'a8-req-2' }, body: { amount: avail }
+  });
+  assert.equal(req.status, 201, req.text);
+  const nokey = await g.call(`/api/v1/admin/payout-requests/${req.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE' }
+  });
+  assert.equal(nokey.status, 400, 'idempotency key required');
+  const approve = await g.call(`/api/v1/admin/payout-requests/${req.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE', idempotency_key: 'a8-pay-1' }
+  });
+  assert.equal(approve.status, 200, approve.text);
+  assert.equal(g.db.prepare('SELECT status FROM payout_requests WHERE id = ?').get(req.json.data.id).status, 'APPROVED', 'request approved');
+  const done = await g.call(`/api/v1/admin/payout-requests/${req.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'TRANSFER', bank_transfer_ref: 'KB-A8-1', idempotency_key: 'a8-trn-1' }
+  });
+  assert.equal(done.status, 200, done.text);
+  assert.equal(g.db.prepare('SELECT status FROM payout_requests WHERE id = ?').get(req.json.data.id).status, 'TRANSFERRED', 'transfer mirrored');
+});
+
+await t.test('A9. penalty rules gate imposition, appeals get decided', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const put = await g.call('/api/v1/admin/penalty-rules', {
+    method: 'PUT', token: adm, body: { code: 'LATE_DISPATCH', name: '늦은 출고', points: 10, amount: 5000, is_enabled: 0 }
+  });
+  assert.equal(put.status, 200, put.text);
+  const off = await g.call('/api/v1/admin/partners/pt_001/penalties', {
+    method: 'POST', token: adm, body: { rule_code: 'LATE_DISPATCH', reason: '늦음' }
+  });
+  assert.equal(off.status, 409, 'disabled rules cannot impose');
+  const ghost = await g.call('/api/v1/admin/partners/pt_001/penalties', {
+    method: 'POST', token: adm, body: { rule_code: 'NOPE', reason: 'x' }
+  });
+  assert.equal(ghost.status, 404, 'unknown rules rejected');
+  await g.call('/api/v1/admin/penalty-rules', {
+    method: 'PUT', token: adm, body: { code: 'LATE_DISPATCH', name: '늦은 출고', points: 10, amount: 5000, is_enabled: 1 }
+  });
+  const imp = await g.call('/api/v1/admin/partners/pt_001/penalties', {
+    method: 'POST', token: adm, body: { rule_code: 'LATE_DISPATCH', reason: '늦음' }
+  });
+  assert.equal(imp.status, 201, imp.text);
+  const row = g.db.prepare('SELECT rule_code, points, penalty_amount, status FROM partner_penalties WHERE id = ?').get(imp.json.data.id);
+  assert.deepEqual([row.rule_code, row.points, row.penalty_amount, row.status], ['LATE_DISPATCH', 10, 5000, 'IMPOSED'], 'rule values applied');
+  g.db.prepare("UPDATE partner_penalties SET appeal_body = '택배 파업' WHERE id = ?").run(imp.json.data.id);
+  const dec = await g.call(`/api/v1/admin/penalties/${imp.json.data.id}`, {
+    method: 'PUT', token: adm, body: { decision: 'REVOKE', note: '소명 인정' }
+  });
+  assert.equal(dec.status, 200, dec.text);
+  assert.equal(g.db.prepare('SELECT status FROM partner_penalties WHERE id = ?').get(imp.json.data.id).status, 'REVOKED', 'appeal upheld');
+  const rules = await g.call('/api/v1/admin/penalty-rules', { token: adm });
+  assert.ok(rules.json.data.find((x) => x.code === 'LATE_DISPATCH'), 'rules listed');
+});
+
+await t.test('A10. grade policies drive the monthly recompute', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const put = await g.call('/api/v1/admin/grade-policies', {
+    method: 'PUT', token: adm, body: { grade_code: 'GOLD', name: '골드', sort_order: 10, min_sales: 0, is_enabled: 1 }
+  });
+  assert.equal(put.status, 200, put.text);
+  const badMonth = await g.call('/api/v1/admin/grades/compute', { method: 'POST', token: adm, body: { month: '2026-13' } });
+  assert.equal(badMonth.status, 400, 'month validated');
+  const run = await g.call('/api/v1/admin/grades/compute', { method: 'POST', token: adm, body: { month: '2026-10' } });
+  assert.equal(run.status, 200, run.text);
+  assert.ok(run.json.data.computed >= 2, 'every seller graded');
+  assert.equal(g.db.prepare("SELECT grade_code FROM partner_grades WHERE partner_id = 'pt_001' AND month = '2026-10'").get().grade_code, 'GOLD', 'top policy assigned');
+  const list = await g.call('/api/v1/admin/grade-policies', { token: adm });
+  assert.ok(list.json.data.find((x) => x.grade_code === 'GOLD'), 'policies listed');
+});
+
+await t.test('A11. reported reviews queue and blind out of aggregates', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content)
+    VALUES ('rv_a11', 'prod_001', 'u_customer_001', 't', 5, 'x')`).run();
+  g.db.prepare(`INSERT INTO review_reports (id, review_id, reporter_user_id, reason) VALUES ('rr_a11', 'rv_a11', 'u_customer_001', 'AD')`).run();
+  const before = g.db.prepare('SELECT review_count FROM products WHERE id = ?').get('prod_001').review_count;
+  const queue = await g.call('/api/v1/admin/review-reports', { token: adm });
+  assert.equal(queue.status, 200, queue.text);
+  assert.ok(queue.json.data.find((x) => x.review_id === 'rv_a11'), 'report queued');
+  const bad = await g.call('/api/v1/admin/reviews/rv_a11/visibility', {
+    method: 'PUT', token: adm, body: { visibility: 'HIDDEN' }
+  });
+  assert.equal(bad.status, 400, 'visibility validated');
+  const blind = await g.call('/api/v1/admin/reviews/rv_a11/visibility', {
+    method: 'PUT', token: adm, body: { visibility: 'BLIND', blind_reason: '광고' }
+  });
+  assert.equal(blind.status, 200, blind.text);
+  assert.equal(g.db.prepare('SELECT visibility FROM product_reviews WHERE id = ?').get('rv_a11').visibility, 'BLIND', 'review blinded');
+  assert.equal(g.db.prepare('SELECT review_count FROM products WHERE id = ?').get('prod_001').review_count, before - 1, 'aggregates drop the blind review');
+});
+
+await t.test('A12. admin lists paginate, filter by period and export csv', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, created_at)
+    VALUES ('rv_a12n', 'prod_001', 'u_customer_001', 't', 4, 'x', CURRENT_TIMESTAMP)`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, created_at)
+    VALUES ('rv_a12o', 'prod_001', 'u_customer_001', 't', 4, 'x', '2001-01-01 00:00:00')`).run();
+  const page = await g.call('/api/v1/admin/reviews?per_page=1', { token: adm });
+  assert.equal(page.json.data.length, 1, 'pagination applies');
+  assert.equal(page.json.pagination.total, 2, 'total counts all');
+  const today = new Date().toISOString().slice(0, 10);
+  const fresh = await g.call(`/api/v1/admin/reviews?from=${today}&to=${today}`, { token: adm });
+  assert.equal(fresh.json.pagination.total, 1, 'period excludes the old row');
+  const users = await g.call('/api/v1/admin/users?per_page=1', { token: adm });
+  assert.equal(users.json.data.length, 1, 'users paginate');
+  assert.ok(users.json.pagination.total >= 1, 'users total present');
+  const products = await g.call('/api/v1/admin/products?per_page=1', { token: adm });
+  assert.equal(products.json.data.length, 1, 'products paginate');
+  const log = await g.call('/api/v1/admin/privacy/access-log?per_page=1', { token: adm });
+  assert.ok(log.json.pagination, 'access log paginates');
+  const csv = await g.call('/api/v1/admin/reviews?format=csv', { token: adm });
+  assert.equal(csv.status, 200, csv.text);
+  assert.match(csv.headers.get('content-type') || '', /text\/csv/, 'csv content type');
+  assert.ok(csv.text.includes('rv_a12n'), 'csv carries review rows');
+});
+
+t.finish();

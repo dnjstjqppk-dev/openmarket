@@ -32,6 +32,24 @@ paths:
                   description: Or coupon_code; must be unused, active and unexpired.
                 coupon_code:
                   type: string
+                platform_coupon_id:
+                  type: string
+                  description: '2-9: explicit platform-coupon slot (dup_group PLATFORM).'
+                platform_coupon_code:
+                  type: string
+                store_coupon_ids:
+                  type: array
+                  description: '2-9: one store coupon (dup_group STORE) per seller.'
+                  items:
+                    type: string
+                store_coupon_id:
+                  type: string
+                store_coupon_codes:
+                  type: array
+                  items:
+                    type: string
+                store_coupon_code:
+                  type: string
                 use_credit_amount:
                   type: integer
                   minimum: 0
@@ -60,6 +78,9 @@ paths:
                         type: integer
                       coupon_discount_amount:
                         type: integer
+                      platform_discount_amount:
+                        type: integer
+                        description: '2-9: platform-coupon share of the coupon total (0 without one).'
                       credit_used_amount:
                         type: integer
                       total_shipping_amount:
@@ -68,10 +89,14 @@ paths:
                         type: integer
                       currency:
                         type: string
+                      projected_credit_amount:
+                        type: integer
+                        description: '2-9: purchase-reward projection; present only with an effective credit.earn_bps policy.'
                       sub_orders:
                         type: array
                         items:
                           type: object
+                          description: '2-9: each carries store_discount_amount and shipping_groups.'
         '401':
           description: Missing or expired customer JWT
         '503':
@@ -383,6 +408,16 @@ paths:
                 notes:
                   type: string
                   maxLength: 500
+                pickup_address:
+                  type: string
+                  maxLength: 500
+                  description: '2-9: return collection address, stored on the claim.'
+                photos:
+                  type: array
+                  maxItems: 10
+                  description: '2-9: photo evidence (https or site-relative URLs), stored on the claim.'
+                  items:
+                    type: string
       responses:
         '201':
           description: Claim accepted as REQUESTED (nothing paid yet; RETURN/EXCHANGE pay out on approval, PRICE_ADJUSTMENT on admin approval with cap)

@@ -5,13 +5,13 @@
 paths:
   /api/v1/coupons:
     get:
-      summary: List active claimable coupons with my claim status
+      summary: Coupon wallet grouped into usable, claimable and used/expired
       tags: [Features]
       security: []
-      description: Public list; when called with a customer JWT each coupon is enriched with claimed_status (CLAIMED/USED), is_claimed, user_coupon_id and is_used.
+      description: '2-9 wallet: usable holds an unused live holding per row (with user_coupon_id, issuer and scope); claimable lists live downloadable offers with quantity left that the caller has no unused holding of (AUTO coupons never appear); used_expired holds used or dead holdings. Anonymous callers get empty usable/used_expired.'
       responses:
         '200':
-          description: Active coupons (expires_at in the future)
+          description: Grouped coupon wallet
           content:
             application/json:
               schema:
@@ -23,44 +23,21 @@ paths:
                   count:
                     type: integer
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        code:
-                          type: string
-                        title:
-                          type: string
-                        name:
-                          type: string
-                          description: title, falling back to code.
-                        discount_type:
-                          type: string
-                        discount_value:
-                          type: number
-                        min_order_amount:
-                          type: integer
-                        max_discount_amount:
-                          type: integer
-                        expires_at:
-                          type: string
-                        valid_until:
-                          type: string
-                          description: Alias of expires_at.
-                        claimed_status:
-                          type: string
-                          nullable: true
-                          enum: [CLAIMED, USED]
-                          description: Null for anonymous callers or unclaimed coupons.
-                        is_claimed:
-                          type: boolean
-                        user_coupon_id:
-                          type: string
-                          nullable: true
-                        is_used:
-                          type: boolean
+                    type: object
+                    required: [usable, claimable, used_expired]
+                    properties:
+                      usable:
+                        type: array
+                        items:
+                          type: object
+                      claimable:
+                        type: array
+                        items:
+                          type: object
+                      used_expired:
+                        type: array
+                        items:
+                          type: object
 
   /api/v1/coupons/claim:
     post:
@@ -724,3 +701,252 @@ paths:
                     type: string
         '401':
           description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/coupons/best:
+    post:
+      summary: Best coupon combination for my cart
+      tags: [Features]
+      description: '2-9: one platform coupon plus the best store coupon per seller, evaluated in checkout order (store first, platform on the remainder). An estimate; checkout re-verifies.'
+      responses:
+        '200':
+          description: Best combination (platform may be null on an empty cart)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [platform, store, total_discount]
+                    properties:
+                      platform:
+                        type: object
+                        nullable: true
+                      store:
+                        type: array
+                        items:
+                          type: object
+                      total_discount:
+                        type: integer
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/reviews/{id}/helpful:
+    post:
+      summary: Toggle helpful on a review
+      tags: [Features]
+      description: '2-9: second call untoggles. Own reviews are rejected (403).'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New vote state and stored count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [helpful, count]
+                    properties:
+                      helpful:
+                        type: boolean
+                      count:
+                        type: integer
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '403':
+          description: Own review (FORBIDDEN)
+        '404':
+          description: Unknown review (NOT_FOUND)
+
+  /api/v1/reviews/{id}/report:
+    post:
+      summary: Report a review
+      tags: [Features]
+      description: '2-9: reason must be PROFANITY, PRIVACY, AD, IRRELEVANT or OTHER; one report per member per review.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Report recorded
+        '400':
+          description: Invalid reason (INVALID_REASON)
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown review (NOT_FOUND)
+        '409':
+          description: Duplicate report (REPORT_EXISTS)
+
+  /api/v1/stores/{partnerId}/follow:
+    post:
+      summary: Follow a store
+      tags: [Features]
+      description: '2-9: idempotent; unknown sellers 404.'
+      parameters:
+        - name: partnerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Following state
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown seller (NOT_FOUND)
+    delete:
+      summary: Unfollow a store
+      tags: [Features]
+      parameters:
+        - name: partnerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Following state
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown seller (NOT_FOUND)
+
+  /api/v1/me/followed-stores:
+    get:
+      summary: Stores I follow
+      tags: [Features]
+      description: '2-9: followed stores with business name and active product count.'
+      responses:
+        '200':
+          description: Followed stores
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/me/recently-viewed:
+    get:
+      summary: My recently viewed products
+      tags: [Features]
+      description: '2-9: one card per product, newest first. Query: limit (default 20, max 50).'
+      responses:
+        '200':
+          description: Recently viewed product cards
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/me/recently-viewed/merge:
+    post:
+      summary: Merge browser history into recently viewed
+      tags: [Features]
+      description: '2-9: product_ids (max 50) refresh recency in array order; unknown ids are skipped.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_ids]
+              properties:
+                product_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Merge count
+        '400':
+          description: Missing array or over 50 ids
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/me/recently-viewed/{productId}:
+    delete:
+      summary: Remove one recently viewed product
+      tags: [Features]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Removal result (idempotent)
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/restock-subscriptions:
+    post:
+      summary: Subscribe to a restock alert
+      tags: [Features]
+      description: '2-9: only genuinely stocked-out SKUs (stock_quantity 0); duplicates replay 200.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id]
+              properties:
+                sku_id:
+                  type: string
+      responses:
+        '201':
+          description: Subscribed
+        '200':
+          description: Already subscribed (idempotent replay)
+        '400':
+          description: Missing sku_id (SKU_REQUIRED)
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown SKU (NOT_FOUND)
+        '409':
+          description: SKU still in stock (STOCK_AVAILABLE)
+    delete:
+      summary: Cancel a restock alert
+      tags: [Features]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id]
+              properties:
+                sku_id:
+                  type: string
+      responses:
+        '200':
+          description: Unsubscribed (idempotent)
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown SKU (NOT_FOUND)

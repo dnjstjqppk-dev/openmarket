@@ -70,7 +70,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_60_search_trending_recent.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_61_claim_pickup_photos.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -85,6 +85,28 @@ export async function assertSchemaLevel(env) {
   if (applied !== REQUIRED_SCHEMA_VERSION) {
     throw unavailable('SCHEMA_MISMATCH', `주문 서버 스키마(${applied || 'unknown'})가 코드 요구 수준(${REQUIRED_SCHEMA_VERSION})과 달라 주문을 받을 수 없습니다.`);
   }
+}
+
+// 2-9: platform/store coupon split plus the items-PG base for credit
+// projection, re-read from stored allocations (replay responses included).
+export async function couponSplitForOrder(env, orderId) {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(i.platform_coupon_alloc), 0) AS plat, COALESCE(SUM(i.store_coupon_alloc), 0) AS store,
+            COALESCE(SUM(i.pg_alloc), 0) AS items_pg
+     FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.parent_order_id = ?`
+  ).bind(orderId).first();
+  return { platform: Number(row.plat) || 0, store: Number(row.store) || 0, itemsPg: Number(row.items_pg) || 0 };
+}
+
+// 2-9: projected purchase-reward credit. Null without an effective
+// credit.earn_bps policy, so callers omit the key instead of inventing money.
+// The base mirrors confirmPurchase (items PG only, shipping excluded).
+export async function projectedCreditFor(env, itemsPg) {
+  const raw = await getPolicy(env, 'credit.earn_bps');
+  if (raw == null) return null;
+  const bps = Number(raw);
+  if (!Number.isFinite(bps) || bps < 0) return null;
+  return applyBps(Math.max(0, itemsPg), bps);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -129,7 +151,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const idemKey = idempotencyKey(idemHeader || body.idempotency_key || null);
   if (idemKey && !dryRun) {
     const prev = await env.DB.prepare('SELECT * FROM orders WHERE customer_id = ? AND checkout_idempotency_key = ?').bind(principal.userId, idemKey).first();
-    if (prev) return { replay: true, order: prev };
+    if (prev) {
+      const split = await couponSplitForOrder(env, prev.id);
+      return { replay: true, order: prev, platformDiscount: split.platform, storeDiscount: split.store,
+        projectedCredit: await projectedCreditFor(env, split.itemsPg) };
+    }
   }
 
   const lines = parseLines(body.items);
@@ -414,10 +440,17 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const pgTotal = allItems.reduce((a, it) => a + it.pgAlloc, 0) + subs.reduce((a, s) => a + s.shipPg, 0);
   if (goodsBase - volumeTotal - coupon - credit + shippingTotal !== pgTotal) throw new Error('MONEY_INVARIANT: order totals do not reconcile');
   if (dryRun) {
+    const platformTotal = allItems.reduce((a, it) => a + it.platformCouponAlloc, 0);
+    const itemsPgTotal = allItems.reduce((a, it) => a + it.pgAlloc, 0);
+    const projected = await projectedCreditFor(env, itemsPgTotal);
     return { quote: {
       total_goods_amount: goodsBase, volume_discount_amount: volumeTotal, coupon_discount_amount: coupon, credit_used_amount: credit,
+      platform_discount_amount: platformTotal,
       total_shipping_amount: shippingTotal, total_pay_amount: pgTotal, currency: 'KRW', requires_pccc: orderRequiresPccc, remote_zone: remoteZoneName,
-      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping, remote_surcharge: s.remoteSurcharge, remote_zone: s.remoteZone, shipping_groups: s.shippingGroups, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
+      ...(projected == null ? {} : { projected_credit_amount: projected }),
+      sub_orders: subs.map((s) => ({ partner_id: s.partnerId, sales_model: s.salesModel, goods_amount: s.goods, shipping_fee: s.shipping,
+        store_discount_amount: s.items.reduce((a, it) => a + it.storeCouponAlloc, 0),
+        remote_surcharge: s.remoteSurcharge, remote_zone: s.remoteZone, shipping_groups: s.shippingGroups, items: s.items.map((it) => ({ sku_id: it.skuId, title: it.title, option_summary: it.optionSummary, unit_price: it.unitPrice, base_unit_price: it.baseUnitPrice, quantity: it.quantity, line_total: it.lineTotal, volume_discount_pct: it.volumePct, requires_pccc: it.requiresPccc })) }))
     } };
   }
 
@@ -506,7 +539,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   } catch (e) {
     if (idemKey && e instanceof HttpError && e.code === 'DUPLICATE_REQUEST') {
       const prev = await env.DB.prepare('SELECT * FROM orders WHERE customer_id = ? AND checkout_idempotency_key = ?').bind(principal.userId, idemKey).first();
-      if (prev) return { replay: true, order: prev };
+      if (prev) {
+        const split = await couponSplitForOrder(env, prev.id);
+        return { replay: true, order: prev, platformDiscount: split.platform, storeDiscount: split.store,
+          projectedCredit: await projectedCreditFor(env, split.itemsPg) };
+      }
     }
     throw e;
   }
@@ -516,7 +553,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     await capturePayment(env, order, { provider: 'INTERNAL', paymentKey: null, amount: 0, sandbox: false, method: 'CREDIT_COUPON', approvedAt: new Date().toISOString(), raw: null });
     order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first();
   }
-  return { replay: false, order, subOrderCount: subs.length };
+  const platformTotal = allItems.reduce((a, it) => a + it.platformCouponAlloc, 0);
+  const storeTotal = allItems.reduce((a, it) => a + it.storeCouponAlloc, 0);
+  const itemsPgTotal = allItems.reduce((a, it) => a + it.pgAlloc, 0);
+  return { replay: false, order, subOrderCount: subs.length, platformDiscount: platformTotal, storeDiscount: storeTotal,
+    projectedCredit: await projectedCreditFor(env, itemsPgTotal) };
 }
 
 // ---------------------------------------------------------------------------------------------

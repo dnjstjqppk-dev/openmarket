@@ -68,7 +68,7 @@ await t.test('07 wishlist toggle + coupon claim', async () => {
   assert.equal((await g.call('/api/v1/wishlist', { method: 'POST', token: cust, body: { product_id: mpSku.product_id } })).json.wished, true);
   assert.equal((await g.call('/api/v1/coupons/claim', { method: 'POST', token: cust, headers: { 'X-Idempotency-Key': 'e2e-claim-vip20' }, body: { code: 'VIP20' } })).status, 200);
   const list = await g.call('/api/v1/coupons', { token: cust });
-  assert.ok(list.json.data.find((c) => c.code === 'VIP20').is_claimed);
+  assert.ok(list.json.data.usable.find((c) => c.code === 'VIP20'), 'claimed coupon lands in the usable group');
   assert.equal((await g.call('/api/v1/coupons/claim', { method: 'POST', token: cust, headers: { 'X-Idempotency-Key': 'e2e-claim-nope' }, body: { code: 'NOPE' } })).status, 404);
 });
 await t.test('08 registration stores consents; email verification grants a journaled welcome credit', async () => {

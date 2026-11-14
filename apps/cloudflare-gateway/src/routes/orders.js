@@ -2,7 +2,7 @@
 // Customer order API. Identity comes only from the verified JWT (lib/auth.js).
 
 import { requireAuth, requireCustomer, authenticate } from '../lib/auth.js';
-import { json, readJson, bad, conflict, forbidden, notFound, str, idempotencyKey } from '../lib/http.js';
+import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl, idempotencyKey } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
 import { grantCreditStatements } from '../lib/ledger.js';
 import { REASON_CODES, faultOf, partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
@@ -80,8 +80,10 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       order_id: o.id, order_no: o.order_no, payment_status: o.payment_status, status: o.payment_status,
       total_goods_amount: o.total_goods_amount, total_shipping_amount: o.total_shipping_amount,
       volume_discount_amount: o.volume_discount_amount, coupon_discount_amount: o.coupon_discount_amount,
+      platform_discount_amount: r.platformDiscount ?? 0, store_discount_amount: r.storeDiscount ?? 0,
       credit_used_amount: o.credit_used_amount, total_discount_amount: o.total_discount_amount,
       total_pay_amount: o.total_pay_amount, payment_expires_at: o.payment_expires_at, currency: 'KRW',
+      ...(r.projectedCredit == null ? {} : { projected_credit_amount: r.projectedCredit }),
       sub_orders_created: r.subOrderCount, idempotent_replay: r.replay
     };
     return json(corsHeaders, { success: true, ...data, data }, r.replay ? 200 : 201);
@@ -257,10 +259,23 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     }
     const fees = await partnerReturnFees(env, sub.partner_id);
     const feeEstimate = type === 'RETURN' ? Math.min(estimate, returnFeeFor({ fault, returnless: false, fullReturn: isFullReturn(subItems, lines), subShippingFee: sub.shipping_fee, fees })) : 0;
+    // 2-9: pickup address + photo evidence ride on the claim row (d1_61).
+    const pickupAddress = str(body.pickup_address, { field: '수거지', max: 500 }) || null;
+    let claimPhotos = [];
+    if (body.photos !== undefined && body.photos !== null) {
+      if (!Array.isArray(body.photos)) throw bad('INVALID_PHOTOS', 'photos는 이미지 주소 배열이어야 합니다.');
+      if (body.photos.length > 10) throw bad('TOO_MANY_PHOTOS', '클레임 사진은 최대 10장까지 첨부할 수 있습니다.');
+      try {
+        claimPhotos = body.photos.map((u) => safeUrl(u, { field: '클레임 사진', allowRelative: true, required: true }));
+      } catch {
+        throw bad('INVALID_PHOTOS', '클레임 사진은 https 또는 사이트 상대경로(URL 2000자 이내)만 첨부할 수 있습니다.');
+      }
+    }
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, reason_code, fault, items_json, exchange_items_json, status, refund_amount, notes)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, reasonCode, fault, JSON.stringify(lines),
-        exchangeItems ? JSON.stringify(exchangeItems) : null, type === 'RETURN' ? estimate - feeEstimate : 0, str(body.notes, { max: 500 }) || null),
+      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, reason_code, fault, items_json, exchange_items_json, status, refund_amount, notes, pickup_address, photo_urls_json)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?, ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, reasonCode, fault, JSON.stringify(lines),
+        exchangeItems ? JSON.stringify(exchangeItems) : null, type === 'RETURN' ? estimate - feeEstimate : 0, str(body.notes, { max: 500 }) || null,
+        pickupAddress, claimPhotos.length ? JSON.stringify(claimPhotos) : null),
       env.DB.prepare("UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'DELIVERED'").bind(sub.id)
     ]);
     const data = {

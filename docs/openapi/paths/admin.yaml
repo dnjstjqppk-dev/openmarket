@@ -314,13 +314,41 @@ paths:
                         type: integer
                       pending_settlements_amount:
                         type: integer
+                  waiting:
+                    type: object
+                    description: '2-9: partner_applications, product_reviews, disputes, payout_requests, fds_reviews.'
         '401':
           description: Missing or expired JWT, or not an ADMIN session
 
   /api/v1/admin/reviews:
     get:
-      summary: List product reviews for moderation (latest 100)
+      summary: List product reviews for moderation (paged)
+      description: '2-9: page/per_page, from/to, format=csv replace the fixed 100.'
       tags: [Admin]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            description: csv returns a text/csv download.
       responses:
         '200':
           description: Reviews with product title and reviewer email
@@ -336,6 +364,8 @@ paths:
                     type: string
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
@@ -373,17 +403,41 @@ paths:
 
   /api/v1/admin/users:
     get:
-      summary: List users with order counts (latest 100, PII view logged)
+      summary: List users with order counts (paged, PII view logged)
       tags: [Admin]
       description: >
-        With ?q=, narrows to id-exact or email-prefix matches (limit 20) for
+        With ?q=, narrows to id-exact or email-prefix matches for
         operator pickers; LIKE metacharacters in q are escaped.
+        2-9: page/per_page, from/to, format=csv replace the fixed 100.
       parameters:
         - name: q
           in: query
           schema:
             type: string
           description: Optional id or email prefix filter (max 100 chars).
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            description: csv returns a text/csv download.
       responses:
         '200':
           description: User rows with order_count
@@ -399,6 +453,8 @@ paths:
                     type: string
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
@@ -410,6 +466,7 @@ paths:
     get:
       summary: Query PII access log (who viewed, exported or destroyed personal data)
       tags: [Admin]
+      description: '2-9: page/per_page, from/to, format=csv replace the fixed 500.'
       parameters:
         - name: actor_user_id
           in: query
@@ -423,6 +480,29 @@ paths:
           in: query
           schema:
             type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            description: csv returns a text/csv download.
       responses:
         '200':
           description: Access-log rows with parsed subject_ids
@@ -436,6 +516,8 @@ paths:
                     type: boolean
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
@@ -524,8 +606,33 @@ paths:
 
   /api/v1/admin/products:
     get:
-      summary: List all products with partner, category, SKU and stock rollups (latest 150)
+      summary: List all products with partner, category, SKU and stock rollups (paged)
       tags: [Admin]
+      description: '2-9: page/per_page, from/to, format=csv replace the fixed 150.'
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            description: csv returns a text/csv download.
       responses:
         '200':
           description: Product rows with business_name, category_name, sku_count and total_stock
@@ -541,6 +648,8 @@ paths:
                     type: string
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
@@ -1084,8 +1193,9 @@ paths:
         '401':
           description: Missing or expired JWT, or not an ADMIN session
     post:
-      summary: Create a coupon (audited)
+      summary: Create a platform coupon (audited)
       tags: [Admin]
+      description: '2-9: issuer forced PLATFORM (dup_group PLATFORM); scope, burden split, issue mode, quantity and per-user limit; seller burden needs seller_ids.'
       requestBody:
         required: true
         content:
@@ -1111,7 +1221,31 @@ paths:
                   type: number
                 expires_at:
                   type: string
-                  description: Defaults to 30 days out (YYYY-MM-DD).
+                  description: Defaults to 30 days out.
+                starts_at:
+                  type: string
+                scope:
+                  type: string
+                  enum: [ALL, SELLER, PRODUCT, CATEGORY]
+                platform_share_bps:
+                  type: integer
+                  description: 0..10000, default 10000.
+                seller_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Required when scope is SELLER with seller burden.
+                target_ids:
+                  type: array
+                  items:
+                    type: string
+                issue_method:
+                  type: string
+                  enum: [DOWNLOAD, CODE, AUTO]
+                total_quantity:
+                  type: integer
+                per_user_limit:
+                  type: integer
       responses:
         '201':
           description: Coupon created
@@ -1128,11 +1262,32 @@ paths:
                   data:
                     type: object
         '400':
-          description: Code and title are required; INVALID_DISCOUNT for a bad discount_value
+          description: Code and title are required; INVALID_DISCOUNT for a bad discount_value; SELLERS_REQUIRED without targets
         '401':
           description: Missing or expired JWT, or not an ADMIN session
 
   /api/v1/admin/coupons/{id}:
+    put:
+      summary: Update any coupon (money freezes after issue)
+      tags: [Admin]
+      description: '2-9: title/is_active stay editable; money and scope freeze once issuance starts (409).'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated coupon
+        '400':
+          description: Invalid discount
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Unknown coupon (NOT_FOUND)
+        '409':
+          description: Frozen after issue start (COUPON_IMMUTABLE_AFTER_ISSUE)
     delete:
       summary: Deactivate a coupon, preserving usage history (audited)
       tags: [Admin]
@@ -1227,6 +1382,38 @@ paths:
           description: Missing or expired JWT, or not an ADMIN session
 
   /api/v1/admin/categories/{id}:
+    put:
+      summary: Update icon, commission and notice template (audited)
+      tags: [Admin]
+      description: '2-9: commission_rate_bps 0..3000 prices new orders only (rates read live at checkout); unknown templates 400.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                icon_key:
+                  type: string
+                commission_rate_bps:
+                  type: integer
+                notice_template_id:
+                  type: string
+      responses:
+        '200':
+          description: Updated category
+        '400':
+          description: Out-of-range rate or unknown template
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Unknown category (NOT_FOUND)
     delete:
       summary: Delete an unused category (audited)
       tags: [Admin]
@@ -1466,3 +1653,586 @@ paths:
           description: Unknown inquiry id
         '409':
           description: INQUIRY_CLOSED when the inquiry is already closed
+
+  /api/v1/admin/notice-templates:
+    get:
+      summary: List notice templates
+      tags: [Admin]
+      responses:
+        '200':
+          description: Templates with versioned item lists
+        '401':
+          description: Missing or expired JWT
+    post:
+      summary: Create a notice template
+      tags: [Admin]
+      description: '2-9: items [{key, label, required}] with unique keys; starts at version 1.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, items]
+              properties:
+                name:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Template created
+        '400':
+          description: Missing name, items or item keys
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/notice-templates/{id}:
+    put:
+      summary: Update a notice template
+      tags: [Admin]
+      description: '2-9: content edits bump the version; products keep their snapshotted version.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated template
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown template (NOT_FOUND)
+
+  /api/v1/admin/platform-policies:
+    get:
+      summary: List platform policies
+      tags: [Admin]
+      responses:
+        '200':
+          description: Policies with effective dates
+        '401':
+          description: Missing or expired JWT
+    put:
+      summary: Upsert a platform policy
+      tags: [Admin]
+      description: '2-9: effective_from must be today or later; edits are trigger-recorded into platform_policy_history.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value, effective_from]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+                effective_from:
+                  type: string
+                  description: YYYY-MM-DD, today or later.
+      responses:
+        '200':
+          description: Stored policy
+        '400':
+          description: Missing fields or a backdated effective date
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/flash-sales:
+    get:
+      summary: List flash-sale campaigns with items
+      tags: [Admin]
+      responses:
+        '200':
+          description: Campaigns with attached items
+        '401':
+          description: Missing or expired JWT
+    post:
+      summary: Create a flash-sale campaign
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, starts_at, ends_at]
+              properties:
+                title:
+                  type: string
+                starts_at:
+                  type: string
+                ends_at:
+                  type: string
+                status:
+                  type: string
+      responses:
+        '201':
+          description: Campaign created (default DRAFT)
+        '400':
+          description: Unordered window or bad status
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/flash-sales/{id}:
+    put:
+      summary: Update a flash-sale campaign
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated campaign
+        '400':
+          description: Unordered window or bad status
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown campaign (NOT_FOUND)
+
+  /api/v1/admin/flash-sales/{id}/items:
+    post:
+      summary: Directly assign a SKU to a campaign
+      tags: [Admin]
+      description: '2-9: direct picks skip review (APPROVED); deal below sale, allocation within stock.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id, deal_price, allocated_stock]
+              properties:
+                sku_id:
+                  type: string
+                deal_price:
+                  type: integer
+                allocated_stock:
+                  type: integer
+      responses:
+        '201':
+          description: Item assigned as APPROVED
+        '400':
+          description: Deal or allocation invalid
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown campaign or SKU
+        '409':
+          description: Ended campaign (CAMPAIGN_CLOSED)
+
+  /api/v1/admin/flash-sales/{id}/items/{itemId}:
+    put:
+      summary: Review an application or edit a live item
+      tags: [Admin]
+      description: '2-9: decision APPROVE/REJECT moves REQUESTED items only; deal_price is frozen while the campaign runs.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                deal_price:
+                  type: integer
+                allocated_stock:
+                  type: integer
+      responses:
+        '200':
+          description: Updated item
+        '400':
+          description: Bad decision or price
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown campaign or item
+        '409':
+          description: Not REQUESTED, or live deal frozen
+
+  /api/v1/admin/exhibitions:
+    get:
+      summary: List exhibitions with product lineups
+      tags: [Admin]
+      responses:
+        '200':
+          description: Exhibitions (each with product_ids)
+        '401':
+          description: Missing or expired JWT
+    post:
+      summary: Create an exhibition
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, starts_at, ends_at]
+              properties:
+                title:
+                  type: string
+                starts_at:
+                  type: string
+                ends_at:
+                  type: string
+                status:
+                  type: string
+                product_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Exhibition created
+        '400':
+          description: Unordered window, bad status or unknown products
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/exhibitions/{id}:
+    put:
+      summary: Update an exhibition
+      tags: [Admin]
+      description: '2-9: product_ids replace the lineup wholesale.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated exhibition
+        '400':
+          description: Unordered window, bad status or unknown products
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown exhibition (NOT_FOUND)
+
+  /api/v1/admin/coupons/{id}/suspend:
+    put:
+      summary: Suspend any coupon including seller coupons
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suspended (is_active=0, history kept)
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown coupon (NOT_FOUND)
+
+  /api/v1/admin/payout-requests:
+    get:
+      summary: List payout requests
+      tags: [Admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Requests with seller names
+        '400':
+          description: Invalid status
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/payout-requests/{id}:
+    put:
+      summary: Approve, reject or complete a payout request
+      tags: [Admin]
+      description: '2-9: idempotency key mandatory; APPROVE pays through the payout engine, REJECT needs a reason, TRANSFER records the bank reference and mirrors TRANSFERRED.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVE, REJECT, TRANSFER]
+                reason:
+                  type: string
+                bank_transfer_ref:
+                  type: string
+                idempotency_key:
+                  type: string
+      responses:
+        '200':
+          description: Decided request
+        '400':
+          description: Missing key, reason or reference
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown request (NOT_FOUND)
+        '409':
+          description: Already decided or amount drifted
+
+  /api/v1/admin/penalty-rules:
+    get:
+      summary: List penalty rules
+      tags: [Admin]
+      responses:
+        '200':
+          description: Rules with scores and amounts
+        '401':
+          description: Missing or expired JWT
+    put:
+      summary: Upsert a penalty rule
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                points:
+                  type: integer
+                amount:
+                  type: integer
+                is_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Stored rule
+        '400':
+          description: Missing fields or negative values
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/partners/{id}/penalties:
+    post:
+      summary: Impose a penalty on a seller
+      tags: [Admin]
+      description: '2-9: rule values (points, amount) are copied onto the penalty; disabled rules cannot impose.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule_code, reason]
+              properties:
+                rule_code:
+                  type: string
+                reason:
+                  type: string
+                sub_order_id:
+                  type: string
+      responses:
+        '201':
+          description: Penalty imposed
+        '400':
+          description: Missing reason
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown seller, rule or sub-order
+        '409':
+          description: Disabled rule (RULE_DISABLED)
+
+  /api/v1/admin/penalties/{id}:
+    put:
+      summary: Decide a penalty appeal
+      tags: [Admin]
+      description: '2-9: REVOKE clears it, UPHOLD stands it; once each.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [REVOKE, UPHOLD]
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Decided penalty
+        '400':
+          description: Bad decision
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown penalty (NOT_FOUND)
+        '409':
+          description: Already decided (PENALTY_DECIDED)
+
+  /api/v1/admin/grade-policies:
+    get:
+      summary: List grade policies
+      tags: [Admin]
+      responses:
+        '200':
+          description: Policies ordered by sort_order
+        '401':
+          description: Missing or expired JWT
+    put:
+      summary: Upsert a grade policy
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grade_code, name]
+              properties:
+                grade_code:
+                  type: string
+                name:
+                  type: string
+                sort_order:
+                  type: integer
+                min_sales:
+                  type: integer
+                max_claim_rate:
+                  type: number
+                min_ship_on_time_rate:
+                  type: number
+                max_penalty_points:
+                  type: integer
+                is_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Stored policy
+        '400':
+          description: Missing fields or out-of-range thresholds
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/grades/compute:
+    post:
+      summary: Recompute monthly seller grades
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [month]
+              properties:
+                month:
+                  type: string
+                  description: YYYY-MM.
+      responses:
+        '200':
+          description: Graded seller count
+        '400':
+          description: Bad month (INVALID_MONTH)
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/review-reports:
+    get:
+      summary: Reported-review queue
+      tags: [Admin]
+      responses:
+        '200':
+          description: Reports with review and product context
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/reviews/{id}/visibility:
+    put:
+      summary: Blind or unblind a review
+      tags: [Admin]
+      description: '2-9: blinding drops the review from the stored product aggregates via trigger.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [VISIBLE, BLIND]
+                blind_reason:
+                  type: string
+      responses:
+        '200':
+          description: New visibility
+        '400':
+          description: Bad visibility (INVALID_VISIBILITY)
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown review (NOT_FOUND)

@@ -128,3 +128,46 @@ paths:
                 properties:
                   success:
                     type: boolean
+
+  /api/v1/search/trending:
+    get:
+      summary: Trending searches with rank deltas
+      tags: [Search]
+      security: []
+      description: '2-9: top 10 keywords of the last 24h with prev_rank and delta against the prior 24h. Below-minimum and banned keywords stay out.'
+      responses:
+        '200':
+          description: Trending keywords
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: object
+                    required: [trending]
+                    properties:
+                      trending:
+                        type: array
+                        items:
+                          type: object
+                          required: [keyword, count, rank, prev_rank, delta]
+                          properties:
+                            keyword:
+                              type: string
+                            count:
+                              type: integer
+                            rank:
+                              type: integer
+                            prev_rank:
+                              type: integer
+                              nullable: true
+                            delta:
+                              type: integer
+                              nullable: true
+                              description: Positive means climbed; null for new entries.

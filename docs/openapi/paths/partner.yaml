@@ -122,6 +122,36 @@ paths:
                 brand:
                   type: string
                   maxLength: 100
+                images:
+                  type: array
+                  maxItems: 10
+                  description: '2-9: gallery (own /api/v1/storage/file/ URLs only); first image becomes the thumbnail.'
+                  items:
+                    type: object
+                options:
+                  type: array
+                  maxItems: 3
+                  description: '2-9: option kinds [{name, values[]}].'
+                  items:
+                    type: object
+                skus:
+                  type: array
+                  maxItems: 200
+                  description: '2-9: full SKU set (unique combos, sale <= original); omitted = legacy single SKU from the top-level price/stock.'
+                  items:
+                    type: object
+                notice_template_id:
+                  type: string
+                  description: '2-9: required notice items must be present in the notice values.'
+                notice_values:
+                  type: object
+                  description: '2-9: notice inputs (aliases notice_info, notice_info_json).'
+                shipping_policy_id:
+                  type: string
+                  description: '2-9: own ACTIVE shipping template.'
+                bundle_group_key:
+                  type: string
+                  maxLength: 64
       responses:
         '201':
           description: Product created for operator review
@@ -150,7 +180,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: CATEGORY_REQUIRED, INVALID_CATEGORY, INVALID_IMAGE_URL, INVALID_OPTIONS
+          description: CATEGORY_REQUIRED, INVALID_CATEGORY, INVALID_IMAGE_URL, INVALID_OPTIONS, TEMPLATE_TEXT_LEFT ([판매자 작성] leftovers), NOTICE_REQUIRED_MISSING, TOO_MANY_IMAGES/SKUS, DUPLICATE_COMBINATION
           content:
             application/json:
               schema:
@@ -502,12 +532,54 @@ paths:
 
   /api/v1/partner/orders:
     get:
-      summary: My seller sub-orders with items (newest first, max 500)
+      summary: My seller sub-orders with items (newest first, paged)
       tags: [Partner]
-      description: Recipient/PII fields are access-logged for fulfilment.
+      description: '2-9: status, date_field (paid, confirmed, shipped), from/to, q (order no, recipient, product), carrier, page/per_page, format=csv. Contacts are masked; full text needs GET .../{id}/contact with a reason. Access-logged for fulfilment.'
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: date_field
+          in: query
+          schema:
+            type: string
+            enum: [paid, confirmed, shipped]
+            default: paid
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: carrier
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 30
+        - name: format
+          in: query
+          schema:
+            type: string
+            description: csv returns a masked text/csv download.
       responses:
         '200':
-          description: Sub-orders with order_items[] attached
+          description: Sub-orders with order_items[] attached (masked contacts)
           content:
             application/json:
               schema:
@@ -520,10 +592,14 @@ paths:
                     type: string
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
                       type: object
+        '400':
+          description: Invalid status, date_field or period
         '401':
           description: Missing or expired partner JWT
 
@@ -746,7 +822,11 @@ paths:
         (404 otherwise). Changing title, thumbnail or description_html sends an
         ACTIVE/APPROVED product back to DRAFT/PENDING for re-review. Price
         fields follow the same contract as registration (sale, orig defaulting
-        to current lowest prices) and propagate to all SKUs.
+        to current lowest prices) and propagate to all SKUs. 2-9: images[]
+        (gallery replace, own storage only), skus[] (upsert by id, combos
+        immutable, price moves journaled; rejects mixed top-level prices),
+        notice_template_id/notice values (required items enforced),
+        shipping_policy_id and bundle_group_key; [판매자 작성] leftovers refused.
       parameters:
         - name: id
           in: path
@@ -1070,7 +1150,35 @@ paths:
     get:
       summary: List return/exchange claims on the seller's sub-orders
       tags: [Partner]
-      description: Each row carries order/sub-order totals and the customer identity. Requires APPROVED status.
+      description: Each row carries order/sub-order totals and the customer identity. Requires APPROVED status. 2-9: claim_type, status, from/to, page/per_page.
+      parameters:
+        - name: claim_type
+          in: query
+          schema:
+            type: string
+            enum: [RETURN, EXCHANGE, PRICE_ADJUSTMENT]
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 30
       responses:
         '200':
           description: Claim rows for the seller's sub-orders
@@ -1086,10 +1194,14 @@ paths:
                     type: string
                   count:
                     type: integer
+                  pagination:
+                    $ref: '../schemas/common.yaml#/components/schemas/OffsetPageMeta'
                   data:
                     type: array
                     items:
                       type: object
+        '400':
+          description: Invalid claim_type, status or period
         '403':
           description: PARTNER_NOT_APPROVED when status is not APPROVED
           content:
@@ -1259,3 +1371,611 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/partner/dashboard/pipeline:
+    get:
+      summary: Fulfillment pipeline counts matching the list APIs
+      tags: [Partner]
+      description: '2-9: new/preparing/due-today/in-transit orders, cancel/return/exchange requests, unanswered qna (24h overdue split), settlement preview, 30-day penalties, latest grade.'
+      responses:
+        '200':
+          description: Pipeline counts
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/orders/{id}/contact:
+    get:
+      summary: Full recipient contact for fulfilment
+      tags: [Partner]
+      description: '2-9: reason query required; every reveal is pii_access_log recorded.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: reason
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full contact
+        '400':
+          description: Missing reason (REASON_REQUIRED)
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign sub-order (NOT_FOUND)
+
+  /api/v1/partner/orders/confirm:
+    put:
+      summary: Bulk order confirmation (max 200)
+      tags: [Partner]
+      description: '2-9: own PAYMENT_CONFIRMED rows move to PREPARING with confirmed_at; foreign, missing and wrong-state ids come back in failed[].'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sub_order_ids]
+              properties:
+                sub_order_ids:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated and failed id lists
+        '400':
+          description: Empty array or over 200 ids
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/orders/{id}/delay-notice:
+    put:
+      summary: Announce a shipment delay
+      tags: [Partner]
+      description: '2-9: reason plus a new ship-by date later than the current deadline and within 14 days; the buyer gets an inbox notice and a push attempt.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                new_ship_by:
+                  type: string
+                  description: YYYY-MM-DD (alias new_due_date).
+      responses:
+        '200':
+          description: Extended deadline
+        '400':
+          description: Missing reason, bad date or outside the (baseline, baseline+14d] window
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign sub-order (NOT_FOUND)
+        '409':
+          description: Already shipped (NOT_DELAYABLE)
+
+  /api/v1/partner/shipping-policies:
+    get:
+      summary: My shipping templates
+      tags: [Partner]
+      description: '2-9: seller shipping templates.'
+      responses:
+        '200':
+          description: Template list
+        '401':
+          description: Missing or expired partner JWT
+    post:
+      summary: Create a shipping template
+      tags: [Partner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, method, fee_type]
+              properties:
+                name:
+                  type: string
+                method:
+                  type: string
+                  enum: [PARCEL, DIRECT, OVERSEAS]
+                fee_type:
+                  type: string
+                  enum: [FREE, PAID, CONDITIONAL, PER_QTY]
+                base_fee:
+                  type: integer
+      responses:
+        '201':
+          description: Template created
+        '400':
+          description: Invalid method, fee type or amounts
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/shipping-policies/{id}:
+    put:
+      summary: Update a shipping template
+      tags: [Partner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated template
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign template (NOT_FOUND)
+    delete:
+      summary: Delete a shipping template
+      tags: [Partner]
+      description: Refused (409) while products reference the template.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign template (NOT_FOUND)
+        '409':
+          description: Template in use (TEMPLATE_IN_USE)
+
+  /api/v1/partner/products/bulk-update:
+    put:
+      summary: Bulk status, price and stock update (max 500)
+      tags: [Partner]
+      description: '2-9: per-product status (HIDDEN/DRAFT only, never self-activation), price set/ratio/delta (journaled) and stock; failures stay apart. Separate from POST .../products/bulk (CSV registration).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [updates]
+              properties:
+                updates:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Updated and failed lists
+        '400':
+          description: Empty array or over 500 entries
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/coupons:
+    get:
+      summary: My store coupons
+      tags: [Partner]
+      description: '2-9: seller-issued coupons (issuer SELLER, dup_group STORE).'
+      responses:
+        '200':
+          description: Own coupons
+        '401':
+          description: Missing or expired partner JWT
+    post:
+      summary: Create a store coupon
+      tags: [Partner]
+      description: '2-9: issuer/seller/dup-group/burden are server-forced; scope SELLER (store-wide) or PRODUCT/CATEGORY with target_ids.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, title, discount_value]
+              properties:
+                code:
+                  type: string
+                title:
+                  type: string
+                discount_type:
+                  type: string
+                discount_value:
+                  type: integer
+                scope:
+                  type: string
+                target_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Coupon created
+        '400':
+          description: Invalid discount, scope or targets
+        '401':
+          description: Missing or expired partner JWT
+        '409':
+          description: Duplicate code (COUPON_CODE_TAKEN)
+
+  /api/v1/partner/coupons/{id}:
+    put:
+      summary: Update a store coupon
+      tags: [Partner]
+      description: '2-9: money and scope freeze once issuance starts (409); suspend (is_active=0) stays allowed.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated coupon
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign coupon (NOT_FOUND)
+        '409':
+          description: Frozen after issue start (COUPON_IMMUTABLE_AFTER_ISSUE)
+
+  /api/v1/partner/flash-sales:
+    get:
+      summary: Flash-sale campaigns with my applications
+      tags: [Partner]
+      responses:
+        '200':
+          description: Campaigns (each with my_application or null)
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/flash-sales/{id}/apply:
+    post:
+      summary: Apply a SKU to a flash-sale campaign
+      tags: [Partner]
+      description: '2-9: deal below sale, allocation within stock; queued as REQUESTED for operator review.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_id, deal_price, allocated_stock]
+              properties:
+                sku_id:
+                  type: string
+                deal_price:
+                  type: integer
+                allocated_stock:
+                  type: integer
+      responses:
+        '201':
+          description: Application queued
+        '400':
+          description: Deal or allocation invalid
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown campaign or foreign SKU
+        '409':
+          description: Ended campaign or duplicate application
+
+  /api/v1/partner/payout-requests:
+    get:
+      summary: My payout requests with available amount
+      tags: [Partner]
+      responses:
+        '200':
+          description: Requests, available_amount and account_verified
+        '401':
+          description: Missing or expired partner JWT
+    post:
+      summary: Request a payout
+      tags: [Partner]
+      description: '2-9: X-Idempotency-Key required; over-available, unverified account and in-flight requests are refused.'
+      parameters:
+        - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+      responses:
+        '201':
+          description: Request queued
+        '400':
+          description: Missing key or bad amount
+        '401':
+          description: Missing or expired partner JWT
+        '409':
+          description: Unverified account, over-available or in-flight request
+
+  /api/v1/partner/payout-requests/{id}/cancel:
+    post:
+      summary: Cancel my payout request
+      tags: [Partner]
+      description: '2-9: REQUESTED requests only.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelled
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign request (NOT_FOUND)
+        '409':
+          description: Already decided (PAYOUT_REQUEST_IMMUTABLE)
+
+  /api/v1/partner/store-profile:
+    get:
+      summary: My store decor profile
+      tags: [Partner]
+      responses:
+        '200':
+          description: Profile or null
+        '401':
+          description: Missing or expired partner JWT
+    put:
+      summary: Save my store decor profile
+      tags: [Partner]
+      description: '2-9: logo/banner/intro/notice plus up to 8 featured products (own ACTIVE products only).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                intro:
+                  type: string
+                notice:
+                  type: string
+                logo_url:
+                  type: string
+                banner_url:
+                  type: string
+                featured_product_ids:
+                  type: array
+                  maxItems: 8
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Saved profile
+        '400':
+          description: Invalid featured products or URLs
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/reviews/{id}/reply:
+    put:
+      summary: Reply to a review on my product
+      tags: [Partner]
+      description: '2-9: upserts the single seller reply; foreign reviews 404.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Saved reply
+        '400':
+          description: Missing or overlong body
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign review (NOT_FOUND)
+    delete:
+      summary: Remove my reply
+      tags: [Partner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Removed
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown review or no reply
+
+  /api/v1/partner/reviews/{id}/report:
+    post:
+      summary: Report a review on my product
+      tags: [Partner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Report recorded
+        '400':
+          description: Invalid reason
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign review (NOT_FOUND)
+        '409':
+          description: Duplicate report (REPORT_EXISTS)
+
+  /api/v1/partner/penalties:
+    get:
+      summary: My penalties
+      tags: [Partner]
+      responses:
+        '200':
+          description: Own penalties, newest first
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/penalties/{id}/appeal:
+    post:
+      summary: Appeal a penalty once
+      tags: [Partner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Appeal recorded
+        '400':
+          description: Missing appeal body
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign penalty (NOT_FOUND)
+        '409':
+          description: Already appealed (APPEAL_EXISTS)
+
+  /api/v1/partner/returns/{id}/pickup:
+    put:
+      summary: Register return collection tracking
+      tags: [Partner]
+      description: '2-9: REQUESTED claims only, recorded once; inspection comes next.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrier, tracking_number]
+              properties:
+                carrier:
+                  type: string
+                tracking_number:
+                  type: string
+      responses:
+        '200':
+          description: Collection recorded
+        '400':
+          description: Bad carrier or tracking shape
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign claim (NOT_FOUND)
+        '409':
+          description: Closed claim or already recorded
+
+  /api/v1/partner/returns/{id}/inspect:
+    put:
+      summary: Record the return inspection
+      tags: [Partner]
+      description: '2-9: pickup first; DEFECTIVE/MISMATCH flips fault to the seller (approval then drops the return fee). Photos max 5.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result:
+                  type: string
+                  enum: [NORMAL, DEFECTIVE, MISMATCH]
+                memo:
+                  type: string
+                photos:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Inspection recorded with resulting fault
+        '400':
+          description: Bad result, memo or photos
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign claim (NOT_FOUND)
+        '409':
+          description: Stage order violated (pickup first, once, while open)

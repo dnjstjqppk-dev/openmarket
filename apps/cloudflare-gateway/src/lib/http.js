@@ -125,6 +125,21 @@ export function safeUrl(value, { field = 'URL', max = 2000, required = false, al
   return s;
 }
 
+/**
+ * 2-9: CSV download for list APIs. BOM + quoted cells (SettlementView
+ * convention), so spreadsheet apps open it without mojibake or split cells.
+ */
+export function csvResponse(corsHeaders, filename, columns, rows) {
+  const cell = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const body = '\uFEFF' + [columns.join(','), ...rows.map((r) => r.map(cell).join(','))].join('\r\n');
+  const headers = { ...corsHeaders, 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"` };
+  return new Response(body, { status: 200, headers });
+}
+
 export function str(value, { max = 500, field = 'value', required = false } = {}) {
   if (value === undefined || value === null || value === '') {
     if (required) throw bad('REQUIRED', `${field} 항목은 필수입니다.`, { field });
