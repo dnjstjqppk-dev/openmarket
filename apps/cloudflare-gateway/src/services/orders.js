@@ -63,7 +63,9 @@ export async function loadOrderBundle(env, orderIdOrNo) {
      WHERE s.parent_order_id = ? ORDER BY s.sub_order_no`
   ).bind(order.id).all();
   const { results: items } = await env.DB.prepare(
-    `SELECT i.* FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.parent_order_id = ? ORDER BY i.id`
+    `SELECT i.*, sk.product_id, p.thumbnail_url FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id
+     LEFT JOIN product_skus sk ON sk.id = i.sku_id LEFT JOIN products p ON p.id = sk.product_id
+     WHERE s.parent_order_id = ? ORDER BY i.id`
   ).bind(order.id).all();
   return { order, subs, items };
 }
@@ -71,7 +73,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_63_payment_card_summary.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_64_claim_pickup_date.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must

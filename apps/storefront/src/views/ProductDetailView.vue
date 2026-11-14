@@ -124,13 +124,18 @@ const noticeRows = computed<[string, string][]>(() => {
     items = typeof raw === 'string' ? JSON.parse(raw) : (raw || [])
   } catch { items = [] }
   const vals = product.value?.notice_values && typeof product.value.notice_values === 'object' ? product.value.notice_values : {}
-  if (!items.length) {
-    return Object.entries(vals).map(([k, v]): [string, string] => [String(k), String(v ?? '')]).filter(([k, v]) => k !== '' && v !== '')
+  const rows: [string, string][] = !items.length
+    ? Object.entries(vals).map(([k, v]): [string, string] => [String(k), String(v ?? '')]).filter(([k, v]) => k !== '' && v !== '')
+    : items.map((it): [string, string] => {
+      const v = vals[it.key]
+      return [String(it.label || it.key), v == null || String(v).trim() === '' ? '상세페이지 참조' : String(v)]
+    })
+  // NEW-11/12: certified products always show their KC row with the cert number.
+  if (Number(product.value?.kc_certified) === 1) {
+    const no = String(product.value?.kc_cert_number || '').trim()
+    rows.push(['KC 인증', no ? `인증 대상 제품 (${no})` : '인증 대상 제품'])
   }
-  return items.map((it): [string, string] => {
-    const v = vals[it.key]
-    return [String(it.label || it.key), v == null || String(v).trim() === '' ? '상세페이지 참조' : String(v)]
-  })
+  return rows
 })
 
 const galleryImages = computed(() => {

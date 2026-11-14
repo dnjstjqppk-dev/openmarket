@@ -36,6 +36,13 @@ const REASONS = [
 ]
 const claimReasonCode = ref('CHANGE_OF_MIND')
 const claimSub = ref<any>(null)
+// 3-8: scheduled pickup window is tomorrow..+3d (server enforces INVALID_PICKUP_DATE).
+const claimPickupDate = ref('')
+const claimPhotos = ref<string[]>([])
+const claimUploading = ref(false)
+const claimUploadError = ref('')
+const pickupMin = computed(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })
+const pickupMax = computed(() => { const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10) })
 const exchangeOptions = ref<Record<string, any[]>>({})
 const exchangeChoice = ref<Record<string, string>>({})
 const claimFault = computed(() => REASONS.find((r) => r.code === claimReasonCode.value)?.fault || null)
@@ -326,6 +333,9 @@ async function openClaim(sub: any) {
   claimType.value = 'RETURN'
   claimReason.value = ''
   claimReasonCode.value = 'CHANGE_OF_MIND'
+  claimPickupDate.value = ''
+  claimPhotos.value = []
+  claimUploadError.value = ''
   exchangeChoice.value = {}
   showClaimModal.value = true
   // Exchange is offered only for options of the same product at the same price (server enforces it too).
@@ -340,12 +350,51 @@ async function openClaim(sub: any) {
   }
 }
 
+async function uploadClaimPhoto(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files && input.files[0]
+  input.value = ''
+  if (!file) return
+  claimUploadError.value = ''
+  claimUploading.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('folder', 'claims')
+    const res = await fetch(`${API_BASE_URL}/api/v1/storage/upload`, { method: 'POST', headers: { ...authHeader() }, body: form })
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json.success && json.data?.public_url) {
+      claimPhotos.value = [...claimPhotos.value, String(json.data.public_url)].slice(0, 3)
+    } else {
+      claimUploadError.value = json.error || '사진을 올리지 못했습니다.'
+    }
+  } catch (e: any) {
+    claimUploadError.value = userErrorMessage(e, '사진을 올리지 못했습니다.')
+  } finally {
+    claimUploading.value = false
+  }
+}
+
+async function withdrawClaim(cl: any) {
+  if (!order.value) return
+  busy.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/claims/${cl.id}`, { method: 'DELETE', headers: { ...authHeader() } })
+    const json = await res.json().catch(() => ({}))
+    say(res.ok && json.success ? '신청을 철회했습니다.' : (json.error || '철회하지 못했습니다.'), res.ok && json.success ? 'ok' : 'warn')
+  } finally {
+    busy.value = false
+  }
+  await loadOrderDetail()
+}
+
 async function submitClaim() {
   const items = claimType.value === 'EXCHANGE' && claimSub.value
     ? claimSub.value.items.filter((it: any) => it.quantity > (it.refunded_quantity || 0)).map((it: any) => ({ order_item_id: it.id, quantity: it.quantity - (it.refunded_quantity || 0), exchange_sku_id: exchangeChoice.value[it.id] || it.sku_id }))
     : undefined
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/claims`, {
-    type: claimType.value, sub_order_id: claimSubOrderId.value, reason: claimReason.value || REASONS.find((r) => r.code === claimReasonCode.value)?.label, reason_code: claimReasonCode.value, items
+    type: claimType.value, sub_order_id: claimSubOrderId.value, reason: claimReason.value || REASONS.find((r) => r.code === claimReasonCode.value)?.label, reason_code: claimReasonCode.value,
+    pickup_date: claimPickupDate.value || undefined, photos: claimPhotos.value.length ? claimPhotos.value : undefined, items
   })
   if (ok) {
     showClaimModal.value = false
@@ -409,6 +458,7 @@ onMounted(loadOrderDetail)
           <ul class="text-xs space-y-1.5 mb-3">
             <li v-for="it in sub.items" :key="it.id" class="flex justify-between gap-3">
               <span class="text-gray-700">{{ it.product_title }} <span class="text-slate-400">· {{ it.option_summary }} × {{ it.quantity }}</span>
+                <span data-testid="locked-options" class="ml-1 text-[10px] font-bold text-slate-400 border border-slate-200 rounded-full px-1.5 py-0.5">주문 후 변경 불가</span>
                 <span v-if="it.refunded_quantity" class="ml-1 text-[#E60023]">({{ it.refunded_quantity }}개 환불)</span>
                 <span v-if="['PAYMENT_CONFIRMED','PREPARING'].includes(sub.status) && it.quantity - (it.refunded_quantity || 0) > 1" class="ml-2 inline-flex items-center gap-1">
                   <input v-model.number="qtyCancel[it.id]" type="number" min="1" :max="it.quantity - (it.refunded_quantity || 0)" :aria-label="`${it.product_title} 취소 수량`" class="w-12 h-6 px-1 rounded border border-gray-300" placeholder="1" />
@@ -417,6 +467,7 @@ onMounted(loadOrderDetail)
               <span class="font-bold whitespace-nowrap">{{ won(it.total_price) }}</span>
             </li>
             <li class="flex justify-between text-slate-500"><span>배송비</span><span>{{ sub.shipping_fee ? won(sub.shipping_fee) : '무료' }}<template v-if="orderRemoteZone"> ({{ orderRemoteZone.zone_name }} 추가배송비 {{ won(orderRemoteZone.surcharge_amount) }} 포함)</template></span></li>
+            <li v-if="sub.estimated_delivery_date" class="flex justify-between text-slate-500" data-testid="scheduled-arrival"><span>도착 예정일</span><span class="font-bold text-slate-700">{{ sub.estimated_delivery_date }}</span></li>
           </ul>
           <div v-if="sub.tracking_number" class="text-[11px] text-slate-600 mb-3">{{ sub.carrier_code }} · <button class="underline" @click="copyTracking(sub.tracking_number)">{{ sub.tracking_number }}</button>
             <button class="ml-2 text-[#FF5000] font-bold" @click="loadMilestoneTracking(sub.id)">배송 조회</button></div>
@@ -468,6 +519,15 @@ onMounted(loadOrderDetail)
             </select></label>
           <label class="block sm:col-span-2"><span class="block font-bold text-gray-700 mb-1">자세한 내용 (선택)</span>
             <input v-model="claimReason" type="text" maxlength="500" placeholder="예: 화면과 색상이 달라요" class="w-full h-10 px-3 rounded-lg border border-gray-300" /></label>
+          <label class="block"><span class="block font-bold text-gray-700 mb-1">회수 희망일 (선택, 내일~3일 뒤)</span>
+            <input v-model="claimPickupDate" type="date" :min="pickupMin" :max="pickupMax" data-testid="claim-pickup-date" class="w-full h-10 px-3 rounded-lg border border-gray-300" /></label>
+          <div class="block"><span class="block font-bold text-gray-700 mb-1">증거 사진 (선택, 최대 3장)</span>
+            <input type="file" accept="image/*" :disabled="claimUploading || claimPhotos.length >= 3" data-testid="claim-photo-input" @change="uploadClaimPhoto" class="w-full text-xs" />
+            <p v-if="claimUploading" class="text-[11px] text-slate-500 mt-1">올리는 중...</p>
+            <p v-if="claimUploadError" class="text-[11px] text-[#E60023] mt-1">{{ claimUploadError }}</p>
+            <ul v-if="claimPhotos.length" class="mt-1 space-y-0.5 text-[11px] text-slate-600">
+              <li v-for="(u, i) in claimPhotos" :key="u" class="flex items-center justify-between gap-2"><span class="truncate">{{ u.split('/').pop() }}</span><button type="button" class="underline" @click="claimPhotos.splice(i, 1)">삭제</button></li>
+            </ul></div>
           <div v-if="claimType === 'EXCHANGE' && claimSub" class="sm:col-span-2 space-y-2">
             <div v-for="it in claimSub.items" :key="it.id">
               <span class="block font-bold text-gray-700 mb-1">{{ it.product_title }} · 교환받을 옵션</span>
@@ -789,8 +849,11 @@ onMounted(loadOrderDetail)
               <span class="text-gray-700">{{ cl.reason }}</span>
               <span class="text-gray-400 ml-2 font-mono text-[11px]">#{{ cl.id }}</span>
             </div>
-            <div class="font-bold text-[#00A862]">
-              {{ cl.status }} ({{ locale.formatPrice(cl.refund_amount || 0) }})
+            <div class="flex items-center gap-2">
+              <div class="font-bold text-[#00A862]">
+                {{ cl.status }} ({{ locale.formatPrice(cl.refund_amount || 0) }})
+              </div>
+              <button v-if="cl.status === 'REQUESTED'" :disabled="busy" @click="withdrawClaim(cl)" class="px-2.5 py-1 rounded-full border border-slate-300 text-slate-600 font-bold">신청 철회</button>
             </div>
           </div>
         </div>

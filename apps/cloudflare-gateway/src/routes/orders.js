@@ -263,6 +263,15 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const feeEstimate = type === 'RETURN' ? Math.min(estimate, returnFeeFor({ fault, returnless: false, fullReturn: isFullReturn(subItems, lines), subShippingFee: sub.shipping_fee, fees })) : 0;
     // 2-9: pickup address + photo evidence ride on the claim row (d1_61).
     const pickupAddress = str(body.pickup_address, { field: '수거지', max: 500 }) || null;
+    // 3-8: requested collection day within the 3-day window (d1_64).
+    let pickupDate = null;
+    if (body.pickup_date !== undefined && body.pickup_date !== null && String(body.pickup_date).trim() !== '') {
+      pickupDate = String(body.pickup_date).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(pickupDate)) throw bad('INVALID_PICKUP_DATE', '수거 희망일은 YYYY-MM-DD 형식이어야 합니다.');
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const topIso = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      if (pickupDate <= todayIso || pickupDate > topIso) throw bad('INVALID_PICKUP_DATE', '수거 희망일은 내일부터 3일 이내여야 합니다.');
+    }
     let claimPhotos = [];
     if (body.photos !== undefined && body.photos !== null) {
       if (!Array.isArray(body.photos)) throw bad('INVALID_PHOTOS', 'photos는 이미지 주소 배열이어야 합니다.');
@@ -274,10 +283,10 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       }
     }
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, reason_code, fault, items_json, exchange_items_json, status, refund_amount, notes, pickup_address, photo_urls_json)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?, ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, reasonCode, fault, JSON.stringify(lines),
+      env.DB.prepare(`INSERT INTO returns (id, order_id, sub_order_id, user_id, claim_type, reason, reason_code, fault, items_json, exchange_items_json, status, refund_amount, notes, pickup_address, pickup_date, photo_urls_json)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTED', ?, ?, ?, ?, ?)`).bind(claimId, b.order.id, sub.id, me.userId, type, reason, reasonCode, fault, JSON.stringify(lines),
         exchangeItems ? JSON.stringify(exchangeItems) : null, type === 'RETURN' ? estimate - feeEstimate : 0, str(body.notes, { max: 500 }) || null,
-        pickupAddress, claimPhotos.length ? JSON.stringify(claimPhotos) : null),
+        pickupAddress, pickupDate, claimPhotos.length ? JSON.stringify(claimPhotos) : null),
       env.DB.prepare("UPDATE sub_orders SET status = 'RETURN_REQUESTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'DELIVERED'").bind(sub.id)
     ]);
     const data = {
@@ -287,6 +296,21 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       ...(type === 'EXCHANGE' && fault === 'CUSTOMER' ? { customer_shipping_note: `단순변심 교환은 왕복 배송비 ${(fees.oneWay * 2).toLocaleString('ko-KR')}원을 판매자 안내에 따라 별도로 부담합니다.` } : {})
     };
     return json(corsHeaders, { success: true, ...data, data, message: '반품/교환 신청이 접수되었습니다. 판매자 확인 후 처리됩니다.' }, 201);
+  }
+
+  // 3-8: buyer claim withdrawal while the claim is still REQUESTED.
+  const claimCancelM = p.match(/^\/api\/v1\/orders\/([^/]+)\/claims\/([^/]+)$/);
+  if (claimCancelM && request.method === 'DELETE') {
+    const me = await requireAuth(request, env, ['ROLE_CUSTOMER', 'ROLE_ADMIN']);
+    const { b } = await ownedBundle(request, env, claimCancelM[1]);
+    const claim = await env.DB.prepare('SELECT * FROM returns WHERE id = ? AND order_id = ?').bind(claimCancelM[2], b.order.id).first();
+    if (!claim || (me.role !== 'ROLE_ADMIN' && claim.user_id !== me.userId)) throw notFound('클레임을 찾을 수 없습니다.');
+    if (claim.status !== 'REQUESTED') throw conflict('CLAIM_NOT_OPEN', '접수 상태의 신청만 취소할 수 있습니다.');
+    await env.DB.batch([
+      env.DB.prepare("UPDATE returns SET status = 'CANCELLED' WHERE id = ?").bind(claim.id),
+      env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(claim.sub_order_id)
+    ]);
+    return json(corsHeaders, { success: true, claim_id: claim.id, status: 'CANCELLED' });
   }
 
   return null;

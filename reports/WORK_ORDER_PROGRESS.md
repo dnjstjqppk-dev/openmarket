@@ -30,3 +30,4 @@
 3-5 | 통과 | 48781dc | cart 5/5 + plp 7/7 + test:ui + typecheck | 판매자박스·게이지·견적요약·가격표시, 해석 → Q-3-5
 3-6 | 통과 | c86a7be | checkout 4/4 + checkout36 3/3 + test:ui + typecheck | 주문자·쿠폰모달·예약일·금칙어·동의2종, 해석 → Q-3-6
 3-7 | 통과 | PENDING | payment_result 4/4 + test:ui + typecheck | 영수증·카드마스킹·주소정리·공유없음, 해석 → Q-3-7
+3-8 | 통과 | PENDING | order 8/8 + buyer 20/20 + partner 15/15 + admin 12/12 + e2e 26/26 + test:ui + typecheck | 탭3·20개씩·카드·재구매·옵션잠금·회수일·사진·철회, d1_64, 해석 → Q-3-8

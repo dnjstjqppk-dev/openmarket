@@ -343,4 +343,56 @@ await t.test('B18. restock subscriptions need a real stockout', async () => {
   assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM restock_subscriptions WHERE sku_id = ?').get(sku).n, 0, 'removed');
 });
 
+async function deliveredOrder(g, cust) {
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236',
+      items: [{ sku_id: 'sku_001_w', quantity: 1 }]
+    }
+  })).json;
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  const sub = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o.order_id).id;
+  g.db.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(sub);
+  return { orderId: o.order_id, subId: sub };
+}
+
+await t.test('B19. claims take a pickup date inside the 3-day window', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const { orderId, subId } = await deliveredOrder(g, cust);
+  const bad = await g.call(`/api/v1/orders/${orderId}/claims`, {
+    method: 'POST', token: cust, body: { sub_order_id: subId, reason_code: 'CHANGE_OF_MIND', pickup_date: day(9) }
+  });
+  assert.equal(bad.status, 400, 'beyond-3-day refused');
+  const ok = await g.call(`/api/v1/orders/${orderId}/claims`, {
+    method: 'POST', token: cust, body: { sub_order_id: subId, reason_code: 'CHANGE_OF_MIND', pickup_date: day(2) }
+  });
+  assert.equal(ok.status, 201, ok.text);
+  assert.equal(g.db.prepare('SELECT pickup_date d FROM returns WHERE id = ?').get(ok.json.claim_id).d, day(2), 'date stored');
+});
+
+await t.test('B20. open claims cancel and reopen the sub-order', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const { orderId, subId } = await deliveredOrder(g, cust);
+  const claim = (await g.call(`/api/v1/orders/${orderId}/claims`, {
+    method: 'POST', token: cust, body: { sub_order_id: subId, reason_code: 'CHANGE_OF_MIND' }
+  })).json;
+  const gone = await g.call(`/api/v1/orders/${orderId}/claims/cl_missing`, { method: 'DELETE', token: cust });
+  assert.equal(gone.status, 404, 'unknown claim hidden');
+  const del = await g.call(`/api/v1/orders/${orderId}/claims/${claim.claim_id}`, { method: 'DELETE', token: cust });
+  assert.equal(del.status, 200, del.text);
+  assert.equal(g.db.prepare('SELECT status FROM returns WHERE id = ?').get(claim.claim_id).status, 'CANCELLED', 'claim cancelled');
+  assert.equal(g.db.prepare('SELECT status FROM sub_orders WHERE id = ?').get(subId).status, 'DELIVERED', 'sub-order reopened');
+  const twice = await g.call(`/api/v1/orders/${orderId}/claims/${claim.claim_id}`, { method: 'DELETE', token: cust });
+  assert.equal(twice.status, 409, 'cancel is one-way');
+});
+
 t.finish();

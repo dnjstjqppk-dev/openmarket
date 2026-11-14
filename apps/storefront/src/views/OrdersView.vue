@@ -1,394 +1,210 @@
 <script setup lang="ts">
-import { Check, ChevronRight, CircleCheck, Coins, Copy, MapPin, PackageOpen, Pencil, RotateCw, Search, ShieldCheck, ShoppingCart, Ticket, TriangleAlert, Truck } from 'lucide-vue-next'
+import { Check, ChevronRight, Coins, Copy, Pencil, Repeat, RotateCw, ShieldCheck, ShoppingCart, TriangleAlert, Truck } from 'lucide-vue-next'
 import { ref, computed, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { RouterLink, useRouter } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
+import { useCartStore } from '../stores/cart'
 import { API_BASE_URL, authHeader } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
 import { userErrorMessage, OmEmptyState, OmImage, OmSkeleton } from '@olmoa/ui'
 
-const auth = useAuthStore()
+// 3-8: one card per order, three phase tabs. A whole-order cancel is routine
+// admin paperwork (neutral button), not a warning — and only unpaid orders
+// (every sub-order PAYMENT_PENDING) may cancel from this list.
+const TERMINAL_SUB = ['PURCHASE_CONFIRMED', 'CANCELLED', 'RETURNED', 'EXPIRED']
+const TABS = [
+  { key: 'upcoming', label: '예정' },
+  { key: 'purchasing', label: '구매중' },
+  { key: 'completed', label: '완료' }
+] as const
+type TabKey = (typeof TABS)[number]['key']
+
+const router = useRouter()
 const locale = useLocaleStore()
-
-interface OrderItem {
-  id: string
-  sub_order_id: string
-  sku_id: string
-  product_id?: string
-  product_title: string
-  option_summary: string
-  unit_price: number
-  quantity: number
-  total_price: number
-  thumbnail_url?: string
-  carrier?: string
-  tracking_number?: string
-  status?: string
-  partner_name?: string
-  partner_id?: string
-}
-
-interface Order {
-  id: string
-  order_no: string
-  customer_id: string
-  total_goods_amount: number
-  total_shipping_amount: number
-  total_discount_amount: number
-  total_pay_amount: number
-  total_amount?: number
-  currency: string
-  payment_status: string
-  recipient_name: string
-  recipient_phone: string
-  shipping_address_line1: string
-  shipping_address_line2?: string
-  shipping_postal_code: string
-  shipping_memo?: string
-  created_at: string
-  sub_orders?: any[]
-  items?: OrderItem[]
-}
-
-const orders = ref<Order[]>([])
+const cart = useCartStore()
+const orders = ref<any[]>([])
+const page = ref(0)
+const totalPages = ref(1)
 const loading = ref(true)
-const loadError = ref<string | null>(null)
+const loadingMore = ref(false)
+const loadError = ref('')
+const activeTab = ref<TabKey>('purchasing')
 const actionMsg = ref('')
 const copyToast = ref('')
-const searchQuery = ref('')
-const activeTab = ref<'ALL' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'>('ALL')
-
-// Cancel Modal State
 const showCancelModal = ref(false)
-const orderToCancel = ref<Order | null>(null)
-const cancelReason = ref('단순 변심 (다른 상품 재주문)')
+const orderToCancel = ref<any>(null)
 const isCancelling = ref(false)
 
-// Tracking Modal State
-const showTrackingModal = ref(false)
-const trackingItem = ref<{
-  orderNo: string
-  carrier: string
-  trackingNumber: string
-  productTitle: string
-  status: string
-} | null>(null)
+const phaseOf = (o: any): TabKey => {
+  const subs = o.sub_orders || []
+  if (subs.length > 0 && subs.every((s: any) => s.status === 'PAYMENT_PENDING')) return 'upcoming'
+  if (subs.length > 0 && subs.every((s: any) => TERMINAL_SUB.includes(s.status))) return 'completed'
+  return 'purchasing'
+}
+const tabCount = (k: TabKey) => orders.value.filter((o) => phaseOf(o) === k).length
+const filteredOrders = computed(() => orders.value.filter((o) => phaseOf(o) === activeTab.value))
+const allUnpaid = (o: any) => (o.sub_orders || []).length > 0 && (o.sub_orders || []).every((s: any) => s.status === 'PAYMENT_PENDING')
+const anyDelivered = (o: any) => (o.sub_orders || []).some((s: any) => s.status === 'DELIVERED')
+const anyTracking = (o: any) => (o.sub_orders || []).some((s: any) => s.tracking_number)
+const repurchasable = (o: any) => (o.sub_orders || []).some((s: any) => ['DELIVERED', 'PURCHASE_CONFIRMED'].includes(s.status))
+const orderStatus = (o: any) => paymentStatusLabel(o.payment_status || '')
+const subStatus = (s: string) => subOrderStatusLabel(s || '')
 
-const cancelReasons = [
-  '단순 변심 (다른 상품 재주문)',
-  '배송지 주소 또는 연락처 오입력',
-  '상품 옵션 (색상/사이즈) 변경 희망',
-  '배송 지연 예상으로 취소',
-  '할인 쿠폰 또는 결제수단 변경 후 재주문',
-  '기타 사유'
-]
-
-const loadOrders = async () => {
+async function loadOrders() {
   loading.value = true
-  loadError.value = null
+  loadError.value = ''
+  page.value = 0
+  orders.value = []
   try {
-    const cid = auth.user?.id || ''
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders?customer_id=${encodeURIComponent(cid)}`, {
-      headers: { ...authHeader() }
-    })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || `주문 내역을 불러오지 못했습니다`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders?per_page=20&page=1`, { headers: { ...authHeader() } })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || json.success === false) throw new Error(json.error || json.message || '주문 목록을 불러오지 못했습니다.')
     orders.value = Array.isArray(json.data) ? json.data : []
+    page.value = 1
+    totalPages.value = Number(json.pagination?.total_pages || 1)
   } catch (e: any) {
-    loadError.value = userErrorMessage(e, '주문 내역을 불러오지 못했습니다')
+    loadError.value = userErrorMessage(e, '주문 목록을 불러오지 못했습니다.')
   } finally {
     loading.value = false
   }
 }
 
-const filteredOrders = computed(() => {
-  let list = orders.value
-
-  // Status Tab Filtering
-  if (activeTab.value === 'PROCESSING') {
-    list = list.filter(o => ['PAID', 'PREPARING'].includes(o.payment_status))
-  } else if (activeTab.value === 'SHIPPED') {
-    list = list.filter(o => ['SHIPPED', 'IN_TRANSIT'].includes(o.payment_status))
-  } else if (activeTab.value === 'DELIVERED') {
-    list = list.filter(o => ['DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(o.payment_status))
-  } else if (activeTab.value === 'CANCELLED') {
-    list = list.filter(o => ['CANCELLED', 'RETURNED', 'REFUNDED'].includes(o.payment_status))
+async function loadMore() {
+  if (loadingMore.value || page.value >= totalPages.value) return
+  loadingMore.value = true
+  try {
+    const next = page.value + 1
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders?per_page=20&page=${next}`, { headers: { ...authHeader() } })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || json.success === false) throw new Error(json.error || json.message || '주문 목록을 불러오지 못했습니다.')
+    orders.value = orders.value.concat(Array.isArray(json.data) ? json.data : [])
+    page.value = next
+    totalPages.value = Number(json.pagination?.total_pages || next)
+  } catch (e: any) {
+    actionMsg.value = userErrorMessage(e, '주문 목록을 불러오지 못했습니다.')
+  } finally {
+    loadingMore.value = false
   }
+}
 
-  // Keyword Search
-  const query = searchQuery.value.trim().toLowerCase()
-  if (query) {
-    list = list.filter(o => {
-      const matchOrderNo = (o.order_no || o.id).toLowerCase().includes(query)
-      const matchItems = (o.items || []).some(it =>
-        (it.product_title || '').toLowerCase().includes(query) ||
-        (it.option_summary || '').toLowerCase().includes(query)
-      )
-      return matchOrderNo || matchItems
-    })
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).then(() => {
+    copyToast.value = text
+    setTimeout(() => { copyToast.value = '' }, 2000)
+  })
+}
+
+// SAME_OPTIONS: repurchase re-adds the exact ordered SKUs (same options, same
+// quantities) through the cart store; checkout re-prices and re-checks stock.
+function repurchase(order: any) {
+  let added = 0
+  for (const it of order.items || []) {
+    if (!it.sku_id) continue
+    const ok = cart.addItem(
+      { id: it.product_id, partner_id: it.partner_id, title: it.product_title, thumbnail_url: it.thumbnail_url, lowest_sale_price: it.unit_price },
+      { id: it.sku_id, sale_price: it.unit_price, stock_quantity: null },
+      Number(it.quantity || 1)
+    )
+    if (ok) added += 1
   }
-
-  return list
-})
-
-const counts = computed(() => {
-  return {
-    ALL: orders.value.length,
-    PROCESSING: orders.value.filter(o => ['PAID', 'PREPARING'].includes(o.payment_status)).length,
-    SHIPPED: orders.value.filter(o => ['SHIPPED', 'IN_TRANSIT'].includes(o.payment_status)).length,
-    DELIVERED: orders.value.filter(o => ['DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(o.payment_status)).length,
-    CANCELLED: orders.value.filter(o => ['CANCELLED', 'RETURNED', 'REFUNDED'].includes(o.payment_status)).length
+  if (added > 0) {
+    actionMsg.value = `재구매 상품 ${added}건을 장바구니에 담았습니다.`
+    router.push('/cart')
+  } else {
+    actionMsg.value = '재구매할 수 있는 상품이 없습니다.'
   }
-})
+}
 
-function openCancelModal(order: Order) {
+function openCancelModal(order: any) {
   orderToCancel.value = order
-  cancelReason.value = cancelReasons[0]
   showCancelModal.value = true
 }
 
 async function confirmCancel() {
-  if (!orderToCancel.value) return
+  if (!orderToCancel.value || isCancelling.value) return
   isCancelling.value = true
-  const cid = auth.user?.id || ''
-  const ordId = orderToCancel.value.id
-
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${ordId}/cancel`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${orderToCancel.value.id}/cancel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ reason: cancelReason.value })
+      headers: { 'Content-Type': 'application/json', ...authHeader() }
     })
-    const json = await res.json()
-    if (json.success) {
-      actionMsg.value = `✓ 주문(#${orderToCancel.value.order_no || ordId})이 취소되었습니다. 환불 및 재고 원복이 완료되었습니다.`
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json.success !== false) {
+      actionMsg.value = json.refund
+        ? `주문이 취소되었습니다. 환불: 결제수단 ${locale.formatPrice(json.refund.pg_amount || 0)} · 적립금 ${locale.formatPrice(json.refund.credit_amount || 0)}`
+        : '결제 전 주문이 취소되었습니다.'
       showCancelModal.value = false
       orderToCancel.value = null
       await loadOrders()
     } else {
-      actionMsg.value = `⚠️ 취소 실패: ${json.error}`
+      actionMsg.value = json.error || json.message || '취소하지 못했습니다.'
     }
-  } catch (e) {
-    actionMsg.value = '⚠️ 취소 요청 중 네트워크 오류가 발생했습니다.'
+  } catch (e: any) {
+    actionMsg.value = userErrorMessage(e, '취소하지 못했습니다.')
   } finally {
     isCancelling.value = false
   }
 }
 
 const confirmPurchase = async (orderId: string) => {
-  const cid = auth.user?.id || ''
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${orderId}/confirm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() }
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader()
+      }
     })
-    const json = await res.json()
-    if (json.success) {
-      actionMsg.value = `🎉 구매확정이 완료되었습니다! +₩${Number(json.data.reward_credit || 0).toLocaleString()} (1%) 올모아 적립금이 지급되었습니다.`
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json.success) {
+      actionMsg.value = `구매확정 완료 · 적립금 ${locale.formatPrice(json.reward_credit || 0)} 지급`
       await loadOrders()
     } else {
-      actionMsg.value = `⚠️ 구매확정 실패: ${json.error || '다시 시도해 주세요.'}`
+      actionMsg.value = json.error || '구매확정하지 못했습니다.'
     }
-  } catch (e) {
-    actionMsg.value = '⚠️ 구매확정 요청 중 네트워크 오류가 발생했습니다.'
+  } catch (e: any) {
+    actionMsg.value = userErrorMessage(e, '구매확정하지 못했습니다.')
   }
 }
 
-function openTracking(order: Order, item?: OrderItem) {
-  // Only registered carrier/tracking are shown; nothing is invented.
-  trackingItem.value = {
-    orderNo: order.order_no || order.id,
-    carrier: item?.carrier || '',
-    trackingNumber: item?.tracking_number || '',
-    productTitle: item?.product_title || '주문 상품',
-    status: item?.status || order.payment_status
-  }
-  showTrackingModal.value = true
-}
-
-const trackingSteps = computed(() => {
-  const st = (trackingItem.value?.status || '').toUpperCase()
-  const shipped = ['SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(st)
-  const delivered = ['DELIVERED', 'CONFIRMED', 'COMPLETED', 'PURCHASE_CONFIRMED'].includes(st)
-  const preparing = shipped || ['PREPARING', 'PAID', 'PAYMENT_CONFIRMED'].includes(st)
-  return [
-    { label: '결제 완료 및 판매자 주문 접수', done: true },
-    { label: '상품 준비 중', done: preparing },
-    { label: '배송 중', done: shipped },
-    { label: '배송 완료', done: delivered }
-  ]
-})
-
-function copyText(text: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    copyToast.value = text
-    setTimeout(() => {
-      copyToast.value = ''
-    }, 2000)
-  })
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'PAID':
-    case 'PREPARING':
-      return { label: '결제완료 (상품준비)', class: 'bg-amber-50 text-amber-700 border-amber-200' }
-    case 'SHIPPED':
-    case 'IN_TRANSIT':
-      return { label: '배송중 (출고완료)', class: 'bg-sky-50 text-sky-700 border-sky-200' }
-    case 'DELIVERED':
-      return { label: '배송완료', class: 'bg-teal-50 text-teal-700 border-teal-200' }
-    case 'CONFIRMED':
-    case 'COMPLETED':
-    case 'PURCHASE_CONFIRMED':
-      return { label: '구매확정 (+1% 적립)', class: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
-    case 'CANCELLED':
-      return { label: '주문취소 (환불완료)', class: 'bg-rose-50 text-rose-700 border-rose-200' }
-    case 'RETURNED':
-    case 'REFUNDED':
-      return { label: '반품/환불완료', class: 'bg-purple-50 text-purple-700 border-purple-200' }
-    default:
-      // P2-S14: unknown codes fall back to the shared module, never raw.
-      return { label: paymentStatusLabel(status) !== status ? paymentStatusLabel(status) : subOrderStatusLabel(status), class: 'bg-gray-50 text-gray-700 border-gray-200' }
-  }
+function openTracking(order: any) {
+  router.push(`/orders/${order.id}`)
 }
 
 onMounted(loadOrders)
 </script>
 
 <template>
-  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-    <!-- Header Title & Quick Access -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-5">
-      <div>
-        <h1 class="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-          <span>📦 나의 주문 내역</span>
-          <span class="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-[#FF5000] font-black">
-            판매가 인하 차액 보상 · 7일 청약철회
-          </span>
-        </h1>
-        <p class="text-xs sm:text-sm text-gray-500 mt-1">
-          실시간 배송 조회, 구매확정(+1% 올모아 적립금 지급), 주문취소 및 반품 신청을 이용하실 수 있습니다.
-        </p>
-      </div>
-      <div class="flex items-center gap-2 self-start sm:self-auto">
-        <RouterLink
-          to="/addresses"
-          class="text-xs font-bold text-gray-700 hover:text-[#FF5000] px-3.5 py-2 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 shadow-xs transition inline-flex items-center gap-1.5"
-        >
-          <MapPin class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />
-          <span>배송지 관리</span>
-        </RouterLink>
-        <RouterLink
-          to="/coupons"
-          class="text-xs font-bold text-[#FF5000] hover:text-white hover:bg-[#FF5000] px-3.5 py-2 rounded-xl border border-orange-300 bg-orange-50 shadow-xs transition inline-flex items-center gap-1.5"
-        >
-          <Ticket class="h-4 w-4" aria-hidden="true" />
-          <span>쿠폰·적립금</span>
-        </RouterLink>
-      </div>
+  <div class="max-w-[1080px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+    <div>
+      <h1 class="text-xl font-black text-gray-900">주문 내역</h1>
+      <p class="text-xs text-gray-500 mt-1">결제 후 30일 내 판매가 인하 시 차액 적립 · 수령 후 7일 내 반품 신청</p>
     </div>
 
-    <!-- Alert / Action Toast -->
-    <div
-      v-if="actionMsg"
-      class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-[#00A862] flex items-center justify-between shadow-xs animate-fade-in"
-    >
-      <div class="flex items-center gap-2">
-        <CircleCheck class="h-4 w-4" aria-hidden="true" />
-        <span>{{ actionMsg }}</span>
-      </div>
-      <button @click="actionMsg = ''" class="text-emerald-700 hover:text-emerald-900 font-bold p-1">✕</button>
+    <div v-if="actionMsg" role="status" class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between">
+      <span>{{ actionMsg }}</span>
+      <button @click="actionMsg = ''" class="text-emerald-600 hover:text-emerald-800">✕</button>
     </div>
 
-    <!-- Filter Tabs & Search Bar -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/90 shadow-xs">
-      <!-- Horizontal Scrollable Tabs -->
-      <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-        <button
-          @click="activeTab = 'ALL'"
-          :class="[
-            'px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shrink-0',
-            activeTab === 'ALL'
-              ? 'bg-[#FF5000] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          ]"
-        >
-          전체 ({{ counts.ALL }})
-        </button>
-        <button
-          @click="activeTab = 'PROCESSING'"
-          :class="[
-            'px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shrink-0',
-            activeTab === 'PROCESSING'
-              ? 'bg-[#FF5000] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          ]"
-        >
-          결제완료/준비 ({{ counts.PROCESSING }})
-        </button>
-        <button
-          @click="activeTab = 'SHIPPED'"
-          :class="[
-            'px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shrink-0',
-            activeTab === 'SHIPPED'
-              ? 'bg-[#FF5000] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          ]"
-        >
-          배송중 ({{ counts.SHIPPED }})
-        </button>
-        <button
-          @click="activeTab = 'DELIVERED'"
-          :class="[
-            'px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shrink-0',
-            activeTab === 'DELIVERED'
-              ? 'bg-[#FF5000] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          ]"
-        >
-          배송완료/구매확정 ({{ counts.DELIVERED }})
-        </button>
-        <button
-          @click="activeTab = 'CANCELLED'"
-          :class="[
-            'px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shrink-0',
-            activeTab === 'CANCELLED'
-              ? 'bg-[#FF5000] text-white shadow-xs'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-          ]"
-        >
-          취소/반품/환불 ({{ counts.CANCELLED }})
-        </button>
-      </div>
-
-      <!-- Instant Search Filter Input -->
-      <div class="relative w-full md:w-72">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="주문번호 또는 상품명 검색..."
-          class="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-300 text-xs focus:ring-2 focus:ring-[#FF5000] focus:border-[#FF5000] outline-none"
-        />
-        <Search class="h-4 w-4 absolute left-3 top-2.5 text-gray-400" aria-hidden="true" />
-        <button
-          v-if="searchQuery"
-          @click="searchQuery = ''"
-          class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs"
-        >
-          ✕
-        </button>
-      </div>
+    <div class="flex items-center gap-2" role="tablist" aria-label="주문 단계">
+      <button
+        v-for="tab in TABS"
+        :key="tab.key"
+        role="tab"
+        :aria-selected="activeTab === tab.key"
+        @click="activeTab = tab.key"
+        :class="[
+          'px-4 py-2 rounded-full text-xs font-black transition',
+          activeTab === tab.key ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'
+        ]"
+      >
+        {{ tab.label }} {{ tabCount(tab.key) }}
+      </button>
     </div>
 
-    <!-- Loading Skeleton -->
-    <div v-if="loading" class="space-y-4">
-      <OmSkeleton variant="row" :count="3" />
-    </div>
+    <div v-if="loading" class="bg-white rounded-2xl border border-gray-200 p-8"><OmSkeleton variant="rect" height="h-64" /></div>
 
-    <!-- Error State -->
-    <div v-else-if="loadError" class="bg-white rounded-3xl p-12 text-center border border-gray-200 shadow-xs">
+    <div v-else-if="loadError" class="bg-white rounded-2xl border border-gray-200 p-8 text-center">
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-2xl">
         <TriangleAlert class="h-4 w-4" aria-hidden="true" />
       </div>
@@ -403,89 +219,47 @@ onMounted(loadOrders)
       </button>
     </div>
 
-    <!-- Empty State -->
-    <OmEmptyState
-      v-else-if="filteredOrders.length === 0"
-      :title="searchQuery ? `'${searchQuery}' 검색 조건에 맞는 주문이 없습니다.` : '해당 탭에 표시할 주문 내역이 없습니다.'"
-      description="올모아 초특가 상품을 둘러보고 첫 주문을 시작해 보세요."
-    >
-      <RouterLink
-        to="/"
-        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"
-      >
-        <ShoppingCart class="h-4 w-4" aria-hidden="true" />
-        <span>인기 특가 쇼핑하러 가기</span>
-      </RouterLink>
-    </OmEmptyState>
-
-    <!-- Orders Cards List -->
-    <div v-else class="space-y-5">
+    <div v-else-if="filteredOrders.length > 0" class="space-y-5">
       <div
         v-for="order in filteredOrders"
         :key="order.id"
-        class="bg-white rounded-3xl border border-gray-200/90 hover:border-[#FF5000] transition-all shadow-xs overflow-hidden"
+        class="bg-white rounded-2xl border border-gray-200 overflow-hidden"
       >
-        <!-- Card Header -->
-        <div class="bg-gray-50/80 px-5 py-3.5 border-b border-gray-200/80 flex flex-wrap items-center justify-between gap-2.5">
-          <div class="flex items-center gap-3">
-            <span
-              :class="[
-                'px-2.5 py-0.5 text-[11px] font-black rounded-full border',
-                getStatusBadge(order.payment_status).class
-              ]"
-            >
-              {{ getStatusBadge(order.payment_status).label }}
+        <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 text-[11px] font-black rounded-full bg-slate-100 text-slate-700">
+              {{ orderStatus(order) }}
             </span>
-            <div class="flex items-center gap-1.5 text-xs text-gray-600 font-mono">
-              <span class="font-bold text-gray-900">#{{ order.order_no || order.id }}</span>
-              <button
-                @click="copyText(order.order_no || order.id)"
-                title="주문번호 복사"
-                class="text-gray-400 hover:text-[#FF5000] text-[11px]"
-              >
-                <Check v-if="copyToast === (order.order_no || order.id)" class="h-4 w-4 text-emerald-600" aria-hidden="true" /><Copy v-else class="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-            <span class="text-xs text-gray-400 hidden sm:inline">•</span>
-            <span class="text-xs text-gray-400 hidden sm:inline">{{ new Date(order.created_at).toLocaleString() }}</span>
+            <span class="font-mono font-bold text-xs text-gray-900">#{{ order.order_no || order.id }}</span>
+            <button @click="copyText(order.order_no || order.id)" title="주문번호 복사" class="text-gray-400 hover:text-[#FF5000]">
+              <Check v-if="copyToast === (order.order_no || order.id)" class="h-4 w-4 text-emerald-600" aria-hidden="true" /><Copy v-else class="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span class="text-xs text-gray-400 hidden sm:inline">{{ order.created_at }}</span>
           </div>
-
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500">결제금액:</span>
-            <span class="text-base font-black text-gray-900">
-              {{ locale.formatPrice(order.total_pay_amount || order.total_amount || 0) }}
-            </span>
-            <span class="text-[11px] px-2 py-0.5 rounded bg-gray-200/60 text-gray-600 font-medium">
-              {{ order.currency || 'KRW' }}
-            </span>
+          <div class="text-sm font-black text-gray-900">
+            {{ locale.formatPrice(order.total_pay_amount || order.total_amount || 0) }}
           </div>
         </div>
 
-        <!-- Card Body: Items List -->
         <div class="p-5 divide-y divide-gray-100">
-          <!-- When items exist -->
           <div
             v-for="(item, idx) in (order.items || [])"
             :key="item.id || idx"
-            class="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            class="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
-            <!-- Product Thumbnail & Details -->
-            <div class="flex items-start gap-3.5 flex-1 min-w-0">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
               <OmImage
                 :src="item.thumbnail_url"
                 :alt="item.product_title"
-                ratio="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-2xl border border-line"
+                ratio="w-16 h-16 shrink-0 rounded-xl border border-gray-200"
               />
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2">
                   <span v-if="item.partner_name" class="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                     {{ item.partner_name }}
                   </span>
-                  <span
-                    v-if="item.status"
-                    class="text-[10px] font-black uppercase text-[#00A862]"
-                  >
-                    {{ item.status === 'SHIPPED' ? '배송중' : '' }}
+                  <span v-if="item.status" class="text-[11px] font-bold text-slate-600">
+                    {{ subStatus(item.status) }}
                   </span>
                 </div>
                 <RouterLink
@@ -495,20 +269,18 @@ onMounted(loadOrders)
                   {{ item.product_title }}
                 </RouterLink>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <span class="bg-orange-50/80 text-[#FF5000] px-2 py-0.5 rounded text-[11px] font-medium">
+                  <span class="bg-orange-50 text-[#FF5000] px-2 py-0.5 rounded text-[11px] font-medium">
                     옵션: {{ item.option_summary || '기본 표준형' }}
                   </span>
                   <span class="font-bold text-gray-700">x {{ item.quantity }}개</span>
                   <span class="font-bold text-gray-900">{{ locale.formatPrice(item.unit_price) }}</span>
                 </div>
-
-                <!-- If tracking number exists for this item -->
                 <div v-if="item.tracking_number" class="pt-1 flex items-center gap-2 text-xs">
                   <span class="text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded border border-sky-100 text-[11px]">
-                    🚚 {{ item.carrier || '택배사 미정' }} {{ item.tracking_number }}
+                    {{ item.carrier || '택배사 미정' }} {{ item.tracking_number }}
                   </span>
                   <button
-                    @click="openTracking(order, item)"
+                    @click="openTracking(order)"
                     class="text-[11px] font-bold text-sky-600 hover:underline cursor-pointer"
                   >
                     배송추적 →
@@ -517,7 +289,6 @@ onMounted(loadOrders)
               </div>
             </div>
 
-            <!-- Single Item Review Link if Order Confirmed -->
             <div
               v-if="['CONFIRMED', 'DELIVERED', 'COMPLETED'].includes(order.payment_status) && item.product_id"
               class="self-start sm:self-center shrink-0"
@@ -532,38 +303,28 @@ onMounted(loadOrders)
             </div>
           </div>
 
-          <!-- Fallback when items array is empty -->
-          <div v-if="!order.items || order.items.length === 0" class="py-3 text-xs text-gray-500 flex items-center justify-between">
-            <div>
-              <p class="font-bold text-gray-800">주문 품목 세부 정보</p>
-              <p class="text-[11px] text-gray-400 mt-0.5">상세 조회 페이지에서 전체 패킹 내역을 확인하실 수 있습니다.</p>
-            </div>
-            <div class="text-sm font-black text-gray-900">
-              {{ locale.formatPrice(order.total_pay_amount || order.total_amount || 0) }}
-            </div>
+          <div v-if="!order.items || order.items.length === 0" class="py-3 text-xs text-gray-500">
+            주문 품목 세부 정보는 상세 조회 페이지에서 확인할 수 있습니다.
           </div>
         </div>
 
-        <!-- Card Footer Actions Bar -->
-        <div class="bg-gray-50/60 px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
           <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
             <ShieldCheck class="h-4 w-4 text-[#00A862]" aria-hidden="true" />
             <span>결제 후 30일 내 판매가 인하 시 차액 적립 · 수령 후 7일 내 반품 신청</span>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <!-- Order Cancel Button (Paid or Preparing) -->
             <button
-              v-if="['PAID', 'PREPARING'].includes(order.payment_status)"
+              v-if="allUnpaid(order)"
               @click="openCancelModal(order)"
-              class="px-3.5 py-1.5 rounded-full border border-red-200 text-[#E60023] hover:bg-red-50 text-xs font-bold transition cursor-pointer"
+              class="px-3.5 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-bold transition cursor-pointer"
             >
               주문 취소
             </button>
 
-            <!-- Confirm Purchase Button (+1% Credit) -->
             <button
-              v-if="['PAID', 'SHIPPED', 'DELIVERED'].includes(order.payment_status)"
+              v-if="anyDelivered(order)"
               @click="confirmPurchase(order.id)"
               class="px-4 py-1.5 rounded-full bg-orange-50 text-[#FF5000] hover:bg-[#FF5000] hover:text-white border border-orange-200 text-xs font-black transition cursor-pointer inline-flex items-center gap-1"
             >
@@ -571,9 +332,8 @@ onMounted(loadOrders)
               <span>구매확정 (+1% 적립)</span>
             </button>
 
-            <!-- Quick Tracking Button -->
             <button
-              v-if="['SHIPPED', 'IN_TRANSIT', 'DELIVERED'].includes(order.payment_status)"
+              v-if="anyTracking(order)"
               @click="openTracking(order)"
               class="px-3.5 py-1.5 rounded-full bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white border border-sky-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
             >
@@ -581,10 +341,18 @@ onMounted(loadOrders)
               <span>배송 조회</span>
             </button>
 
-            <!-- Detail / Claims / Return Portal Link -->
+            <button
+              v-if="repurchasable(order)"
+              @click="repurchase(order)"
+              class="px-3.5 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:border-[#FF5000] hover:text-[#FF5000] text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
+            >
+              <Repeat class="h-4 w-4" aria-hidden="true" />
+              <span>재구매</span>
+            </button>
+
             <RouterLink
               :to="`/orders/${order.id}`"
-              class="px-4 py-1.5 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-bold transition text-center shadow-xs inline-flex items-center gap-1"
+              class="px-4 py-1.5 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-bold transition text-center inline-flex items-center gap-1"
             >
               <span>상세 조회 / 보상·반품 신청</span>
               <ChevronRight class="h-3 w-3" aria-hidden="true" />
@@ -592,19 +360,27 @@ onMounted(loadOrders)
           </div>
         </div>
       </div>
+
+      <div v-if="page < totalPages" class="text-center">
+        <button
+          @click="loadMore"
+          :disabled="loadingMore"
+          class="px-6 py-2.5 rounded-full border border-gray-300 text-gray-700 hover:border-gray-500 text-xs font-bold transition disabled:opacity-50"
+        >
+          {{ loadingMore ? '불러오는 중...' : '더보기 (20개씩)' }}
+        </button>
+      </div>
     </div>
 
-    <!-- 1. Cancel Order Confirmation Modal -->
     <div
       v-if="showCancelModal && orderToCancel"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      role="dialog"
+      aria-label="주문 취소 신청"
     >
-      <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 border border-gray-100">
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-          <div class="flex items-center gap-2 text-rose-600 font-black text-lg">
-            <TriangleAlert class="h-4 w-4" aria-hidden="true" />
-            <h3>주문 취소 신청</h3>
-          </div>
+          <h3 class="font-black text-base text-gray-900">주문 취소 신청</h3>
           <button @click="showCancelModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
         </div>
 
@@ -613,7 +389,7 @@ onMounted(loadOrders)
             주문번호 <span class="font-mono font-bold text-gray-900">#{{ orderToCancel.order_no || orderToCancel.id }}</span> 취소를 진행하시겠습니까?
           </p>
 
-          <div class="p-3.5 bg-gray-50 rounded-2xl border border-gray-200/80 space-y-1.5">
+          <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
             <div class="flex justify-between text-gray-500">
               <span>상품 금액</span>
               <span>{{ locale.formatPrice(orderToCancel.total_goods_amount || 0) }}</span>
@@ -632,18 +408,8 @@ onMounted(loadOrders)
             </div>
           </div>
 
-          <div>
-            <label class="block font-bold text-gray-700 mb-1.5">취소 사유 선택</label>
-            <select
-              v-model="cancelReason"
-              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-[#FF5000] outline-none"
-            >
-              <option v-for="r in cancelReasons" :key="r" :value="r">{{ r }}</option>
-            </select>
-          </div>
-
           <p class="text-[11px] text-gray-400">
-            * 즉시 주문 취소 처리되며 결제하신 수단으로 자동 환불 및 예약된 재고가 자동 원복됩니다.
+            * 결제 전 주문은 즉시 취소되며, 예약된 재고가 자동 원복됩니다.
           </p>
         </div>
 
@@ -657,7 +423,7 @@ onMounted(loadOrders)
           <button
             @click="confirmCancel"
             :disabled="isCancelling"
-            class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md disabled:opacity-50 cursor-pointer"
+            class="flex-1 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs disabled:opacity-50 cursor-pointer"
           >
             {{ isCancelling ? '취소 처리 중...' : '확인 (주문 취소)' }}
           </button>
@@ -665,59 +431,18 @@ onMounted(loadOrders)
       </div>
     </div>
 
-    <!-- 2. Delivery Tracking Modal -->
-    <div
-      v-if="showTrackingModal && trackingItem"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+    <OmEmptyState
+      v-else-if="filteredOrders.length === 0"
+      title="해당 탭에 표시할 주문 내역이 없습니다."
+      description="올모아 초특가 상품을 둘러보고 첫 주문을 시작해 보세요."
     >
-      <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
-        <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-          <div class="flex items-center gap-2 text-sky-700 font-black text-lg">
-            <Truck class="h-4 w-4" aria-hidden="true" />
-            <h3>배송 조회</h3>
-          </div>
-          <button @click="showTrackingModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
-        </div>
-
-        <div class="space-y-4 text-xs">
-          <div class="p-3 bg-sky-50 rounded-2xl border border-sky-100 space-y-1">
-            <div class="flex items-center justify-between font-mono font-bold text-sky-950">
-              <span>{{ trackingItem.carrier || '택배사 미정' }}</span>
-              <div v-if="trackingItem.trackingNumber" class="flex items-center gap-1.5">
-                <span>{{ trackingItem.trackingNumber }}</span>
-                <button
-                  @click="copyText(trackingItem.trackingNumber)"
-                  class="px-1.5 py-0.5 rounded bg-white border border-sky-200 text-[10px] text-sky-800 hover:bg-sky-100"
-                >
-                  {{ copyToast === trackingItem.trackingNumber ? '✓ 복사완료' : '복사' }}
-                </button>
-              </div>
-              <span v-else class="font-sans text-[11px] font-bold text-amber-700">송장 미등록</span>
-            </div>
-            <p class="text-slate-600 text-[11px] truncate">품목: {{ trackingItem.productTitle }}</p>
-            <p v-if="!trackingItem.trackingNumber" class="text-amber-700 text-[11px]">판매자가 송장을 등록하면 여기에 표시됩니다.</p>
-            <p v-else class="text-slate-500 text-[11px]">택배사 홈페이지에서 송장번호로 상세 위치를 조회할 수 있습니다.</p>
-          </div>
-
-          <!-- Status Timeline (derived from the real sub-order status) -->
-          <div class="space-y-3 py-2">
-            <div v-for="(step, i) in trackingSteps" :key="i" class="flex items-center gap-3" :class="{ 'opacity-60': !step.done }">
-              <span v-if="step.done" class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs">✓</span>
-              <span v-else class="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs">○</span>
-              <p class="font-bold" :class="step.done ? 'text-gray-900' : 'text-gray-500'">{{ step.label }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-2 border-t border-gray-100">
-          <button
-            @click="showTrackingModal = false"
-            class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-[#FF5000] text-white font-bold text-xs shadow-md transition cursor-pointer"
-          >
-            닫기
-          </button>
-        </div>
-      </div>
-    </div>
+      <RouterLink
+        to="/"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"
+      >
+        <ShoppingCart class="h-4 w-4" aria-hidden="true" />
+        <span>인기 특가 쇼핑하러 가기</span>
+      </RouterLink>
+    </OmEmptyState>
   </div>
 </template>

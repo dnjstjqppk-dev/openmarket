@@ -80,6 +80,8 @@ paths:
     $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1tracking'
   /api/v1/orders/{id}/claims:
     $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1claims'
+  /api/v1/orders/{id}/claims/{claimId}:
+    $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1{id}~1claims~1{claimId}'
   /api/v1/orders/cron/auto-confirm:
     $ref: './paths/orders.yaml#/paths/~1api~1v1~1orders~1cron~1auto-confirm'
   /api/v1/orders/cron/expire:

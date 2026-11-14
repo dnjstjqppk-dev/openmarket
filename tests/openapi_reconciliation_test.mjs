@@ -293,6 +293,7 @@ const EXPECTED = [
   ['/api/v1/products/facets', 'GET', 200],
   ['/api/v1/products/{id}/coupons', 'GET', 200],
   ['/api/v1/products/{id}/price-history', 'GET', 200],
+  ['/api/v1/orders/{id}/claims/{claimId}', 'DELETE', 401],
   ['/api/v1/exhibitions', 'GET', 200],
   ['/api/v1/exhibitions/{id}', 'GET', 404],
   ['/api/v1/search/trending', 'GET', 200],
