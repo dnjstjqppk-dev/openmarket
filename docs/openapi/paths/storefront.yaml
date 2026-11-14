@@ -1407,6 +1407,24 @@ paths:
         '404':
           description: Unknown product id
 
+  /api/v1/products/{id}/price-history:
+    get:
+      summary: SKU price history for fake-discount policing
+      tags: [Storefront]
+      security: []
+      description: '3-4: newest-first original/sale moves across the product SKUs, capped at 50.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: History rows (possibly empty)
+        '404':
+          description: Unknown product id
+
   /api/v1/exhibitions:
     get:
       summary: Live exhibitions

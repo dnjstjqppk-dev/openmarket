@@ -530,6 +530,19 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, data: { ...ex, products } }), { headers: corsHeaders });
   }
 
+  // 3e. SKU price history for fake-discount policing (3-4): newest first, capped.
+  const priceHistM = url.pathname.match(/^\/api\/v1\/products\/([^/]+)\/price-history$/);
+  if (priceHistM && request.method === 'GET') {
+    const prod = await env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(decodeURIComponent(priceHistM[1])).first();
+    if (!prod) throw notFound('상품을 찾을 수 없습니다.');
+    const { results } = await env.DB.prepare(
+      `SELECT h.sku_id, h.original_price, h.sale_price, h.changed_at
+       FROM sku_price_history h JOIN product_skus s ON s.id = h.sku_id
+       WHERE s.product_id = ? ORDER BY h.changed_at DESC, h.rowid DESC LIMIT 50`
+    ).bind(prod.id).all();
+    return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
+  }
+
   // 4. Single Product with SKUs, Partner Shipping Rules, Real Rating & QnA Count
   if (url.pathname.startsWith('/api/v1/products/') && !url.pathname.includes('/reviews') && !url.pathname.includes('/qna') && !url.pathname.includes('/buy-box') && !url.pathname.includes('/live-activity') && request.method === 'GET') {
     const prodId = url.pathname.replace('/api/v1/products/', '').trim();
@@ -624,6 +637,10 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' AND is_default = 1"
       ).bind(product.partner_id).first() || null;
     }
+    // 3-4: earn-rate policy for the projected-reward row (null = no policy, row hidden).
+    const earnBps = await env.DB.prepare(
+      "SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')"
+    ).first();
     const gradeRow = await env.DB.prepare(
       'SELECT grade_code FROM partner_grades WHERE partner_id = ? ORDER BY month DESC LIMIT 1'
     ).bind(product.partner_id).first();
@@ -692,7 +709,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         notice_values: noticeValues,
         shipping_policy: shippingPolicy,
         seller: sellerSummary,
-        max_coupon_discount: maxCouponDiscount
+        max_coupon_discount: maxCouponDiscount,
+        earn_bps: earnBps ? Number(earnBps.value) : null
       }
     }), { headers: corsHeaders });
   }

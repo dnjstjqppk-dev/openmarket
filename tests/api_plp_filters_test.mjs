@@ -72,4 +72,18 @@ await t.test('F5. list rows carry card badge facts', async () => {
   assert.equal(r2.json.data[0].earn_bps, '100', 'earn policy surfaces');
 });
 
+await t.test('F6. price history reads newest-first per product', async () => {
+  const g = await newGateway();
+  const sku = g.db.prepare("SELECT id, product_id FROM product_skus WHERE product_id = 'prod_001' LIMIT 1").get();
+  g.db.prepare('INSERT INTO sku_price_history (id, sku_id, original_price, sale_price) VALUES (?, ?, ?, ?)')
+    .run('ph_f6', sku.id, 129000, 49900);
+  const r = await g.call('/api/v1/products/prod_001/price-history');
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.data.find((h) => h.sku_id === sku.id && h.original_price === 129000), 'history row served');
+  const d = await g.call('/api/v1/products/prod_001');
+  assert.ok('earn_bps' in d.json.data, 'detail carries earn_bps');
+  const gone = await g.call('/api/v1/products/prod_missing/price-history');
+  assert.equal(gone.status, 404, 'unknown product hidden');
+});
+
 t.finish();

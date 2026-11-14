@@ -25,4 +25,5 @@
 2-10 | 통과 | 8f89190 | security 88/88 + abuse 5/5 + rehearsal 15쌍 + npm test 전체 | 인증·금액·경합·시산표·RL_WRITE, 관문 조정 → Q-2-10
 3-1 | 통과 | c32a8d7 | home_sections 6/6 + test:ui + typecheck + 빌드 | 7구역·무한40·요청6 이하·일시정지, 해석 → Q-3-1
 3-2 | 통과 | efa9677 | plp 5/5 + plp_sections 6/6 + test:ui + typecheck | 공용 목록·필터7종·주소왕복·빈화면, 해석 → Q-3-2
-3-3 | 통과 | PENDING | card 7/7 + test:ui + typecheck 2종 | 카드·찜·퀵담기·옵션시트·E2E B04b, 해석 → Q-3-3
+3-3 | 통과 | 07bb4f5 | card 7/7 + test:ui + typecheck 2종 | 카드·찜·퀵담기·옵션시트·E2E B04b, 해석 → Q-3-3
+3-4 | 통과 | PENDING | detail 6/6 + plp 6/6 + test:ui + typecheck + 빌드 | 7:5·구매패널·단계옵션·쿠폰·하이라이트, 해석 → Q-3-4

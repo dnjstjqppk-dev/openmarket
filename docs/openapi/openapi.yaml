@@ -517,6 +517,8 @@ paths:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1facets'
   /api/v1/products/{id}/coupons:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1coupons'
+  /api/v1/products/{id}/price-history:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1price-history'
   /api/v1/exhibitions:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1exhibitions'
   /api/v1/exhibitions/{id}:

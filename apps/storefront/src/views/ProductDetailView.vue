@@ -1,50 +1,40 @@
 <script setup lang="ts">
-// Product detail (PHASE 2 redesign on @olmoa/ui). Removed because they were not facts:
-//  - a 3-image "gallery" made by changing the saturation/contrast of the one thumbnail -> the real image only
-//  - "OLMOA CHOICE", "공장직발송 최저가", "90-Day Free Returns" (the rule is 7 days), "Free Shipping over ₩30,000"
-//    for every seller (each seller sets its own), "시연 샘플 영상" on a hard-coded stock video (server fixed too)
-//  - pre-selecting the cheapest SKU and an invented `<id>_sku_def` SKU -> the buyer picks every option
-//  - a client-side volume discount rounded differently from the server -> lib/pricing.ts mirrors the server
-// Prices/discounts/shipping shown here are what the order sheet will charge (the server re-checks everything).
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { Heart, Minus, Plus, Play, ShoppingBag, Star, Store, Truck, RotateCcw, BadgePercent } from 'lucide-vue-next'
-import {
-  OmBreadcrumb, OmButton, OmIconButton, OmTabs, OmAlert, OmSkeleton, OmErrorState, OmEmptyState, OmModal,
-  useToast, discountRate, formatNumber, userErrorMessage
-} from '@olmoa/ui'
+// Product detail (3-4): 7:5 desktop split, gallery + photo strip + sticky
+// section tabs on the left, sticky buy panel on the right, mobile bottom bar
+// with a buy sheet. Prices, shipping, notice and review figures all come from
+// the server; the order sheet re-checks everything.
+import { ref, computed, watch, nextTick } from 'vue'
+import { useRoute, RouterLink } from 'vue-router'
+import { Heart } from 'lucide-vue-next'
+import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, userErrorMessage, formatNumber } from '@olmoa/ui'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
+import ReviewHighlights from '../components/product/ReviewHighlights.vue'
+import BuyPanel from '../components/product/BuyPanel.vue'
+import MobileBuySheet from '../components/product/MobileBuySheet.vue'
 import ProductCard from '../components/ProductCard.vue'
-import { useCartStore } from '../stores/cart'
-import { useAuthStore } from '../stores/auth'
-import { useLocaleStore } from '../stores/locale'
-import { VOLUME_TIERS, volumeDiscountPct, volumeUnitPrice, DEFAULT_SHIPPING_FEE, DEFAULT_FREE_THRESHOLD } from '../lib/pricing'
-import { API_BASE_URL, authHeader } from '../config'
-import { LATE_COMPENSATION, RETURN_WINDOW_DAYS, PRICE_ADJUST_WINDOW_DAYS, fmtKRW } from '../config/policy'
+import { useBuySelection } from '../components/product/useBuySelection'
+import { API_BASE_URL } from '../config'
+import { RETURN_WINDOW_DAYS } from '../config/policy'
 
 const route = useRoute()
-const router = useRouter()
-const cart = useCartStore()
-const auth = useAuthStore()
-const locale = useLocaleStore()
-const toast = useToast()
 
 const product = ref<any>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
-const sold24h = ref(0)
-const isWishlisted = ref(false)
-const wishBusy = ref(false)
 const showVideo = ref(false)
-const tab = ref('detail')
+const showSheet = ref(false)
+const descOpen = ref(false)
+const photoStrip = ref<any[]>([])
 const reviewSummary = ref<{ count: number; average: number | null }>({ count: 0, average: null })
 const qnaCount = ref(0)
+const related = ref<any[]>([])
 
+const skus = computed<any[]>(() => product.value?.skus || [])
+const sel = useBuySelection(product, skus)
 const loginTo = computed(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`)
 
-// Work order 1-8: guest recently-viewed store (max 50, newest first).
 function recordRecentVisit(p: any) {
   try {
     const key = 'olmoa_recent_products'
@@ -55,16 +45,14 @@ function recordRecentVisit(p: any) {
   } catch { /* storage unavailable: rail simply shows less */ }
 }
 
-// ---- load -------------------------------------------------------------------------------------------
 let seq = 0
 async function load() {
   const my = ++seq
   loading.value = true
   loadError.value = null
   notFound.value = false
-  selection.value = {}
-  quantity.value = 1
-  tab.value = 'detail'
+  descOpen.value = false
+  photoStrip.value = []
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(String(route.params.slug))}`)
     const json = await res.json().catch(() => null)
@@ -73,23 +61,42 @@ async function load() {
     if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     product.value = json.data
     recordRecentVisit(json.data)
+    if (route.hash === '#reviews') {
+      await nextTick()
+      gotoReviews()
+    }
     reviewSummary.value = { count: Number(json.data.review_count || 0), average: json.data.avg_rating ?? null }
     qnaCount.value = Number(json.data.qna_count || 0)
-    // A single SKU is the only case where nothing has to be chosen.
-    if (skus.value.length === 1) selection.value = { ...(skus.value[0].options || {}) }
-    loadSideData(json.data.id)
-    loadRelated(json.data.id, json.data.category_slug)
+    sel.checkSurge(json.data.id)
+    loadPhotos(json.data.id)
+    loadRelated(json.data.id)
   } catch (e: any) {
     if (my === seq) loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }
 }
-// ---- related: co-purchase + co-view + popular fill (server ranked, self excluded) ----
-const related = ref<any[]>([])
-async function loadRelated(id: string, categorySlug: string | null) {
+
+async function loadPhotos(id: string) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(id)}/reviews?photos_only=true&per_page=8`)
+    const json = await res.json().catch(() => null)
+    if (product.value?.id !== id) return
+    if (!res.ok || !json?.success) return
+    const out: any[] = []
+    for (const r of json.data?.reviews || []) {
+      for (const src of r.images || []) {
+        if (typeof src === 'string' && (src.startsWith('https://') || (src.startsWith('/') && !src.startsWith('//')))) out.push(src)
+        if (out.length >= 8) break
+      }
+      if (out.length >= 8) break
+    }
+    photoStrip.value = out
+  } catch { /* strip stays hidden */ }
+}
+
+async function loadRelated(id: string) {
   related.value = []
-  void categorySlug
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/recommendations/related?product_id=${encodeURIComponent(id)}&limit=8`)
     const j = await res.json().catch(() => null)
@@ -97,104 +104,6 @@ async function loadRelated(id: string, categorySlug: string | null) {
     if (!res.ok || !j?.success || !Array.isArray(j.data)) return
     related.value = j.data
   } catch { /* section stays hidden */ }
-}
-function loadSideData(id: string) {
-  fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(id)}/urgency-stats`).then((r) => r.json())
-    .then((j) => { sold24h.value = j?.success ? Number(j.data?.recent_24h_sales || 0) : 0 }).catch(() => { sold24h.value = 0 })
-  isWishlisted.value = false
-  if (auth.isAuthenticated) {
-    fetch(`${API_BASE_URL}/api/v1/wishlist`, { headers: { ...authHeader() } }).then((r) => r.json())
-      .then((j) => { if (j?.success && Array.isArray(j.data)) isWishlisted.value = j.data.some((w: any) => w.product_id === id) }).catch(() => {})
-    // H-3: co-view signal (one row per user+product+day; failures are silent).
-    fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(id)}/view`, { method: 'POST', headers: { ...authHeader() } }).catch(() => {})
-  }
-}
-// ---- availability -----------------------------------------------------------------------------------
-const onSale = computed(() => product.value && product.value.status === 'ACTIVE' && (product.value.review_status == null || product.value.review_status === 'APPROVED'))
-const skus = computed<any[]>(() => product.value?.skus || [])
-const attributes = computed<{ name: string; values: string[] }[]>(() => product.value?.attributes || [])
-
-// ---- option selection: one choice per attribute; the SKU is the one matching all of them -------------
-const selection = ref<Record<string, string>>({})
-const selectedSku = computed(() => {
-  if (!skus.value.length) return null
-  if (attributes.value.length === 0) return skus.value.length === 1 ? skus.value[0] : null
-  if (attributes.value.some((a) => !selection.value[a.name])) return null
-  return skus.value.find((s) => attributes.value.every((a) => String(s.options?.[a.name]) === selection.value[a.name])) || null
-})
-/** A value is selectable if some in-stock SKU has it together with the other current choices. */
-function valueState(attr: string, value: string): 'ok' | 'soldout' | 'none' {
-  const matches = skus.value.filter((s) => String(s.options?.[attr]) === value && attributes.value.every((a) => a.name === attr || !selection.value[a.name] || String(s.options?.[a.name]) === selection.value[a.name]))
-  if (!matches.length) return 'none'
-  return matches.some((s) => Number(s.stock_quantity) > 0) ? 'ok' : 'soldout'
-}
-function choose(attr: string, value: string) {
-  const next = { ...selection.value }
-  if (next[attr] === value) delete next[attr]
-  else next[attr] = value
-  selection.value = next
-  quantity.value = 1
-}
-const missingOptions = computed(() => attributes.value.filter((a) => !selection.value[a.name]).map((a) => a.name))
-
-// ---- price ------------------------------------------------------------------------------------------
-const quantity = ref(1)
-const stock = computed(() => (selectedSku.value ? Number(selectedSku.value.stock_quantity || 0) : null))
-const maxQty = computed(() => (stock.value != null ? Math.max(1, stock.value) : 999))
-watch(maxQty, (m) => { if (quantity.value > m) quantity.value = m })
-const priceRange = computed(() => {
-  const ps = skus.value.map((s) => Number(s.sale_price)).filter((n) => Number.isFinite(n))
-  return ps.length ? { min: Math.min(...ps), max: Math.max(...ps) } : { min: Number(product.value?.lowest_sale_price || 0), max: Number(product.value?.lowest_sale_price || 0) }
-})
-const unitSale = computed(() => (selectedSku.value ? Number(selectedSku.value.sale_price) : priceRange.value.min))
-const unitOriginal = computed(() => (selectedSku.value ? Number(selectedSku.value.original_price) : Number(product.value?.lowest_original_price || 0)))
-const listDiscount = computed(() => discountRate(unitOriginal.value, unitSale.value))
-const tierPct = computed(() => volumeDiscountPct(quantity.value))
-const lineTotal = computed(() => volumeUnitPrice(unitSale.value, quantity.value) * quantity.value)
-const tierSaving = computed(() => unitSale.value * quantity.value - lineTotal.value)
-
-const shipFee = computed(() => product.value?.base_shipping_fee ?? DEFAULT_SHIPPING_FEE)
-const shipThreshold = computed(() => product.value?.free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD)
-const sellerName = computed(() => product.value?.business_name || null)
-
-// ---- actions ----------------------------------------------------------------------------------------
-const canBuy = computed(() => onSale.value && !!selectedSku.value && (stock.value ?? 0) > 0)
-const buyHint = computed(() => {
-  if (!onSale.value) return '현재 판매하지 않는 상품입니다'
-  if (!skus.value.length) return '구매할 수 있는 옵션이 없습니다'
-  if (missingOptions.value.length) return `${missingOptions.value.join(', ')}을(를) 선택해 주세요`
-  if (!selectedSku.value) return '선택한 조합의 옵션이 없습니다'
-  if ((stock.value ?? 0) <= 0) return '선택한 옵션은 품절입니다'
-  return ''
-})
-function addToCart(goCheckout: boolean) {
-  if (!canBuy.value || !product.value) { toast.error(buyHint.value || '옵션을 선택해 주세요'); return }
-  // The cart stores the base unit price; quantity tiers are applied from the quantity (cart & server alike).
-  const ok = cart.addItem(product.value, selectedSku.value, quantity.value)
-  if (!ok) { toast.error('장바구니에 담지 못했습니다. 옵션과 재고를 확인해 주세요.'); return }
-  // "바로 구매" orders only this option; other cart lines stay in the cart, unselected.
-  if (goCheckout) { cart.selectOnly([selectedSku.value.id]); router.push('/checkout') }
-  else toast.success(`장바구니에 담았습니다 (${quantity.value}개)`, { title: product.value.title })
-}
-async function toggleWishlist() {
-  if (!product.value) return
-  if (!auth.isAuthenticated) { router.push(loginTo.value); return }
-  wishBusy.value = true
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ product_id: product.value.id })
-    })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.success) throw new Error(json?.error || '찜하지 못했습니다')
-    isWishlisted.value = !!json.wished
-    toast.success(json.wished ? '찜 목록에 저장했습니다.' : '찜 목록에서 삭제했습니다.')
-  } catch (e: any) {
-    toast.error(userErrorMessage(e, '찜하지 못했습니다'))
-  } finally {
-    wishBusy.value = false
-  }
 }
 
 // ---- description: strip active content (server stores seller HTML) ---------------------------------
@@ -207,41 +116,52 @@ const descriptionHtml = computed(() => {
     .replace(/(href|src)\s*=\s*(["'])\s*(javascript|vbscript|data:text\/html)[^"']*\2/gi, '$1="#"')
 })
 
-const tabs = computed(() => [
-  { key: 'detail', label: '상세정보' },
-  { key: 'reviews', label: '후기', count: reviewSummary.value.count },
-  { key: 'qna', label: '문의', count: qnaCount.value },
-  { key: 'shipping', label: '배송·교환·반품' }
-])
-// NEW-11: product notice table (empty when the seller has not entered it).
-const noticeEntries = computed<[string, string][]>(() => {
-  const raw = product.value?.notice_info_json
-  if (!raw) return []
+// ---- notice table in template order; seller blanks read "상세페이지 참조" -----------------------------
+const noticeRows = computed<[string, string][]>(() => {
+  let items: any[] = []
   try {
-    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return []
-    return Object.entries(obj).map(([k, v]): [string, string] => [String(k), String(v ?? '')]).filter(([k, v]) => k !== '' && v !== '')
-  } catch { return [] }
+    const raw = product.value?.notice_template?.items_json
+    items = typeof raw === 'string' ? JSON.parse(raw) : (raw || [])
+  } catch { items = [] }
+  const vals = product.value?.notice_values && typeof product.value.notice_values === 'object' ? product.value.notice_values : {}
+  if (!items.length) {
+    return Object.entries(vals).map(([k, v]): [string, string] => [String(k), String(v ?? '')]).filter(([k, v]) => k !== '' && v !== '')
+  }
+  return items.map((it): [string, string] => {
+    const v = vals[it.key]
+    return [String(it.label || it.key), v == null || String(v).trim() === '' ? '상세페이지 참조' : String(v)]
+  })
 })
-const kcCertified = computed(() => Number(product.value?.kc_certified) === 1)
+
+const galleryImages = computed(() => {
+  const rows = Array.isArray(product.value?.images) ? product.value.images : []
+  if (rows.length) return rows.map((im: any) => ({ src: im.image_url, alt: im.alt_text || product.value.title }))
+  if (product.value?.thumbnail_url) return [{ src: product.value.thumbnail_url, alt: product.value.title }]
+  return []
+})
+
 const crumbs = computed(() => [
   { label: '홈', to: '/' },
   ...(product.value?.category_slug ? [{ label: product.value.category_name, to: `/category/${product.value.category_slug}` }] : []),
   { label: product.value?.title || '상품' }
 ])
-function openTab(k: string) {
-  tab.value = k
-  document.getElementById('product-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+const sectionTabs = computed(() => [
+  { id: 'sec-info', label: '상품정보' },
+  { id: 'sec-reviews', label: `리뷰(${formatNumber(reviewSummary.value.count)})` },
+  { id: 'sec-qna', label: `문의(${formatNumber(qnaCount.value)})` },
+  { id: 'sec-shipping', label: '배송/교환/반품' }
+])
+const activeSection = ref('sec-info')
+function gotoReviews() {
+  document.getElementById('sec-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-// Last, so every ref used by load() already exists when it runs immediately.
+const shipPolicy = computed(() => product.value?.shipping_policy || null)
+const shipMethodLabel: Record<string, string> = { PARCEL: '택배', DIRECT: '직접 전달', OVERSEAS: '해외 배송' }
+
 watch(() => route.params.slug, load, { immediate: true })
-// P2-S05: /product/:slug#reviews (e.g. from OrdersView) opens the reviews tab.
-function applyHash() {
-  if (route.hash === '#reviews') openTab('reviews')
-}
-onMounted(applyHash)
-watch(() => route.hash, applyHash)
+watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
 </script>
 
 <template>
@@ -257,191 +177,129 @@ watch(() => route.hash, applyHash)
     <template v-else-if="product">
       <OmBreadcrumb :items="crumbs" />
 
-      <div class="mt-3 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:gap-12">
-        <!-- media ------------------------------------------------------------------------------------ -->
-        <div class="lg:sticky lg:top-24 lg:self-start">
-          <div class="relative aspect-square overflow-hidden rounded-xl border border-line bg-surface-2">
-            <img :src="product.thumbnail_url" :alt="product.title" class="h-full w-full object-cover" fetchpriority="high" />
-          </div>
-          <OmButton v-if="product.video_url" variant="outline" size="sm" block class="mt-3" @click="showVideo = true">
-            <Play class="h-4 w-4" aria-hidden="true" />판매자 등록 영상 보기
-          </OmButton>
-        </div>
-
-        <!-- buy box ---------------------------------------------------------------------------------- -->
+      <div class="mt-3 grid gap-8 lg:grid-cols-[7fr_5fr] xl:gap-12">
+        <!-- left (scroll) --------------------------------------------------------------------------------- -->
         <div class="min-w-0">
-          <RouterLink v-if="product.partner_id && sellerName" :to="`/store/${product.partner_id}`" class="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
-            <Store class="h-4 w-4" aria-hidden="true" />{{ sellerName }}
-          </RouterLink>
-          <h1 class="mt-1 text-xl font-bold leading-snug text-ink sm:text-2xl">{{ product.title }}</h1>
+          <OmImageGallery :images="galleryImages" />
+          <OmButton v-if="product.video_url" variant="outline" size="sm" block class="mt-3" @click="showVideo = true">판매자 등록 영상 보기</OmButton>
 
-          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <button v-if="reviewSummary.count > 0 && reviewSummary.average != null" type="button" class="inline-flex items-center gap-1 hover:underline" @click="openTab('reviews')">
-              <Star class="h-4 w-4 fill-highlight text-highlight" aria-hidden="true" />
-              <span class="font-semibold text-ink">{{ Number(reviewSummary.average).toFixed(1) }}</span>
-              <span class="text-ink-muted">후기 {{ formatNumber(reviewSummary.count) }}</span>
+          <div v-if="photoStrip.length" class="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="포토 후기 미리보기">
+            <button
+              v-for="(src, i) in photoStrip"
+              :key="i"
+              type="button"
+              class="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              :aria-label="`포토 후기 ${i + 1} 보기`"
+              @click="gotoReviews"
+            >
+              <img :src="src" :alt="`포토 후기 ${i + 1}`" class="h-full w-full object-cover" loading="lazy" decoding="async" />
             </button>
-            <span v-else class="text-ink-subtle">아직 후기가 없습니다</span>
-            <span v-if="sold24h > 0" class="text-ink-muted">최근 24시간 {{ formatNumber(sold24h) }}개 결제</span>
           </div>
 
-          <OmAlert v-if="!onSale" tone="warning" class="mt-4">현재 판매하지 않는 상품입니다. 장바구니에 담거나 주문할 수 없습니다.</OmAlert>
+          <OmStickyTabs v-model="activeSection" :tabs="sectionTabs" offset-top="64px" />
 
-          <!-- price -->
-          <div class="mt-5 border-t border-line-divider pt-5">
-            <div class="flex flex-wrap items-baseline gap-x-2">
-              <span v-if="listDiscount > 0" class="text-2xl font-bold text-accent">{{ listDiscount }}%</span>
-              <span class="text-3xl font-bold tracking-tight text-ink">{{ locale.formatPrice(unitSale) }}</span>
-              <span v-if="!selectedSku && priceRange.max > priceRange.min" class="text-md text-ink-muted">~</span>
-              <span v-if="listDiscount > 0" class="text-sm text-ink-subtle line-through">{{ locale.formatPrice(unitOriginal) }}</span>
-            </div>
-            <p v-if="!selectedSku && priceRange.max > priceRange.min" class="mt-1 text-xs text-ink-muted">옵션에 따라 {{ locale.formatPrice(priceRange.min) }} ~ {{ locale.formatPrice(priceRange.max) }}</p>
-          </div>
-
-          <!-- facts -->
-          <dl class="mt-4 grid gap-2.5 rounded-lg bg-surface-2 p-4 text-sm">
-            <div class="flex gap-3"><dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><Truck class="h-4 w-4" aria-hidden="true" />배송비</dt>
-              <dd class="text-ink">
-                <template v-if="Number(shipFee) === 0">무료배송</template>
-                <template v-else>{{ locale.formatPrice(shipFee) }}<span v-if="Number(shipThreshold) > 0" class="text-ink-muted"> · 이 판매자 상품 {{ locale.formatPrice(shipThreshold) }} 이상 구매 시 무료</span></template>
-              </dd>
-            </div>
-            <div class="flex gap-3"><dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><BadgePercent class="h-4 w-4" aria-hidden="true" />수량 할인</dt>
-              <dd class="text-ink">{{ VOLUME_TIERS.map((t) => `${t.min}개 이상 ${t.pct}%`).join(' · ') }}</dd>
-            </div>
-            <div class="flex gap-3"><dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><RotateCcw class="h-4 w-4" aria-hidden="true" />반품</dt>
-              <dd class="text-ink">배송 완료 후 {{ RETURN_WINDOW_DAYS }}일 이내 신청 · <RouterLink to="/legal/refund" class="text-ink-muted underline underline-offset-2">자세히</RouterLink></dd>
-            </div>
-          </dl>
-
-          <!-- options -->
-          <div v-if="attributes.length" class="mt-5 space-y-4">
-            <fieldset v-for="a in attributes" :key="a.name">
-              <legend class="mb-2 text-sm font-medium text-ink">{{ a.name }}<span v-if="selection[a.name]" class="ml-2 font-normal text-ink-muted">{{ selection[a.name] }}</span></legend>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="v in a.values"
-                  :key="v"
-                  type="button"
-                  :aria-pressed="selection[a.name] === String(v)"
-                  :disabled="valueState(a.name, String(v)) === 'none' || !onSale"
-                  class="min-h-10 rounded-md border px-3.5 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40"
-                  :class="selection[a.name] === String(v) ? 'border-secondary bg-secondary text-secondary-on' : valueState(a.name, String(v)) === 'soldout' ? 'border-line border-dashed text-ink-subtle' : 'border-line text-ink hover:border-line-strong'"
-                  @click="choose(a.name, String(v))"
-                >{{ v }}<span v-if="valueState(a.name, String(v)) === 'soldout'" class="ml-1 text-2xs">품절</span></button>
-              </div>
-            </fieldset>
-          </div>
-          <OmAlert v-else-if="!skus.length" tone="warning" class="mt-5">등록된 옵션이 없어 구매할 수 없습니다.</OmAlert>
-
-          <!-- quantity + total -->
-          <div class="mt-5 rounded-lg border border-line p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <span class="text-sm font-medium text-ink">수량</span>
-                <div class="flex items-center rounded-md border border-line">
-                  <OmIconButton label="수량 줄이기" size="sm" :disabled="quantity <= 1" @click="quantity = Math.max(1, quantity - 1)"><Minus class="h-4 w-4" /></OmIconButton>
-                  <input v-model.number="quantity" type="number" min="1" :max="maxQty" aria-label="수량" class="h-8 w-12 border-x border-line bg-transparent text-center text-sm tabular-nums text-ink [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" @change="quantity = Math.min(maxQty, Math.max(1, Math.floor(Number(quantity) || 1)))" />
-                  <OmIconButton label="수량 늘리기" size="sm" :disabled="quantity >= maxQty" @click="quantity = Math.min(maxQty, quantity + 1)"><Plus class="h-4 w-4" /></OmIconButton>
-                </div>
-                <span v-if="stock != null && stock > 0 && stock <= 10" class="text-xs text-warning">{{ stock }}개 남음</span>
-              </div>
-              <div class="text-right">
-                <p class="text-xs text-ink-muted">상품 금액<span v-if="tierPct"> (수량 할인 {{ tierPct }}% 적용)</span></p>
-                <p class="text-xl font-bold tabular-nums text-ink">{{ selectedSku ? locale.formatPrice(lineTotal) : '-' }}</p>
-                <p v-if="selectedSku && tierSaving > 0" class="text-xs text-accent">-{{ locale.formatPrice(tierSaving) }}</p>
-              </div>
-            </div>
-            <p class="mt-2 text-2xs text-ink-subtle">배송비는 판매자별로 주문서에서 계산됩니다. 직접 구매확정하면 결제 금액의 1%가 적립됩니다.</p>
-          </div>
-
-          <p v-if="buyHint && onSale" class="mt-3 text-sm text-ink-muted" role="status">{{ buyHint }}</p>
-          <div class="mt-3 hidden gap-2 lg:flex">
-            <OmIconButton :label="isWishlisted ? '찜 해제' : '찜하기'" variant="outline" size="lg" :loading="wishBusy" @click="toggleWishlist">
-              <Heart class="h-5 w-5" :class="isWishlisted ? 'fill-accent text-accent' : ''" />
-            </OmIconButton>
-            <OmButton variant="outline" size="lg" class="flex-1" :disabled="!canBuy" @click="addToCart(false)"><ShoppingBag class="h-5 w-5" aria-hidden="true" />{{ locale.t('addToCart') }}</OmButton>
-            <OmButton variant="primary" size="lg" class="flex-1" :disabled="!canBuy" @click="addToCart(true)">{{ locale.t('buyNow') }}</OmButton>
-          </div>
-
-          <!-- seller disclosure (전자상거래법) -->
-          <dl class="mt-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-line-divider pt-4 text-xs text-ink-muted">
-            <dt>판매자</dt><dd class="text-ink">{{ sellerName || '판매자 정보 없음' }}</dd>
-            <template v-if="product.business_reg_number"><dt>사업자등록번호</dt><dd class="text-ink">{{ product.business_reg_number }}</dd></template>
-            <template v-if="product.country_origin"><dt>원산지</dt><dd class="text-ink">{{ product.country_origin }}</dd></template>
-            <template v-if="kcCertified"><dt>KC 인증</dt><dd class="text-ink">인증 대상 상품{{ product.kc_cert_number ? ` (${product.kc_cert_number})` : '' }}</dd></template>
-          </dl>
-        </div>
-      </div>
-
-      <!-- tabs ----------------------------------------------------------------------------------------- -->
-      <section id="product-tabs" class="mt-12 scroll-mt-24">
-        <OmTabs v-model="tab" :tabs="tabs" full />
-        <div class="py-6">
-          <div v-if="tab === 'detail'">
-            <!-- NEW-11: product notice table; '상세페이지 참조' when the seller has not entered it. -->
-            <section class="mx-auto mb-8 max-w-3xl" aria-labelledby="notice-info-heading">
-              <h3 id="notice-info-heading" class="mb-2 text-md font-bold text-ink">상품정보제공고시</h3>
-              <table v-if="noticeEntries.length" class="w-full border-collapse text-sm">
+          <section id="sec-info" class="scroll-mt-32 pt-6" aria-label="상품정보">
+            <div v-if="noticeRows.length" class="mb-8 overflow-x-auto">
+              <h3 class="mb-2 text-md font-bold text-ink">상품정보제공고시</h3>
+              <table class="w-full border-collapse text-sm">
                 <tbody>
-                  <tr v-for="[k, v] in noticeEntries" :key="k" class="border-t border-line-divider">
+                  <tr v-for="[k, v] in noticeRows" :key="k" class="border-t border-line-divider">
                     <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">{{ k }}</th>
                     <td class="px-3 py-2 text-ink">{{ v }}</td>
                   </tr>
                 </tbody>
               </table>
-              <p v-else class="text-sm text-ink-muted">상세페이지 참조</p>
-            </section>
-            <!-- eslint-disable-next-line vue/no-v-html -- seller HTML, active content stripped above -->
-            <div v-if="descriptionHtml.trim()" class="om-prose mx-auto max-w-3xl text-md leading-relaxed text-ink [&_img]:mx-auto [&_img]:h-auto [&_img]:max-w-full" v-html="descriptionHtml" />
+            </div>
+            <div v-if="descriptionHtml.trim()">
+              <div :class="descOpen ? '' : 'max-h-[1200px] overflow-hidden'">
+                <!-- eslint-disable-next-line vue/no-v-html -- seller HTML, active content stripped above -->
+                <div class="om-prose text-md leading-relaxed text-ink [&_img]:mx-auto [&_img]:h-auto [&_img]:max-w-full" v-html="descriptionHtml" />
+              </div>
+              <OmButton variant="outline" size="sm" class="mt-3" :aria-expanded="descOpen" @click="descOpen = !descOpen">
+                {{ descOpen ? '접기' : '상세 설명 더보기' }}
+              </OmButton>
+            </div>
             <OmEmptyState v-else compact title="판매자가 등록한 상세 설명이 없습니다" />
-          </div>
-          <ReviewsPanel v-else-if="tab === 'reviews'" :product-id="product.id" :login-to="loginTo" @summary="reviewSummary = $event" />
-          <QnaPanel v-else-if="tab === 'qna'" :product-id="product.id" :login-to="loginTo" @count="qnaCount = $event" />
-          <div v-else class="mx-auto max-w-3xl space-y-5 text-sm leading-relaxed text-ink">
-            <section>
-              <h3 class="font-semibold">배송</h3>
-              <p class="mt-1 text-ink-muted">
-                이 판매자의 기본 배송비는 {{ Number(shipFee) === 0 ? '무료' : locale.formatPrice(shipFee) }}<template v-if="Number(shipFee) !== 0 && Number(shipThreshold) > 0">이며, 이 판매자 상품을 {{ locale.formatPrice(shipThreshold) }} 이상 구매하면 무료</template>입니다.
-                여러 판매자의 상품을 함께 주문하면 판매자별로 따로 배송·계산됩니다.
-                배송 예정일을 넘기면 주문 상세에서 지연 보상(적립금 {{ fmtKRW(LATE_COMPENSATION) }})을 신청할 수 있습니다. <RouterLink to="/policy/shipping" class="underline underline-offset-2">배송 정책</RouterLink>
-              </p>
-            </section>
-            <section>
-              <h3 class="font-semibold">교환·반품·환불</h3>
-              <p class="mt-1 text-ink-muted">배송 완료 후 구매확정 전, {{ RETURN_WINDOW_DAYS }}일 이내에 주문 상세에서 신청할 수 있습니다. 단순 변심 반품은 반품 배송비가 부과될 수 있으며 금액은 판매자별로 다릅니다. <RouterLink to="/legal/refund" class="underline underline-offset-2">취소·반품·환불 안내</RouterLink></p>
-            </section>
-            <section>
-              <h3 class="font-semibold">판매가 인하 차액 보상</h3>
-              <p class="mt-1 text-ink-muted">결제 후 {{ PRICE_ADJUST_WINDOW_DAYS }}일 이내 같은 옵션의 판매가가 내려가면 주문당 한 번 차액을 적립금으로 받을 수 있습니다. <RouterLink to="/policy/price-match" class="underline underline-offset-2">자세히</RouterLink></p>
-            </section>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <!-- related (co-purchase + co-view + popular fill, server ranked) ----------------------------------- -->
-      <section v-if="related.length" class="mt-12" aria-labelledby="related-heading">
-        <div class="mb-4 flex items-baseline justify-between">
-          <h2 id="related-heading" class="text-lg font-bold">연관 상품</h2>
-          <RouterLink v-if="product.category_slug" :to="`/category/${product.category_slug}`" class="text-sm font-medium text-primary hover:underline">같은 카테고리 보기</RouterLink>
-        </div>
-        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <li v-for="p in related" :key="p.id"><ProductCard :product="p" /></li>
-        </ul>
-      </section>
+          <section id="sec-reviews" class="scroll-mt-32 pt-10" aria-label="리뷰">
+            <h3 class="mb-3 text-lg font-bold text-ink">리뷰 ({{ formatNumber(reviewSummary.count) }})</h3>
+            <ReviewHighlights :product-id="product.id" />
+            <div class="mt-6">
+              <ReviewsPanel :product-id="product.id" :login-to="loginTo" @summary="reviewSummary = $event" />
+            </div>
+          </section>
 
-      <!-- mobile purchase bar --------------------------------------------------------------------------- -->
-      <div class="fixed inset-x-0 bottom-0 z-sticky flex items-center gap-2 border-t border-line bg-surface/95 px-3 pt-2 backdrop-blur lg:hidden" style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom))">
-        <OmIconButton :label="isWishlisted ? '찜 해제' : '찜하기'" variant="outline" :loading="wishBusy" @click="toggleWishlist">
-          <Heart class="h-5 w-5" :class="isWishlisted ? 'fill-accent text-accent' : ''" />
-        </OmIconButton>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-2xs text-ink-muted">{{ selectedSku ? `${quantity}개` : buyHint || '옵션 선택' }}</p>
-          <p class="truncate text-md font-bold tabular-nums text-ink">{{ selectedSku ? locale.formatPrice(lineTotal) : locale.formatPrice(priceRange.min) }}</p>
+          <section id="sec-qna" class="scroll-mt-32 pt-10" aria-label="문의">
+            <h3 class="mb-3 text-lg font-bold text-ink">문의 ({{ formatNumber(qnaCount) }})</h3>
+            <QnaPanel :product-id="product.id" :login-to="loginTo" @count="qnaCount = $event" />
+          </section>
+
+          <section id="sec-shipping" class="scroll-mt-32 pt-10" aria-label="배송/교환/반품">
+            <h3 class="mb-3 text-lg font-bold text-ink">배송/교환/반품</h3>
+            <table v-if="shipPolicy" class="w-full border-collapse text-sm">
+              <tbody>
+                <tr class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">배송방법</th>
+                  <td class="px-3 py-2 text-ink">{{ shipMethodLabel[shipPolicy.method] || shipPolicy.method }}</td>
+                </tr>
+                <tr class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">배송비</th>
+                  <td class="px-3 py-2 text-ink">{{ Number(shipPolicy.base_fee) === 0 ? '무료' : `${formatNumber(shipPolicy.base_fee)}원` }}</td>
+                </tr>
+                <tr v-if="Number(shipPolicy.free_threshold) > 0" class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">무료 조건</th>
+                  <td class="px-3 py-2 text-ink">{{ formatNumber(shipPolicy.free_threshold) }}원 이상 구매 시 무료</td>
+                </tr>
+                <tr v-if="shipPolicy.remote_surcharge !== null && shipPolicy.remote_surcharge !== undefined" class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">도서산간 추가비</th>
+                  <td class="px-3 py-2 text-ink">{{ formatNumber(shipPolicy.remote_surcharge) }}원</td>
+                </tr>
+                <tr class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">출고 소요일</th>
+                  <td class="px-3 py-2 text-ink">{{ shipPolicy.processing_days }}일</td>
+                </tr>
+                <tr class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">반품·교환 배송비</th>
+                  <td class="px-3 py-2 text-ink">반품 {{ formatNumber(shipPolicy.return_fee) }}원 · 교환 {{ formatNumber(shipPolicy.exchange_fee) }}원</td>
+                </tr>
+                <tr v-if="shipPolicy.return_address" class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">반품지</th>
+                  <td class="px-3 py-2 text-ink">{{ shipPolicy.return_address }}</td>
+                </tr>
+                <tr class="border-t border-line-divider">
+                  <th scope="row" class="w-40 bg-surface-2 px-3 py-2 text-left font-medium text-ink-muted">청약철회 제한</th>
+                  <td class="px-3 py-2 text-ink">주문제작·신선식품·개봉 시 가치 상실 상품 등은 철회가 제한됩니다. <RouterLink to="/legal/refund" class="underline underline-offset-2">자세히</RouterLink></td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="text-sm text-ink-muted">판매자가 등록한 배송 정책이 없습니다. 반품은 배송 완료 후 {{ RETURN_WINDOW_DAYS }}일 이내에 신청할 수 있습니다.</p>
+          </section>
+
+          <section v-if="related.length" class="mt-12" aria-labelledby="related-heading">
+            <h2 id="related-heading" class="mb-4 text-lg font-bold">연관 상품</h2>
+            <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <li v-for="p in related" :key="p.id"><ProductCard :product="p" /></li>
+            </ul>
+          </section>
         </div>
-        <OmButton variant="outline" :disabled="!canBuy" @click="addToCart(false)">담기</OmButton>
-        <OmButton variant="primary" :disabled="!canBuy" @click="addToCart(true)">구매</OmButton>
+
+        <!-- right (sticky buy panel) ------------------------------------------------------------------------ -->
+        <div class="hidden min-w-0 lg:block">
+          <div class="sticky top-24">
+            <BuyPanel :product="product" :sel="sel" @reviews="gotoReviews" />
+          </div>
+        </div>
       </div>
+
+      <!-- mobile purchase bar ------------------------------------------------------------------------------- -->
+      <div class="fixed inset-x-0 bottom-0 z-sticky flex items-center gap-2 border-t border-line bg-surface/95 px-3 pt-2 backdrop-blur lg:hidden" style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom))">
+        <OmIconButton :label="sel.wished ? '찜 해제' : '찜하기'" variant="outline" @click="sel.toggleWish">
+          <Heart class="h-5 w-5" :class="sel.wished ? 'fill-accent text-accent' : ''" />
+        </OmIconButton>
+        <OmButton variant="primary" class="flex-1" data-testid="mobile-buy" @click="showSheet = true">구매하기</OmButton>
+      </div>
+      <MobileBuySheet v-model:open="showSheet" :product="product" :sel="sel" />
 
       <OmModal v-if="product.video_url" v-model:open="showVideo" title="판매자 등록 영상" size="lg">
         <video v-if="showVideo" :src="product.video_url" controls playsinline class="aspect-video w-full rounded bg-black" />
