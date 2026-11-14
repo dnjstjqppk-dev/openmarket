@@ -12,6 +12,7 @@ import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } fr
 import { sealPii } from '../lib/pii-crypto.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
+import { findForbiddenMemo } from '../lib/memo-guard.js';
 
 export const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_LINES = 50;
@@ -70,7 +71,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_61_claim_pickup_photos.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_62_checkout_delivery_date.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -142,7 +143,22 @@ function parseAddress(body) {
   const postal = str(body.shipping_postal_code || a.zip || a.postal_code, { field: '우편번호', max: 10, required: true });
   if (!/^\d{5}$/.test(postal)) throw bad('INVALID_POSTAL_CODE', '우편번호는 5자리 숫자여야 합니다.');
   const memo = str(body.shipping_memo || a.memo, { field: '배송메모', max: 200 });
+  const forbidden = findForbiddenMemo(memo);
+  if (forbidden) throw bad('MEMO_FORBIDDEN', '배송 메모에 사용할 수 없는 표현이 있습니다.');
   return { recipient, phone, line1, line2, postal, memo };
+}
+
+// 3-6: optional scheduled-delivery date (tomorrow .. +30 days).
+function parseDeliveryDate(body) {
+  const raw = body.requested_delivery_date;
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const s = String(raw).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw bad('INVALID_DELIVERY_DATE', '수령 희망일은 YYYY-MM-DD 형식이어야 합니다.');
+  const today = new Date().toISOString().slice(0, 10);
+  const top = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  if (s <= today) throw bad('INVALID_DELIVERY_DATE', '수령 희망일은 내일 이후여야 합니다.');
+  if (s > top) throw bad('INVALID_DELIVERY_DATE', '수령 희망일은 30일 이내여야 합니다.');
+  return s;
 }
 
 export async function createOrder(env, principal, body, idemHeader, { dryRun = false, ip = null, ipCountry = null } = {}) {
@@ -160,6 +176,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
 
   const lines = parseLines(body.items);
   const addr = dryRun ? null : parseAddress(body);
+  const requestedDeliveryDate = parseDeliveryDate(body);
   // NEW-20: quotes stay address-free, but resolve the zone when a postal rides along.
   const zonePostal = dryRun
     ? String(body.shipping_postal_code || (body.shipping_address || {}).zip || (body.shipping_address || {}).postal_code || '')
@@ -479,12 +496,13 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
        volume_discount_amount, coupon_discount_amount, credit_used_amount, total_pay_amount, currency, payment_status,
        applied_user_coupon_id, checkout_idempotency_key, payment_expires_at, terms_version,
        recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, shipping_memo,
+       requested_delivery_date,
        pccc, pccc_verified, customs_duty_type, settlement_currency, fx_rate,
        fds_score, fds_decision, fds_rules_json, fds_decided_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 1.0, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'KRW', 1.0, ?, ?, ?, ?, ?, ?)`
   ).bind(orderId, orderNo, principal.userId, operator.id, goodsBase, shippingTotal, volumeTotal + coupon + credit,
     volumeTotal, coupon, credit, pgTotal, userCouponId, idemKey, expiresAt, operator.terms_version || null,
-    addr.recipient, addr.phone, addr.line1, addr.line2, addr.postal, addr.memo,
+    addr.recipient, addr.phone, addr.line1, addr.line2, addr.postal, addr.memo, requestedDeliveryDate,
     await sealPii(env, rawPccc), rawPccc ? 1 : 0, body.customs_duty_type === 'DDP' ? 'DDP' : 'DDU',
     fds.score, fds.decision, JSON.stringify(fds.rules), now, now, now));
 

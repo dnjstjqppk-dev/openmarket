@@ -27,17 +27,20 @@ export interface Quote {
   total_goods_amount: number
   volume_discount_amount: number
   coupon_discount_amount: number
+  platform_discount_amount?: number
   credit_used_amount: number
   total_shipping_amount: number
   total_pay_amount: number
   currency: string
   requires_pccc: boolean
   remote_zone?: string | null
+  projected_credit_amount?: number
   sub_orders: QuoteSubOrder[]
 }
 export interface QuoteRequest {
   items: { product_id: string; sku_id: string; quantity: number }[]
   user_coupon_id?: string
+  store_coupon_ids?: string[]
   use_credit_amount?: number
   shipping_postal_code?: string
 }

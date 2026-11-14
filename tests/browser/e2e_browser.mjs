@@ -114,7 +114,7 @@ await step('B06 checkout shows the server quote; pay with the local simulator', 
   await page.type('input[autocomplete=tel]', '010-2222-3333');
   await page.type('input[autocomplete=postal-code]', '04524');
   await page.type('input[autocomplete=address-line1]', '서울특별시 중구 세종대로 110');
-  await page.check('aside input[type=checkbox]');
+  await page.eval("Array.from(document.querySelectorAll('aside input[type=checkbox]')).forEach((c) => { if (!c.checked) c.click() })");
   await page.idle(400);
   const shown = await page.eval("document.querySelector('[data-testid=pay-total]').textContent.replace(/[^0-9]/g,'')");
   await shots(page, 'store_checkout', ['desktop', 'mobile']);

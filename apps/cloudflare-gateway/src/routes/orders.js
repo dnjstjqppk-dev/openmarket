@@ -84,6 +84,7 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
       credit_used_amount: o.credit_used_amount, total_discount_amount: o.total_discount_amount,
       total_pay_amount: o.total_pay_amount, payment_expires_at: o.payment_expires_at, currency: 'KRW',
       ...(r.projectedCredit == null ? {} : { projected_credit_amount: r.projectedCredit }),
+      requested_delivery_date: o.requested_delivery_date || null,
       sub_orders_created: r.subOrderCount, idempotent_replay: r.replay
     };
     return json(corsHeaders, { success: true, ...data, data }, r.replay ? 200 : 201);

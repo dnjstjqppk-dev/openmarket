@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Checkout (PHASE 2 redesign on @olmoa/ui). Every amount shown comes from the server quote
+// Checkout (3-6). Every amount shown comes from the server quote
 // (/api/v1/orders/quote = createOrder dry run), so the price displayed is the price charged.
 // Only the cart lines the buyer selected are ordered; after payment only those lines leave the cart.
 // PCCC: the server only says "verified" after a real Uni-Pass match; a well-formed code is shown as
@@ -9,12 +9,20 @@ import { RouterLink, useRouter } from 'vue-router'
 import { MapPin, ShoppingCart, Store } from 'lucide-vue-next'
 import { userErrorMessage, OmButton, OmInput, OmSelect, OmCheckbox, OmRadio, OmAlert, OmBadge, OmEmptyState, OmSkeleton, formatNumber } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
+import SellerCouponModal from '../components/checkout/SellerCouponModal.vue'
 import { useCartStore } from '../stores/cart'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { fetchQuote, type Quote } from '../lib/quote'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { validateKrPhone } from '../utils/phone'
+
+// Keep identical to apps/cloudflare-gateway/src/lib/memo-guard.js (server verdict wins).
+const MEMO_FORBIDDEN = [
+  '시발', '씨발', '개새끼', '병신', '꺼져', '죽어', '뒤져', '엿먹어',
+  '니미', '호로', '창녀', '보지', '자지', '좆', 'fuck', 'shit'
+]
+const MEMO_PRESETS = ['문 앞에 놓아 주세요', '경비실에 맡겨 주세요', '택배함에 넣어 주세요', '부재 시 연락 주세요', '직접 입력']
 
 const cart = useCartStore()
 const auth = useAuthStore()
@@ -29,13 +37,18 @@ const lines = ref(cart.selectedItems.map((i) => ({ ...i })))
 const sellerName = (pid: string) => lines.value.find((l) => l.partner_id === pid)?.business_name || '판매자'
 const thumbOf = (sku: string) => lines.value.find((l) => l.sku_id === sku)?.thumbnail_url
 
+// ---- orderer (read-only, from the signed-in account) ----------------------------------------------------------------
+const orderer = ref<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' })
+
 // ---- address ----------------------------------------------------------------------------------------
 const recipientName = ref(auth.user?.name || '')
 const phone = ref('')
 const zipCode = ref('')
 const address = ref('')
 const detailAddress = ref('')
-const deliveryMemo = ref('')
+const memoPreset = ref(MEMO_PRESETS[0])
+const memoCustom = ref('')
+const deliveryMemo = computed(() => (memoPreset.value === '직접 입력' ? memoCustom.value.trim() : memoPreset.value))
 const savedAddresses = ref<any[]>([])
 const addressChoice = ref<string | number | null>('new')
 const addressOptions = computed(() => [
@@ -52,11 +65,16 @@ watch(addressChoice, (id) => {
   detailAddress.value = a.address_line2 || ''
 })
 const showErrors = ref(false)
+const memoForbidden = computed(() => {
+  const s = deliveryMemo.value.toLowerCase()
+  return MEMO_FORBIDDEN.find((w) => s.includes(w.toLowerCase())) || null
+})
 const fieldErrors = computed(() => ({
   name: recipientName.value.trim() ? null : '수령인을 입력해 주세요',
   phone: validateKrPhone(phone.value),
   zip: /^\d{5}$/.test(zipCode.value) ? null : '우편번호 5자리를 입력해 주세요',
-  address: address.value.trim() ? null : '주소를 입력해 주세요'
+  address: address.value.trim() ? null : '주소를 입력해 주세요',
+  memo: memoForbidden.value ? '배송 메모에 사용할 수 없는 표현이 있습니다' : null
 }))
 const addressValid = computed(() => Object.values(fieldErrors.value).every((e) => !e))
 const err = (k: keyof typeof fieldErrors.value) => (showErrors.value ? fieldErrors.value[k] : null)
@@ -85,18 +103,35 @@ async function validatePccc() {
 }
 
 // ---- coupons / credits ------------------------------------------------------------------------------
-const coupons = ref<any[]>([])
-const selectedUserCouponId = ref<string | number | null>('')
+// Wallet shape (2-9): { usable, claimable, used_expired }. Only live unused holdings are offered.
+const walletUsable = ref<any[]>([])
+const storePicks = ref<Record<string, string | null>>({})
+const platformPick = ref<string | null>(null)
+const couponModalSeller = ref<string | null>(null)
 const creditBalance = ref(0)
 const creditToUse = ref<number | string | null>(0)
 const creditAmount = computed(() => Math.min(creditBalance.value, Math.max(0, Math.floor(Number(creditToUse.value) || 0))))
-const couponOptions = computed(() => [
-  { value: '', label: coupons.value.length ? '사용 안 함' : '사용할 수 있는 쿠폰이 없습니다' },
-  ...coupons.value.map((c) => ({
-    value: c.user_coupon_id,
-    label: `${c.title || c.code} · ${c.discount_type === 'PERCENT' ? `${c.discount_value}%${c.max_discount_amount ? ` (최대 ${won(c.max_discount_amount)})` : ''}` : won(c.discount_value)} · ${won(c.min_order_amount)} 이상`
-  }))
+const storeHoldings = (pid: string) => walletUsable.value.filter((c) => c.issuer === 'SELLER' && c.seller_id === pid)
+const platformHoldings = computed(() => walletUsable.value.filter((c) => c.issuer === 'PLATFORM'))
+const couponLabel = (c: any) => `${c.title || c.code} · ${c.discount_type === 'PERCENT' ? `${c.discount_value}%${c.max_discount_amount ? ` (최대 ${won(c.max_discount_amount)})` : ''}` : won(c.discount_value)} · ${won(c.min_order_amount)} 이상`
+const platformOptions = computed(() => [
+  { value: '', label: platformHoldings.value.length ? '사용 안 함' : '사용할 수 있는 쿠폰이 없습니다' },
+  ...platformHoldings.value.map((c) => ({ value: c.user_coupon_id, label: couponLabel(c) }))
 ])
+
+// ---- scheduled delivery -------------------------------------------------------------------------------
+const wantScheduled = ref(false)
+const scheduledDate = ref('')
+const todayIso = () => new Date().toISOString().slice(0, 10)
+const minShipDate = computed(() => { const d = new Date(Date.now() + 86400000); return d.toISOString().slice(0, 10) })
+const maxShipDate = computed(() => { const d = new Date(Date.now() + 30 * 86400000); return d.toISOString().slice(0, 10) })
+const shipDateError = computed(() => {
+  if (!wantScheduled.value) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate.value)) return '수령 희망일을 선택해 주세요'
+  if (scheduledDate.value <= todayIso()) return '수령 희망일은 내일 이후여야 합니다'
+  if (scheduledDate.value > maxShipDate.value) return '수령 희망일은 30일 이내여야 합니다'
+  return null
+})
 
 // ---- quote ------------------------------------------------------------------------------------------
 const quote = ref<Quote | null>(null)
@@ -114,7 +149,13 @@ function requestQuote() {
     quoting.value = true
     quoteError.value = ''
     try {
-      quote.value = await fetchQuote({ items: itemsPayload(), user_coupon_id: selectedUserCouponId.value ? String(selectedUserCouponId.value) : undefined, use_credit_amount: creditAmount.value, shipping_postal_code: zipCode.value.trim() || undefined }, my.signal)
+      quote.value = await fetchQuote({
+        items: itemsPayload(),
+        user_coupon_id: platformPick.value || undefined,
+        store_coupon_ids: Object.values(storePicks.value).filter(Boolean) as string[],
+        use_credit_amount: creditAmount.value,
+        shipping_postal_code: zipCode.value.trim() || undefined
+      }, my.signal)
     } catch (e: any) {
       if (my.signal.aborted || e?.name === 'AbortError') return
       quote.value = null
@@ -124,7 +165,7 @@ function requestQuote() {
     }
   }, 250)
 }
-watch([selectedUserCouponId, creditAmount, zipCode], requestQuote)
+watch([platformPick, storePicks, creditAmount, zipCode], requestQuote, { deep: true })
 // Gate-1 fix: this immediate watch must run after `quote` is declared
 // (evaluating pcccRequired earlier throws a TDZ ReferenceError and blanks the page).
 watch(pcccRequired, (req) => { if (req) needsCustoms.value = true }, { immediate: true })
@@ -147,9 +188,9 @@ async function loadSides() {
   sideLoadError.value = ''
   const h = { headers: { ...authHeader() } }
   const failed: string[] = []
-  const grab = async (label: string, url: string, headers: any) => {
+  const grab = async (label: string, url: string, headers: any, init?: any) => {
     try {
-      const r = await fetch(url, headers)
+      const r = await fetch(url, { ...headers, ...init })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || (j && j.success === false)) throw new Error(j?.error || `불러오지 못했습니다. 잠시 후 다시 시도해주세요.`)
       return j
@@ -158,19 +199,40 @@ async function loadSides() {
       return null
     }
   }
-  const [c, cr, ad, pc] = await Promise.all([
+  const bestBody = { items: lines.value.map((i) => ({ sku_id: i.sku_id, quantity: i.quantity })) }
+  const [me, c, cr, ad, pc, b] = await Promise.all([
+    grab('주문자', `${API_BASE_URL}/api/v1/auth/me`, h),
     grab('쿠폰', `${API_BASE_URL}/api/v1/coupons`, h),
     grab('적립금', `${API_BASE_URL}/api/v1/credits`, h),
     grab('배송지', `${API_BASE_URL}/api/v1/addresses`, h),
-    grab('결제수단', `${API_BASE_URL}/api/v1/payments/config`, undefined)
+    grab('결제수단', `${API_BASE_URL}/api/v1/payments/config`, undefined),
+    grab('최적 쿠폰', `${API_BASE_URL}/api/v1/coupons/best`, { headers: { 'Content-Type': 'application/json', ...authHeader() } }, { method: 'POST', body: JSON.stringify(bestBody) })
   ])
-  coupons.value = Array.isArray(c?.data) ? c.data.filter((x: any) => x.is_claimed && !x.is_used) : []
+  if (me?.data?.user) {
+    orderer.value = {
+      name: me.data.user.full_name || auth.user?.name || '',
+      email: me.data.user.email || auth.user?.email || '',
+      phone: me.data.user.phone || ''
+    }
+  }
+  walletUsable.value = Array.isArray(c?.data?.usable) ? c.data.usable : []
   creditBalance.value = Number(cr?.data?.balance || 0)
   if (Array.isArray(ad?.data) && ad.data.length) {
     savedAddresses.value = ad.data
     addressChoice.value = (ad.data.find((a: any) => Number(a.is_default) === 1) || ad.data[0]).id
   }
   paymentConfig.value = pc
+  // 3-6: the best combination preselects platform + per-seller coupons.
+  if (b?.data) {
+    if (b.data.platform?.user_coupon_id && platformHoldings.value.some((x) => x.user_coupon_id === b.data.platform.user_coupon_id)) {
+      platformPick.value = b.data.platform.user_coupon_id
+    }
+    for (const s of b.data.store || []) {
+      if (s.user_coupon_id && storeHoldings(s.seller_id).some((x) => x.user_coupon_id === s.user_coupon_id)) {
+        storePicks.value = { ...storePicks.value, [s.seller_id]: s.user_coupon_id }
+      }
+    }
+  }
   if (failed.length) sideLoadError.value = `${failed.join('·')} 정보를 불러오지 못했습니다. 새로고침 없이 다시 불러올 수 있습니다.`
   sideLoading.value = false
 }
@@ -181,6 +243,7 @@ onMounted(async () => {
 
 // ---- submit -----------------------------------------------------------------------------------------
 const agreeOrder = ref(false)
+const agreePay = ref(false)
 const submitting = ref(false)
 const errorMsg = ref('')
 // One idempotency key per checkout attempt so a double click / retry cannot create a second order.
@@ -192,7 +255,8 @@ const blockers = computed(() => {
   if (!quote.value) b.push(quoting.value ? '금액 계산 중' : '금액을 확인할 수 없음')
   if (!addressValid.value) b.push('배송지 입력')
   if (needsCustoms.value && !pcccFormatOk.value) b.push('개인통관고유부호 입력')
-  if (!agreeOrder.value) b.push('구매 동의')
+  if (shipDateError.value) b.push('수령 희망일 확인')
+  if (!agreeOrder.value || !agreePay.value) b.push('구매 동의')
   if (!paymentReady.value) b.push('결제 수단 연동 필요')
   return b
 })
@@ -208,11 +272,13 @@ async function createOrderOnce() {
     headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': checkoutKey.value, ...authHeader() },
     body: JSON.stringify({
       items: itemsPayload(),
-      user_coupon_id: selectedUserCouponId.value || undefined,
+      user_coupon_id: platformPick.value || undefined,
+      store_coupon_ids: Object.values(storePicks.value).filter(Boolean),
       use_credit_amount: creditAmount.value,
       recipient_name: recipientName.value, recipient_phone: phone.value,
       shipping_postal_code: zipCode.value, shipping_address_line1: address.value, shipping_address_line2: detailAddress.value,
       shipping_memo: deliveryMemo.value,
+      requested_delivery_date: wantScheduled.value ? scheduledDate.value : undefined,
       pccc: needsCustoms.value ? pccc.value.trim().toUpperCase() : undefined
     })
   })
@@ -276,6 +342,13 @@ async function submitOrder() {
     submitting.value = false
   }
 }
+
+function pickedStoreLabel(pid: string): string | null {
+  const id = storePicks.value[pid]
+  if (!id) return null
+  const c = storeHoldings(pid).find((x) => x.user_coupon_id === id)
+  return c ? couponLabel(c) : null
+}
 </script>
 
 <template>
@@ -297,6 +370,16 @@ async function submitOrder() {
 
     <div v-if="lines.length" class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div class="min-w-0 space-y-5">
+        <!-- orderer (read-only account facts) -->
+        <section class="rounded-lg border border-line bg-surface p-5" aria-labelledby="sec-who">
+          <h2 id="sec-who" class="mb-3 text-lg font-bold text-ink">주문자</h2>
+          <dl class="grid gap-2 text-sm sm:grid-cols-3">
+            <div><dt class="text-ink-muted">이름</dt><dd class="font-medium text-ink">{{ orderer.name || '—' }}</dd></div>
+            <div><dt class="text-ink-muted">이메일</dt><dd class="font-medium text-ink">{{ orderer.email || '—' }}</dd></div>
+            <div><dt class="text-ink-muted">연락처</dt><dd class="font-medium text-ink">{{ orderer.phone || '—' }}</dd></div>
+          </dl>
+        </section>
+
         <!-- address -->
         <section class="rounded-lg border border-line bg-surface p-5" aria-labelledby="sec-addr">
           <div class="mb-4 flex items-center justify-between">
@@ -312,7 +395,11 @@ async function submitOrder() {
             <div class="hidden sm:block" />
             <div class="sm:col-span-2"><OmInput v-model="address" label="주소" required autocomplete="address-line1" :error="err('address')" /></div>
             <div class="sm:col-span-2"><OmInput v-model="detailAddress" label="상세주소" autocomplete="address-line2" /></div>
-            <div class="sm:col-span-2"><OmInput v-model="deliveryMemo" label="배송 메모" maxlength="200" placeholder="예: 문 앞에 놓아 주세요" /></div>
+            <div class="sm:col-span-2 grid gap-3 sm:grid-cols-2">
+              <OmSelect v-model="memoPreset" label="배송 메모" :options="MEMO_PRESETS.map((m) => ({ value: m, label: m }))" />
+              <OmInput v-if="memoPreset === '직접 입력'" v-model="memoCustom" label="직접 입력" maxlength="200" :error="err('memo')" />
+            </div>
+            <p v-if="memoPreset !== '직접 입력' && err('memo')" class="text-xs text-danger" role="alert">{{ err('memo') }}</p>
           </div>
         </section>
 
@@ -324,8 +411,20 @@ async function submitOrder() {
             <li v-for="s in quote.sub_orders" :key="s.partner_id" class="px-5 py-4">
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><Store class="h-4 w-4 text-ink-muted" aria-hidden="true" />{{ sellerName(s.partner_id) }}</p>
-                <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}<template v-if="s.remote_surcharge"> ({{ s.remote_zone }} 추가배송비 {{ won(s.remote_surcharge) }} 포함)</template></p>
+                <div class="flex items-center gap-2">
+                  <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}<template v-if="s.remote_surcharge"> ({{ s.remote_zone }} 추가배송비 {{ won(s.remote_surcharge) }} 포함)</template></p>
+                  <OmButton
+                    size="sm"
+                    variant="outline"
+                    :disabled="!storeHoldings(s.partner_id).length"
+                    :title="storeHoldings(s.partner_id).length ? pickedStoreLabel(s.partner_id) || '스토어 쿠폰 선택' : '사용할 수 있는 스토어 쿠폰이 없습니다'"
+                    @click="couponModalSeller = s.partner_id"
+                  >
+                    {{ pickedStoreLabel(s.partner_id) ? '쿠폰 변경' : '스토어 쿠폰' }}
+                  </OmButton>
+                </div>
               </div>
+              <p v-if="pickedStoreLabel(s.partner_id)" class="mb-2 text-xs text-accent">적용 중: {{ pickedStoreLabel(s.partner_id) }}</p>
               <ul class="space-y-3">
                 <li v-for="it in s.items" :key="it.sku_id" class="flex gap-3">
                   <img :src="thumbOf(it.sku_id)" :alt="it.title" class="h-16 w-16 shrink-0 rounded-md border border-line bg-surface-2 object-cover" loading="lazy" decoding="async" />
@@ -336,6 +435,14 @@ async function submitOrder() {
                   <p class="shrink-0 text-sm font-semibold tabular-nums text-ink">{{ won(it.line_total) }}</p>
                 </li>
               </ul>
+              <SellerCouponModal
+                :open="couponModalSeller === s.partner_id"
+                :seller-name="sellerName(s.partner_id)"
+                :holdings="storeHoldings(s.partner_id)"
+                :model-value="storePicks[s.partner_id] ?? null"
+                @update:open="couponModalSeller = $event ? s.partner_id : null"
+                @update:model-value="storePicks = { ...storePicks, [s.partner_id]: $event }"
+              />
             </li>
           </ul>
           <OmAlert v-else-if="quoteError" tone="danger" class="m-5">{{ quoteError }} <RouterLink to="/cart" class="underline">장바구니에서 수정</RouterLink></OmAlert>
@@ -359,12 +466,22 @@ async function submitOrder() {
         <section class="rounded-lg border border-line bg-surface p-5" aria-labelledby="sec-disc">
           <h2 id="sec-disc" class="mb-4 text-lg font-bold text-ink">할인 · 적립금</h2>
           <div class="grid gap-4 sm:grid-cols-2">
-            <OmSelect v-model="selectedUserCouponId" label="쿠폰" :options="couponOptions" :disabled="!coupons.length" />
+            <OmSelect v-model="platformPick" label="플랫폼 쿠폰" :options="platformOptions" :disabled="!platformHoldings.length" />
             <div>
               <div class="flex items-end gap-2">
                 <div class="flex-1"><OmInput v-model="creditToUse" label="적립금" type="number" min="0" :max="creditBalance" step="1" :help="`보유 ${won(creditBalance)} (인증 회원·3만원 이상·상품가의 20%까지)`" :disabled="!creditBalance" /></div>
                 <OmButton class="mb-6" variant="outline" :disabled="!creditBalance" @click="creditToUse = creditBalance">전액</OmButton>
               </div>
+            </div>
+          </div>
+          <div v-if="quote" class="mt-3 space-y-1 text-sm">
+            <p v-if="quote.coupon_discount_amount" class="text-accent">쿠폰 할인 −{{ won(quote.coupon_discount_amount) }} (스토어 {{ won(quote.coupon_discount_amount - (quote.platform_discount_amount || 0)) }} + 플랫폼 {{ won(quote.platform_discount_amount || 0) }})</p>
+            <p v-if="quote.projected_credit_amount" class="text-ink-muted">구매확정 시 {{ won(quote.projected_credit_amount) }} 적립 예정</p>
+          </div>
+          <div class="mt-4 border-t border-line-divider pt-4">
+            <OmCheckbox v-model="wantScheduled" label="수령 희망일 지정" description="판매자에게 전달되며, 상황에 따라 조정될 수 있습니다." />
+            <div v-if="wantScheduled" class="mt-3 max-w-xs">
+              <OmInput v-model="scheduledDate" type="date" label="수령 희망일" required :min="minShipDate" :max="maxShipDate" :error="showErrors ? shipDateError : null" />
             </div>
           </div>
         </section>
@@ -405,9 +522,12 @@ async function submitOrder() {
           <p v-else class="mt-1 font-medium text-danger">{{ paymentConfig.message || '결제 수단이 연동되지 않았습니다.' }}</p>
         </div>
 
-        <div class="mt-4">
+        <div class="mt-4 space-y-2">
           <OmCheckbox v-model="agreeOrder" :error="showErrors && !agreeOrder">
             <span class="text-xs text-ink">[필수] 주문 상품의 상품명·가격·배송정보를 확인했으며 구매에 동의합니다. (전자상거래법 제8조) 판매자가 다른 상품은 판매자별로 배송·환불됩니다.</span>
+          </OmCheckbox>
+          <OmCheckbox v-model="agreePay" :error="showErrors && !agreePay">
+            <span class="text-xs text-ink">[필수] 토스페이먼츠 결제대행 서비스 이용에 동의합니다. 입력한 결제 정보는 결제에 한해 이용됩니다.</span>
           </OmCheckbox>
         </div>
 

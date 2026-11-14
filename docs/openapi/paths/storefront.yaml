@@ -325,6 +325,10 @@ paths:
                 shipping_memo:
                   type: string
                   maxLength: 200
+                  description: 3-6 MEMO_FORBIDDEN on abusive terms.
+                requested_delivery_date:
+                  type: string
+                  description: 3-6 optional scheduled date, YYYY-MM-DD from tomorrow to +30 days.
                 shipping_address:
                   type: object
                   description: Nested alternative to the flat recipient/address fields.
