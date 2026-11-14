@@ -6,7 +6,7 @@ import { HttpError, bad, conflict, notFound, forbidden, unavailable, str, idempo
 import { newId, newOrderNo, newPoNo, sqlNow } from '../lib/ids.js';
 import { allocate, applyBps, proportionalPortion, assertWon } from '../lib/money.js';
 import { ACCOUNTS, journalStatements, creditStatement, grantCreditStatements, getActiveOperator, auditStatement, getPolicy } from '../lib/ledger.js';
-import { pgConfirm, pgCancel, paymentMode } from '../lib/pg.js';
+import { pgConfirm, pgCancel, paymentMode, cardSummaryOf } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
 import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } from './coupons.js';
 import { sealPii } from '../lib/pii-crypto.js';
@@ -71,7 +71,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_62_checkout_delivery_date.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_63_payment_card_summary.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -592,10 +592,10 @@ async function capturePayment(env, order, pg) {
   }
   if (pg.amount > 0) {
     st.push(env.DB.prepare(
-      `INSERT INTO payment_transactions (id, order_id, payment_key, provider, method, amount, currency, status, receipt_url, raw_response_json, approved_at, is_sandbox)
-       VALUES (?, ?, ?, ?, ?, ?, 'KRW', 'DONE', ?, ?, ?, ?)`
+      `INSERT INTO payment_transactions (id, order_id, payment_key, provider, method, amount, currency, status, receipt_url, raw_response_json, approved_at, is_sandbox, card_summary)
+       VALUES (?, ?, ?, ?, ?, ?, 'KRW', 'DONE', ?, ?, ?, ?, ?)`
     ).bind(newId('ptx'), order.id, pg.paymentKey, pg.provider, pg.method || 'CARD', pg.amount, pg.receiptUrl || null,
-      pg.raw ? JSON.stringify(pg.raw) : null, pg.approvedAt, pg.sandbox ? 1 : 0));
+      pg.raw ? JSON.stringify(pg.raw) : null, pg.approvedAt, pg.sandbox ? 1 : 0, pg.cardSummary || null));
   }
   st.push(env.DB.prepare(
     `UPDATE orders SET payment_status = 'PAID', paid_at = CURRENT_TIMESTAMP, payment_key = ?, pg_provider = ?, pg_receipt_url = ?,
@@ -717,7 +717,7 @@ export async function confirmPayment(env, principal, { orderRef, paymentKey, amo
     throw new HttpError(402, pg.code, pg.message);
   }
   try {
-    await capturePayment(env, order, { provider: pg.sandbox ? 'SANDBOX' : 'TOSS', paymentKey, amount: order.total_pay_amount, sandbox: pg.sandbox, method: pg.method, approvedAt: pg.approvedAt, receiptUrl: pg.receiptUrl, raw: pg.raw });
+    await capturePayment(env, order, { provider: pg.sandbox ? 'SANDBOX' : 'TOSS', paymentKey, amount: order.total_pay_amount, sandbox: pg.sandbox, method: pg.method, approvedAt: pg.approvedAt, receiptUrl: pg.receiptUrl, raw: pg.raw, cardSummary: pg.cardSummary || null });
   } catch (e) {
     const fresh = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(order.id).first();
     if (fresh && fresh.payment_status === 'PAID' && fresh.payment_key === paymentKey) return { replay: true, order: fresh };
@@ -740,7 +740,7 @@ export async function captureFromVerifiedPg(env, order, pgPayment, { sandbox = f
   if (order.payment_status === 'PAID') return order.payment_key === pgPayment.paymentKey ? 'ALREADY_CAPTURED' : 'CONFLICT_OTHER_KEY';
   const okAmount = pgPayment.totalAmount === order.total_pay_amount && pgPayment.orderId === order.order_no;
   if (order.payment_status === 'READY' && okAmount) {
-    await capturePayment(env, order, { provider: sandbox ? 'SANDBOX' : 'TOSS', paymentKey: pgPayment.paymentKey, amount: order.total_pay_amount, sandbox, method: pgPayment.method, approvedAt: pgPayment.approvedAt || new Date().toISOString(), receiptUrl: pgPayment.receipt?.url || null, raw: pgPayment });
+    await capturePayment(env, order, { provider: sandbox ? 'SANDBOX' : 'TOSS', paymentKey: pgPayment.paymentKey, amount: order.total_pay_amount, sandbox, method: pgPayment.method, approvedAt: pgPayment.approvedAt || new Date().toISOString(), receiptUrl: pgPayment.receipt?.url || null, raw: pgPayment, cardSummary: sandbox ? 'TestCard ****-****-****-0000' : cardSummaryOf(pgPayment) });
     return 'CAPTURED_FROM_WEBHOOK';
   }
   const comp = await pgCancel(env, { paymentKey: pgPayment.paymentKey, amount: pgPayment.totalAmount, reason: '취소/만료 주문 결제 자동취소', idempotencyKey: `whcomp_${order.id}_${pgPayment.paymentKey}`, isSandbox: sandbox }).catch(() => ({ ok: false }));

@@ -123,6 +123,10 @@ await step('B06 checkout shows the server quote; pay with the local simulator', 
   await page.waitFor("location.pathname === '/payments/success'");
   await shots(page, 'store_payment_simulator', ['desktop']);
   await page.click('[data-testid=sim-approve]');
+  await page.waitFor("document.querySelector('[data-testid=pay-done]')", 20000);
+  const cardShown = await page.eval("document.querySelector('[data-testid=pay-card]')?.textContent || ''");
+  if (!cardShown.includes('****')) throw new Error(`masked card missing on the receipt: ${cardShown}`);
+  await page.click('[data-testid=order-detail-link]');
   await page.waitFor("location.pathname.startsWith('/orders/')", 20000);
   orderId = await page.eval('location.pathname.split("/").pop()');
   await page.waitFor("document.querySelector('[data-testid=order-status]')");

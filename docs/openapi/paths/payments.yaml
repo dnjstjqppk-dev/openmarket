@@ -99,6 +99,10 @@ paths:
                         nullable: true
                       is_sandbox:
                         type: boolean
+                      card_summary:
+                        type: string
+                        nullable: true
+                        description: '3-7: masked card label (PG-masked live, fixed TestCard label in the simulator).'
                       idempotent_replay:
                         type: boolean
         '401':

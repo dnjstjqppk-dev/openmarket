@@ -2,25 +2,27 @@
 // PG return page (PHASE 2 redesign). On success the server confirms the payment with the PG (amount re-checked
 // server-side). After a confirmed payment only the cart lines that were in this order are removed
 // (cart.completeCheckout) — the rest of the cart is kept.
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CircleCheck, CircleX, FlaskConical } from 'lucide-vue-next'
-import { userErrorMessage, OmButton, OmAlert, OmSpinner } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmAlert, OmSpinner, formatNumber } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { useCartStore } from '../stores/cart'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const cart = useCartStore()
+const auth = useAuthStore()
 const state = ref<'CONFIRMING' | 'DONE' | 'FAILED' | 'SIMULATOR_PROMPT'>('CONFIRMING')
 const message = ref('')
 const orderId = ref('')
+const receipt = ref<any>(null)
 const orderNo = String(route.query.orderId || '')
 const amount = Number(route.query.amount || 0)
 const isFail = route.name === 'payment-fail'
 const isSimulator = route.query.simulator === '1'
-let redirect: ReturnType<typeof setTimeout> | null = null
 
 // S-N02: a failed attempt leaves the order READY (server confirms only READY +
 // exact-amount), so the fail state reloads the order by its order_no and offers
@@ -111,12 +113,24 @@ async function confirm() {
     orderId.value = json.data.order_id
     state.value = 'DONE'
     cart.completeCheckout(orderNo)
-    redirect = setTimeout(() => router.replace(`/orders/${json.data.order_id}`), 1500)
+    // 3-7: drop the PG roundtrip params from the address bar (keys must not linger).
+    try {
+      history.replaceState(null, '', `${route.path}?orderId=${encodeURIComponent(orderNo)}`)
+    } catch { /* private mode keeps the params */ }
+    loadReceipt(json.data.order_id)
   } catch {
     state.value = 'FAILED'
     message.value = '결제 승인 결과를 확인하지 못했습니다. 주문 내역에서 결제 상태를 확인해 주세요.'
     loadResumeOrder()
   }
+}
+
+async function loadReceipt(id: string) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/orders/${encodeURIComponent(id)}`, { headers: { ...authHeader() } })
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json?.success) receipt.value = json.data
+  } catch { /* receipt sections hide one by one */ }
 }
 
 onMounted(() => {
@@ -129,7 +143,11 @@ onMounted(() => {
   if (isSimulator) { state.value = 'SIMULATOR_PROMPT'; return }
   confirm()
 })
-onBeforeUnmount(() => { if (redirect) clearTimeout(redirect) })
+function paidDate(s: string | null): string {
+  if (!s) return ''
+  const d = new Date(String(s).replace(' ', 'T') + 'Z')
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+}
 </script>
 
 <template>
@@ -154,10 +172,57 @@ onBeforeUnmount(() => { if (redirect) clearTimeout(redirect) })
       </template>
 
       <template v-else-if="state === 'DONE'">
-        <CircleCheck class="mx-auto h-12 w-12 text-success" aria-hidden="true" />
-        <h1 class="mt-4 text-xl font-bold text-ink" data-testid="pay-done">결제가 완료되었습니다</h1>
-        <p class="mt-1 text-sm text-ink-muted">주문번호 {{ orderNo }} · 주문 상세로 이동합니다.</p>
-        <OmButton class="mt-6" variant="primary" :to="`/orders/${orderId}`">주문 상세 보기</OmButton>
+        <CircleCheck class="mx-auto h-16 w-16 text-success" aria-hidden="true" />
+        <h1 class="mt-4 text-2xl font-bold text-ink" data-testid="pay-done">결제가 완료되었습니다</h1>
+        <p class="mt-1 text-sm text-ink-muted">주문번호 {{ orderNo }}</p>
+
+        <div v-if="receipt" class="mt-6 space-y-4 text-left">
+          <section class="rounded-lg border border-line-divider p-4" aria-label="주문자 및 배송지">
+            <h2 class="mb-2 text-sm font-bold text-ink">주문·배송 정보</h2>
+            <dl class="grid gap-1 text-sm">
+              <div class="flex justify-between gap-3"><dt class="text-ink-muted">주문자</dt><dd class="text-ink">{{ auth.user?.name || '' }}<span v-if="auth.user?.email" class="text-ink-muted"> · {{ auth.user.email }}</span></dd></div>
+              <div class="flex justify-between gap-3"><dt class="text-ink-muted">수령인</dt><dd class="text-ink">{{ receipt.recipient_name }} · {{ receipt.recipient_phone }}</dd></div>
+              <div class="flex justify-between gap-3"><dt class="text-ink-muted">주소</dt><dd class="text-right text-ink">{{ receipt.shipping_address_line1 }} {{ receipt.shipping_address_line2 || '' }} ({{ receipt.shipping_postal_code }})</dd></div>
+              <div v-if="receipt.shipping_memo" class="flex justify-between gap-3"><dt class="text-ink-muted">메모</dt><dd class="text-ink">{{ receipt.shipping_memo }}</dd></div>
+            </dl>
+          </section>
+
+          <section class="rounded-lg border border-line-divider p-4" aria-label="주문 상품">
+            <h2 class="mb-2 text-sm font-bold text-ink">주문 상품</h2>
+            <ul class="space-y-3">
+              <li v-for="s in receipt.sub_orders || []" :key="s.id">
+                <p class="text-xs font-bold text-ink-muted">{{ s.business_name }}</p>
+                <ul class="mt-1 space-y-1">
+                  <li v-for="it in s.items || []" :key="it.id" class="flex justify-between gap-3 text-sm">
+                    <span class="min-w-0 truncate text-ink">{{ it.product_title }} · {{ it.option_summary }} × {{ it.quantity }}</span>
+                    <span class="shrink-0 tabular-nums text-ink">{{ formatNumber(it.total_price) }}원</span>
+                  </li>
+                </ul>
+                <p class="mt-1 text-right text-xs text-ink-muted">배송비 {{ Number(s.shipping_fee) ? `${formatNumber(s.shipping_fee)}원` : '무료' }}</p>
+              </li>
+            </ul>
+          </section>
+
+          <section class="rounded-lg border border-line-divider p-4" aria-label="결제 정보">
+            <h2 class="mb-2 text-sm font-bold text-ink">결제 정보</h2>
+            <dl class="grid gap-1 text-sm">
+              <div class="flex justify-between gap-3"><dt class="text-ink-muted">결제 일시</dt><dd class="text-ink">{{ paidDate(receipt.paid_at) }}</dd></div>
+              <div v-if="receipt.payment_method" class="flex justify-between gap-3"><dt class="text-ink-muted">결제 수단</dt><dd class="text-ink">{{ receipt.payment_method }}</dd></div>
+              <div v-if="receipt.payment_card" class="flex justify-between gap-3"><dt class="text-ink-muted">카드</dt><dd class="text-ink" data-testid="pay-card">{{ receipt.payment_card }}</dd></div>
+              <div class="flex justify-between gap-3"><dt class="text-ink-muted">상품 금액</dt><dd class="tabular-nums text-ink">{{ formatNumber(receipt.total_goods_amount) }}원</dd></div>
+              <div v-if="Number(receipt.total_discount_amount)" class="flex justify-between gap-3"><dt class="text-ink-muted">할인</dt><dd class="tabular-nums text-accent">-{{ formatNumber(receipt.total_discount_amount) }}원</dd></div>
+              <div class="flex justify-between gap-3 border-t border-line-divider pt-1 font-bold"><dt class="text-ink">결제 금액</dt><dd class="tabular-nums text-ink">{{ formatNumber(receipt.total_pay_amount) }}원</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div class="mt-6 flex flex-col gap-2">
+          <OmButton variant="primary" :to="`/orders/${orderId}`" data-testid="order-detail-link">주문 상세 보기</OmButton>
+          <div class="flex gap-2">
+            <OmButton class="flex-1" variant="outline" :to="receipt?.sub_orders?.[0]?.partner_id ? `/store/${receipt.sub_orders[0].partner_id}` : '/'">스토어 홈</OmButton>
+            <OmButton class="flex-1" variant="outline" to="/">쇼핑 계속하기</OmButton>
+          </div>
+        </div>
       </template>
 
       <template v-else>

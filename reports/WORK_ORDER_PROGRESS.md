@@ -28,4 +28,5 @@
 3-3 | 통과 | 07bb4f5 | card 7/7 + test:ui + typecheck 2종 | 카드·찜·퀵담기·옵션시트·E2E B04b, 해석 → Q-3-3
 3-4 | 통과 | f09f6d1 | detail 6/6 + plp 6/6 + test:ui + typecheck + 빌드 | 7:5·구매패널·단계옵션·쿠폰·하이라이트, 해석 → Q-3-4
 3-5 | 통과 | 48781dc | cart 5/5 + plp 7/7 + test:ui + typecheck | 판매자박스·게이지·견적요약·가격표시, 해석 → Q-3-5
-3-6 | 통과 | PENDING | checkout 4/4 + checkout36 2/2 + test:ui + typecheck | 주문자·쿠폰모달·예약일·금칙어·동의2종, 해석 → Q-3-6
+3-6 | 통과 | c86a7be | checkout 4/4 + checkout36 3/3 + test:ui + typecheck | 주문자·쿠폰모달·예약일·금칙어·동의2종, 해석 → Q-3-6
+3-7 | 통과 | PENDING | payment_result 4/4 + test:ui + typecheck | 영수증·카드마스킹·주소정리·공유없음, 해석 → Q-3-7

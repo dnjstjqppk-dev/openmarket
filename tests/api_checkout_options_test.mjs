@@ -80,4 +80,28 @@ await t.test('O2. abusive memos are refused without touching stock', async () =>
   assert.equal(ok.status, 201, ok.text);
 });
 
+await t.test('O3. simulator captures carry the masked TestCard label', async () => {
+  const g = await newGateway();
+  const login = await g.call('/api/v1/auth/login', {
+    method: 'POST', body: { email: 'customer@example.com', password: 'DevPass!2026#', role: 'CUSTOMER' }
+  });
+  const cust = login.json.token;
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울 강남구', shipping_postal_code: '06236',
+      items: [{ sku_id: 'sku_001_w', quantity: 1 }]
+    }
+  })).json;
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  assert.equal(pay.json.data.card_summary, 'TestCard ****-****-****-0000', 'confirm echoes the label');
+  const got = await g.call(`/api/v1/orders/${o.order_id}`, { token: cust });
+  assert.equal(got.json.data.payment_card, 'TestCard ****-****-****-0000', 'order detail exposes it');
+});
+
 t.finish();

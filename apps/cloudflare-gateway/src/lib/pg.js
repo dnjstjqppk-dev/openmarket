@@ -38,6 +38,13 @@ async function tossFetch(env, path, { method = 'GET', body, idempotencyKey } = {
   return { ok: res.ok, status: res.status, data };
 }
 
+/** Masked card label from a Toss payment object (Toss masks the number itself). */
+export function cardSummaryOf(data) {
+  const card = data && data.card ? data.card : null;
+  if (!card) return null;
+  return [card.company, card.number].filter(Boolean).join(' ') || null;
+}
+
 export async function pgConfirm(env, { paymentKey, orderNo, amount }) {
   const mode = paymentMode(env);
   if (mode === 'sandbox') {
@@ -46,6 +53,8 @@ export async function pgConfirm(env, { paymentKey, orderNo, amount }) {
     }
     return {
       ok: true, sandbox: true, method: 'SANDBOX', approvedAt: new Date().toISOString(), receiptUrl: null,
+      // 3-7: fixed simulator label (never a real PAN); live parses the PG-masked card below.
+      cardSummary: 'TestCard ****-****-****-0000',
       raw: { simulator: true, paymentKey, orderId: orderNo, totalAmount: amount, status: 'DONE' }
     };
   }
@@ -54,7 +63,7 @@ export async function pgConfirm(env, { paymentKey, orderNo, amount }) {
   if (r.data.totalAmount !== amount || r.data.orderId !== orderNo || r.data.status !== 'DONE') {
     return { ok: false, code: 'PG_RESPONSE_MISMATCH', message: 'PG 승인 응답이 주문과 일치하지 않습니다.', raw: r.data, approvedButMismatched: r.data.status === 'DONE' };
   }
-  return { ok: true, sandbox: false, method: r.data.method || 'CARD', approvedAt: r.data.approvedAt, receiptUrl: r.data.receipt?.url || null, raw: r.data };
+  return { ok: true, sandbox: false, method: r.data.method || 'CARD', approvedAt: r.data.approvedAt, receiptUrl: r.data.receipt?.url || null, cardSummary: cardSummaryOf(r.data), raw: r.data };
 }
 
 export async function pgCancel(env, { paymentKey, amount, reason, idempotencyKey, isSandbox }) {

@@ -97,7 +97,8 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const perPage = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '30', 10) || 30));
     const total = await env.DB.prepare('SELECT COUNT(*) AS c FROM orders WHERE customer_id = ?').bind(target).first('c') || 0;
-    const { results } = await env.DB.prepare('SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(target, perPage, (page - 1) * perPage).all();
+    // 3-7: latest orders first; order_no breaks same-second ties deterministically.
+    const { results } = await env.DB.prepare('SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at DESC, order_no DESC LIMIT ? OFFSET ?').bind(target, perPage, (page - 1) * perPage).all();
     const data = [];
     for (const r of results) data.push(presentOrder(await loadOrderBundle(env, r.id)));
     return json(corsHeaders, { success: true, count: data.length, pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data });
@@ -113,8 +114,8 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(b.order.id).all();
     const { results: refunds } = await env.DB.prepare("SELECT id, sub_order_id, reason_code, pg_amount, credit_amount, status, created_at, completed_at FROM refunds WHERE order_id = ? ORDER BY created_at").bind(b.order.id).all();
     // NEW-07: the real PG method of the capturing transaction (powers the cash-receipt hint).
-    const pay = await env.DB.prepare("SELECT method FROM payment_transactions WHERE order_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1").bind(b.order.id).first();
-    return json(corsHeaders, { success: true, data: { ...presentOrder(b), payment_method: pay ? pay.method : null, claims, refunds } });
+    const pay = await env.DB.prepare("SELECT method, card_summary FROM payment_transactions WHERE order_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1").bind(b.order.id).first();
+    return json(corsHeaders, { success: true, data: { ...presentOrder(b), payment_method: pay ? pay.method : null, payment_card: pay ? pay.card_summary : null, claims, refunds } });
   }
 
   if (action === 'cancel' && request.method === 'POST') {
