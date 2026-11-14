@@ -57,7 +57,9 @@ await t.test('F-S07 policy figures come from one module pinned to the server', a
   assert.ok(ord.includes('PRICE_ADJUST_WINDOW_DAYS = 30'), 'server price-match window read')
   const home = read('apps/storefront/src/views/HomeView.vue')
   const detail = read('apps/storefront/src/views/ProductDetailView.vue')
-  assert.ok(home.includes('policy') && detail.includes('policy'), 'views import the policy module')
+  // 3-1: the home hero renders no figures at all (empty sections hide), so only
+  // the detail view still needs the policy import; home keeps the no-literals rule.
+  assert.ok(detail.includes('policy'), 'detail imports the policy module')
   assert.ok(!home.includes("'10,000원'") && !home.includes("'5,300원'"), 'home carries no literal figures')
 })
 

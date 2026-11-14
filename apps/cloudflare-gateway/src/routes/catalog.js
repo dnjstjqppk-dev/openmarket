@@ -161,7 +161,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   // 1. All Categories Tree with Bottom-Up Descendant Rollup
   if (url.pathname === '/api/v1/categories' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
-      `SELECT c.id, c.parent_id, c.name, c.slug, c.depth, c.sort_order,
+      `SELECT c.id, c.parent_id, c.name, c.slug, c.depth, c.sort_order, c.icon_key,
               (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'ACTIVE') as direct_count
        FROM categories c
        WHERE c.is_active = 1
@@ -185,6 +185,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         slug: c.slug,
         depth: c.depth,
         sort_order: c.sort_order,
+        icon_key: c.icon_key || null,
         product_count: countMap[c.id] || 0
       }))
       .sort((a, b) => {
@@ -465,11 +466,18 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, count: applicable.length, data: applicable }), { headers: corsHeaders });
   }
 
-  // 3d. Live exhibitions and their products (2-9).
+  // 3d. Live exhibitions and their products (2-9; 3-1 attaches the lineup so the
+  // home section needs one request).
   if (url.pathname === '/api/v1/exhibitions' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
       `SELECT * FROM exhibitions WHERE status = 'ACTIVE' AND starts_at <= CURRENT_TIMESTAMP AND ends_at > CURRENT_TIMESTAMP ORDER BY sort_order ASC`
     ).all();
+    for (const ex of results) {
+      ex.products = (await env.DB.prepare(
+        `SELECT p.* FROM exhibition_products ep JOIN products p ON p.id = ep.product_id
+         WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' ORDER BY ep.sort_order ASC LIMIT 8`
+      ).bind(ex.id).all()).results;
+    }
     return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
   }
   const exM = url.pathname.match(/^\/api\/v1\/exhibitions\/([^/]+)$/);

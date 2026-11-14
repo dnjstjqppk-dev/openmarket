@@ -14,6 +14,7 @@ export interface Category {
   slug: string
   depth: number
   sort_order: number
+  icon_key: string | null
   product_count: number
 }
 

@@ -496,6 +496,10 @@ paths:
                           type: integer
                         sort_order:
                           type: integer
+                        icon_key:
+                          type: string
+                          nullable: true
+                          description: '3-1: operator icon key for shortcut circles (null until set).'
                         product_count:
                           type: integer
                           description: Direct ACTIVE count rolled up bottom-up from descendants.
@@ -1399,10 +1403,10 @@ paths:
       summary: Live exhibitions
       tags: [Storefront]
       security: []
-      description: '2-9: ACTIVE exhibitions inside their window, newest first.'
+      description: '2-9: ACTIVE exhibitions inside their window, newest first. 3-1: each carries products (on-sale lineup, max 8).'
       responses:
         '200':
-          description: Live exhibitions
+          description: Live exhibitions with product lineups
 
   /api/v1/exhibitions/{id}:
     get:

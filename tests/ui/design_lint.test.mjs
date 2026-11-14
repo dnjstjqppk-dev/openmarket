@@ -75,7 +75,7 @@ const CAPS = {
   'apps/storefront/src/App.vue': 1,
   'apps/storefront/src/views/AddressesView.vue': 32,
   'apps/storefront/src/views/CouponsView.vue': 20,
-  'apps/storefront/src/views/HomeView.vue': 8,
+  'apps/storefront/src/views/HomeView.vue': 4,
   'apps/storefront/src/views/LegalPrivacyView.vue': 1,
   'apps/storefront/src/views/LegalRefundView.vue': 1,
   'apps/storefront/src/views/LegalTermsView.vue': 1,
