@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { createGateway, createRunner } from './lib/harness.mjs';
+import { classify } from '../apps/cloudflare-gateway/src/lib/ratelimit.js';
 
 const t = createRunner('Input Abuse Guards');
 
@@ -53,6 +54,61 @@ await t.test('2. milestone webhook enforces stage allowlist and field caps', asy
   assert.equal((await post({ sub_order_id: 'so_w1', stage_code: 'SHIPPED', location: 'x'.repeat(201) })).status, 400);
   assert.equal((await post({ sub_order_id: 'so_w1', stage_code: 'SHIPPED' }, {})).status, 401);
   assert.equal(g.db.prepare("SELECT COUNT(*) AS c FROM milestone_tracking_logs WHERE stage_code = 'TELEPORTED'").get().c, 0);
+});
+
+async function partnerToken(g) {
+  const r = await g.call('/api/v1/auth/login', {
+    method: 'POST', body: { email: 'seller@temu-supply.com', password: 'DevPass!2026#', role: 'PARTNER' }
+  });
+  assert.equal(r.status, 200);
+  return r.json.token;
+}
+
+await t.test('3. 2-10.2 coupon and payout amounts reject abuse shapes', async () => {
+  const g = await newGateway();
+  const pt = await partnerToken(g);
+  const base = { code: 'ABUSE', title: 't', discount_type: 'FIXED_AMOUNT' };
+  for (const v of [-5, 10.5, 'lots', 999999999999]) {
+    const r = await g.call('/api/v1/partner/coupons', { method: 'POST', token: pt, body: { ...base, discount_value: v } });
+    assert.equal(r.status, 400, `discount ${JSON.stringify(v)} refused`);
+  }
+  const over = await g.call('/api/v1/partner/payout-requests', {
+    method: 'POST', token: pt, headers: { 'X-Idempotency-Key': 'abuse-pay-huge' }, body: { amount: 99999999999999 }
+  });
+  assert.ok([400, 409].includes(over.status), 'huge payout refused without processing');
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM payout_requests WHERE idempotency_key = ?').get('abuse-pay-huge').n, 0, 'nothing queued');
+  const deal = await g.call('/api/v1/partner/flash-sales/fls_today/apply', {
+    method: 'POST', token: pt, body: { sku_id: 'sku_001_w', deal_price: -100, allocated_stock: 1 }
+  });
+  assert.equal(deal.status, 400, 'negative deal refused');
+});
+
+await t.test('4. 2-10.2 list-length caps hold on the new bulk endpoints', async () => {
+  const g = await newGateway();
+  const pt = await partnerToken(g);
+  const custLogin = await g.call('/api/v1/auth/login', {
+    method: 'POST', body: { email: 'customer@example.com', password: 'DevPass!2026#', role: 'CUSTOMER' }
+  });
+  const cust = custLogin.json.token;
+  assert.equal((await g.call('/api/v1/partner/orders/confirm', {
+    method: 'PUT', token: pt, body: { sub_order_ids: Array.from({ length: 201 }, (_, i) => `x${i}`) }
+  })).status, 400);
+  assert.equal((await g.call('/api/v1/partner/products/bulk-update', {
+    method: 'PUT', token: pt, body: { updates: Array.from({ length: 501 }, (_, i) => ({ product_id: `x${i}` })) }
+  })).status, 400);
+  assert.equal((await g.call('/api/v1/me/recently-viewed/merge', {
+    method: 'POST', token: cust, body: { product_ids: Array.from({ length: 51 }, (_, i) => `p${i}`) }
+  })).status, 400);
+  assert.equal((await g.call('/api/v1/products?brand=a,b,c,d,e,f,g,h,i,j,k', {})).status, 400);
+});
+
+await t.test('5. 2-10.5 claims, votes, reports and follows share RL_WRITE', async () => {
+  assert.equal(classify('POST', '/api/v1/coupons/claim'), 'RL_WRITE');
+  assert.equal(classify('POST', '/api/v1/reviews/rv_x/helpful'), 'RL_WRITE');
+  assert.equal(classify('POST', '/api/v1/reviews/rv_x/report'), 'RL_WRITE');
+  assert.equal(classify('POST', '/api/v1/stores/pt_001/follow'), 'RL_WRITE');
+  assert.equal(classify('DELETE', '/api/v1/stores/pt_001/follow'), 'RL_WRITE');
+  assert.equal(classify('GET', '/api/v1/coupons'), 'RL_API', 'reads stay on the wide bucket');
 });
 
 t.finish();

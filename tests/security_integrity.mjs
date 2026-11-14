@@ -222,7 +222,15 @@ await t.test('I01 checkout reserves stock and creates an UNPAID order (no fake P
 });
 await t.test('I02 client-supplied prices / customer_id ignored (server price authority)', async () => {
   const r = await I.checkout(c1, [{ sku_id: m0.id, quantity: 1, unit_price: 1 }], { customer_id: 'cust_demo_001' });
-  assert.equal(r.json.total_goods_amount, m0.sale_price);
+  // 2-6 deal layer: the server ticket is the live deal price when one covers
+  // the SKU, else the shelf price — never the client-sent unit_price.
+  const prod = I.one('SELECT product_id FROM product_skus WHERE id = ?', m0.id).product_id;
+  const deal = I.one(`SELECT f.deal_price AS d FROM flash_sale_items f
+    JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+    WHERE f.status = 'APPROVED' AND c.status = 'ACTIVE' AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP
+      AND f.deal_price > 0 AND ((f.sku_id IS NOT NULL AND f.sku_id = ?) OR (f.sku_id IS NULL AND f.product_id = ?))
+    ORDER BY (f.sku_id IS NULL) ASC, f.deal_price ASC LIMIT 1`, m0.id, prod);
+  assert.equal(r.json.total_goods_amount, deal ? deal.d : m0.sale_price);
   assert.equal(I.one('SELECT customer_id FROM orders WHERE id = ?', r.json.order_id).customer_id, 'u_customer_001');
 });
 await t.test('I03 payment confirm: wrong amount rejected, double click idempotent, single capture', async () => {
@@ -1443,6 +1451,108 @@ await t.test('I31 full reconciliation passes after every scenario above (R01–R
   assert.equal(r.status, 200, r.text);
   const failedChecks = r.json.data.checks.filter((c) => !c.ok && c.id !== 'R07');
   assert.deepEqual(failedChecks.map((c) => `${c.id}:${JSON.stringify(c.violations).slice(0, 200)}`), []);
+});
+
+// ============================== 2-10 NEW-API SECURITY ==============================
+await t.test('W10.1 new APIs: 401 anonymous, 403 wrong role, 404 foreign seller', async () => {
+  const B = await boot();
+  const c = await B.login('customer@example.com');
+  const p1 = await B.login('seller@temu-supply.com', 'PARTNER');
+  const p2 = await B.login('partner2@olmoa-tech.com', 'PARTNER');
+  for (const [path, method] of [
+    ['/api/v1/partner/dashboard/pipeline', 'GET'], ['/api/v1/coupons/best', 'POST'],
+    ['/api/v1/admin/notice-templates', 'GET'], ['/api/v1/partner/orders/confirm', 'PUT'],
+    ['/api/v1/me/recently-viewed', 'GET'], ['/api/v1/reviews/rv_x/helpful', 'POST'],
+    ['/api/v1/partner/payout-requests', 'POST'], ['/api/v1/admin/payout-requests', 'GET']
+  ]) {
+    assert.equal((await B.call(path, { method })).status, 401, `${method} ${path} needs auth`);
+  }
+  assert.equal((await B.call('/api/v1/partner/dashboard/pipeline', { token: c })).status, 403);
+  assert.equal((await B.call('/api/v1/admin/notice-templates', { token: c })).status, 403);
+  assert.equal((await B.call('/api/v1/admin/notice-templates', { token: p1 })).status, 403);
+  assert.equal((await B.call('/api/v1/partner/store-profile', { method: 'PUT', token: c, body: {} })).status, 403);
+  B.db.prepare("INSERT INTO shipping_policies (id, partner_id, name, method, fee_type) VALUES ('sp_w10', 'pt_001', 't', 'PARCEL', 'PAID')").run();
+  assert.equal((await B.call('/api/v1/partner/shipping-policies/sp_w10', { method: 'PUT', token: p2, body: { base_fee: 1 } })).status, 404);
+  B.db.prepare("INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, expires_at, is_active, issuer, seller_id, scope, platform_share_bps, dup_group, issue_method, issued_count) VALUES ('cp_w10', 'W10', 't', 'FIXED_AMOUNT', 100, 0, '2099-01-01 00:00:00', 1, 'SELLER', 'pt_001', 'SELLER', 0, 'STORE', 'DOWNLOAD', 0)").run();
+  assert.equal((await B.call('/api/v1/partner/coupons/cp_w10', { method: 'PUT', token: p2, body: { title: 'x' } })).status, 404);
+  B.db.prepare("INSERT INTO partner_penalties (id, partner_id, penalty_amount, reason) VALUES ('pp_w10', 'pt_001', 100, 't')").run();
+  assert.equal((await B.call('/api/v1/partner/penalties/pp_w10/appeal', { method: 'POST', token: p2, body: { body: 'x' } })).status, 404);
+  const o = (await B.checkout(c, [{ sku_id: B.directSku.id, quantity: 1 }])).json;
+  const sub = B.one('SELECT id FROM sub_orders WHERE parent_order_id = ?', o.order_id).id;
+  assert.equal((await B.call(`/api/v1/partner/orders/${sub}/contact?reason=x`, { token: p2 })).status, 404);
+});
+
+await t.test('W10.2 coupon, flash and payout races never exceed their caps', async () => {
+  const B = await boot();
+  const c = await B.login('customer@example.com');
+  const adm = await B.login('admin@openmarket.com', 'ADMIN');
+  const p2 = await B.login('partner2@olmoa-tech.com', 'PARTNER');
+  // Coupon quantity race: 5 members, 2 units (one holding per member per coupon).
+  const cp = await B.call('/api/v1/admin/coupons', { method: 'POST', token: adm,
+    body: { code: 'RACE2', title: 't', discount_type: 'FIXED_AMOUNT', discount_value: 100, total_quantity: 2 } });
+  assert.equal(cp.status, 201, cp.text);
+  const racers = [c];
+  for (let i = 1; i <= 4; i++) {
+    const reg = await B.call('/api/v1/auth/register', { method: 'POST',
+      body: { email: `racer${i}@olmoa.test`, password: 'RacerPass!2026#', full_name: '경합', phone: '010-0000-0001', agree_terms: true, agree_privacy: true } });
+    assert.equal(reg.status, 201, reg.text);
+    racers.push(reg.json.token);
+  }
+  const claims = await Promise.all(racers.map((tok, i) =>
+    B.call('/api/v1/coupons/claim', { method: 'POST', token: tok, headers: { 'X-Idempotency-Key': `w10-race-${i}` }, body: { code: 'RACE2' } })));
+  assert.equal(claims.filter((r) => r.status === 200).length, 2, 'exactly two claims win');
+  assert.ok(claims.filter((r) => r.status === 409).length === 3, 'the rest see sold out');
+  assert.equal(B.one('SELECT issued_count c FROM coupons WHERE id = ?', cp.json.data.id).c, 2, 'issued count capped');
+  // Flash allocation race: 1 unit left, 2 payments (allocation moves at capture).
+  B.db.prepare('UPDATE flash_sale_items SET allocated_stock = 85, sold_stock = 84 WHERE id = ?').run('fls_it_01');
+  const c2 = await B.login('alex.kim@olmoa.com');
+  const oa = (await B.checkout(c, [{ sku_id: 'sku_001_w', quantity: 1 }])).json;
+  const ob = (await B.checkout(c2, [{ sku_id: 'sku_001_w', quantity: 1 }])).json;
+  const [a, b] = await Promise.all([B.pay(c, oa, 'sandbox_w10flashaa'), B.pay(c2, ob, 'sandbox_w10flashbb')]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409], 'one payment wins the last unit');
+  assert.equal(B.one('SELECT sold_stock c FROM flash_sale_items WHERE id = ?', 'fls_it_01').c, 85, 'sold never exceeds allocated');
+  // Payout inflight race: one REQUESTED max per seller.
+  const sku = B.mpSkus[0].id;
+  const co = (await B.checkout(c, [{ sku_id: sku, quantity: 1 }])).json;
+  await B.pay(c, co);
+  B.db.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT' WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)").run(co.order_id);
+  B.db.prepare('UPDATE partners SET payout_account_verified = 1 WHERE id = ?').run('pt_002');
+  const avail = B.one("SELECT net_payout_amount c FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)", co.order_id).c;
+  const [r1, r2] = await Promise.all([1, 2].map((i) =>
+    B.call('/api/v1/partner/payout-requests', { method: 'POST', token: p2, headers: { 'X-Idempotency-Key': `w10-pay-${i}` }, body: { amount: avail } })));
+  assert.deepEqual([r1.status, r2.status].sort(), [201, 409], 'one request wins inflight');
+  assert.equal(B.one("SELECT COUNT(*) c FROM payout_requests WHERE partner_id = 'pt_002' AND status = 'REQUESTED'").c, 1, 'single inflight row');
+});
+
+await t.test('W10.3 settlement formula holds and the trial balance nets to zero', async () => {
+  const B = await boot();
+  const c = await B.login('customer@example.com');
+  const p2 = await B.login('partner2@olmoa-tech.com', 'PARTNER');
+  const adm = await B.login('admin@openmarket.com', 'ADMIN');
+  const co = (await B.checkout(c, [{ sku_id: B.mpSkus[0].id, quantity: 2 }])).json;
+  await B.pay(c, co);
+  const sub = B.one('SELECT id FROM sub_orders WHERE parent_order_id = ?', co.order_id);
+  const item = B.one('SELECT id FROM order_items WHERE sub_order_id = ? LIMIT 1', sub.id);
+  const cancel = await B.call(`/api/v1/orders/${co.order_id}/sub-orders/${sub.id}/cancel`, {
+    method: 'POST', token: c, headers: { 'X-Idempotency-Key': 'w10-partial-1' },
+    body: { items: [{ order_item_id: item.id, quantity: 1 }] }
+  });
+  assert.equal(cancel.status, 200, cancel.text);
+  await B.ship(p2, co.order_id);
+  B.db.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP WHERE parent_order_id = ? AND status = 'SHIPPED'").run(co.order_id);
+  assert.equal((await B.call(`/api/v1/orders/${co.order_id}/confirm`, { method: 'POST', token: c })).status, 200);
+  const rows = B.q('SELECT st.*, COALESCE((SELECT SUM(a.net_delta) FROM settlement_adjustments a WHERE a.settlement_id = st.id), 0) AS adj FROM settlements st');
+  assert.ok(rows.length > 0, 'settlements exist');
+  for (const s of rows) {
+    assert.equal(s.net_payout_amount, s.gross_amount - s.commission_amount + s.shipping_fee - (s.seller_coupon_burden || 0) - (s.pg_fee_amount || 0), `settlement ${s.id} formula holds`);
+  }
+  const tb = B.one('SELECT COALESCE(SUM(debit), 0) AS d, COALESCE(SUM(credit), 0) AS c FROM journal_entries');
+  assert.equal(tb.d, tb.c, 'trial balance nets to zero');
+  assert.ok(tb.d > 0, 'the journey journaled money');
+  const rec = await B.call('/api/v1/admin/reconciliation', { token: adm });
+  assert.equal(rec.status, 200, rec.text);
+  const bad = rec.json.data.checks.filter((x) => !x.ok && x.id !== 'R07');
+  assert.deepEqual(bad.map((x) => x.id), [], 'reconciliation clean after the journey');
 });
 
 const res = t.finish();

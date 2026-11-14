@@ -54,6 +54,18 @@ async function mkSeller() {
   return { g, pid };
 }
 
+// 2-6 deal layer: an approved flash item in a live campaign replaces the
+// ticket price (services/orders.js). Absolute expectations price the charged
+// amount, not the shelf price.
+function chargedPrice(g, sku) {
+  const deal = g.db.prepare(`SELECT f.deal_price AS d FROM flash_sale_items f
+    JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+    WHERE f.status = 'APPROVED' AND c.status = 'ACTIVE' AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP
+      AND f.deal_price > 0 AND ((f.sku_id IS NOT NULL AND f.sku_id = ?) OR (f.sku_id IS NULL AND f.product_id = ?))
+    ORDER BY (f.sku_id IS NULL) ASC, f.deal_price ASC LIMIT 1`).get(sku.id, sku.product_id);
+  return deal ? deal.d : sku.sale_price;
+}
+
 function columns(db, table) {
   return db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
 }
@@ -86,7 +98,7 @@ await t.test('2. without policies the legacy formula holds', async () => {
   })).json;
   assert.ok(o.order_id, `checkout ok: ${JSON.stringify(o).slice(0, 200)}`);
   const st = g.db.prepare('SELECT * FROM settlements WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)').get(o.order_id);
-  const expectComm = Math.floor((s1.sale_price * bps + 5000) / 10000);
+  const expectComm = Math.floor((chargedPrice(g, s1) * bps + 5000) / 10000);
   assert.equal(st.commission_amount, expectComm, 'seller rate on the full line total');
   assert.equal(st.fee_source, 'SELLER', 'source names the seller default');
   assert.equal(st.pg_fee_amount, 0, 'no policy means no PG fee');
@@ -108,8 +120,8 @@ await t.test('3. category rates price per item and win over the seller rate', as
   const pt = g.db.prepare('SELECT commission_rate_bps, commission_rate FROM partners WHERE id = ?').get(pid);
   const sellerBps = pt.commission_rate_bps ?? Math.round(Number(pt.commission_rate || 10) * 100);
   const s2cat = g.db.prepare('SELECT category_id FROM products WHERE id = ?').get(s2.product_id).category_id;
-  const c1 = Math.floor((s1.sale_price * 500 + 5000) / 10000);
-  const c2 = Math.floor((s2.sale_price * (s2cat === cat ? 500 : sellerBps) + 5000) / 10000);
+  const c1 = Math.floor((chargedPrice(g, s1) * 500 + 5000) / 10000);
+  const c2 = Math.floor((chargedPrice(g, s2) * (s2cat === cat ? 500 : sellerBps) + 5000) / 10000);
   assert.equal(st.commission_amount, c1 + c2, 'per-item category and seller rates summed');
   assert.equal(st.fee_source, s2cat === cat ? 'CATEGORY' : 'SELLER', 'source reflects the mix');
 });
@@ -135,7 +147,7 @@ await t.test('4. NET base policy excludes the store discount', async () => {
   const st = g.db.prepare('SELECT * FROM settlements WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)').get(o.order_id);
   const pt = g.db.prepare('SELECT commission_rate_bps, commission_rate FROM partners WHERE id = ?').get(pid);
   const bps = pt.commission_rate_bps ?? Math.round(Number(pt.commission_rate || 10) * 100);
-  assert.equal(st.commission_amount, Math.floor(((s1.sale_price - 1000) * bps + 5000) / 10000), 'base excludes the store discount');
+  assert.equal(st.commission_amount, Math.floor(((chargedPrice(g, s1) - 1000) * bps + 5000) / 10000), 'base excludes the store discount');
 });
 
 await t.test('5. PG fee policy deducts, stores and journals the fee', async () => {
@@ -258,7 +270,7 @@ await t.test('10. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_56_settlement_payout_policy.sql', 'pin names d1_56');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_61_claim_pickup_photos.sql', 'pin names d1_61');
 });
 
 t.finish();

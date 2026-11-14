@@ -91,6 +91,10 @@ const DANGLING_PAIRS = [
   // sources it from a server-side verified purchase (features.js), so the scan
   // below is the backstop against future dangling writes.
   ['product_reviews', 'order_id', 'orders'],
+  // 2-10.6: 2-9 writes these bare ALTER-added references (server-validated
+  // own+ACTIVE lookups in partner.js); the scan backstops future drift.
+  ['products', 'shipping_policy_id', 'shipping_policies'],
+  ['products', 'notice_template_id', 'notice_templates'],
 ];
 // Intentionally unenforced (no D1 parent table; external or denormalized ids):
 // partners.payout_account_id, sub_orders.consolidation_hub_id,

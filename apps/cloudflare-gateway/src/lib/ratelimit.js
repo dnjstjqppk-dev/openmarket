@@ -6,7 +6,8 @@
 //   RL_AUTH    10 / 60 s per IP   login, register, refresh, password reset, seller application, 2FA, withdrawal
 //   RL_LOGIN    5 / 60 s per account (e-mail)  — distributed guessing against one account
 //   RL_WRITE   30 / 60 s per user (or IP)      checkout, payment confirm, claims, uploads, reviews, Q&A, imports, channels, bidding,
-//                                                 search/log, validate-pccc, estimate-duty (P2-SEC-06)
+//                                                 search/log, validate-pccc, estimate-duty (P2-SEC-06),
+//                                                 coupon claims, helpful votes, reports, follows (2-10.5)
 //   RL_API    300 / 60 s per IP                everything else
 //
 // Missing binding (local dev / tests) = no limit, unless RATE_LIMIT_REQUIRED=true (then fail closed with 503).
@@ -22,7 +23,10 @@ const WRITE_PATHS = [
   /^\/api\/v1\/storage\/upload$/, /^\/api\/v1\/products\/[^/]+\/(reviews|qna)$/, /^\/api\/v1\/support/,
   /^\/api\/v1\/imports\//, /^\/api\/v1\/channels\//, /^\/api\/v1\/bidding\//,
   /^\/api\/v1\/pricing\//, /^\/api\/v1\/(admin|partner)\/(bidding|pricing)\//, /^\/api\/v1\/auth\/social\//,
-  /^\/api\/v1\/search\/log$/, /^\/api\/v1\/customs\/validate-pccc$/, /^\/api\/v1\/customs\/estimate-duty$/
+  /^\/api\/v1\/search\/log$/, /^\/api\/v1\/customs\/validate-pccc$/, /^\/api\/v1\/customs\/estimate-duty$/,
+  // 2-10.5: coupon claims, helpful votes, reports and follows share the
+  // per-member 30/min write bucket.
+  /^\/api\/v1\/coupons\/claim$/, /^\/api\/v1\/reviews\/[^/]+\/(helpful|report)$/, /^\/api\/v1\/stores\/[^/]+\/follow$/
 ];
 
 export function classify(method, path) {

@@ -689,7 +689,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const dtype = String(body.discount_type || 'FIXED_AMOUNT').toUpperCase();
     if (!['FIXED_AMOUNT', 'PERCENT'].includes(dtype)) throw bad('INVALID_DISCOUNT_TYPE', 'discount_type은 FIXED_AMOUNT·PERCENT 중 하나여야 합니다.');
     const dv = Number(body.discount_value);
-    if (!Number.isSafeInteger(dv) || dv <= 0 || (dtype === 'PERCENT' && dv > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
+    if (!Number.isSafeInteger(dv) || dv <= 0 || dv > 100_000_000 || (dtype === 'PERCENT' && dv > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
     const scope = String(body.scope || 'ALL').toUpperCase();
     if (!['ALL', 'SELLER', 'PRODUCT', 'CATEGORY'].includes(scope)) throw bad('INVALID_SCOPE', 'scope은 ALL·SELLER·PRODUCT·CATEGORY 중 하나여야 합니다.');
     const share = body.platform_share_bps === undefined ? 10000 : intParam(body.platform_share_bps, { min: 0, max: 10000, field: '플랫폼 분담 비율' });
@@ -757,7 +757,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }
     const dtype = body.discount_type !== undefined ? String(body.discount_type).toUpperCase() : cp.discount_type;
     const dval = body.discount_value !== undefined ? Number(body.discount_value) : cp.discount_value;
-    if (!Number.isSafeInteger(dval) || dval <= 0 || (dtype === 'PERCENT' && dval > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
+    if (!Number.isSafeInteger(dval) || dval <= 0 || dval > 100_000_000 || (dtype === 'PERCENT' && dval > 90)) throw bad('INVALID_DISCOUNT', '할인 값이 올바르지 않습니다.');
     await env.DB.batch([
       env.DB.prepare(
         `UPDATE coupons SET title = ?, discount_type = ?, discount_value = ?, min_order_amount = ?, max_discount_amount = ?,

@@ -72,6 +72,18 @@ function columns(db, table) {
   return db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
 }
 
+// 2-6 deal layer: an approved flash item in a live campaign replaces the
+// ticket price (services/orders.js). Absolute expectations price the charged
+// amount, not the shelf price.
+function chargedPrice(g, sku) {
+  const deal = g.db.prepare(`SELECT f.deal_price AS d FROM flash_sale_items f
+    JOIN flash_sale_campaigns c ON c.id = f.campaign_id
+    WHERE f.status = 'APPROVED' AND c.status = 'ACTIVE' AND c.starts_at <= CURRENT_TIMESTAMP AND c.ends_at > CURRENT_TIMESTAMP
+      AND f.deal_price > 0 AND ((f.sku_id IS NOT NULL AND f.sku_id = ?) OR (f.sku_id IS NULL AND f.product_id = ?))
+    ORDER BY (f.sku_id IS NULL) ASC, f.deal_price ASC LIMIT 1`).get(sku.id, sku.product_id);
+  return deal ? deal.d : sku.sale_price;
+}
+
 await t.test('1. coupon tables and columns exist', async () => {
   const g = await newGateway();
   for (const c of ['issuer', 'seller_id', 'scope', 'platform_share_bps', 'dup_group',
@@ -160,8 +172,8 @@ await t.test('4. minimum order and scope narrow the eligible sum', async () => {
   });
   assert.equal(scoped.status, 200, scoped.text);
   const s1cat = g.db.prepare('SELECT category_id FROM products WHERE id = ?').get(s2.product_id).category_id;
-  const s2eligible = s1cat === cat ? s2.sale_price : 0;
-  const expect = Math.floor(((s1.sale_price + s2eligible) * 10 + 50) / 100);
+  const s2eligible = s1cat === cat ? chargedPrice(g, s2) : 0;
+  const expect = Math.floor(((chargedPrice(g, s1) + s2eligible) * 10 + 50) / 100);
   assert.equal(scoped.json.data.coupon_discount_amount, expect, 'only the targeted category is discounted');
 });
 
@@ -341,7 +353,7 @@ await t.test('12. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_55_coupon_engine.sql', 'pin names d1_55');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_61_claim_pickup_photos.sql', 'pin names d1_61');
 });
 
 t.finish();
