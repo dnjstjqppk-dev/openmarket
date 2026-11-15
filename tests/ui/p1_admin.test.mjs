@@ -107,8 +107,8 @@ await t.test('P1-A11 payout button relabeled and passes partner context', async 
   assert.ok(v.includes('지급 화면으로 이동'), 'button relabeled (no fake approve)')
   assert.ok(!v.includes('Approve Payout'), 'fake approve label gone')
   assert.ok(v.includes('partner_id'), 'navigation passes partner_id')
-  const r = read('apps/admin/src/views/ReconciliationView.vue')
-  assert.ok(r.includes('partner_id') && (r.includes('route.query') || r.includes('useRoute')), 'reconciliation preselects/highlights the partner')
+  const r = read('apps/admin/src/views/finance/SettlementBatchView.vue')
+  assert.ok(r.includes('partner_id') && (r.includes('route.query') || r.includes('useRoute')), 'batch screen preselects/highlights the partner')
 })
 
 await t.test('P1-A12 takedown button no longer implies an action it lacks', async () => {
@@ -171,7 +171,10 @@ await t.test('P1-A14 adminApi never throws and views handle load failure', async
   assert.ok(fn.includes('ok: false'), 'adminApi returns {ok:false} instead of throwing')
   for (const [f, need] of [
     ['apps/admin/src/views/BusinessEntitiesView.vue', 'try'],
-    ['apps/admin/src/views/ReconciliationView.vue', 'try'],
+    ['apps/admin/src/views/finance/ReconciliationView.vue', 'try'],
+    ['apps/admin/src/views/finance/SettlementBatchView.vue', 'try'],
+    ['apps/admin/src/views/finance/PayoutApprovalView.vue', 'try'],
+    ['apps/admin/src/views/finance/PolicyView.vue', 'try'],
     ['apps/admin/src/views/SecurityView.vue', 'try'],
     ['apps/admin/src/views/SuppliersView.vue', 'try'],
     ['apps/admin/src/views/partners/ApplicationListView.vue', 'try'],
@@ -180,7 +183,7 @@ await t.test('P1-A14 adminApi never throws and views handle load failure', async
     const v = read(f)
     assert.ok(v.includes(need), `${f} guards adminApi with try/catch`)
   }
-  assert.ok(read('apps/admin/src/views/ReconciliationView.vue').includes('loadError') || read('apps/admin/src/views/ReconciliationView.vue').includes('err'), 'reconciliation has an error state')
+  assert.ok(read('apps/admin/src/views/finance/ReconciliationView.vue').includes('loadError') || read('apps/admin/src/views/finance/ReconciliationView.vue').includes('err'), 'reconciliation has an error state')
   assert.ok(read('apps/admin/src/views/BusinessEntitiesView.vue').includes('다시') || read('apps/admin/src/views/BusinessEntitiesView.vue').includes('retry') || read('apps/admin/src/views/BusinessEntitiesView.vue').includes('load()'), 'business entities offers retry')
 })
 

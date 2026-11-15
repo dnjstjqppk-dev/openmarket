@@ -126,7 +126,7 @@ await t.test('F-SN03 address form drops the 010- prefill and validates', async (
 
 // ---------- Admin ----------
 await t.test('F-A01 notify target is searchable, never a hardcoded customer', async () => {
-  const v = read('apps/admin/src/views/MarketingView.vue')
+  const v = read('apps/admin/src/views/marketing/NotificationSendView.vue')
   assert.ok(!v.includes('u_customer_001'), 'no hardcoded notify target')
   assert.ok(v.includes('/admin/users?q=') || v.includes('searchUsers'), 'customer search wired')
   const srv = read('apps/cloudflare-gateway/src/routes/admin.js')
@@ -134,10 +134,10 @@ await t.test('F-A01 notify target is searchable, never a hardcoded customer', as
 })
 
 await t.test('F-A02 new banner requires an explicit image URL', async () => {
-  const v = read('apps/admin/src/views/MarketingView.vue')
+  const v = read('apps/admin/src/views/marketing/BannerView.vue')
   assert.ok(!v.includes('images.unsplash.com'), 'no stock-photo default')
   assert.ok(v.includes("image_url: ''"), 'default is empty')
-  const fn = v.split('handleCreateBanner')[1].split('async function handleBroadcastNotification')[0]
+  const fn = v.split('handleCreateBanner')[1].split('async function toggleActive')[0]
   assert.ok(fn.includes('image_url'), 'create validates the image URL')
 })
 
@@ -178,7 +178,7 @@ await t.test('F-A07 reserve defaults pinned between UI and server', async () => 
 })
 
 await t.test('F-A08 admin lists split errors and empty states', async () => {
-  const o = read('apps/admin/src/views/OrdersView.vue')
+  const o = read('apps/admin/src/views/orders/OrderListView.vue')
   assert.ok(o.includes('loadError'), 'orders list has an error state')
   assert.ok(o.includes('다시 시도') || o.includes('@click="loadOrders"'), 'orders retry exists')
   const d = read('apps/admin/src/views/DashboardView.vue')

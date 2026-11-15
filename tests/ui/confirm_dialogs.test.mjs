@@ -1,11 +1,12 @@
 // Work order 1-9: native confirm()/alert() become useConfirm/toasts.
-// Two holds stay native because existing tests pin window.confirm there
-// (A06-A07); the storefront hold converted with its e2e script update
-// under autonomous authority (see Q-G3a), the dashboard tribunal hold
-// retired when 4-12 removed arbitration from the dashboard (rulings move to
-// views/claims in 4-16, built on useConfirm from the start — see Q-4-12),
-// and the partner-verify hold converted when 4-13 rebuilt the seller
-// screens on useConfirm (see Q-4-13).
+// No native-dialog holds remain. The storefront hold converted with its e2e
+// script update under autonomous authority (see Q-G3a), the dashboard
+// tribunal hold retired when 4-12 removed arbitration from the dashboard
+// (rulings move to views/claims in 4-16, built on useConfirm — see Q-4-12),
+// the partner-verify hold converted when 4-13 rebuilt the seller screens
+// (see Q-4-13), the ledger-claim hold converted when 4-16 moved rulings
+// to the claims screen (see Q-4-16), and the last hold (broadcast push)
+// converted when 4-18 rebuilt the marketing screens (see Q-4-18).
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -29,14 +30,19 @@ const CONVERTED = [
   'apps/admin/src/views/CategoriesView.vue',
   'apps/admin/src/views/CouponsView.vue',
   'apps/admin/src/views/InquiriesView.vue',
-  'apps/admin/src/views/OrdersView.vue',
+  'apps/admin/src/views/orders/OrderListView.vue',
+  'apps/admin/src/views/orders/OrderDetailView.vue',
+  'apps/admin/src/views/claims/ClaimListView.vue',
   'apps/admin/src/views/partners/ApplicationListView.vue',
   'apps/admin/src/views/partners/ApplicationDetailView.vue',
   'apps/admin/src/views/partners/PartnerListView.vue',
   'apps/admin/src/views/partners/PartnerDetailView.vue',
   'apps/admin/src/views/products/ProductListView.vue',
   'apps/admin/src/views/products/ReviewQueueView.vue',
-  'apps/admin/src/views/ReconciliationView.vue',
+  'apps/admin/src/views/finance/ReconciliationView.vue',
+  'apps/admin/src/views/finance/SettlementBatchView.vue',
+  'apps/admin/src/views/finance/PayoutApprovalView.vue',
+  'apps/admin/src/views/finance/PolicyView.vue',
   'apps/admin/src/views/ReviewsView.vue',
   'apps/admin/src/views/SecurityView.vue',
   'apps/admin/src/views/ShippingZonesView.vue',
@@ -52,24 +58,17 @@ const CONVERTED = [
   'apps/partner/src/views/settlements/SettlementOverviewView.vue'
 ]
 
-// Q-1-9: two admin sites stay native because existing tests pin
-// window.confirm there (A06-A07). Each hold is pinned to its exact site.
-const HOLDS = [
-  ['apps/admin/src/views/MarketingView.vue', 'async function handleBroadcastNotification', 'sendingNotif.value = true'],
-  ['apps/admin/src/views/LedgerAuditView.vue', 'const resolveClaim', 'let body']
-]
+// Q-1-9: no native-dialog holds remain. The last one (broadcast push)
+// converted when 4-18 rebuilt the marketing screens on useConfirm.
+const HOLDS = []
 
 await t.test('N01 converted views carry no native confirm/alert', async () => {
   for (const f of CONVERTED) assert.equal(countNative(f), 0, `${f} must be clean`)
 })
 
-await t.test('N02 the two holds stay pinned to their exact sites', async () => {
-  for (const [f, start, end] of HOLDS) {
-    const v = read(f)
-    assert.equal(countIn(v), 1, `${f} keeps exactly one native call`)
-    const seg = v.split(start)[1].split(end)[0]
-    assert.equal(countIn(seg), 1, `the hold in ${f} sits between its markers`)
-  }
+await t.test('N02 no native-dialog holds remain', async () => {
+  assert.equal(HOLDS.length, 0, 'every 1-9 hold converted to useConfirm')
+  assert.ok(!read('apps/admin/src/router/index.ts').includes('MarketingView'), 'the last hold site is gone')
 })
 
 await t.test('N03 converted confirms use useConfirm', async () => {
@@ -81,13 +80,19 @@ await t.test('N03 converted confirms use useConfirm', async () => {
     'apps/admin/src/views/CategoriesView.vue',
     'apps/admin/src/views/CouponsView.vue',
     'apps/admin/src/views/InquiriesView.vue',
-    'apps/admin/src/views/MarketingView.vue',
-    'apps/admin/src/views/OrdersView.vue',
+    'apps/admin/src/views/marketing/BannerView.vue',
+    'apps/admin/src/views/marketing/ExhibitionView.vue',
+    'apps/admin/src/views/marketing/FlashSaleView.vue',
+    'apps/admin/src/views/marketing/NotificationSendView.vue',
+    'apps/admin/src/views/orders/OrderDetailView.vue',
+    'apps/admin/src/views/claims/ClaimListView.vue',
     'apps/admin/src/views/partners/ApplicationDetailView.vue',
     'apps/admin/src/views/partners/PartnerDetailView.vue',
     'apps/admin/src/views/products/ProductListView.vue',
     'apps/admin/src/views/products/ReviewQueueView.vue',
-    'apps/admin/src/views/ReconciliationView.vue',
+    'apps/admin/src/views/finance/SettlementBatchView.vue',
+    'apps/admin/src/views/finance/PayoutApprovalView.vue',
+    'apps/admin/src/views/finance/PolicyView.vue',
     'apps/admin/src/views/ReviewsView.vue',
     'apps/admin/src/views/SecurityView.vue',
     'apps/admin/src/views/ShippingZonesView.vue',
@@ -110,8 +115,10 @@ await t.test('N04 dialogs mount once per app shell', async () => {
 
 await t.test('N05 money-moving confirms are dangerous with amounts', async () => {
   for (const f of [
-    'apps/admin/src/views/OrdersView.vue',
-    'apps/admin/src/views/ReconciliationView.vue'
+    'apps/admin/src/views/orders/OrderDetailView.vue',
+    'apps/admin/src/views/claims/ClaimListView.vue',
+    'apps/admin/src/views/finance/SettlementBatchView.vue',
+    'apps/admin/src/views/finance/PayoutApprovalView.vue'
   ]) {
     const src = read(f)
     assert.ok(src.includes('danger: true'), `${f} marks danger`)

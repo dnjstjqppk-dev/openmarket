@@ -880,6 +880,7 @@ paths:
     get:
       summary: List orders with sub-orders and items (latest 50, PII view logged)
       tags: [Admin]
+      description: '4-16: status, from/to, q (order/member/seller/product), page/per_page, format=csv.'
       responses:
         '200':
           description: Order rows with buyer_email and nested sub_orders
@@ -901,6 +902,25 @@ paths:
                       type: object
         '401':
           description: Missing or expired JWT, or not an ADMIN session
+
+  /api/v1/admin/orders/{id}:
+    get:
+      summary: Order detail with payments, refunds, settlements and journal
+      tags: [Admin]
+      description: 4-16 detail bundle (PII view logged). Accepts the id or order_no.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order, sub-orders, payments, refunds, journal and claims
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Unknown order id
 
   /api/v1/admin/ledger:
     get:
@@ -1813,6 +1833,28 @@ paths:
           description: Stored policy
         '400':
           description: Missing fields or a backdated effective date
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/platform-policies/history:
+    get:
+      summary: Policy change history
+      tags: [Admin]
+      description: 4-17 trigger-kept history (updates only; the first insert is the baseline).
+      parameters:
+        - name: key
+          in: query
+          schema:
+            type: string
+          description: Filter to one policy key.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: History rows newest first
         '401':
           description: Missing or expired JWT
 

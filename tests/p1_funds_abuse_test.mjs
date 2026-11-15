@@ -223,8 +223,8 @@ await t.test('P0-02 UI copy matches the approval-gated, capped policy', async ()
   const detail = fs.readFileSync('apps/storefront/src/views/OrderDetailView.vue', 'utf8');
   assert.ok(detail.includes('관리자 승인 후 지급'), 'price-claim message names post-approval payout');
   assert.ok(!detail.includes('차액 ${won(json.refund_amount)}이 적립금으로 지급되었습니다'), 'no instant-grant claim copy');
-  const ledger = fs.readFileSync('apps/admin/src/views/LedgerAuditView.vue', 'utf8');
-  assert.ok(ledger.includes('PRICE_ADJUSTMENT') && ledger.includes('Approve Credit'), 'admin can approve pending price claims');
+  const claims = fs.readFileSync('apps/admin/src/views/claims/ClaimListView.vue', 'utf8');
+  assert.ok(claims.includes('PRICE_ADJUSTMENT') && claims.includes('승인·적립금 지급'), 'admin can approve pending price claims');
   const checkout = fs.readFileSync('apps/storefront/src/views/CheckoutView.vue', 'utf8');
   assert.ok(checkout.includes('20%까지'), 'checkout states the credit cap');
   const partner = fs.readFileSync('apps/cloudflare-gateway/src/routes/partner.js', 'utf8');

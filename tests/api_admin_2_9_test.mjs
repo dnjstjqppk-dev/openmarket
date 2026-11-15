@@ -582,4 +582,196 @@ await t.test('A18. category banned words save; fee changes price new orders only
   assert.deepEqual(cleared.json.data.banned_words, [], 'words cleared');
 });
 
+await t.test('A19. split ruling refunds a line subset of the claim', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236',
+      items: [{ sku_id: 'sku_001_w', quantity: 2 }]
+    }
+  })).json;
+  assert.ok(o.order_id, `checkout ok: ${JSON.stringify(o)}`);
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  const sub = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o.order_id).id;
+  g.db.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(sub);
+  const item = g.db.prepare('SELECT id, quantity FROM order_items WHERE sub_order_id = ?').get(sub);
+  const claim = await g.call(`/api/v1/orders/${o.order_id}/claims`, {
+    method: 'POST', token: cust, body: { claim_type: 'RETURN', reason: '변심', items: [{ order_item_id: item.id, quantity: 2 }] }
+  });
+  assert.equal(claim.status, 201, claim.text);
+  const badLine = await g.call(`/api/v1/admin/claims/${claim.json.claim_id}`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE', lines: [{ order_item_id: 'oi_missing', quantity: 1 }] }
+  });
+  assert.equal(badLine.status, 400, 'foreign lines refused');
+  const split = await g.call(`/api/v1/admin/claims/${claim.json.claim_id}`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE', lines: [{ order_item_id: item.id, quantity: 1 }] }
+  });
+  assert.equal(split.status, 200, split.text);
+  assert.equal(split.json.split, true, 'partial subset flagged as split');
+  const left = g.db.prepare('SELECT quantity, refunded_quantity FROM order_items WHERE id = ?').get(item.id);
+  assert.equal(left.refunded_quantity, 1, 'one unit refunded');
+  assert.equal(left.quantity - left.refunded_quantity, 1, 'one unit left with the buyer');
+  const queued = await g.call('/api/v1/admin/claims?status=REFUNDED', { token: adm });
+  assert.ok(queued.json.data.some((x) => x.id === claim.json.claim_id), 'status filter finds the ruling');
+});
+
+await t.test('A20. order list pages across ten thousand rows', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.exec('BEGIN');
+  const ins = g.db.prepare(`INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount,
+    total_discount_amount, total_pay_amount, payment_status, recipient_name, recipient_phone, shipping_address_line1,
+    shipping_address_line2, shipping_postal_code) VALUES (?, ?, 'u_customer_001', 1000, 0, 0, 1000, 'PAID', 'n', 'p', 'a', '', '06236')`);
+  for (let i = 0; i < 10000; i++) ins.run(`o_a20_${i}`, `A20-${i}`);
+  g.db.exec('COMMIT');
+  const p2 = await g.call('/api/v1/admin/orders?per_page=50&page=2', { token: adm });
+  assert.equal(p2.status, 200, p2.text);
+  assert.equal(p2.json.data.length, 50, 'full page returned');
+  assert.ok(p2.json.pagination.total >= 10000, 'total counts all rows');
+  assert.equal(p2.json.pagination.total_pages, Math.ceil(p2.json.pagination.total / 50), 'page math consistent');
+  const byNo = await g.call('/api/v1/admin/orders?q=A20-4242', { token: adm });
+  assert.ok(byNo.json.data.some((o) => o.order_no === 'A20-4242'), 'order-no search hits');
+  const csv = await g.call('/api/v1/admin/orders?format=csv&q=A20-4242', { token: adm });
+  assert.equal(csv.status, 200, csv.text);
+  assert.match(csv.headers.get('content-type') || '', /text\/csv/, 'csv content type');
+  assert.ok(csv.text.includes('A20-4242'), 'csv carries the row');
+  const bad = await g.call('/api/v1/admin/orders?status=BOGUS', { token: adm });
+  assert.equal(bad.status, 400, 'status validated');
+});
+
+await t.test('A21. policy history lists changes and backdates are refused', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const today = new Date().toISOString().slice(0, 10);
+  const past = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'pg.fee_bps', value: '300', effective_from: '2001-01-01' }
+  });
+  assert.equal(past.status, 400, 'backdate refused');
+  const set = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'pg.fee_bps', value: '300', effective_from: today }
+  });
+  assert.equal(set.status, 200, set.text);
+  const set2 = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'pg.fee_bps', value: '350', effective_from: today }
+  });
+  assert.equal(set2.status, 200, set2.text);
+  const hist = await g.call('/api/v1/admin/platform-policies/history?key=pg.fee_bps', { token: adm });
+  assert.equal(hist.status, 200, hist.text);
+  assert.ok(hist.json.data.some((h) => h.old_value === '300' && h.new_value === '350'), 'change recorded');
+  const payouts = await g.call('/api/v1/admin/finance/payouts', { token: adm });
+  assert.equal(payouts.status, 200, payouts.text);
+  assert.ok(Array.isArray(payouts.json.data.pending), 'pending shaped');
+  assert.ok(payouts.json.data.pending.every((p) => 'settlement_cycle' in p), 'cycle carried for batching');
+});
+
+await t.test('A22. banner placement and windows gate storefront exposure', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const badPos = await g.call('/api/v1/admin/banners', {
+    method: 'POST', token: adm, body: { title: 'x', image_url: 'https://x/i.png', position: 'SIDEBAR' }
+  });
+  assert.equal(badPos.status, 400, 'position validated');
+  const badWin = await g.call('/api/v1/admin/banners', {
+    method: 'POST', token: adm, body: { title: 'x', image_url: 'https://x/i.png', starts_at: '2030-01-02', ends_at: '2030-01-01' }
+  });
+  assert.equal(badWin.status, 400, 'window ordered');
+  const hero = await g.call('/api/v1/admin/banners', {
+    method: 'POST', token: adm, body: { title: 'A22 hero', image_url: 'https://x/hero.png', position: 'HOME_HERO' }
+  });
+  assert.equal(hero.status, 201, hero.text);
+  const strip = await g.call('/api/v1/admin/banners', {
+    method: 'POST', token: adm, body: { title: 'A22 strip', image_url: 'https://x/strip.png', position: 'HOME_STRIP' }
+  });
+  assert.equal(strip.status, 201, strip.text);
+  const old = await g.call('/api/v1/admin/banners', {
+    method: 'POST', token: adm, body: { title: 'A22 old', image_url: 'https://x/old.png', starts_at: '2001-01-01', ends_at: '2001-01-02' }
+  });
+  assert.equal(old.status, 201, old.text);
+  const pub = await g.call('/api/v1/banners');
+  assert.ok(pub.json.data.some((b) => b.id === hero.json.data.id), 'hero exposed by default');
+  assert.ok(!pub.json.data.some((b) => b.id === strip.json.data.id), 'strip hidden by default');
+  assert.ok(!pub.json.data.some((b) => b.id === old.json.data.id), 'expired window hidden');
+  const all = await g.call('/api/v1/banners?position=ALL');
+  assert.ok(all.json.data.some((b) => b.id === strip.json.data.id), 'strip selectable');
+});
+
+await t.test('A23. flash campaign, seller apply, approve, home exposure', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  g.db.prepare("UPDATE flash_sale_campaigns SET status = 'ENDED'").run();
+  const now = new Date();
+  const fmt = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+  const camp = await g.call('/api/v1/admin/flash-sales', {
+    method: 'POST', token: adm,
+    body: { title: 'A23 특가', starts_at: fmt(new Date(now.getTime() - 3600000)), ends_at: fmt(new Date(now.getTime() + 3600000)), status: 'ACTIVE' }
+  });
+  assert.equal(camp.status, 201, camp.text);
+  const campId = camp.json.data.id;
+  const deal = 10000;
+  const sale = g.db.prepare('SELECT sale_price, stock_quantity FROM product_skus WHERE id = ?').get('sku_001_w');
+  assert.ok(deal < sale.sale_price && sale.stock_quantity >= 5, 'seed sku fits the deal');
+  const apply = await g.call(`/api/v1/partner/flash-sales/${campId}/apply`, {
+    method: 'POST', token: pt, body: { sku_id: 'sku_001_w', deal_price: deal, allocated_stock: 5 }
+  });
+  assert.equal(apply.status, 201, apply.text);
+  const itemId = apply.json.data.id;
+  const decide = await g.call(`/api/v1/admin/flash-sales/${campId}/items/${itemId}`, {
+    method: 'PUT', token: adm, body: { decision: 'APPROVE' }
+  });
+  assert.equal(decide.status, 200, decide.text);
+  const feed = await g.call('/api/v1/campaigns/lightning');
+  assert.equal(feed.json.campaign.id, campId, 'campaign live on home');
+  const row = feed.json.items.find((it) => it.id === itemId);
+  assert.ok(row, 'approved item exposed');
+  assert.equal(row.charged_price, deal, 'feed charges the deal price');
+  assert.equal(row.sold_percent, 0, 'sell-through starts at zero');
+});
+
+await t.test('A24. platform coupon stats split platform and seller shares', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const c = await g.call('/api/v1/admin/coupons', {
+    method: 'POST', token: adm,
+    body: { code: 'A24PLAT', title: 'A24 플랫폼', discount_type: 'FIXED_AMOUNT', discount_value: 2000, platform_share_bps: 5000 }
+  });
+  assert.equal(c.status, 201, c.text);
+  const couponId = c.json.data.id;
+  const claim = await g.call('/api/v1/coupons/claim', {
+    method: 'POST', token: cust, headers: { 'X-Idempotency-Key': 'a24-claim-1' }, body: { code: 'A24PLAT' }
+  });
+  assert.equal(claim.status, 200, claim.text);
+  // Seller burden exists only on MARKETPLACE lines (pt_002 in the dev seed).
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
+    VALUES ('prod_a24', 'pt_002', 'cat_e_audio', 'a24', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
+    VALUES ('sku_a24', 'prod_a24', 'C-A24', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236',
+      items: [{ sku_id: 'sku_a24', quantity: 1 }], platform_coupon_id: claim.json.user_coupon_id
+    }
+  })).json;
+  assert.ok(o.order_id, `checkout ok: ${JSON.stringify(o)}`);
+  const list = await g.call('/api/v1/admin/coupons', { token: adm });
+  const row2 = list.json.data.find((x) => x.id === couponId);
+  assert.equal(row2.used_count, 1, 'use counted');
+  assert.equal(row2.platform_discount_total, 2000, 'discount totalled');
+  assert.equal(row2.platform_seller_share, 1000, 'seller half split out');
+  const stop = await g.call(`/api/v1/admin/coupons/${couponId}/suspend`, { method: 'PUT', token: adm });
+  assert.equal(stop.status, 200, stop.text);
+  assert.equal(g.db.prepare('SELECT is_active FROM coupons WHERE id = ?').get(couponId).is_active, 0, 'suspended');
+});
+
 t.finish();

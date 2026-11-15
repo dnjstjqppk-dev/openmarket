@@ -13,18 +13,18 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (p) => readFileSync(join(ROOT, p), 'utf8')
 
 await t.test('A01 claims table binds the real claim_type and offers approve+reject', async () => {
-  const v = read('apps/admin/src/views/LedgerAuditView.vue')
-  assert.ok(v.includes('{{ cl.claim_type }}'), 'type column binds claim_type (API has no `type` field)')
-  assert.ok(!v.includes('{{ cl.type }}'), 'stale cl.type binding is gone')
-  assert.ok(v.includes("resolveClaim(cl.id, 'REJECTED')"), 'reject button wired')
-  assert.ok(v.includes("cl.claim_type === 'RETURN'"), 'approve gated to RETURN (EXCHANGE is seller-approved)')
+  const v = read('apps/admin/src/views/claims/ClaimListView.vue')
+  assert.ok(v.includes('row.claim_type'), 'type column binds claim_type (API has no `type` field)')
+  assert.ok(!v.includes('row.type'), 'stale row.type binding is gone')
+  assert.ok(v.includes('openReject(row)'), 'reject button wired')
+  assert.ok(v.includes("row.claim_type === 'RETURN'"), 'split gated to RETURN (EXCHANGE is seller-approved)')
   assert.ok(v.includes('EXCHANGE') && v.includes('판매자'), 'exchange claims explain the seller path')
-  assert.ok(v.includes('if (!notes) return'), 'prompt cancel never fires a note-less reject')
+  assert.ok(v.includes('!rejectNote.trim()'), 'empty notes never fire a reject')
 })
 
 await t.test('A02 orders table wires manual full-refund with reason and idempotency', async () => {
-  const v = read('apps/admin/src/views/OrdersView.vue')
-  assert.ok(v.includes('/api/v1/admin/orders/${o.id}/refund'), 'refund endpoint called per order')
+  const v = read('apps/admin/src/views/orders/OrderDetailView.vue')
+  assert.ok(v.includes('/api/v1/admin/orders/${order.value.id}/refund'), 'refund endpoint called per order')
   assert.ok(v.includes('X-Idempotency-Key'), 'refund carries an idempotency key')
   assert.ok(v.includes('refunded_quantity'), 'already-refunded quantities are excluded')
   assert.ok(v.includes('전액 환불'), 'refund action labeled')
@@ -97,18 +97,19 @@ await t.test('A05 dashboard carries no money-moving arbitration (tribunal is 4-1
 })
 
 await t.test('A06 broadcast push confirms target before sending', async () => {
-  const v = read('apps/admin/src/views/MarketingView.vue')
-  assert.ok(v.includes('window.confirm'), 'broadcast requires confirmation')
+  const v = read('apps/admin/src/views/marketing/NotificationSendView.vue')
+  assert.ok(v.includes('askConfirm'), 'broadcast confirms via useConfirm')
   assert.ok(v.includes('notifTarget.value'), 'confirm names the target audience')
   assert.ok(v.includes('발송에 실패'), 'broadcast failure is reported')
 })
 
-await t.test('A07 ledger claim approve confirms with amount before moving money', async () => {
-  const v = read('apps/admin/src/views/LedgerAuditView.vue')
-  assert.ok(v.includes('window.confirm'), 'approve requires confirmation')
+await t.test('A07 dispute ruling confirms with amount before moving money', async () => {
+  const v = read('apps/admin/src/views/claims/ClaimListView.vue')
+  assert.ok(v.includes('askConfirm'), 'ruling confirms via useConfirm')
   assert.ok(v.includes('실제 환불이 실행됩니다'), 'confirm warns money moves')
-  assert.ok(v.includes("resolveClaim(cl.id, 'APPROVED', cl.refund_amount)"), 'approve passes the amount')
-  assert.ok(v.includes("resolveClaim(cl.id, 'REJECTED')"), 'reject path unchanged')
+  assert.ok(v.includes('amounts:'), 'confirm carries the bold amount')
+  assert.ok(v.includes('구매자 환불') && v.includes('분담') && v.includes('판매자 부담'), 'three-way ruling offered')
+  assert.ok(v.includes("decision: 'APPROVE'") && v.includes("decision: 'REJECT'"), 'approve and reject wired')
 })
 
 t.finish()

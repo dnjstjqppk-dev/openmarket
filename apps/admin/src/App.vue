@@ -49,20 +49,31 @@ const rawMenu: ConsoleMenuItem[] = [
       { to: "/categories", label: '카테고리' }
     ]
   },
-  { to: "/orders", label: '주문·클레임', icon: Receipt },
+  {
+    to: "/orders", label: '주문·클레임', icon: Receipt,
+    children: [
+      { to: "/orders", label: '주문 목록' },
+      { to: "/claims", label: '분쟁 판정' }
+    ]
+  },
   {
     to: "/reconciliation", label: '정산·재무', icon: ChartPie,
     children: [
       { to: "/reconciliation", label: '데이터 대사' },
+      { to: "/finance/batches", label: '정산 배치' },
+      { to: "/finance/payout-requests", label: '출금 승인' },
+      { to: "/finance/policies", label: '수수료 정책' },
       { to: "/ledger", label: '원장 감사' }
     ]
   },
   {
     to: "/marketing", label: '마케팅', icon: Megaphone,
     children: [
-      { to: "/marketing", label: '배너' },
+      { to: "/marketing/banners", label: '배너' },
+      { to: "/marketing/exhibitions", label: '기획전' },
+      { to: "/marketing/flash-sales", label: '타임딜' },
       { to: "/coupons", label: '플랫폼 쿠폰' },
-      { to: "/marketing", label: '알림 발송' }
+      { to: "/marketing/notifications", label: '알림 발송' }
     ]
   },
   {

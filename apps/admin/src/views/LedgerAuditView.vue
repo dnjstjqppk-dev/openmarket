@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { LoaderCircle } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { API_BASE_URL, getAdminHeaders } from '../config'
 const router = useRouter()
 
 const settlements = ref<any[]>([])
 const inventoryLogs = ref<any[]>([])
-const claims = ref<any[]>([])
 const taxInvoices = ref<any[]>([])
 const loading = ref(true)
 const actionMsg = ref('')
@@ -17,20 +16,15 @@ const loadLedgers = async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const [res, claimRes, taxRes] = await Promise.all([
+    const [res, taxRes] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/admin/ledgers`, { headers: getAdminHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/admin/claims`, { headers: getAdminHeaders() }),
       fetch(`${API_BASE_URL}/api/v1/finance/tax-invoices`, { headers: getAdminHeaders() }).catch(() => null)
     ])
-    if (!res.ok || !claimRes.ok) throw new Error(`원장을 불러오지 못했습니다`)
+    if (!res.ok) throw new Error(`원장을 불러오지 못했습니다`)
     const json = await res.json()
-    const claimJson = await claimRes.json()
     if (json.success) {
       settlements.value = (Array.isArray(json.data) ? json.data : (json.data.settlements || [])).map((s: any) => ({ ...s, settlement_status: s.status === 'PAID_OUT' ? 'PAID' : s.status }))
       inventoryLogs.value = Array.isArray(json.data) ? [] : (json.data.inventory_ledger || [])
-    }
-    if (claimJson.success) {
-      claims.value = claimJson.data || []
     }
     if (taxRes && taxRes.ok) {
       const taxJson = await taxRes.json()
@@ -48,29 +42,7 @@ const loadLedgers = async () => {
 // carrying the partner so the pending payout is preselected there.
 const approveSettlement = async (s: any) => {
   // Individual settlement approval was replaced by per-seller payouts (with post-payout refund deductions).
-  router.push({ path: '/reconciliation', query: s?.partner_id ? { partner_id: s.partner_id } : {} })
-}
-
-const resolveClaim = async (claimId: string, status: string, refundAmount?: number) => {
-  if (status !== 'REJECTED') {
-    const amt = Number(refundAmount || 0).toLocaleString()
-    // HOLD (Q-1-9): admin_ops A07 pins window.confirm here; convert after the test is updated.
-    if (!window.confirm(`클레임 ${claimId} (환불 ₩${amt}) 승인 시 실제 환불이 실행됩니다. 계속할까요?`)) return
-  }
-  let body: any = { decision: 'APPROVE' }
-  if (status === 'REJECTED') {
-    const notes = window.prompt('거절 사유를 입력하세요 (필수, 감사 로그에 기록됩니다)', '')?.trim()
-    if (!notes) return
-    body = { decision: 'REJECT', notes }
-  }
-  const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claimId}`, {
-    method: 'PUT',
-    headers: getAdminHeaders(),
-    body: JSON.stringify(body)
-  })
-  const json = await res.json()
-  actionMsg.value = json.success ? `✓ 클레임 ${claimId} 처리 완료 (${json.status})` : `⚠ ${json.error || '처리 실패'}`
-  await loadLedgers()
+  router.push({ path: '/finance/batches', query: s?.partner_id ? { partner_id: s.partner_id } : {} })
 }
 
 onMounted(loadLedgers)
@@ -137,53 +109,8 @@ onMounted(loadLedgers)
       </div>
     </div>
 
-    <!-- Buyer Protection Claims Governance -->
-    <div v-if="claims.length > 0">
-      <h2 class="text-xl font-black text-gray-900 mb-1">Buyer Protection Claims (Return / Exchange / 30-Day Price Match)</h2>
-      <p class="text-xs text-gray-500 mb-4">Audit and resolve customer return or price-adjustment requests</p>
-      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-gray-50 text-gray-500 border-b border-gray-200 uppercase">
-              <th class="py-3 px-5 font-bold">Claim ID</th>
-              <th class="py-3 px-5 font-bold">Order ID</th>
-              <th class="py-3 px-5 font-bold">Type</th>
-              <th class="py-3 px-5 font-bold">Reason</th>
-              <th class="py-3 px-5 font-bold">Refund Amount</th>
-              <th class="py-3 px-5 font-bold">Status / Action</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr v-for="cl in claims" :key="cl.id">
-              <td class="py-3 px-5 font-mono font-bold">{{ cl.id }}</td>
-              <td class="py-3 px-5 font-mono">{{ cl.order_id }}</td>
-              <td class="py-3 px-5 font-black text-indigo-600">{{ cl.claim_type }}</td>
-              <td class="py-3 px-5 text-gray-600">{{ cl.reason }}</td>
-              <td class="py-3 px-5 font-bold">₩{{ Number(cl.refund_amount || 0).toLocaleString() }}</td>
-              <td class="py-3 px-5 flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded bg-gray-100 font-bold">{{ cl.status }}</span>
-                <button
-                  v-if="cl.status === 'REQUESTED' && (cl.claim_type === 'RETURN' || cl.claim_type === 'PRICE_ADJUSTMENT')"
-                  @click="resolveClaim(cl.id, 'APPROVED', cl.refund_amount)"
-                  class="px-2.5 py-1 rounded bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
-                >
-                  {{ cl.claim_type === 'PRICE_ADJUSTMENT' ? 'Approve Credit' : 'Approve Refund' }}
-                </button>
-                <span v-else-if="cl.status === 'REQUESTED' && cl.claim_type === 'EXCHANGE'" class="text-[10px] text-gray-400 font-bold">
-                  판매자 승인·재출고 건
-                </span>
-                <button
-                  v-if="cl.status === 'REQUESTED'"
-                  @click="resolveClaim(cl.id, 'REJECTED')"
-                  class="px-2.5 py-1 rounded bg-white border border-red-300 text-red-600 text-[11px] font-bold cursor-pointer"
-                >
-                  Reject
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div>
+      <RouterLink to="/claims" class="text-xs font-bold text-primary hover:underline">분쟁 판정은 클레임 화면에서 처리합니다 →</RouterLink>
     </div>
 
     <div>

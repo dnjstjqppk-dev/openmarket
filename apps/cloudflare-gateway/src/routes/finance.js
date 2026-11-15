@@ -498,13 +498,13 @@ export async function handleFinanceRoutes(request, url, env, corsHeaders) {
 
   if (p === '/api/v1/admin/finance/payouts' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT po.*, pt.business_name FROM payouts po JOIN partners pt ON pt.id = po.partner_id ORDER BY po.created_at DESC LIMIT 200').all();
-    const { results: partners } = await env.DB.prepare("SELECT id, business_name FROM partners WHERE sales_model = 'MARKETPLACE'").all();
+    const { results: partners } = await env.DB.prepare("SELECT id, business_name, settlement_cycle FROM partners WHERE sales_model = 'MARKETPLACE'").all();
     const pending = [];
     for (const pt of partners) {
       const pv = await payablePreview(env, pt.id);
       if (pv.settlements.length || pv.carried.length || pv.releasable.length || pv.reserve_outstanding) {
         pending.push({
-          partner_id: pt.id, business_name: pt.business_name, settlements: pv.settlements.length, carried_adjustments: pv.carried.length,
+          partner_id: pt.id, business_name: pt.business_name, settlement_cycle: pt.settlement_cycle, settlements: pv.settlements.length, carried_adjustments: pv.carried.length,
           gross_amount: pv.gross, reserve_to_hold: pv.held, reserve_to_release: pv.released, amount: pv.amount,
           reserve_outstanding: pv.reserve_outstanding, next_reserve_release: pv.next_release
         });

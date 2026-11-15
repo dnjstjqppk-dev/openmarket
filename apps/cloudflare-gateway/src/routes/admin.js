@@ -593,14 +593,37 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, applied: false });
   }
 
-  // 6. Admin All Orders
+  // 6. Admin All Orders (4-16: status, period, keyword, CSV; detail rides below).
   if (url.pathname === '/api/v1/admin/orders' && request.method === 'GET') {
     const admPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const admPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
-    const admTotal = await env.DB.prepare('SELECT COUNT(*) AS c FROM orders').first('c') || 0;
+    const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = url.searchParams.get('from') || null;
+    const to = url.searchParams.get('to') || null;
+    if ((from && !dayRe.test(from)) || (to && !dayRe.test(to))) throw bad('INVALID_PERIOD', 'from·to는 YYYY-MM-DD 형식이어야 합니다.');
+    const where = [];
+    const args = [];
+    const fStatus = str(url.searchParams.get('status') || '', { max: 20 }).toUpperCase();
+    if (fStatus) {
+      if (!['READY', 'PAID', 'FAILED', 'CANCELLED', 'PARTIAL_REFUNDED', 'DELIVERED'].includes(fStatus)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
+      where.push('o.payment_status = ?'); args.push(fStatus);
+    }
+    if (from) { where.push('date(o.created_at) >= date(?)'); args.push(from); }
+    if (to) { where.push('date(o.created_at) <= date(?)'); args.push(to); }
+    const q = str(url.searchParams.get('q') || '', { max: 200 });
+    if (q) {
+      where.push(`(o.order_no LIKE ? OR u.email LIKE ? OR o.recipient_name LIKE ?
+        OR EXISTS (SELECT 1 FROM sub_orders s JOIN partners p ON p.id = s.partner_id WHERE s.parent_order_id = o.id AND p.business_name LIKE ?)
+        OR EXISTS (SELECT 1 FROM sub_orders s JOIN order_items i ON i.sub_order_id = s.id WHERE s.parent_order_id = o.id AND i.product_title LIKE ?))`);
+      args.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const admTotal = await env.DB.prepare(`SELECT COUNT(*) AS c FROM orders o LEFT JOIN users u ON o.customer_id = u.id ${whereSql}`).bind(...args).first('c') || 0;
+    const asCsv = String(url.searchParams.get('format') || '').toLowerCase() === 'csv';
     const { results: orders } = await env.DB.prepare(
-      'SELECT o.*, u.email as buyer_email FROM orders o LEFT JOIN users u ON o.customer_id = u.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?'
-    ).bind(admPerPage, (admPage - 1) * admPerPage).all();
+      `SELECT o.*, u.email as buyer_email FROM orders o LEFT JOIN users u ON o.customer_id = u.id
+       ${whereSql} ORDER BY o.created_at DESC ${asCsv ? 'LIMIT 5000' : 'LIMIT ? OFFSET ?'}`
+    ).bind(...args, ...(asCsv ? [] : [admPerPage, (admPage - 1) * admPerPage])).all();
 
     for (const ord of orders) {
       const { results: subs } = await env.DB.prepare(
@@ -615,7 +638,36 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       ord.pccc = await maybeOpenPii(env, ord.pccc);
     }
     await logPiiView(env, admin, 'admin.orders', 'order', orders.map((o) => o.id), 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
+    if (asCsv) {
+      return csvResponse(corsHeaders, 'admin_orders.csv',
+        ['order_no', 'buyer_email', 'pay_amount', 'payment_status', 'created_at'],
+        orders.map((o) => [o.order_no, o.buyer_email, o.total_pay_amount, o.payment_status, o.created_at]));
+    }
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: orders.length, pagination: { page: admPage, per_page: admPerPage, total: Number(admTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(admTotal) || 0) / admPerPage)) }, data: orders }), { headers: corsHeaders });
+  }
+
+  // 4-16: order detail — subs/items, payments, refunds, settlements, journal, claims.
+  const admOrdM = url.pathname.match(/^\/api\/v1\/admin\/orders\/([^/]+)$/);
+  if (admOrdM && request.method === 'GET') {
+    const ord = await env.DB.prepare(
+      'SELECT o.*, u.email as buyer_email FROM orders o LEFT JOIN users u ON o.customer_id = u.id WHERE o.id = ? OR o.order_no = ?'
+    ).bind(admOrdM[1], admOrdM[1]).first();
+    if (!ord) throw notFound('주문을 찾을 수 없습니다.');
+    const { results: subs } = await env.DB.prepare(
+      'SELECT s.*, p.business_name FROM sub_orders s LEFT JOIN partners p ON s.partner_id = p.id WHERE s.parent_order_id = ?'
+    ).bind(ord.id).all();
+    for (const s of subs) {
+      const { results: items } = await env.DB.prepare('SELECT * FROM order_items WHERE sub_order_id = ?').bind(s.id).all();
+      s.items = items;
+      s.settlement = await env.DB.prepare('SELECT * FROM settlements WHERE sub_order_id = ?').bind(s.id).first() || null;
+    }
+    const { results: payments } = await env.DB.prepare('SELECT * FROM payment_transactions WHERE order_id = ? ORDER BY created_at ASC').bind(ord.id).all();
+    const { results: refunds } = await env.DB.prepare('SELECT * FROM refunds WHERE order_id = ? ORDER BY created_at ASC').bind(ord.id).all();
+    const { results: journal } = await env.DB.prepare('SELECT * FROM journal_entries WHERE order_id = ? ORDER BY created_at ASC LIMIT 200').bind(ord.id).all();
+    const { results: claims } = await env.DB.prepare('SELECT * FROM returns WHERE order_id = ? ORDER BY created_at DESC').bind(ord.id).all();
+    ord.pccc = await maybeOpenPii(env, ord.pccc);
+    await logPiiView(env, admin, 'admin.orders', 'order', [ord.id], 'buyer_email,recipient_name,recipient_phone,shipping_address,pccc', request);
+    return json(corsHeaders, { success: true, data: { order: ord, sub_orders: subs, payments, refunds, journal, claims } });
   }
 
   // 7. Admin Ledger / Settlements & Approve Payout
@@ -641,14 +693,27 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/admin/claims' && request.method === 'GET') {
     const clmPage = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const clmPerPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
-    const clmTotal = await env.DB.prepare('SELECT COUNT(*) AS c FROM returns').first('c') || 0;
+    const cWhere = [];
+    const cArgs = [];
+    const cStatus = str(url.searchParams.get('status') || '', { max: 20 }).toUpperCase();
+    if (cStatus) {
+      if (!['REQUESTED', 'APPROVED', 'REJECTED', 'REFUNDED', 'COLLECTING', 'INSPECTING', 'COMPLETED'].includes(cStatus)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
+      cWhere.push('r.status = ?'); cArgs.push(cStatus);
+    }
+    const cType = str(url.searchParams.get('claim_type') || '', { max: 30 }).toUpperCase();
+    if (cType) {
+      if (!['RETURN', 'EXCHANGE', 'PRICE_ADJUSTMENT'].includes(cType)) throw bad('INVALID_CLAIM_TYPE', 'claim_type 값이 올바르지 않습니다.');
+      cWhere.push('r.claim_type = ?'); cArgs.push(cType);
+    }
+    const cWhereSql = cWhere.length ? `WHERE ${cWhere.join(' AND ')}` : '';
+    const clmTotal = await env.DB.prepare(`SELECT COUNT(*) AS c FROM returns r ${cWhereSql}`).bind(...cArgs).first('c') || 0;
     const { results } = await env.DB.prepare(
       `SELECT r.*, o.order_no, u.email as customer_email
        FROM returns r
        LEFT JOIN orders o ON r.order_id = o.id
        LEFT JOIN users u ON r.user_id = u.id
-       ORDER BY r.created_at DESC LIMIT ? OFFSET ?`
-    ).bind(clmPerPage, (clmPage - 1) * clmPerPage).all();
+       ${cWhereSql} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...cArgs, clmPerPage, (clmPage - 1) * clmPerPage).all();
     await logPiiView(env, admin, 'admin.claims', 'claim', results.map((r) => r.id), 'customer_email', request);
     return new Response(JSON.stringify({ success: true, count: results.length, pagination: { page: clmPage, per_page: clmPerPage, total: Number(clmTotal) || 0, total_pages: Math.max(1, Math.ceil((Number(clmTotal) || 0) / clmPerPage)) }, data: results }), { headers: corsHeaders });
   }
@@ -723,15 +788,31 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (claim.claim_type !== 'RETURN') throw conflict('UNSUPPORTED', '반품(RETURN) 클레임만 환불 승인할 수 있습니다.');
     // Approve moves money via refundOrder — require the refund privilege, not just orders.manage.
     if (!hasPermission(admin.adminRole, 'orders.refund')) throw forbidden('환불 승인 권한이 없습니다. (필요 권한: orders.refund)');
+    // 4-16: an explicit line subset is a split ruling (partial buyer refund);
+    // without it the whole claim refunds.
+    let approveLines = JSON.parse(claim.items_json || '[]');
+    let split = false;
+    if (body.lines !== undefined) {
+      if (!Array.isArray(body.lines) || !body.lines.length) throw bad('LINES_REQUIRED', '분담 판정은 환불 품목(lines)이 필요합니다.');
+      const allowed = new Map(approveLines.map((l) => [l.order_item_id, Number(l.quantity) || 0]));
+      approveLines = body.lines.map((l) => {
+        const max = allowed.get(l.order_item_id);
+        if (max === undefined) throw bad('LINE_NOT_IN_CLAIM', '클레임에 없는 품목입니다.');
+        return { order_item_id: l.order_item_id, quantity: intParam(l.quantity, { min: 1, max, field: '수량' }) };
+      });
+      const full = approveLines.every((l) => l.quantity === allowed.get(l.order_item_id)) && approveLines.length === allowed.size;
+      split = !full;
+      if (!split) approveLines = JSON.parse(claim.items_json || '[]');
+    }
     const r = await refundOrder(env, admin, claim.order_id, {
-      lines: JSON.parse(claim.items_json || '[]'), shippingSubOrderIds: [], subOrderId: claim.sub_order_id, claimId: clmId, reasonCode: 'RETURN',
+      lines: approveLines, shippingSubOrderIds: [], subOrderId: claim.sub_order_id, claimId: clmId, reasonCode: 'RETURN',
       restock: body.restock !== false && body.returnless !== true, idemKey: `claim:${clmId}`, subStatusOnFull: 'RETURNED', orderStatusOnFull: 'REFUNDED'
     });
     await env.DB.batch([
       env.DB.prepare("UPDATE sub_orders SET status = 'DELIVERED' WHERE id = ? AND status = 'RETURN_REQUESTED'").bind(claim.sub_order_id),
-      audit('CLAIM_REFUND', 'claim', clmId, claim, { refund_id: r.refund && r.refund.id })
+      audit('CLAIM_REFUND', 'claim', clmId, claim, { refund_id: r.refund && r.refund.id, split })
     ]);
-    return json(corsHeaders, { success: true, claim_id: clmId, status: 'REFUNDED', refund: r.refund });
+    return json(corsHeaders, { success: true, claim_id: clmId, status: 'REFUNDED', split, refund: r.refund });
   }
 
   // 9. Admin Banners Management
@@ -756,11 +837,19 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const bgGradient = str(body.bg_gradient ?? 'from-orange-500 to-red-600', { field: '배너 배경', max: 120 }) || 'from-orange-500 to-red-600';
     const displayOrder = parseInt(body.display_order ?? 0, 10);
     const isActive = body.is_active === false || body.is_active === 0 ? 0 : 1;
+    // 4-18: placement + exposure window (bg_gradient stays stored for old rows only).
+    const position = body.position === undefined ? 'HOME_HERO' : String(body.position).toUpperCase();
+    if (!['HOME_HERO', 'HOME_STRIP'].includes(position)) throw bad('INVALID_POSITION', 'position은 HOME_HERO·HOME_STRIP 중 하나여야 합니다.');
+    const dtRe = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/;
+    const startsAt = body.starts_at === undefined || body.starts_at === null || body.starts_at === '' ? null : str(body.starts_at, { field: '시작일시', max: 30 });
+    const endsAt = body.ends_at === undefined || body.ends_at === null || body.ends_at === '' ? null : str(body.ends_at, { field: '종료일시', max: 30 });
+    if ((startsAt && !dtRe.test(startsAt)) || (endsAt && !dtRe.test(endsAt))) throw bad('INVALID_WINDOW', '노출 기간은 YYYY-MM-DD[ HH:MM[:SS]] 형식이어야 합니다.');
+    if (startsAt && endsAt && !(endsAt > startsAt)) throw bad('INVALID_WINDOW', '종료일시는 시작일시보다 늦어야 합니다.');
 
     await env.DB.batch([
       env.DB.prepare(
-        'INSERT INTO banners (id, title, subtitle, badge_text, image_url, link_url, bg_gradient, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(bannerId, title, subtitle, badgeText, imageUrl, linkUrl, bgGradient, displayOrder, isActive),
+        'INSERT INTO banners (id, title, subtitle, badge_text, image_url, link_url, bg_gradient, display_order, is_active, position, starts_at, ends_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(bannerId, title, subtitle, badgeText, imageUrl, linkUrl, bgGradient, displayOrder, isActive, position, startsAt, endsAt),
       audit('BANNER_CREATE', 'banner', bannerId, null, { title })
     ]);
 
@@ -782,11 +871,18 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       const badgeText = body.badge_text !== undefined ? str(body.badge_text, { field: '배너 뱃지', max: 40 }) : existing.badge_text;
       const bgGradient = body.bg_gradient ? str(body.bg_gradient, { field: '배너 배경', max: 120 }) : existing.bg_gradient;
       const linkUrl = body.link_url ? safeUrl(body.link_url, { field: '배너 링크', allowRelative: true, required: true }) : existing.link_url;
+      const position = body.position !== undefined ? String(body.position).toUpperCase() : existing.position;
+      if (!['HOME_HERO', 'HOME_STRIP'].includes(position)) throw bad('INVALID_POSITION', 'position은 HOME_HERO·HOME_STRIP 중 하나여야 합니다.');
+      const startsAt = body.starts_at !== undefined ? (body.starts_at === null || body.starts_at === '' ? null : str(body.starts_at, { field: '시작일시', max: 30 })) : existing.starts_at;
+      const endsAt = body.ends_at !== undefined ? (body.ends_at === null || body.ends_at === '' ? null : str(body.ends_at, { field: '종료일시', max: 30 })) : existing.ends_at;
+      const dtRe = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/;
+      if ((startsAt && !dtRe.test(startsAt)) || (endsAt && !dtRe.test(endsAt))) throw bad('INVALID_WINDOW', '노출 기간은 YYYY-MM-DD[ HH:MM[:SS]] 형식이어야 합니다.');
+      if (startsAt && endsAt && !(endsAt > startsAt)) throw bad('INVALID_WINDOW', '종료일시는 시작일시보다 늦어야 합니다.');
 
       await env.DB.batch([
         env.DB.prepare(
-          'UPDATE banners SET title = ?, subtitle = ?, badge_text = ?, bg_gradient = ?, link_url = ?, display_order = ?, is_active = ? WHERE id = ?'
-        ).bind(title, subtitle, badgeText, bgGradient, linkUrl, displayOrder, isActive, bnrId),
+          'UPDATE banners SET title = ?, subtitle = ?, badge_text = ?, bg_gradient = ?, link_url = ?, display_order = ?, is_active = ?, position = ?, starts_at = ?, ends_at = ? WHERE id = ?'
+        ).bind(title, subtitle, badgeText, bgGradient, linkUrl, displayOrder, isActive, position, startsAt, endsAt, bnrId),
         audit('BANNER_UPDATE', 'banner', bnrId, { title: existing.title, is_active: existing.is_active }, { title, is_active: isActive })
       ]);
 
@@ -909,7 +1005,22 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   // 11. Admin Coupon Management
   if (url.pathname === '/api/v1/admin/coupons' && request.method === 'GET') {
-    const { results } = await env.DB.prepare('SELECT * FROM coupons ORDER BY created_at DESC').all();
+    const { results } = await env.DB.prepare(
+      `SELECT c.*,
+        (SELECT COUNT(*) FROM user_coupons u WHERE u.coupon_id = c.id AND u.is_used = 1) AS used_count,
+        (SELECT COALESCE(SUM(i.store_coupon_alloc), 0) FROM order_items i
+         JOIN sub_orders s ON s.id = i.sub_order_id JOIN user_coupons u ON u.id = s.applied_store_coupon_id
+         WHERE u.coupon_id = c.id) AS store_discount_total,
+        (SELECT COALESCE(SUM(i.platform_coupon_alloc), 0) FROM order_items i
+         JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+         JOIN user_coupons u ON u.id = o.applied_user_coupon_id
+         WHERE u.coupon_id = c.id) AS platform_discount_total,
+        (SELECT COALESCE(SUM(i.seller_burden_amount - i.store_coupon_alloc), 0) FROM order_items i
+         JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+         JOIN user_coupons u ON u.id = o.applied_user_coupon_id
+         WHERE u.coupon_id = c.id) AS platform_seller_share
+       FROM coupons c ORDER BY c.created_at DESC`
+    ).all();
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
@@ -1218,6 +1329,16 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }
     const row = await env.DB.prepare('SELECT * FROM platform_policies WHERE key = ?').bind(key).first();
     return json(corsHeaders, { success: true, ...row, data: row });
+  }
+
+  // 4-17: policy change history (trigger-kept; backdates refused at write time).
+  if (url.pathname === '/api/v1/admin/platform-policies/history' && request.method === 'GET') {
+    const key = str(url.searchParams.get('key') || '', { max: 100 });
+    const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM platform_policy_history ${key ? 'WHERE policy_key = ?' : ''} ORDER BY created_at DESC LIMIT ?`
+    ).bind(...(key ? [key] : []), limit).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
   // 2-9: flash-sale campaigns, direct picks, application review.

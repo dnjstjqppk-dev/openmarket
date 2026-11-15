@@ -261,6 +261,8 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1commission'
   /api/v1/admin/orders:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1orders'
+  /api/v1/admin/orders/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1orders~1{id}'
   /api/v1/admin/ledger:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1ledger'
   /api/v1/admin/settlements/{id}/approve:
@@ -593,6 +595,8 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1notice-templates~1{id}'
   /api/v1/admin/platform-policies:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1platform-policies'
+  /api/v1/admin/platform-policies/history:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1platform-policies~1history'
   /api/v1/admin/flash-sales:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1flash-sales'
   /api/v1/admin/flash-sales/{id}:

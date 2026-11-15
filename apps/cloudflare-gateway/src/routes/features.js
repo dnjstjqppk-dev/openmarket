@@ -628,9 +628,13 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
 
   // 10. Dynamic Promotional Banners
   if (url.pathname === '/api/v1/banners' && request.method === 'GET') {
+    const pos = String(url.searchParams.get('position') || 'HOME_HERO').toUpperCase();
     const { results } = await env.DB.prepare(
-      'SELECT * FROM banners WHERE is_active = 1 ORDER BY display_order ASC, created_at DESC'
-    ).all();
+      `SELECT * FROM banners WHERE is_active = 1 AND (? = 'ALL' OR position = ?)
+       AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+       AND (ends_at IS NULL OR ends_at >= CURRENT_TIMESTAMP)
+       ORDER BY display_order ASC, created_at DESC`
+    ).bind(pos, pos).all();
     return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
   }
 

@@ -145,7 +145,7 @@ await t.test('H11-01 not-found names the requested page', async () => {
 })
 
 await t.test('H11-02 admin order empty names the selected filters', async () => {
-  const v = read('apps/admin/src/views/OrdersView.vue')
+  const v = read('apps/admin/src/views/orders/OrderListView.vue')
   assert.ok(v.includes('title="선택한 조건에 맞는 주문이 없습니다."'), 'filter-aware empty title present')
   assert.ok(v.includes('data-empty'), 'empty marker present')
 })
