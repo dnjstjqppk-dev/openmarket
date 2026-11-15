@@ -58,7 +58,7 @@ await t.test('P1-A03 status badges derive from fetch outcomes, not static copy',
 
 await t.test('P1-A04 dashboard surfaces per-source failures with retry', async () => {
   const v = read('apps/admin/src/views/DashboardView.vue')
-  assert.ok(v.includes('loadControlTower'), 'retry calls loadControlTower')
+  assert.ok(v.includes('loadDashboard'), 'retry calls loadDashboard')
   assert.ok(/다시 시도|재시도|retry/i.test(v), 'retry affordance exists')
   assert.ok(v.includes('failedSources') || v.includes('loadError'), 'failure state tracked')
   assert.ok(!v.includes('} catch (_) {\n  }'), 'empty outer catch is gone')
@@ -78,19 +78,19 @@ await t.test('P1-A06 supplier console binds isLoading and surfaces loader errors
   assert.ok(sets >= 10, `loader catches surface errorMsg (${sets} assignments)`)
 })
 
-await t.test('P1-A08 partner verify confirms with business+tier+reserve and toasts failures', async () => {
-  const v = read('apps/admin/src/views/PartnerVerifyView.vue')
-  const fn = v.split('async function verify')[1].split('function maskAcct')[0]
-  assert.ok(fn.includes('window.confirm'), 'verify() confirms')
-  assert.ok(fn.includes('business_name') && fn.includes('reserve'), 'confirm names business + tier/reserve')
-  assert.ok(fn.includes('else') && fn.includes('toastMsg'), 'failure branch toasts')
-  assert.ok(/catch[^{]*\{[^}]*toastMsg/s.test(fn), 'catch toasts')
+await t.test('P1-A08 partner suspend confirms with business+tier+reserve and toasts failures', async () => {
+  const v = read('apps/admin/src/views/partners/PartnerDetailView.vue')
+  const fn = v.split('async function setStatus')[1].split('function openEvidence')[0]
+  assert.ok(fn.includes('askConfirm'), 'setStatus() confirms via useConfirm')
+  assert.ok(fn.includes('business_name') && fn.includes('RESERVE_OF'), 'confirm names business + tier/reserve')
+  assert.ok(fn.includes('toastApi.error'), 'failure branch toasts')
+  assert.ok(/catch[^{]*\{[^}]*toastApi/s.test(fn), 'catch toasts')
 })
 
 await t.test('P1-A09 product status change confirms and reports failures', async () => {
-  const v = read('apps/admin/src/views/ProductManageView.vue')
-  const fn = v.split('async function updateStatus')[1].split('async function reviewProduct')[0]
-  assert.ok(fn.includes('window.confirm') || fn.includes('confirm('), 'updateStatus() confirms')
+  const v = read('apps/admin/src/views/products/ProductListView.vue')
+  const fn = v.split('async function updateStatus')[1].split('onMounted')[0]
+  assert.ok(fn.includes('askConfirm'), 'updateStatus() confirms via useConfirm')
   assert.ok(v.includes('toastMsg') || v.includes('actionMsg') || v.includes('errorMsg'), 'feedback message state exists')
   assert.ok(fn.includes('else') || /catch[^{]*\{[^}]*toast/s.test(fn), 'failure branch reports')
 })
@@ -174,7 +174,8 @@ await t.test('P1-A14 adminApi never throws and views handle load failure', async
     ['apps/admin/src/views/ReconciliationView.vue', 'try'],
     ['apps/admin/src/views/SecurityView.vue', 'try'],
     ['apps/admin/src/views/SuppliersView.vue', 'try'],
-    ['apps/admin/src/views/PartnerApplicationsView.vue', 'try']
+    ['apps/admin/src/views/partners/ApplicationListView.vue', 'try'],
+    ['apps/admin/src/views/partners/ApplicationDetailView.vue', 'try']
   ]) {
     const v = read(f)
     assert.ok(v.includes(need), `${f} guards adminApi with try/catch`)
@@ -184,9 +185,9 @@ await t.test('P1-A14 adminApi never throws and views handle load failure', async
 })
 
 await t.test('A-N01 partner applications mask bank account numbers', async () => {
-  const v = read('apps/admin/src/views/PartnerApplicationsView.vue')
+  const v = read('apps/admin/src/views/partners/ApplicationDetailView.vue')
   assert.ok(v.includes('maskAcct'), 'view reuses maskAcct')
-  assert.ok(!v.includes('{{ a.bank_account_number }}'), 'full account number never rendered raw')
+  assert.ok(!v.includes('{{ app.bank_account_number }}'), 'full account number never rendered raw')
 })
 
 await t.test('A-N02 coupon form caps PERCENT discounts with max_discount_amount', async () => {

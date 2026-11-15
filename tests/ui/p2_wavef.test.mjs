@@ -171,7 +171,7 @@ await t.test('F-A06 API base URL is required env, never a prod hardcode', async 
 })
 
 await t.test('F-A07 reserve defaults pinned between UI and server', async () => {
-  const v = read('apps/admin/src/views/PartnerVerifyView.vue')
+  const v = read('apps/admin/src/views/partners/PartnerDetailView.vue')
   const srv = read('apps/cloudflare-gateway/src/routes/admin.js')
   assert.ok(v.includes('10.0') && v.includes('5.0'), 'UI shows tier defaults')
   assert.ok(srv.includes('TIER_3_HIGH_RISK') && srv.includes('10.0') && srv.includes('5.0'), 'server owns the same defaults')

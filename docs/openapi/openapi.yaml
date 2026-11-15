@@ -251,8 +251,14 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products~1{id}~1status'
   /api/v1/admin/products/{id}/review:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products~1{id}~1review'
+  /api/v1/admin/products/review-queue:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1products~1review-queue'
   /api/v1/admin/partners/{id}/payout-account:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1payout-account'
+  /api/v1/admin/partners/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}'
+  /api/v1/admin/partners/{id}/commission:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1commission'
   /api/v1/admin/orders:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1orders'
   /api/v1/admin/ledger:
@@ -453,6 +459,8 @@ paths:
     $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1partner~1application~1submit'
   /api/v1/admin/partner-applications:
     $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1admin~1partner-applications'
+  /api/v1/admin/partner-applications/{id}:
+    $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1admin~1partner-applications~1{id}'
   /api/v1/admin/partner-applications/{id}/review:
     $ref: './paths/onboarding.yaml#/paths/~1api~1v1~1admin~1partner-applications~1{id}~1review'
 

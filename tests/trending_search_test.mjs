@@ -129,7 +129,7 @@ await t.test('8. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_64_claim_pickup_date.sql', 'pin names d1_64');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_65_category_banned_words.sql', 'pin names d1_65');
 });
 
 t.finish();

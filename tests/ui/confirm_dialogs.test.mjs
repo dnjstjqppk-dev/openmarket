@@ -1,7 +1,11 @@
 // Work order 1-9: native confirm()/alert() become useConfirm/toasts.
-// Four holds stay native because existing tests pin window.confirm there
-// (P1-A08, A05-A07); the storefront hold converted with its e2e script update
-// under autonomous authority (see Q-G3a).
+// Two holds stay native because existing tests pin window.confirm there
+// (A06-A07); the storefront hold converted with its e2e script update
+// under autonomous authority (see Q-G3a), the dashboard tribunal hold
+// retired when 4-12 removed arbitration from the dashboard (rulings move to
+// views/claims in 4-16, built on useConfirm from the start — see Q-4-12),
+// and the partner-verify hold converted when 4-13 rebuilt the seller
+// screens on useConfirm (see Q-4-13).
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -26,8 +30,12 @@ const CONVERTED = [
   'apps/admin/src/views/CouponsView.vue',
   'apps/admin/src/views/InquiriesView.vue',
   'apps/admin/src/views/OrdersView.vue',
-  'apps/admin/src/views/PartnerApplicationsView.vue',
-  'apps/admin/src/views/ProductManageView.vue',
+  'apps/admin/src/views/partners/ApplicationListView.vue',
+  'apps/admin/src/views/partners/ApplicationDetailView.vue',
+  'apps/admin/src/views/partners/PartnerListView.vue',
+  'apps/admin/src/views/partners/PartnerDetailView.vue',
+  'apps/admin/src/views/products/ProductListView.vue',
+  'apps/admin/src/views/products/ReviewQueueView.vue',
   'apps/admin/src/views/ReconciliationView.vue',
   'apps/admin/src/views/ReviewsView.vue',
   'apps/admin/src/views/SecurityView.vue',
@@ -44,11 +52,9 @@ const CONVERTED = [
   'apps/partner/src/views/settlements/SettlementOverviewView.vue'
 ]
 
-// Q-1-9: four admin sites stay native because existing tests pin
-// window.confirm there (P1-A08, A05-A07). Each hold is pinned to its exact site.
+// Q-1-9: two admin sites stay native because existing tests pin
+// window.confirm there (A06-A07). Each hold is pinned to its exact site.
 const HOLDS = [
-  ['apps/admin/src/views/PartnerVerifyView.vue', 'async function verify', 'function maskAcct'],
-  ['apps/admin/src/views/DashboardView.vue', 'async function arbitrateDispute', 'const res = await fetch'],
   ['apps/admin/src/views/MarketingView.vue', 'async function handleBroadcastNotification', 'sendingNotif.value = true'],
   ['apps/admin/src/views/LedgerAuditView.vue', 'const resolveClaim', 'let body']
 ]
@@ -57,7 +63,7 @@ await t.test('N01 converted views carry no native confirm/alert', async () => {
   for (const f of CONVERTED) assert.equal(countNative(f), 0, `${f} must be clean`)
 })
 
-await t.test('N02 the four holds stay pinned to their exact sites', async () => {
+await t.test('N02 the two holds stay pinned to their exact sites', async () => {
   for (const [f, start, end] of HOLDS) {
     const v = read(f)
     assert.equal(countIn(v), 1, `${f} keeps exactly one native call`)
@@ -77,8 +83,10 @@ await t.test('N03 converted confirms use useConfirm', async () => {
     'apps/admin/src/views/InquiriesView.vue',
     'apps/admin/src/views/MarketingView.vue',
     'apps/admin/src/views/OrdersView.vue',
-    'apps/admin/src/views/PartnerApplicationsView.vue',
-    'apps/admin/src/views/ProductManageView.vue',
+    'apps/admin/src/views/partners/ApplicationDetailView.vue',
+    'apps/admin/src/views/partners/PartnerDetailView.vue',
+    'apps/admin/src/views/products/ProductListView.vue',
+    'apps/admin/src/views/products/ReviewQueueView.vue',
     'apps/admin/src/views/ReconciliationView.vue',
     'apps/admin/src/views/ReviewsView.vue',
     'apps/admin/src/views/SecurityView.vue',

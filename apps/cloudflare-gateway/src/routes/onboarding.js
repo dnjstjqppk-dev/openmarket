@@ -214,10 +214,20 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
 
   if (p === '/api/v1/admin/partner-applications' && request.method === 'GET') {
     const status = url.searchParams.get('kyc_status') || 'SUBMITTED';
+    const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = url.searchParams.get('from') || null;
+    const to = url.searchParams.get('to') || null;
+    if ((from && !dayRe.test(from)) || (to && !dayRe.test(to))) throw bad('INVALID_PERIOD', 'from·to는 YYYY-MM-DD 형식이어야 합니다.');
+    const brn = (url.searchParams.get('brn') || '').replace(/[-\s]/g, '');
+    const extra = [];
+    const extraArgs = [];
+    if (from) { extra.push('date(p.applied_at) >= date(?)'); extraArgs.push(from); }
+    if (to) { extra.push('date(p.applied_at) <= date(?)'); extraArgs.push(to); }
+    if (brn) { extra.push("REPLACE(p.business_reg_number, '-', '') LIKE ?"); extraArgs.push(`%${brn}%`); }
     const { results } = await env.DB.prepare(
       `SELECT p.*, u.email AS contact_email, u.full_name AS contact_name, u.phone AS contact_phone FROM partners p JOIN users u ON u.id = p.owner_user_id
-       WHERE p.applied_at IS NOT NULL AND (? = 'ALL' OR p.kyc_status = ?) ORDER BY COALESCE(p.submitted_at, p.applied_at) LIMIT 200`
-    ).bind(status, status).all();
+       WHERE p.applied_at IS NOT NULL AND (? = 'ALL' OR p.kyc_status = ?)${extra.length ? ` AND ${extra.join(' AND ')}` : ''} ORDER BY COALESCE(p.submitted_at, p.applied_at) LIMIT 200`
+    ).bind(status, status, ...extraArgs).all();
     const out = [];
     for (const pt of results) {
       const v = await applicationView(env, pt);
@@ -229,6 +239,29 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     }
     await logPiiView(env, admin, 'admin.partner-applications', 'user', results.map((r) => r.owner_user_id), 'contact,bank_account,representative_name', request);
     return json(corsHeaders, { success: true, count: out.length, data: out });
+  }
+
+  // 4-13: single application detail for the review screen.
+  const apDetailM = p.match(/^\/api\/v1\/admin\/partner-applications\/([^/]+)$/);
+  if (apDetailM && request.method === 'GET') {
+    const pt = await env.DB.prepare(
+      `SELECT p.*, u.email AS contact_email, u.full_name AS contact_name, u.phone AS contact_phone FROM partners p JOIN users u ON u.id = p.owner_user_id
+       WHERE p.id = ? AND p.applied_at IS NOT NULL`
+    ).bind(apDetailM[1]).first();
+    if (!pt) throw notFound('입점 신청을 찾을 수 없습니다.');
+    const v = await applicationView(env, pt);
+    await logPiiView(env, admin, 'admin.partner-applications', 'user', [pt.owner_user_id], 'contact,bank_account,representative_name', request);
+    return json(corsHeaders, {
+      success: true,
+      data: {
+        ...v, contact_email: pt.contact_email, contact_name: pt.contact_name, contact_phone: pt.contact_phone,
+        bank_code: pt.bank_code, bank_account_number: maskLast4(await maybeOpenPii(env, pt.bank_account_number)),
+        bank_account_holder: await maybeOpenPii(env, pt.bank_account_holder),
+        customer_service_phone: pt.customer_service_phone, return_shipping_address: pt.return_shipping_address,
+        business_address: pt.business_address, cs_email: pt.cs_email,
+        risk_tier: pt.risk_tier, rolling_reserve_pct: pt.rolling_reserve_pct
+      }
+    });
   }
 
   const rvM = p.match(/^\/api\/v1\/admin\/partner-applications\/([^/]+)\/review$/);

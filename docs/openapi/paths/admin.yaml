@@ -604,6 +604,56 @@ paths:
         '401':
           description: Missing or expired JWT, or not an ADMIN session
 
+  /api/v1/admin/partners/{id}:
+    get:
+      summary: Seller detail with account request, penalties, grade and stats
+      tags: [Admin]
+      description: 4-13 seller screen payload (bank numbers masked).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Partner, payout change, penalties, grade, stats, category rates
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Unknown partner id
+
+  /api/v1/admin/partners/{id}/commission:
+    put:
+      summary: Update a seller base commission rate (audited)
+      tags: [Admin]
+      description: 4-13 commission_rate 0-50; category overrides stay global.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [commission_rate]
+              properties:
+                commission_rate:
+                  type: number
+      responses:
+        '200':
+          description: Updated base rate
+        '400':
+          description: Rate out of range
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '404':
+          description: Unknown partner id
+
   /api/v1/admin/products:
     get:
       summary: List all products with partner, category, SKU and stock rollups (paged)
@@ -754,6 +804,28 @@ paths:
           description: Missing or expired JWT, or not an ADMIN session
         '404':
           description: Product not found
+
+  /api/v1/admin/products/review-queue:
+    get:
+      summary: Pending products with auto-check flags for reviewers
+      tags: [Admin]
+      description: 4-14 images/notice/banned-word/exaggeration/price-hike checks per row; rulings stay human.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Queued products with checks and pagination
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
 
   /api/v1/admin/partners/{id}/payout-account:
     post:

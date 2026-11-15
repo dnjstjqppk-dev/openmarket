@@ -378,4 +378,208 @@ await t.test('A12. admin lists paginate, filter by period and export csv', async
   assert.ok(csv.text.includes('rv_a12n'), 'csv carries review rows');
 });
 
+await t.test('A13. dashboard compares today with yesterday and lists queues', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236',
+      items: [{ sku_id: 'sku_001_w', quantity: 1 }]
+    }
+  })).json;
+  assert.ok(o.order_id, `checkout ok: ${JSON.stringify(o)}`);
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  // Sandbox payments flag is_sandbox=1; the dashboard counts live GMV only,
+  // so flip the row to model a live payment.
+  g.db.prepare('UPDATE orders SET is_sandbox = 0 WHERE id = ?').run(o.order_id);
+  const r = await g.call('/api/v1/admin/dashboard', { token: adm });
+  assert.equal(r.status, 200, r.text);
+  const c = r.json.compare;
+  assert.ok(c.gmv.today > 0 && c.orders.today >= 1, 'today reflects the paid order');
+  assert.ok(Number.isInteger(c.gmv.yesterday) && Number.isInteger(c.orders.yesterday), 'yesterday present');
+  assert.ok(Number.isInteger(c.users.today) && Number.isInteger(c.applications.today), 'user and application compares present');
+  for (const k of ['review_queue', 'open_claims', 'open_disputes', 'payout_pending_amount', 'fds_reviews']) {
+    assert.ok(Number.isInteger(c[k]), `snapshot ${k} present`);
+  }
+  const q = r.json.queues;
+  assert.ok(q.partner_applications.length <= 5 && q.product_reviews.length <= 5 && q.disputes.length <= 5, 'queues capped at 5');
+  const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const row = r.json.series30.find((s) => s.day === kstToday);
+  assert.ok(row && row.orders >= 1 && row.gmv > 0, '30-day series carries today (KST)');
+  assert.ok(Array.isArray(r.json.category_sales), 'category sales present');
+  assert.ok(r.json.category_sales.every((s) => typeof s.category === 'string' && Number.isInteger(s.gmv)), 'category rows shaped');
+});
+
+function seedApplication(g, tag, brn) {
+  g.db.prepare(`INSERT INTO users (id, email, password_hash, full_name, phone, role)
+    VALUES (?, ?, 'x', '담당', '010', 'ROLE_PARTNER')`).run(`u_a14_${tag}`, `a14_${tag}@example.com`);
+  g.db.prepare(`INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, bank_code, bank_account_number,
+      bank_account_holder, status, kyc_status, applied_at, submitted_at, representative_name, mail_order_reg_number)
+    VALUES (?, ?, ?, ?, '004', '123456', '예금주', 'PENDING', 'SUBMITTED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '대표', '제2026-1호')`)
+    .run(`pt_a14_${tag}`, `u_a14_${tag}`, `상호${tag}`, brn);
+  for (const dt of ['BUSINESS_REGISTRATION', 'MAIL_ORDER_REGISTRATION', 'BANK_ACCOUNT_COPY']) {
+    g.db.prepare(`INSERT INTO storage_objects (id, original_name, content_type, byte_size, folder, public_url)
+      VALUES (?, 'd.pdf', 'application/pdf', 10, 'kyb', 'https://x/y')`).run(`so_a14_${tag}_${dt}`);
+    g.db.prepare(`INSERT INTO partner_kyb_documents (id, partner_id, doc_type, storage_object_id, status)
+      VALUES (?, ?, ?, ?, 'SUBMITTED')`).run(`kyb_a14_${tag}_${dt}`, `pt_a14_${tag}`, dt, `so_a14_${tag}_${dt}`);
+  }
+  return `pt_a14_${tag}`;
+}
+
+await t.test('A14. application approve, resubmit and reject end to end', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const pApprove = seedApplication(g, 'ok', '111-11-11111');
+  const pResub = seedApplication(g, 're', '222-22-22222');
+  const pReject = seedApplication(g, 'no', '333-33-33333');
+  const list = await g.call('/api/v1/admin/partner-applications?kyc_status=SUBMITTED', { token: adm });
+  assert.ok(list.json.data.some((x) => x.partner_id === pApprove), 'applicant queued');
+  const brn = await g.call('/api/v1/admin/partner-applications?kyc_status=SUBMITTED&brn=2222222222', { token: adm });
+  assert.ok(brn.json.data.some((x) => x.partner_id === pResub) && !brn.json.data.some((x) => x.partner_id === pApprove), 'brn narrows');
+  const badPeriod = await g.call('/api/v1/admin/partner-applications?from=nope', { token: adm });
+  assert.equal(badPeriod.status, 400, 'period validated');
+  const detail = await g.call(`/api/v1/admin/partner-applications/${pApprove}`, { token: adm });
+  assert.equal(detail.status, 200, detail.text);
+  assert.equal(detail.json.data.documents.length, 3, 'detail carries documents');
+  const noNote = await g.call(`/api/v1/admin/partner-applications/${pReject}/review`, { method: 'POST', token: adm, body: { decision: 'REJECT' } });
+  assert.equal(noNote.status, 400, 'reject needs a reason');
+  const noDocs = await g.call(`/api/v1/admin/partner-applications/${pApprove}/review`, {
+    method: 'POST', token: adm, body: { decision: 'APPROVE', commission_rate: 8, business_status_evidence: '국세청 계속사업자', confirm_documents_checked: false }
+  });
+  assert.equal(noDocs.status, 400, 'approve needs the document-match confirmation');
+  const ok = await g.call(`/api/v1/admin/partner-applications/${pApprove}/review`, {
+    method: 'POST', token: adm, body: { decision: 'APPROVE', commission_rate: 8, business_status_evidence: '국세청 계속사업자', confirm_documents_checked: true }
+  });
+  assert.equal(ok.status, 200, ok.text);
+  const approved = g.db.prepare('SELECT status, kyc_status, commission_rate_bps FROM partners WHERE id = ?').get(pApprove);
+  assert.deepEqual([approved.status, approved.kyc_status, approved.commission_rate_bps], ['APPROVED', 'APPROVED', 800], 'approved with commission');
+  const resub = await g.call(`/api/v1/admin/partner-applications/${pResub}/review`, {
+    method: 'POST', token: adm, body: { decision: 'REQUEST_RESUBMIT', note: '통장 사본이 흐립니다', rejected_document_ids: [`kyb_a14_re_BANK_ACCOUNT_COPY`] }
+  });
+  assert.equal(resub.status, 200, resub.text);
+  assert.equal(g.db.prepare('SELECT kyc_status FROM partners WHERE id = ?').get(pResub).kyc_status, 'RESUBMIT_REQUIRED', 'resubmit queued');
+  assert.equal(g.db.prepare('SELECT status FROM partner_kyb_documents WHERE id = ?').get('kyb_a14_re_BANK_ACCOUNT_COPY').status, 'REJECTED', 'doc flagged');
+  const rej = await g.call(`/api/v1/admin/partner-applications/${pReject}/review`, {
+    method: 'POST', token: adm, body: { decision: 'REJECT', note: '서류 불일치' }
+  });
+  assert.equal(rej.status, 200, rej.text);
+  assert.equal(g.db.prepare('SELECT status FROM partners WHERE id = ?').get(pReject).status, 'REJECTED', 'rejected');
+  const again = await g.call(`/api/v1/admin/partner-applications/${pReject}/review`, {
+    method: 'POST', token: adm, body: { decision: 'REJECT', note: 'x' }
+  });
+  assert.equal(again.status, 409, 'second ruling refused');
+});
+
+await t.test('A15. seller detail bundles account, penalties, grade and stats', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const d = await g.call('/api/v1/admin/partners/pt_001', { token: adm });
+  assert.equal(d.status, 200, d.text);
+  assert.ok(d.json.data.partner && d.json.data.stats && Array.isArray(d.json.data.penalties), 'detail shaped');
+  assert.ok(d.json.data.partner.bank_account_number.startsWith('****'), 'account masked');
+  const missing = await g.call('/api/v1/admin/partners/pt_missing', { token: adm });
+  assert.equal(missing.status, 404, 'unknown seller 404s');
+  const badRate = await g.call('/api/v1/admin/partners/pt_001/commission', { method: 'PUT', token: adm, body: { commission_rate: 99 } });
+  assert.equal(badRate.status, 400, 'commission range enforced');
+  const set = await g.call('/api/v1/admin/partners/pt_001/commission', { method: 'PUT', token: adm, body: { commission_rate: 7.5 } });
+  assert.equal(set.status, 200, set.text);
+  assert.equal(g.db.prepare('SELECT commission_rate_bps FROM partners WHERE id = ?').get('pt_001').commission_rate_bps, 750, 'base rate stored');
+});
+
+await t.test('A16. product filters narrow the list', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
+    VALUES ('prod_a16', 'pt_001', 'cat_e_audio', 'a16', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  const byPartner = await g.call('/api/v1/admin/products?partner_id=pt_001&per_page=200', { token: adm });
+  assert.ok(byPartner.json.data.some((x) => x.id === 'prod_a16'), 'partner narrows');
+  assert.ok(byPartner.json.data.every((x) => x.partner_id === 'pt_001'), 'partner excludes others');
+  const byCat = await g.call('/api/v1/admin/products?category=cat_e_audio&per_page=200', { token: adm });
+  assert.ok(byCat.json.data.some((x) => x.id === 'prod_a16'), 'category narrows');
+  const byStatus = await g.call('/api/v1/admin/products?status=ACTIVE', { token: adm });
+  assert.ok(byStatus.json.data.every((x) => x.status === 'ACTIVE'), 'status narrows');
+  const badStatus = await g.call('/api/v1/admin/products?status=BOGUS', { token: adm });
+  assert.equal(badStatus.status, 400, 'status validated');
+  const byPrice = await g.call('/api/v1/admin/products?min_price=15000&max_price=15000', { token: adm });
+  assert.ok(byPrice.json.data.some((x) => x.id === 'prod_a16'), 'price window hits');
+  const outPrice = await g.call('/api/v1/admin/products?min_price=99999999', { token: adm });
+  assert.ok(!outPrice.json.data.some((x) => x.id === 'prod_a16'), 'price window excludes');
+  const byReview = await g.call('/api/v1/admin/products?review_status=APPROVED', { token: adm });
+  assert.ok(byReview.json.data.every((x) => x.review_status === 'APPROVED'), 'review status narrows');
+});
+
+await t.test('A17. review queue flags images, notice, banned, hype and hikes', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price,
+      lowest_sale_price, status, review_status, notice_template_id, notice_info_json)
+    VALUES ('prod_a17', 'pt_001', 'cat_e_audio', '최저가 보장 불법복제 음반', 'https://x/y.png', '<p>본문</p>', 15000, 7000,
+      'DRAFT', 'PENDING', 'nt_a17', '{"제조국": "한국"}')`).run();
+  g.db.prepare(`INSERT INTO notice_templates (id, name, items_json) VALUES ('nt_a17', 't',
+    '[{"key": "제조국", "required": true}, {"key": "AS책임자", "required": true}]')`).run();
+  g.db.prepare(`INSERT INTO category_banned_words (id, category_id, word) VALUES ('cbw_a17', 'cat_e_audio', '불법복제')`).run();
+  g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
+    VALUES ('sku_a17', 'prod_a17', 'C-A17', '{}', 15000, 7000, 10, 'IN_STOCK')`).run();
+  g.db.prepare(`INSERT INTO sku_price_history (id, sku_id, original_price, sale_price, changed_at) VALUES
+    ('sph1', 'sku_a17', 10000, 9000, datetime('now', '-10 days')),
+    ('sph2', 'sku_a17', 15000, 9000, datetime('now', '-5 days')),
+    ('sph3', 'sku_a17', 15000, 7000, datetime('now', '-1 day'))`).run();
+  const q = await g.call('/api/v1/admin/products/review-queue', { token: adm });
+  assert.equal(q.status, 200, q.text);
+  const row = q.json.data.find((x) => x.id === 'prod_a17');
+  assert.ok(row, 'pending product queued');
+  assert.equal(row.checks.images.ok, false, 'missing gallery flagged');
+  assert.deepEqual(row.checks.notice.missing, ['AS책임자'], 'missing notice item flagged');
+  assert.ok(row.checks.banned_words.includes('불법복제'), 'banned word flagged');
+  assert.ok(row.checks.exaggeration.includes('최저가 보장'), 'hype flagged');
+  assert.ok(row.checks.price_hike && row.checks.price_hike.original_raised === 15000, 'pre-discount hike flagged');
+  g.db.prepare(`INSERT INTO product_images (id, product_id, image_url) VALUES ('pi_a17', 'prod_a17', 'https://x/i.png')`).run();
+  const q2 = await g.call('/api/v1/admin/products/review-queue', { token: adm });
+  assert.equal(q2.json.data.find((x) => x.id === 'prod_a17').checks.images.ok, true, 'gallery clears the flag');
+});
+
+await t.test('A18. category banned words save; fee changes price new orders only', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const badWords = await g.call('/api/v1/admin/categories/cat_e_audio', { method: 'PUT', token: adm, body: { banned_words: 'nope' } });
+  assert.equal(badWords.status, 400, 'banned words need an array');
+  const setWords = await g.call('/api/v1/admin/categories/cat_e_audio', { method: 'PUT', token: adm, body: { banned_words: ['불법복제', '불법복제', ''] } });
+  assert.equal(setWords.status, 200, setWords.text);
+  assert.deepEqual(setWords.json.data.banned_words, ['불법복제'], 'words deduped and trimmed');
+  const list = await g.call('/api/v1/admin/categories', { token: adm });
+  assert.ok(list.json.data.find((c) => c.id === 'cat_e_audio').banned_words.includes('불법복제'), 'list carries words');
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
+    VALUES ('prod_a18', 'pt_002', 'cat_e_audio', 'a18', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
+    VALUES ('sku_a18', 'prod_a18', 'C-A18', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
+  const addr = { recipient_name: '홍길동', recipient_phone: '010-1234-5678', shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236' };
+  const buy = async () => (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust, body: { ...addr, items: [{ sku_id: 'sku_a18', quantity: 1 }] }
+  })).json.order_id;
+  const setFee = async (bps) => {
+    const r = await g.call('/api/v1/admin/categories/cat_e_audio', { method: 'PUT', token: adm, body: { commission_rate_bps: bps } });
+    assert.equal(r.status, 200, r.text);
+  };
+  await setFee(500);
+  const o1 = await buy();
+  await setFee(1200);
+  const o2 = await buy();
+  const bpsOf = (orderId) => g.db.prepare(
+    'SELECT st.commission_rate_bps AS bps FROM settlements st JOIN sub_orders s ON s.id = st.sub_order_id WHERE s.parent_order_id = ?'
+  ).get(orderId).bps;
+  assert.equal(bpsOf(o1), 500, 'first order keeps the old rate');
+  assert.equal(bpsOf(o2), 1200, 'second order takes the new rate');
+  await setFee(null);
+  const cleared = await g.call('/api/v1/admin/categories/cat_e_audio', { method: 'PUT', token: adm, body: { banned_words: [] } });
+  assert.deepEqual(cleared.json.data.banned_words, [], 'words cleared');
+});
+
 t.finish();

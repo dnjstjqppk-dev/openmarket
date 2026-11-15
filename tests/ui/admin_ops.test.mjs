@@ -32,7 +32,7 @@ await t.test('A02 orders table wires manual full-refund with reason and idempote
 })
 
 await t.test('A03 partner desk wires payout-account verify and change approve/reject', async () => {
-  const v = read('apps/admin/src/views/PartnerVerifyView.vue')
+  const v = read('apps/admin/src/views/partners/PartnerDetailView.vue')
   assert.ok(v.includes('/payout-account'), 'payout-account endpoint called')
   assert.ok(v.includes('VERIFY_CURRENT'), 'current-account verification wired')
   assert.ok(v.includes("'APPROVE'") && v.includes("'REJECT'"), 'change approve/reject wired')
@@ -87,12 +87,13 @@ await t.test('A04 GET /api/v1/admin/orders attaches sub_orders[].items for the r
   assert.equal(ord.sub_orders[0].items[0].id, 'oi_admops')
 })
 
-await t.test('A05 dispute arbitration confirms before moving money either way', async () => {
+await t.test('A05 dashboard carries no money-moving arbitration (tribunal is 4-16)', async () => {
   const v = read('apps/admin/src/views/DashboardView.vue')
-  assert.ok(v.includes('FULL_REFUND_TO_BUYER'), 'refund ruling exists')
-  assert.ok(v.includes('window.confirm'), 'money-moving ruling requires confirmation')
-  assert.ok(v.includes('구매자 환불'), 'confirm names the refund action')
-  assert.ok(v.includes('판정에 실패'), 'arbitration failure is reported')
+  assert.ok(!v.includes('arbitrateDispute'), 'tribunal removed from the dashboard')
+  assert.ok(!v.includes('FULL_REFUND_TO_BUYER'), 'no ruling lives on the dashboard')
+  assert.ok(!/\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/.test(v), 'no native dialogs on the dashboard')
+  // The ruling behavior (with its confirmation) moves to views/claims in 4-16,
+  // where it is built on useConfirm from the start (see Q-4-12).
 })
 
 await t.test('A06 broadcast push confirms target before sending', async () => {

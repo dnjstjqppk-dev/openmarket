@@ -1,495 +1,414 @@
 <script setup lang="ts">
-import { Globe, Images, LoaderCircle, Megaphone, Scale, ShieldCheck } from 'lucide-vue-next'
-import { ref, onMounted } from 'vue';
-import { RouterLink } from 'vue-router';
-import { API_BASE_URL, getAdminHeaders } from '../config';
-import { OmButton, OmEmptyState } from '@olmoa/ui'
+// Admin operations dashboard (4-12): today-vs-yesterday compare cards,
+// three waiting queues (5 rows each), 30-day GMV/order lines and top
+// category bars. Every card renders its own load failure (never a bare 0).
+// Sample-QC and IPR desks stay here until 4-20 gives them a home; the
+// dispute tribunal moved to the claims screens (4-16).
+import { ref, computed, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import { API_BASE_URL, getAdminHeaders } from '../config'
+import { userErrorMessage, useConfirm, OmEmptyState, OmSkeleton } from '@olmoa/ui'
 
-const metrics = ref({
-  totalProducts: 0,
-  totalOrders: 0,
-  totalGmv: 0,
-  totalPartners: 0,
-  totalUsers: 0,
-  bannersCount: 0,
-  notifsCount: 0
-});
+const { confirm: askConfirm } = useConfirm()
+const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
 
-const controlTower = ref<any>({
-  cross_border_pccc_orders: 0,
-  escrow_protected_balance_krw: 0,
-  edge_regions: [] as any[] // filled only from /admin/control-tower (no fabricated traffic split)
-});
+interface Compare { today: number; yesterday: number }
+const compare = ref<any>(null)
+const queues = ref<any>({ partner_applications: [], product_reviews: [], disputes: [] })
+const series30 = ref<any[]>([])
+const catSales = ref<any[]>([])
+const fdsRules = ref<any[]>([])
+const sampleQcList = ref<any[]>([])
+const iprReports = ref<any[]>([])
 
-const fdsRules = ref<any[]>([]);
-// P2-A04: root-category count is measured (null until the source answers).
-const rootCategoryCount = ref<number | null>(null);
+const loading = ref(true)
+const toastMsg = ref('')
+const failedSources = ref<string[]>([])
+const loadError = ref('')
 
-const disputes = ref<any[]>([]);
-const sampleQcList = ref<any[]>([]);
-const iprReports = ref<any[]>([]);
-const loading = ref(true);
-const toastMsg = ref('');
-// P1-A03/A04: per-source outcomes drive the status badges and the error banner.
-const failedSources = ref<string[]>([]);
-const loadError = ref('');
+const won = (v: any) => `${(Number(v) || 0).toLocaleString('ko-KR')}원`
+const num = (v: any) => (Number(v) || 0).toLocaleString('ko-KR')
+const dashFailed = computed(() => failedSources.value.includes('대시보드'))
+
+const deltaText = (c: Compare | null | undefined) => {
+  if (!c) return '-'
+  const d = c.today - c.yesterday
+  if (d === 0) return '어제와 같음'
+  return `${d > 0 ? '▲' : '▼'} ${num(Math.abs(d))}`
+}
+const deltaUp = (c: Compare | null | undefined) => !!c && c.today > c.yesterday
 
 async function fetchSource(label: string, path: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, { headers: getAdminHeaders() });
-    const data = await res.json().catch(() => ({}));
+    const res = await fetch(`${API_BASE_URL}${path}`, { headers: getAdminHeaders() })
+    const data = await res.json().catch(() => ({}))
     if (!res.ok || (data && data.success === false)) {
-      failedSources.value.push(label);
-      return {};
+      failedSources.value.push(label)
+      return {}
     }
-    return data;
-  } catch (_) {
-    failedSources.value.push(label);
-    return {};
+    return data
+  } catch {
+    failedSources.value.push(label)
+    return {}
   }
 }
 
-async function loadControlTower() {
-  loading.value = true;
-  loadError.value = '';
-  failedSources.value = [];
+async function loadDashboard() {
+  loading.value = true
+  loadError.value = ''
+  failedSources.value = []
   try {
-    const [json, bnrJson, notifJson, ctJson, fdsJson, dispJson, qcRes, iprRes, catJson] = await Promise.all([
+    const [json, fdsJson, qcRes, iprRes] = await Promise.all([
       fetchSource('대시보드', '/api/v1/admin/dashboard'),
-      fetchSource('배너', '/api/v1/admin/banners'),
-      fetchSource('알림', '/api/v1/admin/notifications'),
-      fetchSource('관제', '/api/v1/admin/control-tower'),
       fetchSource('FDS', '/api/v1/admin/fds/overview'),
-      fetchSource('분쟁', '/api/v1/admin/disputes'),
       fetchSource('샘플QC', '/api/v1/admin/sample-qc'),
-      fetchSource('IPR', '/api/v1/admin/ipr-reports'),
-      fetchSource('카테고리', '/api/v1/categories')
-    ]);
-    rootCategoryCount.value = Array.isArray(catJson?.data) ? catJson.data.filter((c: any) => !c.parent_id).length : null;
-    sampleQcList.value = Array.isArray(qcRes?.data) ? qcRes.data : [];
-    iprReports.value = Array.isArray(iprRes?.data) ? iprRes.data : [];
-
-    if (json.success && json.metrics) {
-      metrics.value.totalProducts = json.metrics.total_products || 0;
-      metrics.value.totalOrders = json.metrics.total_orders || 0;
-      metrics.value.totalGmv = json.metrics.total_gmv_amount || 0;
-      metrics.value.totalPartners = json.metrics.total_partners || 0;
-      metrics.value.totalUsers = json.metrics.total_users || 0;
+      fetchSource('IPR', '/api/v1/admin/ipr-reports')
+    ])
+    if (json?.success) {
+      compare.value = json.compare || null
+      queues.value = json.queues || queues.value
+      series30.value = Array.isArray(json.series30) ? json.series30 : []
+      catSales.value = Array.isArray(json.category_sales) ? json.category_sales : []
     }
-    if (bnrJson?.data && Array.isArray(bnrJson.data)) {
-      metrics.value.bannersCount = bnrJson.data.length;
-    }
-    if (notifJson?.data && Array.isArray(notifJson.data)) {
-      metrics.value.notifsCount = notifJson.data.length;
-    }
-    if (ctJson?.success && ctJson.data) {
-      controlTower.value = ctJson.data;
-    }
-    if (fdsJson?.success && fdsJson.data?.active_rules) {
-      fdsRules.value = fdsJson.data.active_rules;
-    }
-    if (dispJson?.success && Array.isArray(dispJson.data)) {
-      disputes.value = dispJson.data;
-    }
-  } catch (_) {
-    loadError.value = '관제 지표를 불러오지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.';
+    fdsRules.value = Array.isArray(fdsJson?.data?.active_rules) ? fdsJson.data.active_rules : []
+    sampleQcList.value = Array.isArray(qcRes?.data) ? qcRes.data : []
+    iprReports.value = Array.isArray(iprRes?.data) ? iprRes.data : []
+  } catch (e: any) {
+    loadError.value = userErrorMessage(e, '지표를 불러오지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.')
   } finally {
     if (failedSources.value.length && !loadError.value) {
-      loadError.value = `일부 지표 집계 실패 (${failedSources.value.join(', ')}) — 표시된 0은 미집계일 수 있습니다.`;
+      loadError.value = `일부 지표 집계 실패 (${failedSources.value.join(', ')}) — 실패한 카드는 값을 표시하지 않습니다.`
     }
-    loading.value = false;
+    loading.value = false
   }
 }
 
-async function arbitrateDispute(claim: any, ruling: 'FULL_REFUND_TO_BUYER' | 'RELEASE_TO_SELLER') {
-  const notes = ruling === 'RELEASE_TO_SELLER' ? window.prompt('반품 거절(판매자 지급) 판정 근거를 입력하세요', '')?.trim() : null;
-  if (ruling === 'RELEASE_TO_SELLER' && !notes) return;
-  // HOLD (Q-1-9): admin_ops A05 pins window.confirm here; convert after the test is updated.
-  if (ruling === 'FULL_REFUND_TO_BUYER' && !window.confirm(`분쟁 건(${claim.id})에 대해 구매자 환불을 승인합니다. 실제 환불이 실행됩니다. 계속할까요?`)) return;
+// ---- 30-day lines (hand-rolled SVG, each series on its own scale) ----
+const W = 600
+const H = 180
+const PAD = 8
+const gmvMax = computed(() => Math.max(1, ...series30.value.map((s: any) => Number(s.gmv) || 0)))
+const ordMax = computed(() => Math.max(1, ...series30.value.map((s: any) => Number(s.orders) || 0)))
+const xAt = (i: number) => {
+  const n = Math.max(1, series30.value.length - 1)
+  return PAD + (i / n) * (W - PAD * 2)
+}
+const yAt = (v: number, max: number) => H - PAD - (v / max) * (H - PAD * 2 - 14)
+const gmvPoints = computed(() => series30.value.map((s: any, i: number) => `${xAt(i).toFixed(1)},${yAt(Number(s.gmv) || 0, gmvMax.value).toFixed(1)}`).join(' '))
+const ordPoints = computed(() => series30.value.map((s: any, i: number) => `${xAt(i).toFixed(1)},${yAt(Number(s.orders) || 0, ordMax.value).toFixed(1)}`).join(' '))
+const xTicks = computed(() => series30.value.filter((_: any, i: number) => i % 5 === 0 || i === series30.value.length - 1))
+const catMax = computed(() => Math.max(1, ...catSales.value.map((s: any) => Number(s.gmv) || 0)))
+
+// ---- sample QC decision modal (prompt-free notes) ----
+const qcOpen = ref(false)
+const qcTarget = ref<any>(null)
+const qcDecision = ref<'APPROVED' | 'REJECTED'>('APPROVED')
+const qcNotes = ref('')
+const qcBusy = ref(false)
+function openQc(qc: any, decision: 'APPROVED' | 'REJECTED') {
+  qcTarget.value = qc
+  qcDecision.value = decision
+  qcNotes.value = ''
+  qcOpen.value = true
+}
+async function submitQc() {
+  if (!qcTarget.value || !qcNotes.value.trim() || qcBusy.value) return
+  if (qcDecision.value === 'REJECTED') {
+    const ok = await askConfirm({ title: '샘플 반려', body: `실물 샘플(${qcTarget.value.id})을 반려합니다.`, danger: true })
+    if (!ok) return
+  }
+  qcBusy.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/claims/${claim.id}`, {
-      method: 'PUT',
-      headers: getAdminHeaders(),
-      body: JSON.stringify(ruling === 'FULL_REFUND_TO_BUYER' ? { decision: 'APPROVE' } : { decision: 'REJECT', notes })
-    });
-    if (res.ok) {
-      toastMsg.value = `✓ 분쟁 건(${claim.id})에 대해 [${ruling === 'FULL_REFUND_TO_BUYER' ? '구매자 환불 승인' : '판매자 정산 지급'}] 직권 판정이 완료되었습니다.`;
-      setTimeout(() => { toastMsg.value = ''; }, 3500);
-      await loadControlTower();
-    } else {
-      toastMsg.value = `판정에 실패했습니다. 잠시 후 다시 시도해주세요.`;
-      setTimeout(() => { toastMsg.value = ''; }, 4000);
-    }
-  } catch (_) {
-    toastMsg.value = '판정에 실패했습니다 — 네트워크 오류. 다시 시도해 주세요.';
-    setTimeout(() => { toastMsg.value = ''; }, 4000);
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/sample-qc/${qcTarget.value.id}/inspect`, {
+      method: 'POST', headers: getAdminHeaders(),
+      body: JSON.stringify({ decision: qcDecision.value, inspector_notes: qcNotes.value.trim() })
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success) throw new Error(json.error || '검수 처리에 실패했습니다.')
+    qcTarget.value.status = qcDecision.value
+    toastMsg.value = `실물 샘플(${qcTarget.value.id})이 [${qcDecision.value === 'APPROVED' ? '합격 승인' : '반려 처리'}] 되었습니다.`
+    setTimeout(() => { toastMsg.value = '' }, 3000)
+    qcOpen.value = false
+  } catch (e: any) {
+    toastMsg.value = userErrorMessage(e, '검수 처리에 실패했습니다.')
+    setTimeout(() => { toastMsg.value = '' }, 4000)
+  } finally {
+    qcBusy.value = false
   }
 }
 
-
-async function inspectSample(qcId: string, decision: 'APPROVED' | 'REJECTED') {
-  const notes = window.prompt(decision === 'APPROVED' ? '검수 의견(합격 근거)을 입력하세요' : '반려 사유를 입력하세요', '')?.trim();
-  if (!notes) return;
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/sample-qc/${qcId}/inspect`, {
-      method: 'POST',
-      headers: getAdminHeaders(),
-      body: JSON.stringify({ decision, inspector_notes: notes })
-    });
-    if (res.ok) {
-      toastMsg.value = `✓ 실물 샘플(${qcId})이 [${decision === 'APPROVED' ? '합격 승인' : '반려 처리'}] 되었습니다.`;
-      setTimeout(() => { toastMsg.value = ''; }, 3000);
-      const target = sampleQcList.value.find(s => s.id === qcId);
-      if (target) target.status = decision;
-    }
-  } catch (_) {}
-}
-
-async function fastTrackTakedown(iprId: string) {
+function fastTrackTakedown(iprId: string) {
   // There is no takedown endpoint yet. Products are stopped from 상품 관리 (상태 변경) after the operator reviews the report.
-  toastMsg.value = `IPR 신고(${iprId}): 즉시 차단 기능은 아직 없습니다. 상품 관리에서 해당 상품을 직접 판매중지해 주세요.`;
-  setTimeout(() => { toastMsg.value = ''; }, 5000);
+  toastMsg.value = `IPR 신고(${iprId}): 즉시 차단 기능은 아직 없습니다. 상품 관리에서 해당 상품을 직접 판매중지해 주세요.`
+  setTimeout(() => { toastMsg.value = '' }, 5000)
 }
 
-onMounted(loadControlTower);
+onMounted(loadDashboard)
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+    <div class="flex flex-col justify-between gap-3 border-b border-line pb-4 sm:flex-row sm:items-center">
       <div>
-        <h2 class="text-xl font-black text-slate-900">OLMOA 글로벌 중앙 관제 컨트롤 타워 (Central Control Room)</h2>
-        <p class="text-xs text-slate-500 mt-0.5">전 세계 주문 흐름, 관세청 통관 연동, FDS 부정결제 방어 및 3자 분쟁 중재 현황</p>
+        <h1 class="text-xl font-bold text-ink">운영 대시보드</h1>
+        <p class="mt-0.5 text-xs text-ink-muted">오늘·어제 대비 지표, 대기 목록, 30일 추이 (한국 시간 기준)</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <span v-if="loading" class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold border border-slate-200">
-          상태 확인 중…
-        </span>
+        <span v-if="loading" class="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs font-bold text-ink-muted">상태 확인 중…</span>
         <template v-else>
-          <span v-if="!failedSources.includes('대시보드')" class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Edge Gateway & D1 정상 가동
+          <span v-if="!dashFailed" class="flex items-center gap-1.5 rounded-full border border-line bg-success-soft px-3 py-1 text-xs font-bold text-success">
+            <span class="h-2 w-2 animate-pulse rounded-full bg-success"></span>
+            지표 집계 정상
           </span>
-          <span v-else class="px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-200">
-            Edge Gateway 집계 실패
-          </span>
-          <span v-if="!failedSources.includes('관제')" class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-200">
-            ✈️ Uni-Pass & FX 동기화 완료
-          </span>
-          <span v-else class="px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-200">
-            Uni-Pass & FX 집계 실패
-          </span>
+          <span v-else class="rounded-full border border-line bg-danger-soft px-3 py-1 text-xs font-bold text-danger">지표 집계 실패</span>
         </template>
       </div>
     </div>
 
-    <div v-if="toastMsg" class="p-3.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-xs">
-      {{ toastMsg }}
+    <div v-if="toastMsg" role="status" class="rounded-xl bg-secondary p-3.5 text-xs font-bold text-secondary-on">{{ toastMsg }}</div>
+
+    <div v-if="loadError" role="alert" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-danger-soft p-3.5 text-xs font-bold text-danger">
+      <span>{{ U }} ({{ loadError }})</span>
+      <button type="button" class="rounded-lg bg-secondary px-3 py-1.5 text-secondary-on hover:bg-secondary-hover" @click="loadDashboard">다시 시도</button>
     </div>
 
-    <div v-if="loadError" role="alert" class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex flex-wrap items-center justify-between gap-3">
-      <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
-      <button @click="loadControlTower" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
-        다시 시도
-      </button>
-    </div>
-
-    <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />글로벌 관제 지표를 집계하는 중입니다...
+    <div v-if="loading" class="rounded-2xl border border-line bg-surface p-6">
+      <p class="mb-3 text-xs text-ink-muted">불러오는 중입니다…</p>
+      <OmSkeleton variant="row" :count="8" />
     </div>
 
     <div v-else class="space-y-6">
-      <!-- Top 4 Core KPI Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div class="text-slate-500 font-medium">총 누적 결제액 (Global GMV)</div>
-          <div class="text-2xl font-black text-slate-900 mt-1">₩ {{ metrics.totalGmv.toLocaleString() }}</div>
-          <div class="text-emerald-600 font-bold mt-1">D1 에스크로 원장 실시간 집계</div>
+      <div class="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">오늘 결제금액</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ won(compare.gmv.today) }}</p>
+            <p class="mt-1 font-bold" :class="deltaUp(compare.gmv) ? 'text-success' : 'text-ink-muted'">{{ deltaText(compare.gmv) }} · 어제 {{ won(compare.gmv.yesterday) }}</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div class="text-slate-500 font-medium">플랫폼 총 주문 / 통관(PCCC)</div>
-          <div class="text-2xl font-black text-indigo-700 mt-1">
-            {{ metrics.totalOrders }} 건
-            <span class="text-xs font-bold text-blue-600 ml-1">(직구 {{ controlTower.cross_border_pccc_orders || 0 }}건)</span>
-          </div>
-          <div class="text-slate-400 mt-1">Split-Order 입점사별 자동 분기</div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">오늘 주문 수</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.orders.today) }}건</p>
+            <p class="mt-1 font-bold" :class="deltaUp(compare.orders) ? 'text-success' : 'text-ink-muted'">{{ deltaText(compare.orders) }} · 어제 {{ num(compare.orders.yesterday) }}건</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div class="text-slate-500 font-medium">활성 판매 파트너사 (Global KYC)</div>
-          <div class="text-2xl font-black text-orange-600 mt-1">{{ metrics.totalPartners }} 개사</div>
-          <div class="text-slate-400 mt-1">Rolling Reserve 유보금 정책 적용</div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">오늘 신규 회원</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.users.today) }}명</p>
+            <p class="mt-1 font-bold" :class="deltaUp(compare.users) ? 'text-success' : 'text-ink-muted'">{{ deltaText(compare.users) }} · 어제 {{ num(compare.users.yesterday) }}명</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div class="text-slate-500 font-medium">글로벌 카탈로그<template v-if="rootCategoryCount !== null"> ({{ rootCategoryCount }}개 대분류)</template></div>
-          <div class="text-2xl font-black text-blue-600 mt-1">{{ metrics.totalProducts }} 개</div>
-          <div class="text-slate-400 mt-1">HS Code 및 부피중량 등록 완료</div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">오늘 입점 신청</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.applications.today) }}건</p>
+            <p class="mt-1 font-bold" :class="deltaUp(compare.applications) ? 'text-success' : 'text-ink-muted'">{{ deltaText(compare.applications) }} · 어제 {{ num(compare.applications.yesterday) }}건</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
+        </div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">검수 대기 상품</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.review_queue) }}건</p>
+            <p class="mt-1 font-bold text-ink-muted"><RouterLink to="/products" class="underline">검수 대기열로 이동</RouterLink></p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
+        </div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">미처리 클레임</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.open_claims) }}건</p>
+            <p class="mt-1 font-bold text-ink-muted">판매자 처리 대기</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
+        </div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">분쟁</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.open_disputes) }}건</p>
+            <p class="mt-1 font-bold text-ink-muted">진행 중 반품·클레임</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
+        </div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">지급 승인 대기액</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ won(compare.payout_pending_amount) }}</p>
+            <p class="mt-1 font-bold text-ink-muted">출금 신청 승인 대기</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
+        </div>
+        <div class="rounded-2xl border border-line bg-surface p-5">
+          <p class="text-ink-muted">이상거래 검토</p>
+          <template v-if="!dashFailed && compare">
+            <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.fds_reviews) }}건</p>
+            <p class="mt-1 font-bold text-ink-muted">FDS 검토 대상 주문</p>
+          </template>
+          <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
       </div>
 
-      <!-- Global Edge Traffic & FDS Security Control Room -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-        <!-- Global Edge Region Latency Monitor -->
-        <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div class="flex items-center justify-between border-b pb-2.5">
-            <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <Globe class="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              <span>글로벌 엣지 리전 트래픽 & 응답속도</span>
-            </h3>
-            <!-- P2-A04: no PoP claim without a data source (edge_regions below is the truth). -->
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section class="space-y-2 rounded-2xl border border-line bg-surface p-5" aria-label="입점 심사 대기">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-ink">입점 심사 대기</h2>
+            <RouterLink to="/partner-applications" class="text-xs font-bold text-primary hover:underline">전체 보기</RouterLink>
           </div>
-          <div class="space-y-3">
-            <p v-if="!controlTower.edge_regions || !controlTower.edge_regions.length" class="text-xs text-slate-400">트래픽 분석 데이터 소스가 연결되지 않아 지역별 분포를 표시하지 않습니다.</p>
-            <div v-for="reg in controlTower.edge_regions" :key="reg.region" class="space-y-1">
-              <div class="flex justify-between font-bold text-slate-700">
-                <span>{{ reg.region }}</span>
-                <span class="font-mono text-indigo-600">{{ reg.traffic_pct }}% ({{ reg.latency_ms }}ms)</span>
-              </div>
-              <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-indigo-600 rounded-full" :style="{ width: reg.traffic_pct + '%' }"></div>
-              </div>
+          <OmEmptyState v-if="!queues.partner_applications.length" compact title="대기 중인 입점 심사가 없습니다." description="새 신청이 들어오면 이곳에 표시됩니다." />
+          <ul v-else class="divide-y divide-line-divider text-xs">
+            <li v-for="q in queues.partner_applications" :key="q.id" class="py-2">
+              <p class="truncate font-bold text-ink">{{ q.business_name }}</p>
+              <p class="om-num mt-0.5 text-ink-subtle">{{ q.business_reg_number }} · {{ String(q.created_at || '').slice(0, 10) }}</p>
+            </li>
+          </ul>
+        </section>
+        <section class="space-y-2 rounded-2xl border border-line bg-surface p-5" aria-label="상품 검수 대기">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-ink">상품 검수 대기</h2>
+            <RouterLink to="/products" class="text-xs font-bold text-primary hover:underline">전체 보기</RouterLink>
+          </div>
+          <OmEmptyState v-if="!queues.product_reviews.length" compact title="대기 중인 상품 검수가 없습니다." description="새 검수 요청이 들어오면 이곳에 표시됩니다." />
+          <ul v-else class="divide-y divide-line-divider text-xs">
+            <li v-for="q in queues.product_reviews" :key="q.id" class="py-2">
+              <p class="truncate font-bold text-ink">{{ q.title }}</p>
+              <p class="mt-0.5 text-ink-subtle">{{ q.business_name || q.partner_id }} · {{ String(q.created_at || '').slice(0, 10) }}</p>
+            </li>
+          </ul>
+        </section>
+        <section class="space-y-2 rounded-2xl border border-line bg-surface p-5" aria-label="분쟁 대기">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-ink">분쟁 대기</h2>
+            <RouterLink to="/orders" class="text-xs font-bold text-primary hover:underline">주문에서 확인</RouterLink>
+          </div>
+          <OmEmptyState v-if="!queues.disputes.length" compact title="대기 중인 분쟁이 없습니다." description="새 분쟁이 접수되면 이곳에 표시됩니다." />
+          <ul v-else class="divide-y divide-line-divider text-xs">
+            <li v-for="q in queues.disputes" :key="q.id" class="py-2">
+              <p class="truncate font-bold text-ink">{{ q.order_no || q.order_id }}</p>
+              <p class="om-num mt-0.5 text-ink-subtle">{{ q.status }} · {{ won(q.refund_amount) }} · {{ q.age_days }}일 경과</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="30일 추이">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-sm font-bold text-ink">30일 결제금액·주문 수</h2>
+            <div class="flex items-center gap-3 text-2xs font-bold text-ink-muted">
+              <span class="flex items-center gap-1"><span class="h-0.5 w-4 bg-primary"></span>결제금액</span>
+              <span class="flex items-center gap-1"><span class="h-0.5 w-4 bg-success"></span>주문 수</span>
             </div>
           </div>
-        </div>
-
-        <!-- Real-Time FDS Anti-Fraud Situation Room -->
-        <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div class="flex items-center justify-between border-b pb-2.5">
-            <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <ShieldCheck class="h-4 w-4 text-rose-600" aria-hidden="true" />
-              <span>실시간 FDS (이상거래 및 부정결제 탐지 엔진)</span>
-            </h3>
-            <span class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Zero-Trust Active</span>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left">
-              <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase border-b">
-                <tr>
-                  <th class="p-2">룰 코드</th>
-                  <th class="p-2">탐지 정책 명칭</th>
-                  <th class="p-2">위험도</th>
-                  <th class="p-2 text-right">24h 차단/감지</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100">
-                <tr v-if="fdsRules.length === 0">
-                  <td colspan="4" class="p-4 text-center text-slate-400">표시할 FDS 규칙이 없습니다.</td>
-                </tr>
-                <tr v-for="r in fdsRules" :key="r.id">
-                  <td class="p-2 font-mono font-bold text-slate-700 text-[11px]">{{ r.code }}</td>
-                  <td class="p-2 text-slate-800 font-medium">{{ r.name }}</td>
-                  <td class="p-2">
-                    <span
-                      class="px-2 py-0.5 rounded text-[10px] font-bold"
-                      :class="r.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-700' : r.severity === 'HIGH' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'"
-                    >
-                      {{ r.severity }}
-                    </span>
-                  </td>
-                  <td class="p-2 text-right font-mono font-bold text-slate-900">{{ r.hit_count_24h ?? "미집계" }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <p v-if="!series30.length" class="text-xs text-ink-muted">최근 30일 결제 기록이 없습니다.</p>
+          <svg v-else :viewBox="`0 0 ${W} ${H}`" class="w-full" role="img" aria-label="30일 결제 추이 그래프">
+            <line :x1="PAD" :x2="W - PAD" :y1="H - PAD - 14" :y2="H - PAD - 14" class="stroke-line" stroke-width="1" />
+            <polyline :points="gmvPoints" fill="none" class="stroke-primary" stroke-width="2" />
+            <polyline :points="ordPoints" fill="none" class="stroke-success" stroke-width="2" />
+            <g v-for="(s, i) in xTicks" :key="s.day">
+              <text :x="xAt(series30.indexOf(s))" :y="H - 2" text-anchor="middle" font-size="9" class="fill-ink-subtle">{{ String(s.day).slice(5) }}</text>
+            </g>
+          </svg>
+        </section>
+        <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="카테고리별 매출">
+          <h2 class="text-sm font-bold text-ink">카테고리별 매출 (최근 30일)</h2>
+          <p v-if="!catSales.length" class="text-xs text-ink-muted">최근 30일 결제 기록이 없습니다.</p>
+          <ul v-else class="space-y-2">
+            <li v-for="c in catSales" :key="c.category">
+              <div class="flex items-center justify-between gap-2 text-xs">
+                <span class="truncate font-bold text-ink">{{ c.category }}</span>
+                <span class="om-num shrink-0 text-ink-muted">{{ won(c.gmv) }}</span>
+              </div>
+              <div class="mt-1 h-2 overflow-hidden rounded-full bg-surface-3">
+                <div class="h-full rounded-full bg-primary" :style="{ width: `${Math.max(2, (Number(c.gmv) / catMax) * 100)}%` }"></div>
+              </div>
+            </li>
+          </ul>
+        </section>
       </div>
 
-      <!-- 3-Party Dispute Arbitration Tribunal -->
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 text-xs">
-        <div class="flex items-center justify-between border-b pb-2.5">
-          <div>
-            <h3 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <Scale class="h-4 w-4 text-amber-600" aria-hidden="true" />
-              <span>3자 분쟁 중재 법정 (구매자 vs 판매자 클레임 직권 판정 데스크)</span>
-            </h3>
-            <p class="text-[11px] text-slate-500 mt-0.5">반품, 파손, 오배송 및 최저가 보상 클레임에 대해 관리자가 에스크로 자금을 직권 중재합니다.</p>
-          </div>
-          <span class="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-bold text-[11px]">
-            접수 클레임 {{ disputes.length }}건
-          </span>
-        </div>
-
-        <OmEmptyState
-          v-if="disputes.length === 0"
-          compact
-          title="현재 중재 대기 중인 분쟁 클레임이 없습니다."
-          description="새 분쟁이 접수되면 이곳에 표시됩니다."
-        >
-          <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
-        </OmEmptyState>
-
+      <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="FDS 규칙 현황">
+        <h2 class="text-sm font-bold text-ink">FDS 탐지 규칙</h2>
+        <OmEmptyState v-if="fdsRules.length === 0" compact title="표시할 FDS 규칙이 없습니다." description="규칙이 등록되면 이곳에 표시됩니다." />
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase border-b">
-              <tr>
-                <th class="p-2.5">클레임 ID / 주문번호</th>
-                <th class="p-2.5">유형 / 사유</th>
-                <th class="p-2.5">환불 요청액</th>
-                <th class="p-2.5">현재 상태</th>
-                <th class="p-2.5 text-right">직권 중재 판정</th>
-              </tr>
+          <table class="w-full text-left text-xs">
+            <thead class="border-b border-line bg-surface-2 text-2xs uppercase text-ink-muted">
+              <tr><th class="p-2">룰 코드</th><th class="p-2">탐지 정책 명칭</th><th class="p-2">위험도</th><th class="p-2 text-right">24h 차단/감지</th></tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr v-for="d in disputes.slice(0, 8)" :key="d.id" class="hover:bg-slate-50">
-                <td class="p-2.5 font-mono font-bold text-slate-800">
-                  <div>{{ d.id }}</div>
-                  <div class="text-[10px] text-slate-400">Order: {{ d.order_no || d.order_id }}</div>
+            <tbody class="divide-y divide-line-divider">
+              <tr v-for="r in fdsRules" :key="r.id">
+                <td class="p-2 font-mono text-2xs font-bold text-ink-muted">{{ r.code }}</td>
+                <td class="p-2 font-medium text-ink">{{ r.name }}</td>
+                <td class="p-2">
+                  <span class="rounded px-2 py-0.5 text-2xs font-bold" :class="r.severity === 'CRITICAL' ? 'bg-danger-soft text-danger' : r.severity === 'HIGH' ? 'bg-warning-soft text-warning' : 'bg-info-soft text-info'">{{ r.severity }}</span>
                 </td>
-                <td class="p-2.5">
-                  <span class="font-bold text-indigo-600 mr-1.5">[{{ d.type || 'RETURN' }}]</span>
-                  <span class="text-slate-700">{{ d.reason }}</span>
-                </td>
-                <td class="p-2.5 font-bold text-slate-900">₩{{ Number(d.refund_amount || 0).toLocaleString() }}</td>
-                <td class="p-2.5">
-                  <span
-                    class="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                    :class="d.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : d.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'"
-                  >
-                    {{ d.status }}
-                  </span>
-                </td>
-                <td class="p-2.5 text-right">
-                  <div class="flex justify-end gap-1.5">
-                    <button
-                      @click="arbitrateDispute(d, 'FULL_REFUND_TO_BUYER')"
-                      class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer"
-                    >
-                      구매자 환불 판정
-                    </button>
-                    <button
-                      @click="arbitrateDispute(d, 'RELEASE_TO_SELLER')"
-                      class="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer"
-                    >
-                      판매자 지급 판정
-                    </button>
-                  </div>
-                </td>
+                <td class="om-num p-2 text-right font-bold text-ink">{{ r.hit_count_24h ?? '미집계' }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      
-      <!-- Temu-style Factory Sample QC & IPR Takedown Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-        <!-- Sample QC Desk -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
-                <span>🔬 공장 실물 샘플 검수(QC) 승인 데스크</span>
-                <span class="px-2 py-0.5 rounded bg-orange-100 text-[#FF5000] text-[10px] font-mono">대기 {{ sampleQcList.filter(s => s.status === 'IN_INSPECTION').length }}건</span>
-              </h3>
-              <p class="text-[11px] text-slate-500 mt-0.5">M2C 직결 셀러 대량 입고 전 실물 시제품 품질 합격 여부를 판정합니다.</p>
-            </div>
+      <div class="grid grid-cols-1 gap-4 text-xs lg:grid-cols-2">
+        <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="샘플 검수">
+          <div class="border-b border-line-divider pb-3">
+            <h2 class="text-sm font-bold text-ink">공장 실물 샘플 검수 <span class="font-mono text-2xs text-ink-muted">대기 {{ sampleQcList.filter((s: any) => s.status === 'IN_INSPECTION').length }}건</span></h2>
+            <p class="mt-0.5 text-2xs text-ink-muted">M2C 직결 셀러 대량 입고 전 실물 시제품 품질 합격 여부를 판정합니다.</p>
           </div>
-          <OmEmptyState
-            v-if="sampleQcList.length === 0"
-            compact
-            title="검수 대기 중인 샘플이 없습니다."
-            description="새 검수 요청이 들어오면 이곳에 표시됩니다."
-          >
-            <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
-          </OmEmptyState>
-          <div v-else class="divide-y divide-slate-100">
-            <div v-for="qc in sampleQcList" :key="qc.id" class="py-3 flex items-center justify-between gap-3">
+          <OmEmptyState v-if="sampleQcList.length === 0" compact title="검수 대기 중인 샘플이 없습니다." description="새 검수 요청이 들어오면 이곳에 표시됩니다." />
+          <div v-else class="divide-y divide-line-divider">
+            <div v-for="qc in sampleQcList" :key="qc.id" class="flex items-center justify-between gap-3 py-3">
               <div>
-                <div class="font-bold text-slate-900">{{ qc.product_title }}</div>
-                <div class="text-[11px] text-slate-500 font-mono">
-                  [{{ qc.business_name }}] • {{ qc.carrier }} ({{ qc.sample_tracking_no }})
-                </div>
+                <div class="font-bold text-ink">{{ qc.product_title }}</div>
+                <div class="font-mono text-2xs text-ink-muted">[{{ qc.business_name }}] · {{ qc.carrier }} ({{ qc.sample_tracking_no }})</div>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <span v-if="qc.status !== 'IN_INSPECTION'" :class="qc.status === 'APPROVED' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'" class="px-2.5 py-1 rounded-md text-[10px] font-bold">
-                  {{ qc.status === 'APPROVED' ? '✓ 검수합격' : '✕ 검수반려' }}
-                </span>
+              <div class="flex shrink-0 items-center gap-1.5">
+                <span v-if="qc.status !== 'IN_INSPECTION'" class="rounded-md px-2.5 py-1 text-2xs font-bold" :class="qc.status === 'APPROVED' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">{{ qc.status === 'APPROVED' ? '검수합격' : '검수반려' }}</span>
                 <template v-else>
-                  <button @click="inspectSample(qc.id, 'APPROVED')" class="px-2.5 py-1 rounded bg-[#00A862] hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer">
-                    합격 승인
-                  </button>
-                  <button @click="inspectSample(qc.id, 'REJECTED')" class="px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 font-bold text-[11px] cursor-pointer">
-                    반려
-                  </button>
+                  <button type="button" class="rounded bg-success px-2.5 py-1 text-2xs font-bold text-primary-on" @click="openQc(qc, 'APPROVED')">합격 승인</button>
+                  <button type="button" class="rounded border border-line px-2 py-1 text-2xs font-bold text-danger hover:bg-danger-soft" @click="openQc(qc, 'REJECTED')">반려</button>
                 </template>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- IPR Notice & Takedown Desk -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
-                <span>⚖️ 지식재산권(IPR) 신속 퇴출 관제 (Notice & Takedown)</span>
-                <span class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-mono">긴급 접수</span>
-              </h3>
-              <p class="text-[11px] text-slate-500 mt-0.5">상표권/가품 신고 접수 시 해당 상품을 즉시 블라인드하고 정산금을 동결합니다.</p>
-            </div>
+        <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="IPR 신고">
+          <div class="border-b border-line-divider pb-3">
+            <h2 class="text-sm font-bold text-ink">지식재산권(IPR) 신고 <span class="rounded bg-danger-soft px-2 py-0.5 font-mono text-2xs text-danger">긴급 접수</span></h2>
+            <p class="mt-0.5 text-2xs text-ink-muted">상표권/가품 신고 접수 시 해당 상품을 즉시 블라인드하고 정산금을 동결합니다.</p>
           </div>
-          <OmEmptyState
-            v-if="iprReports.length === 0"
-            compact
-            title="접수된 지식재산권 신고가 없습니다."
-            description="새 신고가 접수되면 이곳에 표시됩니다."
-          >
-            <OmButton size="sm" @click="loadControlTower">다시 불러오기</OmButton>
-          </OmEmptyState>
-          <div v-else class="divide-y divide-slate-100">
-            <div v-for="ipr in iprReports" :key="ipr.id" class="py-3 flex items-center justify-between gap-3">
+          <OmEmptyState v-if="iprReports.length === 0" compact title="접수된 지식재산권 신고가 없습니다." description="새 신고가 접수되면 이곳에 표시됩니다." />
+          <div v-else class="divide-y divide-line-divider">
+            <div v-for="ipr in iprReports" :key="ipr.id" class="flex items-center justify-between gap-3 py-3">
               <div>
-                <div class="font-bold text-slate-900">{{ ipr.product_title }}</div>
-                <div class="text-[11px] text-red-600 font-bold">
-                  신고자: {{ ipr.reporter_name }} (권리브랜드: {{ ipr.brand_name }} • 유형: {{ ipr.infringement_type }})
-                </div>
+                <div class="font-bold text-ink">{{ ipr.product_title }}</div>
+                <div class="text-2xs font-bold text-danger">신고자: {{ ipr.reporter_name }} (권리브랜드: {{ ipr.brand_name }} · 유형: {{ ipr.infringement_type }})</div>
               </div>
               <div class="shrink-0">
-                <span v-if="ipr.status === 'TAKEDOWN_APPLIED'" class="px-2.5 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">
-                  ✓ 판매중단 완료
-                </span>
-                <button v-else @click="fastTrackTakedown(ipr.id)" class="px-3 py-1.5 rounded-lg bg-[#E60023] hover:bg-red-800 text-white font-bold text-[11px] cursor-pointer shadow-xs">
-                  차단 요청 접수
-                </button>
+                <span v-if="ipr.status === 'TAKEDOWN_APPLIED'" class="rounded bg-surface-2 px-2.5 py-1 text-2xs font-bold text-ink-muted">판매중단 완료</span>
+                <button v-else type="button" class="rounded-lg bg-danger px-3 py-1.5 text-2xs font-bold text-primary-on" @click="fastTrackTakedown(ipr.id)">차단 요청 접수</button>
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </div>
+    </div>
 
-      <!-- Quick Action Navigation Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-        <RouterLink to="/marketing" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-orange-500 transition shadow-xs group block">
-          <div class="flex items-center justify-between mb-2">
-            <span class="p-2.5 bg-orange-50 text-orange-600 rounded-xl group-hover:bg-orange-500 group-hover:text-white transition">
-              <Images class="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span class="text-xs font-bold text-orange-600">활성 {{ metrics.bannersCount }}개 →</span>
-          </div>
-          <h3 class="font-black text-slate-900 text-sm">홈 배너 & 프로모션 관리</h3>
-          <p class="text-slate-500 mt-1">스토어프론트 메인 캐러셀 배너를 실시간으로 추가·삭제합니다.</p>
-        </RouterLink>
-
-        <RouterLink to="/marketing" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-indigo-500 transition shadow-xs group block">
-          <div class="flex items-center justify-between mb-2">
-            <span class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition">
-              <Megaphone class="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span class="text-xs font-bold text-indigo-600">누적 {{ metrics.notifsCount }}건 →</span>
-          </div>
-          <h3 class="font-black text-slate-900 text-sm">전사 고객 알림 발송</h3>
-          <p class="text-slate-500 mt-1">전체 회원 또는 특정 고객에게 이벤트·주문 공지를 푸시합니다.</p>
-        </RouterLink>
-
-        <RouterLink to="/ledger" class="bg-white p-5 rounded-2xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group block">
-          <div class="flex items-center justify-between mb-2">
-            <span class="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition">
-              <Scale class="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span class="text-xs font-bold text-emerald-600">원장 감사 →</span>
-          </div>
-          <h3 class="font-black text-slate-900 text-sm">에스크로 정산 & 재고 원장</h3>
-          <p class="text-slate-500 mt-1">파트너 정산 지급 승인 및 SKU별 재고 차감·원복 기록을 감사합니디.</p>
-        </RouterLink>
+    <div v-if="qcOpen" class="fixed inset-0 z-modal flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="샘플 검수">
+      <div class="absolute inset-0 bg-overlay/50" @click="qcOpen = false"></div>
+      <div class="relative w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-6">
+        <h2 class="text-sm font-bold text-ink">샘플 {{ qcDecision === 'APPROVED' ? '합격 승인' : '반려' }}</h2>
+        <p class="text-xs text-ink-muted">{{ qcTarget?.product_title }}</p>
+        <textarea v-model="qcNotes" rows="3" :placeholder="qcDecision === 'APPROVED' ? '검수 의견(합격 근거)을 입력하세요' : '반려 사유를 입력하세요'" aria-label="검수 의견" class="w-full rounded-lg border border-line bg-surface p-3 text-xs text-ink"></textarea>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="qcOpen = false">취소</button>
+          <button type="button" :disabled="qcBusy || !qcNotes.trim()" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitQc">{{ qcBusy ? '처리 중…' : '확인' }}</button>
+        </div>
       </div>
     </div>
   </div>

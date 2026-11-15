@@ -73,7 +73,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_64_claim_pickup_date.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_65_category_banned_words.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -450,6 +450,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
         const base = netBase ? it.lineTotal - it.storeCouponAlloc : it.lineTotal;
         return a + applyBps(base, bps);
       }, 0);
+      // 4-15: when every line resolves to the same rate, snapshot it so the
+      // stored rate matches the charged amount; mixed baskets keep the seller
+      // base (per-line rates still drive the amount above).
+      const itemBps = s.items.map((it) => catRates.get(it.categoryId) ?? it.bps);
+      if (new Set(itemBps).size === 1) s.bps = itemBps[0];
     }
     const subPg = s.items.reduce((a, it) => a + it.pgAlloc, 0) + s.shipPg;
     s.pgFeeBps = pgFeeBps;

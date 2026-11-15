@@ -237,6 +237,23 @@ paths:
             type: string
             default: SUBMITTED
           description: KYC status filter, or ALL; capped at 200 rows.
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: 4-13 applied-date start (YYYY-MM-DD).
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: 4-13 applied-date end (YYYY-MM-DD).
+        - name: brn
+          in: query
+          schema:
+            type: string
+          description: 4-13 business-registration-number substring (dashes ignored).
       responses:
         '200':
           description: Application views enriched with contact and bank details
@@ -256,6 +273,25 @@ paths:
                       type: object
         '401':
           description: Missing or expired JWT, or not an admin
+
+  /api/v1/admin/partner-applications/{id}:
+    get:
+      summary: Single application detail for the review screen
+      tags: [Onboarding]
+      description: 4-13 detail view payload (same enrichment as the queue).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application view with contact and bank details
+        '401':
+          description: Missing or expired JWT, or not an admin
+        '404':
+          description: Unknown application id
 
   /api/v1/admin/partner-applications/{id}/review:
     post:

@@ -45,6 +45,7 @@ const rawMenu: ConsoleMenuItem[] = [
     to: "/products", label: '상품', icon: Boxes,
     children: [
       { to: "/products", label: '전체 상품' },
+      { to: "/products/review-queue", label: '검수 대기열' },
       { to: "/categories", label: '카테고리' }
     ]
   },

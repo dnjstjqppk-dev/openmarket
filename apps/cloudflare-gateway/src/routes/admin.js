@@ -34,6 +34,62 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const wProducts = await env.DB.prepare("SELECT COUNT(*) AS c FROM products WHERE review_status = 'PENDING'").first('c') || 0;
     const wPayouts = await env.DB.prepare("SELECT COUNT(*) AS c FROM payout_requests WHERE status = 'REQUESTED'").first('c') || 0;
     const wFds = await env.DB.prepare("SELECT COUNT(*) AS c FROM orders WHERE fds_decision = 'REVIEW'").first('c') || 0;
+    // 4-12: day boundaries are KST. Queue-type metrics are snapshots (no yesterday).
+    const paidExpr = '(total_goods_amount - volume_discount_amount + total_shipping_amount)';
+    const paid = await env.DB.prepare(
+      `SELECT
+        SUM(CASE WHEN date(paid_at, '+9 hours') = date('now', '+9 hours') THEN ${paidExpr} ELSE 0 END) AS gmv_today,
+        SUM(CASE WHEN date(paid_at, '+9 hours') = date('now', '+9 hours', '-1 day') THEN ${paidExpr} ELSE 0 END) AS gmv_yday,
+        SUM(CASE WHEN date(paid_at, '+9 hours') = date('now', '+9 hours') THEN 1 ELSE 0 END) AS orders_today,
+        SUM(CASE WHEN date(paid_at, '+9 hours') = date('now', '+9 hours', '-1 day') THEN 1 ELSE 0 END) AS orders_yday
+       FROM orders WHERE paid_at IS NOT NULL AND is_sandbox = 0`
+    ).first();
+    const users = await env.DB.prepare(
+      `SELECT
+        SUM(CASE WHEN date(created_at, '+9 hours') = date('now', '+9 hours') THEN 1 ELSE 0 END) AS today,
+        SUM(CASE WHEN date(created_at, '+9 hours') = date('now', '+9 hours', '-1 day') THEN 1 ELSE 0 END) AS yday
+       FROM users`
+    ).first();
+    const apps = await env.DB.prepare(
+      `SELECT
+        SUM(CASE WHEN date(created_at, '+9 hours') = date('now', '+9 hours') THEN 1 ELSE 0 END) AS today,
+        SUM(CASE WHEN date(created_at, '+9 hours') = date('now', '+9 hours', '-1 day') THEN 1 ELSE 0 END) AS yday
+       FROM partners`
+    ).first();
+    const payoutPending = await env.DB.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS amt FROM payout_requests WHERE status = 'REQUESTED'"
+    ).first('amt') || 0;
+    const { results: qPartners } = await env.DB.prepare(
+      "SELECT id, business_name, business_reg_number, created_at FROM partners WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 5"
+    ).all();
+    const { results: qProducts } = await env.DB.prepare(
+      `SELECT p.id, p.title, p.partner_id, pt.business_name, p.created_at FROM products p
+       LEFT JOIN partners pt ON pt.id = p.partner_id WHERE p.review_status = 'PENDING' ORDER BY p.created_at ASC LIMIT 5`
+    ).all();
+    const { results: qDisputes } = await env.DB.prepare(
+      `SELECT r.id, r.order_id, o.order_no, r.status, r.refund_amount, r.created_at,
+        CAST(julianday('now') - julianday(r.created_at) AS INTEGER) AS age_days
+       FROM returns r LEFT JOIN orders o ON o.id = r.order_id
+       WHERE r.status IN ('REQUESTED', 'COLLECTING', 'INSPECTING') ORDER BY r.created_at ASC LIMIT 5`
+    ).all();
+    const openDisputes = await env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM returns WHERE status IN ('REQUESTED', 'COLLECTING', 'INSPECTING')"
+    ).first('c') || 0;
+    const { results: series30 } = await env.DB.prepare(
+      `SELECT date(paid_at, '+9 hours') AS day, COALESCE(SUM(${paidExpr}), 0) AS gmv, COUNT(*) AS orders
+       FROM orders WHERE paid_at IS NOT NULL AND is_sandbox = 0 AND date(paid_at, '+9 hours') >= date('now', '+9 hours', '-29 days')
+       GROUP BY day ORDER BY day ASC`
+    ).all();
+    const { results: catSales } = await env.DB.prepare(
+      `SELECT COALESCE(pc.name, c.name, '(미지정)') AS category,
+        COALESCE(SUM(i.quantity * i.unit_price), 0) AS gmv
+       FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+       JOIN product_skus sk ON sk.id = i.sku_id JOIN products p ON p.id = sk.product_id
+       LEFT JOIN categories c ON c.id = p.category_id LEFT JOIN categories pc ON pc.id = c.parent_id
+       WHERE o.paid_at IS NOT NULL AND o.is_sandbox = 0
+         AND date(o.paid_at, '+9 hours') >= date('now', '+9 hours', '-29 days')
+       GROUP BY category ORDER BY gmv DESC LIMIT 10`
+    ).all();
 
     return new Response(JSON.stringify({
       success: true, brand: 'OLMOA',
@@ -54,7 +110,25 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         disputes: claimRes ? claimRes.cnt : 0,
         payout_requests: wPayouts,
         fds_reviews: wFds
-      }
+      },
+      compare: {
+        gmv: { today: paid?.gmv_today || 0, yesterday: paid?.gmv_yday || 0 },
+        orders: { today: paid?.orders_today || 0, yesterday: paid?.orders_yday || 0 },
+        users: { today: users?.today || 0, yesterday: users?.yday || 0 },
+        applications: { today: apps?.today || 0, yesterday: apps?.yday || 0 },
+        review_queue: wProducts,
+        open_claims: claimRes ? claimRes.cnt : 0,
+        open_disputes: openDisputes,
+        payout_pending_amount: payoutPending,
+        fds_reviews: wFds
+      },
+      queues: {
+        partner_applications: qPartners,
+        product_reviews: qProducts,
+        disputes: qDisputes
+      },
+      series30,
+      category_sales: catSales
     }), { headers: corsHeaders });
   }
 
@@ -221,6 +295,58 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: maskedPartners }), { headers: corsHeaders });
   }
 
+  // 4-13: seller detail — identity, account change, commission, penalties, grade, stats.
+  const ptDetailM = url.pathname.match(/^\/api\/v1\/admin\/partners\/([^/]+)$/);
+  if (ptDetailM && request.method === 'GET') {
+    const pt = await env.DB.prepare(
+      `SELECT p.*, u.email, u.full_name, u.phone FROM partners p LEFT JOIN users u ON p.owner_user_id = u.id WHERE p.id = ?`
+    ).bind(ptDetailM[1]).first();
+    if (!pt) throw notFound('입점사를 찾을 수 없습니다.');
+    let change = null;
+    if (pt.payout_change_request_json) {
+      try {
+        const req = JSON.parse(pt.payout_change_request_json);
+        change = { ...req, bank_account_number: maskLast4(await maybeOpenPii(env, req.bank_account_number)) };
+      } catch { change = null; }
+    }
+    const { results: penalties } = await env.DB.prepare(
+      'SELECT * FROM partner_penalties WHERE partner_id = ? ORDER BY created_at DESC LIMIT 50'
+    ).bind(pt.id).all();
+    const grade = await env.DB.prepare('SELECT * FROM partner_grades WHERE partner_id = ? ORDER BY month DESC LIMIT 1').bind(pt.id).first();
+    const stats = await env.DB.prepare(
+      `SELECT (SELECT COUNT(*) FROM products WHERE partner_id = ?) AS products,
+        (SELECT COUNT(*) FROM sub_orders WHERE partner_id = ? AND status NOT IN ('PAYMENT_PENDING', 'CANCELLED')) AS sub_orders,
+        (SELECT COALESCE(SUM(gross_amount), 0) FROM settlements WHERE partner_id = ? AND status != 'CANCELLED') AS gross`
+    ).bind(pt.id, pt.id, pt.id).first();
+    const { results: categoryRates } = await env.DB.prepare(
+      'SELECT id, name, commission_rate_bps FROM categories WHERE commission_rate_bps IS NOT NULL ORDER BY name ASC'
+    ).all();
+    await logPiiView(env, admin, 'admin.partners', 'user', [pt.owner_user_id], 'email,full_name,phone,bank_account', request);
+    return json(corsHeaders, {
+      success: true,
+      data: {
+        partner: { ...pt, bank_account_number: maskLast4(await maybeOpenPii(env, pt.bank_account_number)) },
+        payout_change_request: change, penalties, grade: grade || null, stats, category_rates: categoryRates
+      }
+    });
+  }
+
+  // 4-13: seller base commission (category overrides in categories stay global).
+  const ptCommM = url.pathname.match(/^\/api\/v1\/admin\/partners\/([^/]+)\/commission$/);
+  if (ptCommM && (request.method === 'PUT' || request.method === 'POST')) {
+    const pt = await env.DB.prepare('SELECT id, commission_rate, commission_rate_bps FROM partners WHERE id = ?').bind(ptCommM[1]).first();
+    if (!pt) throw notFound('입점사를 찾을 수 없습니다.');
+    const body = await readJson(request);
+    const rate = Number(body.commission_rate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 50) throw bad('INVALID_COMMISSION', '수수료율은 0~50% 사이로 입력해 주세요.');
+    const bps = Math.round(rate * 100);
+    await env.DB.batch([
+      env.DB.prepare('UPDATE partners SET commission_rate = ?, commission_rate_bps = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(bps / 100, bps, pt.id),
+      audit('PARTNER_COMMISSION_UPDATE', 'partner', pt.id, { commission_rate_bps: pt.commission_rate_bps }, { commission_rate_bps: bps })
+    ]);
+    return json(corsHeaders, { success: true, data: { partner_id: pt.id, commission_rate: bps / 100, commission_rate_bps: bps } });
+  }
+
   // 3. Admin Verify Partner (Approve / Reject / Risk Tiering / Rolling Reserve)
   if (url.pathname.startsWith('/api/v1/admin/partners/') && url.pathname.endsWith('/verify') && (request.method === 'PUT' || request.method === 'POST')) {
     const partnerId = url.pathname.split('/')[5];
@@ -268,10 +394,30 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const args = [];
     if (from) { where.push('date(p.created_at) >= date(?)'); args.push(from); }
     if (to) { where.push('date(p.created_at) <= date(?)'); args.push(to); }
+    // 4-14: seller, category, status, review, price filters.
+    const fPartner = str(url.searchParams.get('partner_id') || '', { max: 64 });
+    if (fPartner) { where.push('p.partner_id = ?'); args.push(fPartner); }
+    const fCat = str(url.searchParams.get('category') || '', { max: 64 });
+    if (fCat) { where.push('(p.category_id = ? OR c.slug = ?)'); args.push(fCat, fCat); }
+    const fStatus = str(url.searchParams.get('status') || '', { max: 20 }).toUpperCase();
+    if (fStatus) {
+      if (!['ACTIVE', 'HIDDEN', 'DELETED', 'DRAFT'].includes(fStatus)) throw bad('INVALID_STATUS', 'status는 ACTIVE·HIDDEN·DELETED·DRAFT 중 하나여야 합니다.');
+      where.push('p.status = ?'); args.push(fStatus);
+    }
+    const fReview = str(url.searchParams.get('review_status') || '', { max: 20 }).toUpperCase();
+    if (fReview) {
+      if (!['PENDING', 'APPROVED', 'REJECTED'].includes(fReview)) throw bad('INVALID_REVIEW_STATUS', 'review_status는 PENDING·APPROVED·REJECTED 중 하나여야 합니다.');
+      where.push('p.review_status = ?'); args.push(fReview);
+    }
+    const fMin = url.searchParams.get('min_price');
+    const fMax = url.searchParams.get('max_price');
+    if (fMin !== null && fMin !== '') { where.push('p.lowest_sale_price >= ?'); args.push(intParam(fMin, { min: 0, max: 1_000_000_000, field: 'min_price' })); }
+    if (fMax !== null && fMax !== '') { where.push('p.lowest_sale_price <= ?'); args.push(intParam(fMax, { min: 0, max: 1_000_000_000, field: 'max_price' })); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
-    const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM products p ${whereSql}`).bind(...args).first('c') || 0;
+    const fromSql = 'FROM products p LEFT JOIN partners pt ON p.partner_id = pt.id LEFT JOIN categories c ON p.category_id = c.id';
+    const total = await env.DB.prepare(`SELECT COUNT(*) AS c ${fromSql} ${whereSql}`).bind(...args).first('c') || 0;
     const asCsv = String(url.searchParams.get('format') || '').toLowerCase() === 'csv';
     const { results } = await env.DB.prepare(
       `SELECT p.*, pt.business_name, c.name as category_name,
@@ -289,6 +435,93 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length,
       pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data: results }), { headers: corsHeaders });
+  }
+
+  // 4b. Review queue (4-14): PENDING products with image/notice/banned-word/
+  // exaggeration/price-hike auto-checks. Flags guide the reviewer; the ruling
+  // stays human (POST .../review).
+  if (url.pathname === '/api/v1/admin/products/review-queue' && request.method === 'GET') {
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || '50', 10) || 50));
+    const total = await env.DB.prepare("SELECT COUNT(*) AS c FROM products WHERE review_status = 'PENDING'").first('c') || 0;
+    const { results } = await env.DB.prepare(
+      `SELECT p.*, pt.business_name, c.name AS category_name, c.parent_id AS category_parent
+       FROM products p LEFT JOIN partners pt ON p.partner_id = pt.id LEFT JOIN categories c ON p.category_id = c.id
+       WHERE p.review_status = 'PENDING' ORDER BY p.created_at ASC LIMIT ? OFFSET ?`
+    ).bind(perPage, (page - 1) * perPage).all();
+    const EXAGGERATION = ['최저가 보장', '국내 최저가', '정품 보증', '전수 검수', '무조건', '즉시 환불', '무료 반품'];
+    const out = [];
+    for (const pr of results) {
+      const imgCount = await env.DB.prepare('SELECT COUNT(*) AS c FROM product_images WHERE product_id = ?').bind(pr.id).first('c') || 0;
+      let noticeMissing = [];
+      let noticeTemplate = null;
+      if (pr.notice_template_id) {
+        const tpl = await env.DB.prepare('SELECT items_json FROM notice_templates WHERE id = ?').bind(pr.notice_template_id).first();
+        if (tpl) {
+          noticeTemplate = pr.notice_template_id;
+          let items = [];
+          try { items = JSON.parse(tpl.items_json || '[]'); } catch { items = []; }
+          let vals = {};
+          try { vals = JSON.parse(pr.notice_info_json || '{}'); } catch { vals = {}; }
+          noticeMissing = items.filter((it) => it.required).map((it) => it.key).filter((k) => !k || !String(vals[k] ?? '').trim());
+        }
+      }
+      const catIds = [];
+      let cursor = pr.category_id;
+      for (let i = 0; i < 6 && cursor; i++) {
+        catIds.push(cursor);
+        const parent = await env.DB.prepare('SELECT parent_id FROM categories WHERE id = ?').bind(cursor).first();
+        cursor = parent ? parent.parent_id : null;
+      }
+      let bannedHits = [];
+      if (catIds.length) {
+        const { results: words } = await env.DB.prepare(
+          `SELECT DISTINCT word FROM category_banned_words WHERE category_id IN (${catIds.map(() => '?').join(',')})`
+        ).bind(...catIds).all();
+        const text = `${pr.title || ''}\n${String(pr.description_html || '').replace(/<[^>]*>/g, ' ')}`;
+        bannedHits = words.map((w) => w.word).filter((w) => w && text.includes(w));
+      }
+      const textAll = `${pr.title || ''}\n${String(pr.description_html || '').replace(/<[^>]*>/g, ' ')}`;
+      const exagHits = EXAGGERATION.filter((w) => textAll.includes(w));
+      const { results: skus } = await env.DB.prepare('SELECT id FROM product_skus WHERE product_id = ?').bind(pr.id).all();
+      let hike = null;
+      for (const s of skus) {
+        const { results: hist } = await env.DB.prepare(
+          'SELECT original_price, sale_price, changed_at FROM sku_price_history WHERE sku_id = ? ORDER BY changed_at ASC'
+        ).bind(s.id).all();
+        for (let i = 1; i < hist.length && !hike; i++) {
+          const prev = hist[i - 1];
+          const cur = hist[i];
+          if (cur.original_price > prev.original_price) {
+            for (let j = i + 1; j < hist.length; j++) {
+              const later = hist[j];
+              const days = (Date.parse(later.changed_at) - Date.parse(cur.changed_at)) / 86400000;
+              if (days > 7) break;
+              if (later.sale_price < cur.sale_price) {
+                hike = { sku_id: s.id, original_before: prev.original_price, original_raised: cur.original_price, sale_after: later.sale_price };
+                break;
+              }
+            }
+          }
+        }
+        if (hike) break;
+      }
+      out.push({
+        ...pr,
+        checks: {
+          images: { count: imgCount, ok: imgCount > 0 },
+          notice: { template: noticeTemplate, missing: noticeMissing, ok: noticeTemplate !== null && noticeMissing.length === 0 },
+          banned_words: bannedHits,
+          exaggeration: exagHits,
+          price_hike: hike
+        }
+      });
+    }
+    return json(corsHeaders, {
+      success: true, count: out.length,
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
+      data: out
+    });
   }
 
   // 5. Admin Update Product Status (Approve / Suspend / Delete)
@@ -798,6 +1031,13 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const { results } = await env.DB.prepare(
       'SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) as product_count FROM categories c ORDER BY c.depth ASC, c.sort_order ASC'
     ).all();
+    const { results: banned } = await env.DB.prepare('SELECT category_id, word FROM category_banned_words ORDER BY word ASC').all();
+    const byCat = new Map();
+    for (const b of banned) {
+      if (!byCat.has(b.category_id)) byCat.set(b.category_id, []);
+      byCat.get(b.category_id).push(b.word);
+    }
+    for (const c of results) c.banned_words = byCat.get(c.id) || [];
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', count: results.length, data: results }), { headers: corsHeaders });
   }
 
@@ -808,11 +1048,13 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if (!name) throw bad('CATEGORY_NAME_REQUIRED', '카테고리명은 필수입니다.');
     const id = body.id || newId('cat');
     const parentId = body.parent_id || null;
+    let depth = 0;
     if (parentId) {
-      const parent = await env.DB.prepare('SELECT id FROM categories WHERE id = ?').bind(parentId).first();
+      const parent = await env.DB.prepare('SELECT id, depth FROM categories WHERE id = ?').bind(parentId).first();
       if (!parent) throw bad('INVALID_PARENT_CATEGORY', '존재하지 않는 상위 카테고리입니다.');
+      if (parent.depth >= 2) throw bad('CATEGORY_TOO_DEEP', '카테고리는 3단까지 만들 수 있습니다.');
+      depth = parent.depth + 1;
     }
-    const depth = parentId ? 1 : 0;
     await env.DB.batch([
       env.DB.prepare(
         'INSERT INTO categories (id, parent_id, name, slug, depth, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
@@ -827,12 +1069,17 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const catId = adminCatMatch[1];
     const used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM products WHERE category_id = ?) + (SELECT COUNT(*) FROM categories WHERE parent_id = ?) AS c').bind(catId, catId).first('c');
     if (used > 0) throw conflict('CATEGORY_IN_USE', '상품 또는 하위 카테고리가 있는 카테고리는 삭제할 수 없습니다. 비활성화하세요.');
-    await env.DB.batch([env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(catId), audit('CATEGORY_DELETE', 'category', catId, null, null)]);
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM category_banned_words WHERE category_id = ?').bind(catId),
+      env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(catId),
+      audit('CATEGORY_DELETE', 'category', catId, null, null)
+    ]);
     return new Response(JSON.stringify({ success: true, message: '카테고리가 삭제되었습니다.' }), { headers: corsHeaders });
   }
 
   // 2-9: category icon, commission (0~3000bps) and notice template.
   // Commission rates are read live at checkout, so changes price new orders only.
+  // 4-15: slug, visibility, sort order and the banned-word set join the update.
   if (adminCatMatch && (request.method === 'PUT' || request.method === 'PATCH')) {
     const body = await readJson(request);
     const cat = await env.DB.prepare('SELECT * FROM categories WHERE id = ?').bind(adminCatMatch[1]).first();
@@ -852,12 +1099,39 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     }
     const icon = body.icon_key !== undefined ? (body.icon_key === null ? null : str(body.icon_key, { field: '아이콘', max: 60 })) : cat.icon_key;
     const name = body.name !== undefined ? str(body.name, { field: '카테고리명', max: 200, required: true }) : cat.name;
-    await env.DB.batch([
-      env.DB.prepare('UPDATE categories SET name = ?, icon_key = ?, commission_rate_bps = ?, notice_template_id = ? WHERE id = ?')
-        .bind(name, icon, bps, tpl, cat.id),
-      audit('CATEGORY_UPDATE', 'category', cat.id, { commission_rate_bps: cat.commission_rate_bps }, { commission_rate_bps: bps, icon_key: icon, notice_template_id: tpl })
-    ]);
+    const slug = body.slug !== undefined ? str(body.slug, { field: '주소', max: 200, required: true }) : cat.slug;
+    if (slug !== cat.slug) {
+      const dup = await env.DB.prepare('SELECT id FROM categories WHERE slug = ? AND id != ?').bind(slug, cat.id).first();
+      if (dup) throw conflict('SLUG_TAKEN', '이미 사용 중인 주소입니다.');
+    }
+    const active = body.is_active !== undefined ? (body.is_active ? 1 : 0) : cat.is_active;
+    const sort = body.sort_order !== undefined ? intParam(body.sort_order, { min: 0, max: 1000000, field: '정렬 순서' }) : cat.sort_order;
+    let banned = null;
+    if (body.banned_words !== undefined) {
+      if (!Array.isArray(body.banned_words)) throw bad('INVALID_BANNED_WORDS', 'banned_words는 배열이어야 합니다.');
+      banned = [...new Set(body.banned_words.map((w) => String(w || '').trim()).filter(Boolean))];
+      if (banned.length > 200) throw bad('TOO_MANY_BANNED_WORDS', '금칙어는 200개를 넘을 수 없습니다.');
+      for (const w of banned) {
+        if (w.length > 50) throw bad('BANNED_WORD_TOO_LONG', '금칙어는 50자 이내로 입력해 주세요.');
+      }
+    }
+    const stmts = [
+      env.DB.prepare('UPDATE categories SET name = ?, slug = ?, icon_key = ?, is_active = ?, sort_order = ?, commission_rate_bps = ?, notice_template_id = ? WHERE id = ?')
+        .bind(name, slug, icon, active, sort, bps, tpl, cat.id),
+      audit('CATEGORY_UPDATE', 'category', cat.id,
+        { commission_rate_bps: cat.commission_rate_bps, slug: cat.slug, is_active: cat.is_active, sort_order: cat.sort_order },
+        { commission_rate_bps: bps, slug, is_active: active, sort_order: sort, icon_key: icon, notice_template_id: tpl, banned_words: banned })
+    ];
+    if (banned !== null) {
+      stmts.push(env.DB.prepare('DELETE FROM category_banned_words WHERE category_id = ?').bind(cat.id));
+      for (const w of banned) {
+        stmts.push(env.DB.prepare('INSERT INTO category_banned_words (id, category_id, word) VALUES (?, ?, ?)').bind(newId('cbw'), cat.id, w));
+      }
+    }
+    await env.DB.batch(stmts);
     const updatedCat = await env.DB.prepare('SELECT * FROM categories WHERE id = ?').bind(cat.id).first();
+    const { results: words } = await env.DB.prepare('SELECT word FROM category_banned_words WHERE category_id = ? ORDER BY word ASC').bind(cat.id).all();
+    updatedCat.banned_words = words.map((w) => w.word);
     return json(corsHeaders, { success: true, ...updatedCat, data: updatedCat });
   }
 
