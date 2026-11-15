@@ -726,6 +726,16 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     // Only sellers that passed onboarding review have a public store (pending, rejected and suspended ones do not).
     if (!partner || partner.status !== 'APPROVED') throw notFound('Partner store not found');
 
+    // 3-10: signed-in customers see their own follow state; guests see null.
+    let following = null;
+    try {
+      const viewer = await authenticate(request, env);
+      if (viewer && viewer.role === 'ROLE_CUSTOMER') {
+        const f = await env.DB.prepare('SELECT id FROM store_follows WHERE user_id = ? AND partner_id = ?').bind(viewer.userId, partnerId).first();
+        following = !!f;
+      }
+    } catch { /* guests and expired tokens read the public store anyway */ }
+
     const { results: products } = await env.DB.prepare(
       `SELECT p.*,
               p.id as slug,
@@ -769,6 +779,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
           free_shipping_threshold: partner.free_shipping_threshold
         },
         profile,
+        following,
         stats: {
           product_count: products.length,
           total_sold_count: totalSold,

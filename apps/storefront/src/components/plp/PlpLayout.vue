@@ -13,8 +13,9 @@ import { API_BASE_URL } from '../../config'
 
 const props = withDefaults(defineProps<{
   lockedCategory?: string | null
+  lockedPartner?: string | null
   title?: string | null
-}>(), { lockedCategory: null, title: null })
+}>(), { lockedCategory: null, lockedPartner: null, title: null })
 
 const route = useRoute()
 const router = useRouter()
@@ -89,6 +90,7 @@ function serverSort(): string {
 function filterParams(): URLSearchParams {
   const cats = props.lockedCategory ? [props.lockedCategory, ...fCats.value] : fCats.value
   const params = new URLSearchParams()
+  if (props.lockedPartner) params.set('partner_id', props.lockedPartner)
   if (q.value) params.set('q', q.value)
   if (cats.length) params.set('category', [...new Set(cats)].join(','))
   if (fBrands.value.length) params.set('brand', fBrands.value.join(','))
@@ -181,7 +183,7 @@ async function loadMore() {
 // ---- zero state: synonym suggestions + popular fill -------------------------------------------------
 let zeroKey = ''
 async function loadZeroExtras() {
-  const key = `${q.value}|${props.lockedCategory || ''}`
+  const key = `${q.value}|${props.lockedCategory || ''}|${props.lockedPartner || ''}`
   if (key === zeroKey) return
   zeroKey = key
   popular.value = []
@@ -402,6 +404,7 @@ watch(fPrice, () => {
   priceTimer = setTimeout(() => pushUrl(true), 400)
 }, { deep: true })
 watch(() => props.lockedCategory, () => { fCats.value = []; pushUrl(true) })
+watch(() => props.lockedPartner, () => pushUrl(true))
 
 const pickedGroups = computed({
   get: () => ({ brand: fBrands.value, seller: fSellers.value }),

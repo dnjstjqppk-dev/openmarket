@@ -284,6 +284,7 @@ const EXPECTED = [
   ['/api/v1/reviews/{id}/report', 'POST', 401],
   ['/api/v1/stores/{partnerId}/follow', 'POST', 401],
   ['/api/v1/stores/{partnerId}/follow', 'DELETE', 401],
+  ['/api/v1/stores/{partnerId}/reviews', 'GET', 200],
   ['/api/v1/me/followed-stores', 'GET', 401],
   ['/api/v1/me/recently-viewed', 'GET', 401],
   ['/api/v1/me/recently-viewed/merge', 'POST', 401],
@@ -401,6 +402,7 @@ function probePath(template) {
   }
   if (template === '/api/v1/categories/{slug}') return '/api/v1/categories/womens-clothing';
   if (template === '/api/v1/partners/{id}/store') return '/api/v1/partners/pt_001/store';
+  if (template.startsWith('/api/v1/stores/')) return template.replace('{partnerId}', 'pt_001');
   return template.replaceAll('{id}', 'probe-id').replaceAll('{subId}', 'probe-sub')
     .replaceAll('{slug}', 'probe-slug').replaceAll('{platform}', 'probe-id')
     .replaceAll('{key}', 'probe-id').replaceAll('{fileKey}', 'probe-id');

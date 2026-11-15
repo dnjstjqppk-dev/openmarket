@@ -84,16 +84,22 @@ await step('B04 add a direct-sales (MODEL A) product -> mixed cart', page, async
 });
 await step('B04b quick-add from the home grid grows the cart', page, async () => {
   await page.goto(`${STORE}/`, { waitFor: "document.querySelector('[data-testid=quick-add]')" });
-  const before = await page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
-  await page.eval("document.querySelector('[data-testid=quick-add]').click()");
-  await page.idle(800);
-  const sheeted = await page.eval("!!document.querySelector('[data-testid=quick-sheet]')");
-  if (sheeted) {
-    await page.eval("document.querySelector('[data-testid=quick-sku]:not([disabled])').click()");
-    await page.eval("document.querySelector('[data-testid=quick-confirm]').click()");
-    await page.idle(500);
+  const len = () => page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
+  const before = await len();
+  // B03/B04 may already hold the first cards (same-SKU adds merge quantity):
+  // walk the grid until a genuinely new line lands.
+  for (let i = 0; i < 6; i++) {
+    await page.eval(`document.querySelectorAll('[data-testid=quick-add]')[${i}].click()`);
+    await page.idle(800);
+    const sheeted = await page.eval("!!document.querySelector('[data-testid=quick-sheet]')");
+    if (sheeted) {
+      await page.eval("document.querySelector('[data-testid=quick-sku]:not([disabled])').click()");
+      await page.eval("document.querySelector('[data-testid=quick-confirm]').click()");
+      await page.idle(500);
+    }
+    if ((await len()) === before + 1) break;
   }
-  const after = await page.eval("JSON.parse(localStorage.getItem('olmoa_cart_items_v3') || '[]').length");
+  const after = await len();
   if (after !== before + 1) throw new Error(`cart grew ${before} -> ${after}`);
 });
 await step('B05 checkout requires login; login through the real form', page, async () => {
@@ -108,7 +114,27 @@ await step('B05 checkout requires login; login through the real form', page, asy
   await page.click('[data-testid=login-submit]');
   await page.waitFor("location.pathname === '/checkout'");
 });
+await step('B05b store follow toggles on and off in the UI', page, async () => {
+  await page.goto(`${STORE}/store/pt_002`, { waitFor: "document.querySelector('[data-testid=follow-toggle]')" });
+  const label = () => page.eval("document.querySelector('[data-testid=follow-toggle]').textContent.trim()");
+  const count = () => page.eval("document.querySelector('[data-testid=follower-count]').textContent.replace(/[^0-9]/g,'')");
+  if ((await label()) === '팔로잉') {
+    await page.click('[data-testid=follow-toggle]');
+    await page.waitFor("document.querySelector('[data-testid=follow-toggle]').textContent.trim() === '팔로우'");
+  }
+  const before = await count();
+  await page.click('[data-testid=follow-toggle]');
+  await page.waitFor("document.querySelector('[data-testid=follow-toggle]').textContent.trim() === '팔로잉'");
+  const up = await count();
+  if (Number(up) !== Number(before) + 1) throw new Error(`followers ${before} -> ${up}`);
+  await shots(page, 'store_follow_on', ['desktop']);
+  await page.click('[data-testid=follow-toggle]');
+  await page.waitFor("document.querySelector('[data-testid=follow-toggle]').textContent.trim() === '팔로우'");
+  const down = await count();
+  if (down !== before) throw new Error(`followers ${up} -> ${down}, expected ${before}`);
+});
 await step('B06 checkout shows the server quote; pay with the local simulator', page, async () => {
+  await page.goto(`${STORE}/checkout`);
   await page.waitFor("document.querySelector('[data-testid=pay-total]')");
   await page.type('input[autocomplete=name]', '김올모');
   await page.type('input[autocomplete=tel]', '010-2222-3333');
@@ -124,6 +150,7 @@ await step('B06 checkout shows the server quote; pay with the local simulator', 
   await shots(page, 'store_payment_simulator', ['desktop']);
   await page.click('[data-testid=sim-approve]');
   await page.waitFor("document.querySelector('[data-testid=pay-done]')", 20000);
+  await page.waitFor("document.querySelector('[data-testid=pay-card]')");
   const cardShown = await page.eval("document.querySelector('[data-testid=pay-card]')?.textContent || ''");
   if (!cardShown.includes('****')) throw new Error(`masked card missing on the receipt: ${cardShown}`);
   await page.click('[data-testid=order-detail-link]');

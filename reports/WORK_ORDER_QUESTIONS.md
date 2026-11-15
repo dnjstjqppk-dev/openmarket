@@ -346,3 +346,13 @@
 - (d) 3-8 order_sections 테스트가 체인에 빠져 있어 test:ui에 연결했다.
 - (e) 로그인 시 기기 기록 병합(merge)은 미배선 유지. 상세 조회부터 서버에 쌓인다.
 - 운영자 확인 필요: (a) 문의 범위, (b) PO-13 외부 스크립트 승인.
+
+## Q-3-10 (작업 3-10, 2026-11-15): 스토어홈 해석
+
+- (a) 채우기 쿼리는 first_min(3-5 게이지 실링크). 스펙의 free_ship_fill 명칭과 다름.
+- (b) 문의하기는 /support로 연결. 스토어 단위 문의 창구는 없다.
+- (c) 리뷰 탭은 공개 리뷰만. 스토어 공개 읽기(/stores/{id}/reviews) 신설.
+- (d) 팔로우 상태는 스토어 응답 following(회원 true/false, 비회원 null).
+- (e) 대표 상품은 featured 우선, 없으면 판매량순 8개.
+- (f) 무료 기준은 free_threshold 우선·없으면 free_shipping_threshold(행 혼재).
+- 운영자 확인 필요: (a) 쿼리명 확정, (b) 문의 연결처.

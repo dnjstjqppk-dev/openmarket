@@ -468,6 +468,52 @@ await t.test('B23. order summary phases match the buyer list tabs', async () => 
   assert.equal(sum.upcoming + sum.purchasing + sum.completed, sum.total, 'phases partition the total');
 });
 
+await t.test('B24. store reviews list visible rows with paging', async () => {
+  const g = await newGateway();
+  const pid = g.db.prepare("SELECT partner_id FROM products WHERE id = 'prod_001'").get().partner_id;
+  const otherPid = g.db.prepare("SELECT id FROM partners WHERE id != ? LIMIT 1").get(pid).id;
+  const otherProd = g.db.prepare('SELECT id FROM products WHERE partner_id = ? LIMIT 1').get(otherPid).id;
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, images_json)
+    VALUES ('rv_b24a', 'prod_001', 'u_customer_001', 'a', 5, 'x', '["https://x/y.png"]')`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content)
+    VALUES ('rv_b24b', 'prod_001', 'u_customer_001', 'b', 4, 'y')`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, visibility)
+    VALUES ('rv_b24c', 'prod_001', 'u_customer_001', 'c', 1, 'z', 'BLIND')`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content)
+    VALUES ('rv_b24d', ?, 'u_customer_001', 'd', 5, 'w')`).run(otherProd);
+  const r = await g.call(`/api/v1/stores/${pid}/reviews?per_page=1`);
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.count, 2, 'blind and foreign rows excluded');
+  assert.equal(r.json.data.reviews.length, 1, 'pagination applies');
+  assert.equal(r.json.data.pagination.total_pages, 2, 'page count measured');
+  const full = await g.call(`/api/v1/stores/${pid}/reviews`);
+  const ids = full.json.data.reviews.map((x) => x.id);
+  assert.ok(ids.includes('rv_b24a') && ids.includes('rv_b24b'), 'visible rows listed');
+  assert.deepEqual(full.json.data.reviews.find((x) => x.id === 'rv_b24a').images, ['https://x/y.png'], 'images parsed');
+  assert.ok(full.json.data.reviews.every((x) => x.product_title), 'product titles joined');
+  const missing = await g.call('/api/v1/stores/pt_missing/reviews');
+  assert.equal(missing.status, 404, 'unknown sellers hidden');
+  g.db.prepare("UPDATE partners SET status = 'SUSPENDED' WHERE id = ?").run(pid);
+  const suspended = await g.call(`/api/v1/stores/${pid}/reviews`);
+  assert.equal(suspended.status, 404, 'suspended sellers hidden');
+});
+
+await t.test('B25. store endpoint reports my follow state', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const pid = g.db.prepare("SELECT partner_id FROM products WHERE id = 'prod_001'").get().partner_id;
+  const anon = await g.call(`/api/v1/partners/${pid}/store`);
+  assert.equal(anon.json.data.following, null, 'guests see no follow state');
+  const plain = await g.call(`/api/v1/partners/${pid}/store`, { token: cust });
+  assert.equal(plain.json.data.following, false, 'non-followers see false');
+  await g.call(`/api/v1/stores/${pid}/follow`, { method: 'POST', token: cust });
+  const on = await g.call(`/api/v1/partners/${pid}/store`, { token: cust });
+  assert.equal(on.json.data.following, true, 'followers see true');
+  await g.call(`/api/v1/stores/${pid}/follow`, { method: 'DELETE', token: cust });
+  const off = await g.call(`/api/v1/partners/${pid}/store`, { token: cust });
+  assert.equal(off.json.data.following, false, 'unfollow flips back');
+});
+
 await t.test('B20. open claims cancel and reopen the sub-order', async () => {
   const g = await newGateway();
   const cust = await login(g, 'customer@example.com');

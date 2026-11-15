@@ -829,6 +829,40 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const data = { following, partner_id: partner.id };
     return json(corsHeaders, { success: true, ...data, data });
   }
+  // 13b. Public store reviews (3-10): visible reviews on the seller's
+  // products, newest first. Unknown and non-approved sellers stay hidden.
+  const storeReviewsMatch = url.pathname.match(/^\/api\/v1\/stores\/([^/]+)\/reviews$/);
+  if (storeReviewsMatch && request.method === 'GET') {
+    const partner = await env.DB.prepare("SELECT id FROM partners WHERE id = ? AND status = 'APPROVED'").bind(storeReviewsMatch[1]).first();
+    if (!partner) throw notFound('판매자를 찾을 수 없습니다.');
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(100, Math.max(1, parseInt(url.searchParams.get('per_page') || '20', 10) || 20));
+    const total = await env.DB.prepare(
+      `SELECT COUNT(*) AS c FROM product_reviews r JOIN products p ON p.id = r.product_id
+       WHERE p.partner_id = ? AND r.visibility = 'VISIBLE'`
+    ).bind(partner.id).first('c') || 0;
+    const { results } = await env.DB.prepare(
+      `SELECT r.*, p.title AS product_title, p.thumbnail_url
+       FROM product_reviews r JOIN products p ON p.id = r.product_id
+       WHERE p.partner_id = ? AND r.visibility = 'VISIBLE'
+       ORDER BY r.created_at DESC, r.rowid DESC LIMIT ? OFFSET ?`
+    ).bind(partner.id, perPage, (page - 1) * perPage).all();
+    const replies = {};
+    if (results.length) {
+      const { results: replyRows } = await env.DB.prepare(
+        `SELECT review_id, body, created_at FROM review_replies WHERE review_id IN (${results.map(() => '?').join(',')})`
+      ).bind(...results.map((r) => r.id)).all();
+      for (const rr of replyRows) replies[rr.review_id] = { body: rr.body, created_at: rr.created_at };
+    }
+    const reviews = results.map((r) => {
+      let images = [];
+      try { images = JSON.parse(r.images_json || '[]'); } catch (_) { /* keep empty */ }
+      if (!Array.isArray(images)) images = [];
+      return { ...r, comment: r.content, customer_name: r.reviewer_name, images, reply: replies[r.id] || null };
+    });
+    const data = { reviews, pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) } };
+    return json(corsHeaders, { success: true, count: data.pagination.total, data });
+  }
   if (url.pathname === '/api/v1/me/followed-stores' && request.method === 'GET') {
     const me = await requireCustomer(request, env);
     const { results } = await env.DB.prepare(

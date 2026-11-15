@@ -857,6 +857,23 @@ paths:
         '404':
           description: Unknown seller (NOT_FOUND)
 
+  /api/v1/stores/{partnerId}/reviews:
+    get:
+      summary: Visible reviews on a seller's products
+      tags: [Features]
+      description: '3-10: public, newest first. Query: page, per_page (default 20, max 100).'
+      parameters:
+        - name: partnerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Store reviews with pagination
+        '404':
+          description: Unknown or non-approved seller (NOT_FOUND)
+
   /api/v1/me/followed-stores:
     get:
       summary: Stores I follow

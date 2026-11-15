@@ -505,6 +505,8 @@ paths:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1reviews~1{id}~1report'
   /api/v1/stores/{partnerId}/follow:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1stores~1{partnerId}~1follow'
+  /api/v1/stores/{partnerId}/reviews:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1stores~1{partnerId}~1reviews'
   /api/v1/me/followed-stores:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1followed-stores'
   /api/v1/me/recently-viewed:
