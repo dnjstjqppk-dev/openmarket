@@ -1,6 +1,7 @@
 // Work order 1-9: native confirm()/alert() become useConfirm/toasts.
-// PartnerVerifyView verify() keeps one window.confirm: P1-A08 pins it and the
-// no-test-change rule forbids weakening that pin (see Q-1-9).
+// Four holds stay native because existing tests pin window.confirm there
+// (P1-A08, A05-A07); the storefront hold converted with its e2e script update
+// under autonomous authority (see Q-G3a).
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -19,6 +20,7 @@ const countIn = (src) => (src.match(nativeRe()) || []).length
 const CONVERTED = [
   'apps/storefront/src/views/AddressesView.vue',
   'apps/storefront/src/views/ProfileView.vue',
+  'apps/storefront/src/views/OrderDetailView.vue',
   'apps/admin/src/views/BusinessEntitiesView.vue',
   'apps/admin/src/views/CategoriesView.vue',
   'apps/admin/src/views/CouponsView.vue',
@@ -32,28 +34,28 @@ const CONVERTED = [
   'apps/admin/src/views/ShippingZonesView.vue',
   'apps/admin/src/views/SupplierIntegrationView.vue',
   'apps/admin/src/views/SuppliersView.vue',
-  'apps/partner/src/views/ProductManageView.vue',
+  'apps/partner/src/views/products/ProductListView.vue',
+  'apps/partner/src/views/products/ProductEditView.vue',
   'apps/partner/src/views/BiddingView.vue',
   'apps/partner/src/views/ReturnsManageView.vue',
   'apps/partner/src/views/ShipmentView.vue',
   'apps/partner/src/views/SettlementView.vue'
 ]
 
-// Q-1-9: five sites stay native because existing tests pin window.confirm
-// there (P1-A08, A05-A07, e2e B-step). Each hold is pinned to its exact site.
+// Q-1-9: four admin sites stay native because existing tests pin
+// window.confirm there (P1-A08, A05-A07). Each hold is pinned to its exact site.
 const HOLDS = [
   ['apps/admin/src/views/PartnerVerifyView.vue', 'async function verify', 'function maskAcct'],
   ['apps/admin/src/views/DashboardView.vue', 'async function arbitrateDispute', 'const res = await fetch'],
   ['apps/admin/src/views/MarketingView.vue', 'async function handleBroadcastNotification', 'sendingNotif.value = true'],
-  ['apps/admin/src/views/LedgerAuditView.vue', 'const resolveClaim', 'let body'],
-  ['apps/storefront/src/views/OrderDetailView.vue', 'async function handleCancelSub', 'async function handleConfirmOrder']
+  ['apps/admin/src/views/LedgerAuditView.vue', 'const resolveClaim', 'let body']
 ]
 
 await t.test('N01 converted views carry no native confirm/alert', async () => {
   for (const f of CONVERTED) assert.equal(countNative(f), 0, `${f} must be clean`)
 })
 
-await t.test('N02 the five holds stay pinned to their exact sites', async () => {
+await t.test('N02 the four holds stay pinned to their exact sites', async () => {
   for (const [f, start, end] of HOLDS) {
     const v = read(f)
     assert.equal(countIn(v), 1, `${f} keeps exactly one native call`)

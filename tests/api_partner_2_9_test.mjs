@@ -644,4 +644,71 @@ await t.test('P15. pickup and inspection follow the stage order', async () => {
   assert.equal(approve2.json.return_fee, 0, 'seller fault drops the fee');
 });
 
+await t.test('P16. product list pages and filters on the server', async () => {
+  const g = await newGateway();
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const mk = async (title) => (await g.call('/api/v1/partner/products', {
+    method: 'POST', token: pt,
+    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png' }
+  })).json.product_id;
+  const a = await mk('P16 판매중');
+  const b = await mk('P16 품절');
+  g.db.prepare("UPDATE products SET status = 'ACTIVE', review_status = 'APPROVED' WHERE id IN (?, ?)").run(a, b);
+  g.db.prepare('UPDATE product_skus SET stock_quantity = 0 WHERE product_id = ?').run(b);
+  const p1 = await g.call('/api/v1/partner/products?per_page=1&page=1', { token: pt });
+  assert.equal(p1.status, 200, p1.text);
+  assert.ok(p1.json.pagination && p1.json.pagination.total >= 2, 'pagination with total');
+  const p2 = await g.call('/api/v1/partner/products?per_page=1&page=2', { token: pt });
+  const ids1 = [...new Set(p1.json.data.map((r) => r.id || r.product_id))];
+  const ids2 = [...new Set(p2.json.data.map((r) => r.product_id))];
+  assert.ok(ids1.length === 1 && ids2.length === 1 && ids1[0] !== ids2[0], 'pages split by product');
+  const so = await g.call('/api/v1/partner/products?status=SOLDOUT', { token: pt });
+  const soIds = so.json.data.map((r) => r.product_id || r.id);
+  assert.ok(soIds.includes(b) && !soIds.includes(a), 'soldout isolates zero stock');
+  const pend = await g.call('/api/v1/partner/products?status=PENDING', { token: pt });
+  assert.ok(!pend.json.data.map((r) => r.product_id || r.id).includes(a), 'approved product out of pending');
+  const q = await g.call(`/api/v1/partner/products?q=${encodeURIComponent('P16 판매중')}`, { token: pt });
+  assert.ok(q.json.data.length > 0 && q.json.data.every((r) => (r.title || '').includes('P16 판매중')), 'title search narrows');
+  const bad = await g.call('/api/v1/partner/products?status=BOGUS', { token: pt });
+  assert.equal(bad.status, 400, 'unknown status rejected');
+});
+
+await t.test('P17. resume to ACTIVE needs an approved review', async () => {
+  const g = await newGateway();
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const mk = async (title) => (await g.call('/api/v1/partner/products', {
+    method: 'POST', token: pt,
+    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png' }
+  })).json.product_id;
+  const a = await mk('P17 재개');
+  g.db.prepare("UPDATE products SET status = 'ACTIVE', review_status = 'APPROVED' WHERE id = ?").run(a);
+  await g.call('/api/v1/partner/products/bulk-update', { method: 'PUT', token: pt, body: { updates: [{ product_id: a, status: 'HIDDEN' }] } });
+  assert.equal(g.db.prepare('SELECT status FROM products WHERE id = ?').get(a).status, 'HIDDEN');
+  const r = await g.call('/api/v1/partner/products/bulk-update', { method: 'PUT', token: pt, body: { updates: [{ product_id: a, status: 'ACTIVE' }] } });
+  assert.equal(r.json.data.failed.length, 0, 'approved resume succeeds');
+  assert.equal(g.db.prepare('SELECT status FROM products WHERE id = ?').get(a).status, 'ACTIVE', 'back on sale');
+  const b = await mk('P17 미심사');
+  const r2 = await g.call('/api/v1/partner/products/bulk-update', { method: 'PUT', token: pt, body: { updates: [{ product_id: b, status: 'ACTIVE' }] } });
+  assert.equal(r2.json.data.failed.length, 1, 'unapproved activation still refused');
+});
+
+await t.test('P18. single product carries gallery and skus for the edit form', async () => {
+  const g = await newGateway();
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const created = await g.call('/api/v1/partner/products', { method: 'POST', token: pt,
+    body: { title: 'P18 단건', sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video',
+      thumbnail_url: 'https://cdn.example/p18.png', images: [{ image_url: '/api/v1/storage/file/p18a.png' }, { image_url: '/api/v1/storage/file/p18b.png' }] } });
+  assert.equal(created.status, 201, created.text);
+  const id = created.json.product_id;
+  const r = await g.call(`/api/v1/partner/products/${id}`, { token: pt });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.data.id, id, 'product returned');
+  assert.equal(r.json.data.images.length, 2, 'gallery in order');
+  assert.equal(r.json.data.images[0].image_url, '/api/v1/storage/file/p18a.png', 'sort order kept');
+  assert.ok(r.json.data.skus.length >= 1 && r.json.data.skus[0].sale_price === 10000, 'skus with prices');
+  const other = pt2Product(g);
+  const denied = await g.call(`/api/v1/partner/products/${other.id}`, { token: pt });
+  assert.equal(denied.status, 404, 'other seller product hidden');
+});
+
 t.finish();

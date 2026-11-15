@@ -120,6 +120,7 @@ const EXPECTED = [
   ['/api/v1/partner/profile', 'GET', 401],
   ['/api/v1/partner/profile', 'PUT', 401],
   ['/api/v1/partner/products', 'GET', 401],
+  ['/api/v1/partner/products/{id}', 'GET', 401],
   ['/api/v1/partner/products/{id}', 'PUT', 401],
   ['/api/v1/partner/products/{id}/price', 'PUT', 401],
   ['/api/v1/partner/products/{id}/stock', 'PUT', 401],

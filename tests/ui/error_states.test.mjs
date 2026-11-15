@@ -121,7 +121,7 @@ await t.test('E03 custom load-error blocks use the unified heading', async () =>
     'apps/admin/src/views/OrdersView.vue',
     'apps/admin/src/views/ReconciliationView.vue',
     'apps/admin/src/views/ShippingZonesView.vue',
-    'apps/partner/src/views/ProductManageView.vue',
+    'apps/partner/src/views/products/ProductListView.vue',
     'apps/partner/src/views/ProfileManageView.vue',
     'apps/partner/src/views/QnaManageView.vue',
     'apps/partner/src/views/ReturnsManageView.vue',

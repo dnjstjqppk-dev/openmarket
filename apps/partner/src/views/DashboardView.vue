@@ -1,268 +1,218 @@
 <script setup lang="ts">
-import { Boxes, LoaderCircle, Truck } from 'lucide-vue-next'
-import { ref, onMounted, computed } from 'vue';
-import { API_BASE, getPartnerHeaders } from '../config';
-import { OmButton, OmEmptyState } from '@olmoa/ui'
+// Seller dashboard (4-1): action pipeline KPIs, sales trend + fulfillment
+// gauges, and the two hot lists (due shipments, overdue Q&A). Every figure
+// comes from /partner/dashboard/pipeline or /partner/metrics; KPI cards link
+// to the filtered list that produces the same count.
+import { ref, computed, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
+import { API_BASE, getPartnerHeaders } from '../config'
+import { userErrorMessage, OmKpiCard, OmEmptyState, OmSkeleton, OmButton } from '@olmoa/ui'
 
-const metrics = ref({
-  totalProducts: 0,
-  ordersCount: 0,
-  totalSales: 0,
-  settlementExpected: 0
-});
+const won = (v: any) => `${(Number(v) || 0).toLocaleString('ko-KR')}원`
+const fmtDate = (d: any) => {
+  if (!d) return '-'
+  const t = new Date(String(d).replace(' ', 'T'))
+  return Number.isNaN(t.getTime()) ? String(d) : `${t.getMonth() + 1}.${t.getDate()}`
+}
 
-interface GmvBucket { day: string; amount: number; }
-const weeklyGmv = ref<GmvBucket[]>([]);
-const wowPct = ref<number | null>(null);
-const shipOnTime = ref<number | null>(null);
-const avgDays = ref<number | null>(null);
-const claimRate = ref<number | null>(null);
+const loading = ref(true)
+const pipeError = ref('')
+const metricError = ref('')
+const pipe = ref<any>(null)
+const metrics = ref<any>({ weekly_gmv: [], monthly_gmv: [] })
+const trendRange = ref<'7' | '30'>('7')
 
-const recentOrders = ref<any[]>([]);
-const loading = ref(true);
+const dueList = ref<any[]>([])
+const dueError = ref('')
+const overdueQna = ref<any[]>([])
+const qnaError = ref('')
 
-const maxGmv = computed(() => Math.max(1, ...weeklyGmv.value.map((b) => b.amount)));
-const point = (i: number) => {
-  const x = 20 + (i * 440) / 6;
-  const y = 100 - ((weeklyGmv.value[i]?.amount || 0) / maxGmv.value) * 75;
-  return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
-};
-const linePath = computed(() => weeklyGmv.value.map((_, i) => `${i === 0 ? 'M' : 'L'} ${point(i).x} ${point(i).y}`).join(' '));
-const areaPath = computed(() => weeklyGmv.value.length ? `${linePath.value} L 460 110 L 20 110 Z` : '');
-const dayLabel = (day: string) => {
-  const d = new Date(`${day}T00:00:00Z`);
-  return `${d.getUTCMonth() + 1}.${d.getUTCDate()} (${'일월화수목금토'[d.getUTCDay()]})`;
-};
-const isToday = (day: string) => day === new Date().toISOString().slice(0, 10);
+const trendSeries = computed(() => (trendRange.value === '7' ? metrics.value.weekly_gmv || [] : metrics.value.monthly_gmv || []))
+const trendDelta = computed(() => (trendRange.value === '7' ? metrics.value.wow_pct : metrics.value.mom_pct))
+const trendTotal = computed(() => trendSeries.value.reduce((t: number, b: any) => t + (Number(b.amount) || 0), 0))
+const maxTrend = computed(() => Math.max(1, ...trendSeries.value.map((b: any) => Number(b.amount) || 0)))
+const point = (i: number, n: number) => {
+  const x = n <= 1 ? 250 : 20 + (i * 460) / (n - 1)
+  const y = 100 - ((Number(trendSeries.value[i]?.amount) || 0) / maxTrend.value) * 75
+  return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
+}
+const linePath = computed(() => trendSeries.value.map((_: any, i: number) => `${i === 0 ? 'M' : 'L'} ${point(i, trendSeries.value.length).x} ${point(i, trendSeries.value.length).y}`).join(' '))
+const areaPath = computed(() => (trendSeries.value.length ? `${linePath.value} L 480 110 L 20 110 Z` : ''))
+
+async function getJson(path: string) {
+  const res = await fetch(`${API_BASE}${path}`, { headers: getPartnerHeaders() })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || !json.success) throw new Error(json.error || '불러오지 못했습니다.')
+  return json
+}
+
+async function loadPipeline() {
+  pipeError.value = ''
+  try {
+    const json = await getJson('/api/v1/partner/dashboard/pipeline')
+    pipe.value = json.data || json
+  } catch (e: any) {
+    pipeError.value = userErrorMessage(e, '파이프라인을 불러오지 못했습니다.')
+  }
+}
+
+async function loadMetrics() {
+  metricError.value = ''
+  try {
+    const json = await getJson('/api/v1/partner/metrics')
+    metrics.value = json
+  } catch (e: any) {
+    metricError.value = userErrorMessage(e, '매출 지표를 불러오지 못했습니다.')
+  }
+}
+
+async function loadDue() {
+  dueError.value = ''
+  try {
+    const [a, b] = await Promise.all([
+      getJson('/api/v1/partner/orders?status=PAYMENT_CONFIRMED&per_page=200'),
+      getJson('/api/v1/partner/orders?status=PREPARING&per_page=200')
+    ])
+    const rows = [...(a.data || []), ...(b.data || [])]
+    rows.sort((x, y) => String(x.ship_by_deadline || '9999').localeCompare(String(y.ship_by_deadline || '9999')))
+    dueList.value = rows.slice(0, 10)
+  } catch (e: any) {
+    dueError.value = userErrorMessage(e, '출고 임박 주문을 불러오지 못했습니다.')
+  }
+}
+
+async function loadOverdueQna() {
+  qnaError.value = ''
+  try {
+    const json = await getJson('/api/v1/partner/qna')
+    const rows = Array.isArray(json.data) ? json.data : []
+    const cutoff = Date.now() - 24 * 3600 * 1000
+    overdueQna.value = rows.filter((q: any) => q.status === 'WAITING' && new Date(String(q.created_at).replace(' ', 'T')).getTime() < cutoff)
+  } catch (e: any) {
+    qnaError.value = userErrorMessage(e, '미답변 문의를 불러오지 못했습니다.')
+  }
+}
 
 onMounted(async () => {
-  try {
-    const [metRes, ordRes] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/partner/metrics`, { headers: getPartnerHeaders() }),
-      fetch(`${API_BASE}/api/v1/partner/orders`, { headers: getPartnerHeaders() })
-    ]);
-
-    const metJson = await metRes.json();
-    if (metJson.success) {
-      metrics.value.totalProducts = metJson.products_count || 0;
-      metrics.value.ordersCount = metJson.orders_count || 0;
-      metrics.value.totalSales = metJson.total_sales_amount || 0;
-      metrics.value.settlementExpected = metJson.settlement_expected_amount || 0;
-      weeklyGmv.value = Array.isArray(metJson.weekly_gmv) ? metJson.weekly_gmv : [];
-      wowPct.value = typeof metJson.wow_pct === 'number' ? metJson.wow_pct : null;
-      shipOnTime.value = typeof metJson.ship_on_time_rate === 'number' ? metJson.ship_on_time_rate : null;
-      avgDays.value = typeof metJson.avg_delivery_days === 'number' ? metJson.avg_delivery_days : null;
-      claimRate.value = typeof metJson.claim_rate_pct === 'number' ? metJson.claim_rate_pct : null;
-    }
-
-    const ordJson = await ordRes.json();
-    if (ordJson.success && ordJson.data) {
-      recentOrders.value = ordJson.data.slice(0, 5);
-    }
-  } catch (_) {
-  } finally {
-    loading.value = false;
-  }
-});
+  loading.value = true
+  await Promise.all([loadPipeline(), loadMetrics(), loadDue(), loadOverdueQna()])
+  loading.value = false
+})
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900">판매자 비즈니스 대시보드</h1>
-        <p class="text-xs text-slate-500 mt-1">D1 데이터베이스에 기록된 입점사의 실시간 판매 현황 및 출고 지표입니다.</p>
-      </div>
-      <div class="flex gap-2">
-        <router-link to="/products" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-          <Boxes class="h-4 w-4 mr-1.5" aria-hidden="true" />상품 재고 관리
-        </router-link>
-        <router-link to="/shipments" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm transition">
-          <Truck class="h-4 w-4 mr-1.5" aria-hidden="true" />송장 출고 관리
-        </router-link>
-      </div>
+    <div>
+      <h1 class="text-2xl font-bold text-ink">대시보드</h1>
+      <p class="mt-1 text-xs text-ink-muted">처리해야 할 일부터 보여줍니다. 카드 숫자는 눌렀을 때 열리는 목록 건수와 같습니다.</p>
     </div>
 
-    <!-- Metric Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs font-semibold text-slate-500 mb-1">등록 상품 수</div>
-        <div class="text-2xl font-bold text-slate-900">{{ metrics.totalProducts }}개</div>
-        <div class="text-[10px] text-emerald-600 font-semibold mt-1">D1 활성 카탈로그</div>
-      </div>
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs font-semibold text-slate-500 mb-1">인입된 총 주문건수</div>
-        <div class="text-2xl font-bold text-indigo-600">{{ metrics.ordersCount }}건</div>
-        <div class="text-[10px] text-slate-400 mt-1">실시간 고객 주문</div>
-      </div>
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs font-semibold text-slate-500 mb-1">총 누적 매출</div>
-        <div class="text-2xl font-bold text-slate-900">₩{{ metrics.totalSales.toLocaleString() }}</div>
-        <div class="text-[10px] text-emerald-600 font-semibold mt-1">에스크로 확정 매출</div>
-      </div>
-      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div class="text-xs font-semibold text-slate-500 mb-1">정산 예정 금액 (조정 반영 실지급액)</div>
-        <div class="text-2xl font-bold text-emerald-600">₩{{ metrics.settlementExpected.toLocaleString() }}</div>
-        <div class="text-[10px] text-slate-400 mt-1">월 2회 정산 자동 지급</div>
-      </div>
+    <div v-if="pipeError" class="rounded-xl border border-danger bg-danger-soft p-3.5 text-xs font-bold text-danger" role="alert">
+      {{ pipeError }}
+      <button type="button" class="ml-2 underline hover:no-underline" @click="loadPipeline">다시 시도</button>
     </div>
 
-    <!-- Analytics & Fulfillment Health Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- 7-Day GMV & Sales Trend SVG Sparkline Card -->
-      <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-sm space-y-4">
-        <div class="flex items-center justify-between">
+    <!-- Row 1: action pipeline -->
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <OmKpiCard label="신규 주문" :value="pipe ? String(pipe.new_orders) : '-'" :loading="loading" :error="pipeError" to="/shipments?tab=new" @retry="loadPipeline" />
+      <OmKpiCard label="발송 대기" :value="pipe ? String(pipe.preparing) : '-'" :loading="loading" :error="pipeError" to="/shipments?tab=waiting" @retry="loadPipeline" />
+      <OmKpiCard label="배송 중" :value="pipe ? String(pipe.in_transit) : '-'" :loading="loading" :error="pipeError" to="/shipments?tab=shipping" @retry="loadPipeline" />
+      <OmKpiCard label="취소 요청" :value="pipe ? String(pipe.cancel_requests) : '-'" :loading="loading" :error="pipeError" to="/claims/cancel" @retry="loadPipeline" />
+      <OmKpiCard label="반품 요청" :value="pipe ? String(pipe.return_requests) : '-'" :loading="loading" :error="pipeError" to="/claims/return" @retry="loadPipeline" />
+      <OmKpiCard label="교환 요청" :value="pipe ? String(pipe.exchange_requests) : '-'" :loading="loading" :error="pipeError" to="/claims/exchange" @retry="loadPipeline" />
+      <OmKpiCard label="미답변 문의" :value="pipe ? String(pipe.unanswered_qna) : '-'" :loading="loading" :error="pipeError" to="/qna?status=WAITING" @retry="loadPipeline" />
+      <OmKpiCard label="정산 예정금" :value="pipe ? won(pipe.settlement?.expected_amount) : '-'" :loading="loading" :error="pipeError" to="/settlements" @retry="loadPipeline" />
+    </div>
+    <p v-if="pipe" class="om-num -mt-3 text-xs text-ink-muted">출금 가능 {{ won(pipe.settlement?.withdrawable_amount) }} · 지급은 출금 신청 후 승인 시 (다음 지급일 없음)</p>
+
+    <!-- Row 2: sales trend + ops health -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div class="space-y-4 rounded-2xl border border-line bg-surface p-6 lg:col-span-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 class="font-black text-slate-900 text-sm flex items-center gap-2">
-              <span>📈 주간 매출 추이 (최근 7일 GMV)</span>
-            </h2>
-            <p class="text-[11px] text-slate-400">일별 주문 금액 및 D1 에스크로 정산 확정액</p>
+            <h2 class="text-sm font-bold text-ink">매출 추이</h2>
+            <p class="om-num mt-0.5 text-xs text-ink-muted">합계 {{ won(trendTotal) }}</p>
           </div>
-          <span v-if="wowPct === null" class="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-            전주 대비 집계 중
-          </span>
-          <span v-else class="text-xs font-black px-2.5 py-1 rounded-full border"
-            :class="wowPct >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-rose-600 bg-rose-50 border-rose-200'">
-            전주 대비 {{ wowPct >= 0 ? '+' : '' }}{{ wowPct }}% {{ wowPct >= 0 ? '▲' : '▼' }}
-          </span>
+          <div class="flex items-center gap-2">
+            <span v-if="trendDelta !== null && trendDelta !== undefined" class="om-num rounded-full px-2.5 py-1 text-xs font-bold" :class="Number(trendDelta) >= 0 ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">
+              전기 대비 {{ Number(trendDelta) >= 0 ? '+' : '' }}{{ trendDelta }}% {{ Number(trendDelta) >= 0 ? '▲' : '▼' }}
+            </span>
+            <div class="flex rounded-full border border-line p-0.5 text-xs font-bold" role="group" aria-label="집계 기간">
+              <button type="button" :class="['rounded-full px-3 py-1', trendRange === '7' ? 'bg-secondary text-secondary-on' : 'text-ink-muted']" @click="trendRange = '7'">7일</button>
+              <button type="button" :class="['rounded-full px-3 py-1', trendRange === '30' ? 'bg-secondary text-secondary-on' : 'text-ink-muted']" @click="trendRange = '30'">30일</button>
+            </div>
+          </div>
         </div>
-
-        <!-- Interactive SVG Area Chart -->
-        <div class="h-44 w-full pt-2">
-          <svg viewBox="0 0 500 120" class="w-full h-full overflow-visible">
+        <div v-if="loading"><OmSkeleton variant="rect" height="h-44" /></div>
+        <p v-else-if="metricError" class="text-xs font-bold text-danger" role="alert">{{ metricError }} <button type="button" class="underline hover:no-underline" @click="loadMetrics">다시 시도</button></p>
+        <div v-else class="h-44 w-full pt-2">
+          <svg viewBox="0 0 500 120" class="h-full w-full overflow-visible" role="img" aria-label="일별 매출 추이 그래프">
             <defs>
               <linearGradient id="gmvGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#4F46E5" stop-opacity="0.25" />
-                <stop offset="100%" stop-color="#4F46E5" stop-opacity="0.0" />
+                <stop offset="0%" class="gmv-stop-top" />
+                <stop offset="100%" class="gmv-stop-bottom" />
               </linearGradient>
             </defs>
-            <!-- Grid Lines -->
-            <line x1="0" y1="30" x2="500" y2="30" stroke="#F1F5F9" stroke-width="1" stroke-dasharray="3,3" />
-            <line x1="0" y1="70" x2="500" y2="70" stroke="#F1F5F9" stroke-width="1" stroke-dasharray="3,3" />
-            <line x1="0" y1="110" x2="500" y2="110" stroke="#E2E8F0" stroke-width="1" />
-
-            <!-- Area Path -->
+            <line x1="0" y1="30" x2="500" y2="30" class="gmv-grid" stroke-dasharray="3,3" />
+            <line x1="0" y1="70" x2="500" y2="70" class="gmv-grid" stroke-dasharray="3,3" />
+            <line x1="0" y1="110" x2="500" y2="110" class="gmv-axis" />
             <path :d="areaPath" fill="url(#gmvGradient)" />
-            <!-- Line Path -->
-            <path :d="linePath" fill="none" stroke="#4F46E5" stroke-width="3" stroke-linecap="round" />
-            <!-- Data Points -->
-            <circle v-for="(_, i) in weeklyGmv" :key="weeklyGmv[i].day" :cx="point(i).x" :cy="point(i).y" r="4"
-              :fill="i === weeklyGmv.length - 1 ? '#FF5000' : '#4F46E5'" stroke="#FFFFFF" stroke-width="2" />
+            <path :d="linePath" fill="none" class="gmv-line" stroke-width="3" stroke-linecap="round" />
           </svg>
-        </div>
-
-        <div class="flex justify-between text-[11px] font-bold text-slate-400 px-2 border-t pt-2">
-          <span v-for="b in weeklyGmv" :key="b.day" :class="isToday(b.day) ? 'text-indigo-600 font-black' : ''">
-            {{ isToday(b.day) ? '오늘 ' : '' }}({{ dayLabel(b.day) }})
-          </span>
         </div>
       </div>
 
-      <!-- SLA & Fulfillment Health Gauge -->
-      <div class="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-sm space-y-4 flex flex-col justify-between">
-        <div>
-          <h2 class="font-black text-slate-900 text-sm">🚚 풀필먼트 서비스 품질 지수</h2>
-          <p class="text-[11px] text-slate-400 mt-0.5">우수 셀러 평가 및 상위 노출 가산점</p>
-        </div>
-
-        <div class="space-y-3">
-          <div>
-            <div class="flex justify-between text-xs font-bold mb-1">
-              <span class="text-slate-700">24시간 내 당일 출고율</span>
-              <span v-if="shipOnTime === null" class="text-slate-400 font-bold">집계 중</span>
-              <span v-else class="text-emerald-600 font-black">{{ shipOnTime }}%</span>
-            </div>
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-emerald-500 h-full rounded-full" :style="`width: ${shipOnTime ?? 0}%`"></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex justify-between text-xs font-bold mb-1">
-              <span class="text-slate-700">평균 배송 소요일</span>
-              <span v-if="avgDays === null" class="text-slate-400 font-bold">집계 중</span>
-              <span v-else class="text-indigo-600 font-black">{{ avgDays }}일</span>
-            </div>
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-indigo-500 h-full rounded-full" :style="`width: ${avgDays === null ? 0 : Math.min(100, (avgDays / 7) * 100)}%`"></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex justify-between text-xs font-bold mb-1">
-              <span class="text-slate-700">반품 및 클레임율</span>
-              <span v-if="claimRate === null" class="text-slate-400 font-bold">집계 중</span>
-              <span v-else class="text-amber-600 font-black">{{ claimRate }}%</span>
-            </div>
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-amber-400 h-full rounded-full" :style="`width: ${claimRate ?? 0}%`"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-2 border-t">
-          <router-link
-            to="/returns"
-            class="w-full py-2 bg-slate-50 hover:bg-orange-50 hover:text-[#FF5000] text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition border border-slate-200"
-          >
-            <span>🔄 반품·교환 클레임 센터 바로가기</span>
-            <span class="text-[10px]">→</span>
-          </router-link>
-        </div>
+      <div class="space-y-4 rounded-2xl border border-line bg-surface p-6">
+        <h2 class="text-sm font-bold text-ink">운영 지표 · 페널티 · 등급</h2>
+        <dl class="space-y-3 text-xs">
+          <div class="flex items-center justify-between gap-2"><dt class="text-ink-muted">출고 준수율(24시간 내)</dt><dd class="om-num font-bold text-ink">{{ metrics.ship_on_time_rate ?? '-' }}{{ metrics.ship_on_time_rate === null || metrics.ship_on_time_rate === undefined ? '' : '%' }}</dd></div>
+          <div class="flex items-center justify-between gap-2"><dt class="text-ink-muted">평균 배송일</dt><dd class="om-num font-bold text-ink">{{ metrics.avg_delivery_days ?? '-' }}{{ metrics.avg_delivery_days === null || metrics.avg_delivery_days === undefined ? '' : '일' }}</dd></div>
+          <div class="flex items-center justify-between gap-2"><dt class="text-ink-muted">클레임률</dt><dd class="om-num font-bold text-ink">{{ metrics.claim_rate_pct ?? '-' }}{{ metrics.claim_rate_pct === null || metrics.claim_rate_pct === undefined ? '' : '%' }}</dd></div>
+          <div class="flex items-center justify-between gap-2 border-t border-line-divider pt-3"><dt class="text-ink-muted">최근 30일 페널티</dt><dd class="om-num font-bold text-ink">{{ pipe ? `${pipe.penalty_count}건 ${pipe.penalty_points}점` : '-' }}</dd></div>
+          <div class="flex items-center justify-between gap-2"><dt class="text-ink-muted">등급</dt><dd class="font-bold text-ink">{{ pipe?.grade ? `${pipe.grade.grade_code} (${pipe.grade.month})` : '미부여' }}</dd></div>
+        </dl>
       </div>
     </div>
 
-    <!-- Recent Orders Table -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-        <h2 class="font-bold text-slate-800 text-sm">실시간 인입 주문 내역</h2>
-        <router-link to="/shipments" class="text-xs text-indigo-600 hover:underline">전체보기 &rarr;</router-link>
+    <!-- Row 3: hot lists -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div class="rounded-2xl border border-line bg-surface p-6">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-bold text-ink">출고기한 임박 주문 (최대 10건)</h2>
+          <RouterLink to="/shipments?tab=waiting" class="text-xs font-bold text-primary hover:underline">전체보기</RouterLink>
+        </div>
+        <p v-if="dueError" class="text-xs font-bold text-danger" role="alert">{{ dueError }} <button type="button" class="underline hover:no-underline" @click="loadDue">다시 시도</button></p>
+        <OmEmptyState v-else-if="!loading && !dueList.length" compact title="출고 대기 주문이 없습니다" />
+        <ul v-else class="divide-y divide-line-divider text-xs">
+          <li v-for="o in dueList" :key="o.id" class="flex items-center justify-between gap-2 py-2">
+            <span class="min-w-0 truncate font-mono text-ink">{{ o.sub_order_no }}</span>
+            <span class="shrink-0 text-ink-muted">{{ o.recipient_name }}</span>
+            <span class="om-num shrink-0 font-bold" :class="String(o.ship_by_deadline) <= new Date().toISOString().slice(0, 10) ? 'text-danger' : 'text-ink'">{{ fmtDate(o.ship_by_deadline) }}</span>
+          </li>
+        </ul>
       </div>
-
-      <div v-if="loading" class="p-8 text-center text-slate-400 text-xs">
-        <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />주문 정보를 불러오는 중...
-      </div>
-
-      <OmEmptyState
-        v-else-if="recentOrders.length === 0"
-        compact
-        title="인입된 신규 주문이 없습니다."
-        description="새 주문이 들어오면 이곳에 표시됩니다."
-      >
-        <OmButton size="sm" to="/shipments">출고 관리로 이동</OmButton>
-      </OmEmptyState>
-
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-slate-50 text-slate-500 uppercase font-semibold">
-            <tr>
-              <th class="py-3 px-4">주문번호</th>
-              <th class="py-3 px-4">수령인</th>
-              <th class="py-3 px-4">결제금액</th>
-              <th class="py-3 px-4">진행상태</th>
-              <th class="py-3 px-4 text-right">관리</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="order in recentOrders" :key="order.id" class="hover:bg-slate-50 transition">
-              <td class="py-3 px-4 font-mono font-medium text-slate-900">{{ order.sub_order_no || order.order_no }}</td>
-              <td class="py-3 px-4 font-medium text-slate-800">{{ order.recipient_name }}</td>
-              <td class="py-3 px-4 font-semibold text-slate-900">₩{{ order.total_amount.toLocaleString() }}</td>
-              <td class="py-3 px-4">
-                <span
-                  class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                  :class="order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : order.status === 'SHIPPED' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'"
-                >
-                  {{ order.status === 'DELIVERED' ? '배송 완료' : order.status === 'SHIPPED' ? '출고 완료' : '출고 대기' }}
-                </span>
-              </td>
-              <td class="py-3 px-4 text-right">
-                <router-link to="/shipments" class="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px]">처리</router-link>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="rounded-2xl border border-line bg-surface p-6">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-bold text-ink">24시간 넘은 미답변 문의</h2>
+          <RouterLink to="/qna?status=WAITING" class="text-xs font-bold text-primary hover:underline">전체보기</RouterLink>
+        </div>
+        <p v-if="qnaError" class="text-xs font-bold text-danger" role="alert">{{ qnaError }} <button type="button" class="underline hover:no-underline" @click="loadOverdueQna">다시 시도</button></p>
+        <OmEmptyState v-else-if="!loading && !overdueQna.length" compact title="24시간 넘은 미답변 문의가 없습니다" />
+        <ul v-else class="divide-y divide-line-divider text-xs">
+          <li v-for="q in overdueQna.slice(0, 10)" :key="q.id" class="flex items-center justify-between gap-2 py-2">
+            <span class="min-w-0 truncate text-ink">{{ q.question }}</span>
+            <span class="om-num shrink-0 text-ink-muted">{{ fmtDate(q.created_at) }}</span>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.gmv-stop-top { stop-color: rgb(var(--om-primary) / 0.25); }
+.gmv-stop-bottom { stop-color: rgb(var(--om-primary) / 0); }
+.gmv-grid { stroke: rgb(var(--om-divider)); stroke-width: 1; }
+.gmv-axis { stroke: rgb(var(--om-border)); stroke-width: 1; }
+.gmv-line { stroke: rgb(var(--om-primary)); }
+</style>

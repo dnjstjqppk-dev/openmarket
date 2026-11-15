@@ -60,6 +60,7 @@ import OmDateRangePicker from './components/OmDateRangePicker.vue'
 import OmSearchFilterBar from './components/OmSearchFilterBar.vue'
 import OmAddressSearch from './components/OmAddressSearch.vue'
 import OmImage from './components/OmImage.vue'
+import OmBulkActionBar from './components/OmBulkActionBar.vue'
 
 export {
   OmButton, OmIconButton, OmInput, OmTextarea, OmSelect, OmCheckbox, OmRadio, OmSwitch, OmModal, OmDrawer,
@@ -69,7 +70,7 @@ export {
   OmPrice, OmNumber, OmRating, OmCommerceBadge, OmCountdown, OmProgress, OmQuantityStepper, OmCarousel,
   OmImageGallery, OmBottomSheet, OmStickyTabs, OmFoldable, OmFilterPanel, OmFilterChips, OmViewToggle,
   OmProductCard, OmSellerCard, OmConfirmDialog, OmConsoleShell, OmKpiCard, OmStatusTabs, OmDateRangePicker,
-  OmSearchFilterBar, OmAddressSearch, OmImage
+  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar
 }
 
 /** The 31 components required by the PHASE 2 directive (OmField / OmSpinner are internal helpers). */
@@ -107,7 +108,7 @@ const all: Record<string, any> = {
   OmPrice, OmNumber, OmRating, OmCommerceBadge, OmCountdown, OmProgress, OmQuantityStepper, OmCarousel,
   OmImageGallery, OmBottomSheet, OmStickyTabs, OmFoldable, OmFilterPanel, OmFilterChips, OmViewToggle,
   OmProductCard, OmSellerCard, OmConfirmDialog, OmConsoleShell, OmKpiCard, OmStatusTabs, OmDateRangePicker,
-  OmSearchFilterBar, OmAddressSearch, OmImage
+  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar
 }
 export default {
   install(app: App) {

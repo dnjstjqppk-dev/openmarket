@@ -301,7 +301,7 @@ await t.test('NEW-11/12 notice table, fallback copy, and KC row render on the de
   const vw = fs.readFileSync('apps/storefront/src/views/ProductDetailView.vue', 'utf8');
   assert.ok(vw.includes('상품정보제공고시') && vw.includes('상세페이지 참조'));
   assert.ok(vw.includes('KC 인증') && vw.includes('kc_cert_number'));
-  const pm = fs.readFileSync('apps/partner/src/views/ProductManageView.vue', 'utf8');
+  const pm = fs.readFileSync('apps/partner/src/views/products/ProductEditView.vue', 'utf8');
   assert.ok(pm.includes('notice_rows') && pm.includes('kc_cert_number'));
   assert.ok(!pm.includes('HS:{{ p.hs_code || \'6109.10\' }}'));
 });

@@ -249,8 +249,8 @@ async function handleCancelQty(sub: any, it: any) {
 }
 
 async function handleCancelSub(sub: any) {
-  // HOLD (Q-1-9): e2e_browser stubs window.confirm for this flow; convert with the e2e script update.
-  if (!window.confirm(`${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`)) return
+  const rest = (sub.items || []).reduce((a: number, x: any) => a + (x.unit_price || 0) * (x.quantity - (x.refunded_quantity || 0)), 0)
+  if (!(await askConfirm({ title: '이 판매자 상품만 취소', body: `${sub.business_name || '판매자'} 상품만 취소하시겠습니까?`, amounts: [`해당 상품 ${won(rest)}`], danger: true }))) return
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`)
   say(ok ? `부분 취소 완료 · 환불 ${won((json.refund?.pg_amount || 0) + (json.refund?.credit_amount || 0))}` : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()

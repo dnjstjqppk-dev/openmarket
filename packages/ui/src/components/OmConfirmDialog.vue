@@ -20,6 +20,7 @@ useOverlay(open, panel, () => { if (current.value) settle(current.value.id, fals
         role="alertdialog"
         aria-modal="true"
         :aria-label="current.title"
+        data-testid="confirm-dialog"
         tabindex="-1"
         class="relative w-full max-w-sm animate-slide-up rounded-t-xl bg-surface p-5 shadow-overlay outline-none sm:rounded-lg sm:p-6"
       >
@@ -31,6 +32,7 @@ useOverlay(open, panel, () => { if (current.value) settle(current.value.id, fals
         <div class="mt-5 flex justify-end gap-2">
           <button
             type="button"
+            data-testid="confirm-cancel"
             class="h-10 rounded-lg border border-line px-4 text-sm font-bold transition-colors hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             @click="settle(current.id, false)"
           >
@@ -38,6 +40,7 @@ useOverlay(open, panel, () => { if (current.value) settle(current.value.id, fals
           </button>
           <button
             type="button"
+            data-testid="confirm-ok"
             :class="['h-10 rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', current.danger ? 'border border-danger bg-danger-soft text-danger hover:bg-danger-soft/70 active:bg-danger-soft/50' : 'bg-secondary text-secondary-on hover:bg-secondary-hover active:bg-secondary-active']"
             @click="settle(current.id, true)"
           >

@@ -12,7 +12,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (p) => readFileSync(join(ROOT, p), 'utf8')
 
 await t.test('U01 image upload sends FormData without a JSON content-type', async () => {
-  const v = read('apps/partner/src/views/ProductManageView.vue')
+  const v = read('apps/partner/src/components/product-form/ProductImageUploader.vue')
   assert.ok(v.includes('body: formData'), 'upload uses FormData')
   assert.ok(!v.includes('headers: getPartnerHeaders(),\n      body: formData'), 'no JSON content-type forced on FormData')
   assert.ok(v.includes('getPartnerAuthHeaders()'), 'auth-only headers used for upload')

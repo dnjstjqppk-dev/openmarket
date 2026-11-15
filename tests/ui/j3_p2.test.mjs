@@ -32,7 +32,7 @@ await t.test('J-3 web shipment CSV escapes every cell', async () => {
 })
 
 await t.test('J-3 web product manage shows loading, error+retry, and empty', async () => {
-  const v = read('apps/partner/src/views/ProductManageView.vue')
+  const v = read('apps/partner/src/views/products/ProductListView.vue')
   assert.ok(v.includes('loadError'), 'load error state exists')
   assert.ok(v.includes('다시 불러오기'), 'retry offered')
   assert.ok(v.includes('등록된 상품이 없습니다'), 'empty state copy present')

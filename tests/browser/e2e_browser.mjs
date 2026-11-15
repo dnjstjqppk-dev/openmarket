@@ -65,6 +65,12 @@ await step('B02 protected route redirects anonymous users to login', page, async
   await page.goto(`${STORE}/orders`);
   await page.waitFor("location.pathname === '/login'");
 });
+await step('B02b search finds products and a price filter narrows to zero', page, async () => {
+  await page.goto(`${STORE}/search?q=${encodeURIComponent('이어폰')}`, { waitFor: "document.body.innerText.includes('개 상품')" });
+  if (await page.eval("document.body.innerText.includes('검색 결과가 없습니다')")) throw new Error('seed search unexpectedly empty');
+  await page.goto(`${STORE}/search?q=${encodeURIComponent('이어폰')}&min_price=999999999`);
+  await page.waitFor("document.body.innerText.includes('검색 결과가 없습니다')");
+});
 await step('B03 product detail (marketplace seller) and add to cart', page, async () => {
   await page.goto(`${STORE}/product/${mp.id}`, { waitFor: "[...document.querySelectorAll('button')].some(b => /장바구니|Cart/i.test(b.textContent))" });
   await shots(page, 'store_product', ['desktop', 'mobile']);
@@ -133,9 +139,56 @@ await step('B05b store follow toggles on and off in the UI', page, async () => {
   const down = await count();
   if (down !== before) throw new Error(`followers ${up} -> ${down}, expected ${before}`);
 });
+await step('B05c platform and store coupons minted and claimed for checkout', page, async () => {
+  const ts = String(Date.now()).slice(-8);
+  const adminLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'admin@openmarket.com', password: PW, role: 'ADMIN' }) });
+  if (!adminLogin.token) throw new Error('admin API login failed');
+  const sellerLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'seller@temu-supply.com', password: PW, role: 'PARTNER' }) });
+  if (!sellerLogin.token) throw new Error('seller API login failed');
+  const plat = await api('/api/v1/admin/coupons', { method: 'POST', headers: { Authorization: `Bearer ${adminLogin.token}` },
+    body: JSON.stringify({ code: `E2E${ts}P`, title: 'E2E 플랫폼 쿠폰', discount_type: 'FIXED_AMOUNT', discount_value: 1000 }) });
+  if (plat.data?.id == null) throw new Error(`platform coupon mint failed: ${JSON.stringify(plat).slice(0, 120)}`);
+  const store = await api('/api/v1/partner/coupons', { method: 'POST', headers: { Authorization: `Bearer ${sellerLogin.token}` },
+    body: JSON.stringify({ code: `E2E${ts}S`, title: 'E2E 스토어 쿠폰', discount_type: 'FIXED_AMOUNT', discount_value: 500 }) });
+  if (store.data?.id == null) throw new Error(`store coupon mint failed: ${JSON.stringify(store).slice(0, 120)}`);
+  const custToken = await page.eval("localStorage.getItem('olmoa_token')");
+  for (const code of [`E2E${ts}P`, `E2E${ts}S`]) {
+    const claim = await api('/api/v1/coupons/claim', { method: 'POST', headers: { Authorization: `Bearer ${custToken}`, 'X-Idempotency-Key': `e2e-${ts}-${code}` },
+      body: JSON.stringify({ code }) });
+    if (claim.user_coupon_id == null) throw new Error(`claim ${code} failed: ${JSON.stringify(claim).slice(0, 120)}`);
+  }
+});
 await step('B06 checkout shows the server quote; pay with the local simulator', page, async () => {
   await page.goto(`${STORE}/checkout`);
   await page.waitFor("document.querySelector('[data-testid=pay-total]')");
+  await page.waitFor("[...document.querySelectorAll('button')].some(b => (b.textContent.trim() === '스토어 쿠폰' && !b.disabled) || b.textContent.trim() === '쿠폰 변경')");
+  for (let i = 0; i < 3; i++) {
+    const state = await page.eval(`(() => {
+      const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '스토어 쿠폰' && !b.disabled && !b.dataset.e2eTried);
+      if (!btn) return 'done';
+      btn.dataset.e2eTried = '1';
+      btn.click();
+      return 'opened';
+    })()`);
+    if (state === 'done') break;
+    await page.waitFor("document.querySelector('[data-testid=seller-coupon-modal]')");
+    const empty = await page.eval("document.querySelector('[data-testid=seller-coupon-modal]').innerText.includes('사용할 수 있는 스토어 쿠폰이 없습니다')");
+    if (empty) {
+      await page.eval("(() => { const m = document.querySelector('[data-testid=seller-coupon-modal]'); [...m.querySelectorAll('button')].pop().click(); })()");
+    } else {
+      await page.eval("document.querySelector('[data-testid=seller-coupon-modal] [role=radio][aria-checked=\"false\"]').click()");
+    }
+  }
+  const storePicked = await page.eval("[...document.querySelectorAll('button')].some((b) => b.textContent.trim() === '쿠폰 변경')");
+  if (!storePicked) throw new Error('no store coupon picked');
+  const platPicked = await page.eval(`(() => {
+    for (const sel of document.querySelectorAll('select')) {
+      const hit = [...sel.options].find((o) => o.text.includes('E2E') && o.value);
+      if (hit) { sel.value = hit.value; sel.dispatchEvent(new Event('change', { bubbles: true })); return hit.value; }
+    }
+    return '';
+  })()`);
+  if (!platPicked) throw new Error('platform coupon select not driven');
   await page.type('input[autocomplete=name]', '김올모');
   await page.type('input[autocomplete=tel]', '010-2222-3333');
   await page.type('input[autocomplete=postal-code]', '04524');
@@ -163,6 +216,7 @@ await step('B06 checkout shows the server quote; pay with the local simulator', 
   const o = await api(`/api/v1/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
   if (String(o.data.total_pay_amount) !== shown) throw new Error(`displayed ${shown} != charged ${o.data.total_pay_amount}`);
   if (o.data.sub_orders.length !== 2) throw new Error('expected 2 seller shipments');
+  if (!(o.data.coupon_discount_amount > 0)) throw new Error('coupons did not discount the order');
   await shots(page, 'store_order_detail_paid', ['desktop', 'mobile']);
 });
 
@@ -233,10 +287,48 @@ await step('B10 customer cancels the remaining (direct) shipment from the UI', p
     if (anyCancel) throw new Error('whole-order cancel offered although part of the order was delivered');
     return;
   }
-  await page.eval('window.confirm = () => true');
   await page.click('text=이 판매자 상품만 취소');
+  await page.waitFor("document.querySelector('[data-testid=confirm-dialog]')");
+  const dlg = await page.eval("document.querySelector('[data-testid=confirm-dialog]').textContent");
+  if (!dlg.includes('해당 상품')) throw new Error(`cancel dialog hides the amount: ${dlg.slice(0, 80)}`);
+  await page.click('[data-testid=confirm-ok]');
   await page.waitFor("document.body.innerText.includes('부분 취소 완료')");
   await shots(page, 'store_partial_cancel', ['desktop']);
+});
+await step('B10b partial return on one seller shipment from the UI', page, async () => {
+  const token = await page.eval("localStorage.getItem('olmoa_token')");
+  const auth = { Authorization: `Bearer ${token}` };
+  const s1 = (await api('/api/v1/products?partner_id=pt_001&limit=5')).data.find((p) => p.default_sku_id);
+  const s2 = (await api('/api/v1/products?partner_id=pt_002&limit=5')).data.find((p) => p.default_sku_id);
+  const co = await api('/api/v1/orders/checkout', { method: 'POST', headers: auth,
+    body: JSON.stringify({ recipient_name: '김올모', recipient_phone: '010-2222-3333', shipping_address_line1: '서울특별시 중구 세종대로 110', shipping_postal_code: '04524',
+      items: [{ sku_id: s1.default_sku_id, quantity: 1 }, { sku_id: s2.default_sku_id, quantity: 1 }] }) });
+  if (!co.order_id) throw new Error(`return-order checkout failed: ${JSON.stringify(co).slice(0, 160)}`);
+  const pay = await api('/api/v1/payments/confirm', { method: 'POST', headers: auth,
+    body: JSON.stringify({ order_id: co.order_id, payment_key: `sandbox_${String(co.order_id).slice(-8)}xx`, amount: co.total_pay_amount }) });
+  if (pay.order_id == null && pay.data?.order_id == null) throw new Error(`return-order pay failed: ${JSON.stringify(pay).slice(0, 160)}`);
+  const sLogin1 = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'seller@temu-supply.com', password: PW, role: 'PARTNER' }) });
+  const sLogin2 = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'partner2@olmoa-tech.com', password: PW, role: 'PARTNER' }) });
+  const sellerToken = { pt_001: sLogin1.token, pt_002: sLogin2.token };
+  const created = await api(`/api/v1/orders/${co.order_id}`, { headers: auth });
+  for (const sub of created.data.sub_orders) {
+    const st = sellerToken[sub.partner_id];
+    if (!st) throw new Error(`no seller token for ${sub.partner_id}`);
+    await api('/api/v1/partner/orders/confirm', { method: 'PUT', headers: { Authorization: `Bearer ${st}` }, body: JSON.stringify({ sub_order_ids: [sub.id] }) });
+    const ship = await api(`/api/v1/partner/orders/${sub.id}/shipment`, { method: 'PUT', headers: { Authorization: `Bearer ${st}` },
+      body: JSON.stringify({ carrier: 'CJ대한통운', tracking_number: `E2E${Date.now()}${sub.id.slice(-4)}` }) });
+    if (ship.status !== 'SHIPPED') throw new Error(`ship failed: ${JSON.stringify(ship).slice(0, 160)}`);
+  }
+  for (let i = 0; i < 2; i++) await api(`/api/v1/orders/${co.order_id}/advance-tracking`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+  await page.goto(`${STORE}/orders/${co.order_id}`, { waitFor: "document.body.innerText.includes('반품 · 교환 신청')" });
+  await page.click('text=반품 · 교환 신청');
+  await page.waitFor("document.querySelector('[aria-labelledby=claim-title]')");
+  await page.click('text=신청하기');
+  await page.waitFor("document.body.innerText.includes('반품 신청이 접수되었습니다')");
+  const detail = await api(`/api/v1/orders/${co.order_id}`, { headers: auth });
+  const claims = detail.data.claims || detail.claims || [];
+  if (claims.length !== 1) throw new Error(`expected 1 claim, saw ${claims.length}`);
+  await shots(page, 'store_partial_return', ['desktop']);
 });
 await step('B11 reconciliation still clean after the browser journey', adPage, async () => {
   await adPage.goto(`${ADMIN}/reconciliation`, { waitFor: "document.querySelector('[data-testid=recon-status]')" });

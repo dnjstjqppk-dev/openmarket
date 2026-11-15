@@ -25,10 +25,11 @@ const APPS = {
 function routesOf(app) {
   const src = fs.readFileSync(path.join(ROOT, `apps/${app}/src/router/index.ts`), 'utf8');
   const imports = {};
-  for (const m of src.matchAll(/import\s+(\w+)\s+from\s+'\.\.\/views\/(\w+)\.vue'/g)) imports[m[1]] = m[2];
+  for (const m of src.matchAll(/import\s+(\w+)\s+from\s+'\.\.\/views\/([\w/-]+\.vue)'/g)) imports[m[1]] = m[2];
   const routes = [];
-  for (const m of src.matchAll(/\{\s*path:\s*'([^']*)'[^}]*?component:\s*(?:(\w+)|\(\)\s*=>\s*import\('\.\.\/views\/(\w+)\.vue'\))/g)) {
-    routes.push({ path: m[1], view: m[3] || imports[m[2]] || m[2] });
+  for (const m of src.matchAll(/\{\s*path:\s*'([^']*)'[^}]*?component:\s*(?:(\w+)|\(\)\s*=>\s*import\('\.\.\/views\/([\w/-]+\.vue)'\))/g)) {
+    const rel = m[3] || imports[m[2]] || null;
+    routes.push({ path: m[1], view: rel ? rel.split('/').pop().replace(/\.vue$/, '') : m[2], file: rel });
   }
   for (const m of src.matchAll(/\{\s*path:\s*'([^']*)'[^}]*?redirect:\s*'([^']*)'/g)) routes.push({ path: m[1], redirect: m[2] });
   const guard = /beforeEach/.test(src);
@@ -127,11 +128,13 @@ for (const app of Object.keys(APPS)) {
   const { routes, guard, guardSrc } = routesOf(app);
   const viewsDir = path.join(ROOT, `apps/${app}/src/views`);
   const routedViews = new Set(routes.filter((r) => r.view).map((r) => r.view));
-  const allViews = fs.readdirSync(viewsDir).filter((f) => f.endsWith('.vue')).map((f) => f.replace('.vue', ''));
+  const walkVue = (dir, base = '') => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walkVue(path.join(dir, e.name), `${base}${e.name}/`) : e.name.endsWith('.vue') ? [`${base}${e.name}`] : []);
+  const allViews = walkVue(viewsDir).map((f) => f.replace('.vue', '').split('/').pop());
   const screens = [];
   for (const r of routes) {
     if (!r.view) { screens.push({ url: r.path, redirect: r.redirect }); continue; }
-    const file = path.join(viewsDir, `${r.view}.vue`);
+    const file = path.join(viewsDir, r.file || `${r.view}.vue`);
     if (!fs.existsSync(file)) { screens.push({ url: r.path, view: r.view, error: 'VIEW_FILE_MISSING' }); continue; }
     const src = fs.readFileSync(file, 'utf8');
     const calls = apiCalls(src);
@@ -139,7 +142,10 @@ for (const app of Object.keys(APPS)) {
     screens.push({ url: r.path, view: r.view, ...scanView(src), api: calls });
   }
   // shared components / app shell count too (header, footer, nav)
-  const shell = ['App.vue', ...(fs.existsSync(path.join(ROOT, `apps/${app}/src/components`)) ? fs.readdirSync(path.join(ROOT, `apps/${app}/src/components`)).map((f) => `components/${f}`) : [])];
+  const compDir = path.join(ROOT, `apps/${app}/src/components`);
+  const walkComp = (dir, base = '') => fs.existsSync(dir) ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walkComp(path.join(dir, e.name), `${base}${e.name}/`) : e.name.endsWith('.vue') ? [`${base}${e.name}`] : []) : [];
+  const shell = ['App.vue', ...walkComp(compDir).map((f) => `components/${f}`)];
   const shellScreens = [];
   for (const f of shell) {
     const src = fs.readFileSync(path.join(ROOT, `apps/${app}/src`, f), 'utf8');

@@ -243,7 +243,7 @@ await t.test('F-T05 import category defaults to loaded data, never a fixed id', 
 })
 
 await t.test('F-T08 product preview links use the env storefront base', async () => {
-  const v = read('apps/partner/src/views/ProductManageView.vue')
+  const v = read('apps/partner/src/views/products/ProductListView.vue')
   assert.ok(!v.includes('openmarket.dnjstjqppk'), 'no hardcoded preview host')
   assert.ok(v.includes('STOREFRONT_URL'), 'preview base from env config')
 })

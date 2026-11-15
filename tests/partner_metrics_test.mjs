@@ -24,6 +24,9 @@ await t.test('M01 metrics carries weekly GMV and fulfillment gauges', async () =
   assert.ok(Array.isArray(m.weekly_gmv) && m.weekly_gmv.length === 7, 'seven daily buckets')
   assert.ok(m.weekly_gmv.every((b) => /^\d{4}-\d{2}-\d{2}$/.test(b.day) && Number.isInteger(b.amount)), 'buckets are {day, amount}')
   assert.ok(m.wow_pct === null || typeof m.wow_pct === 'number', 'wow_pct is null or a number')
+  assert.ok(Array.isArray(m.monthly_gmv) && m.monthly_gmv.length === 30, 'thirty daily buckets')
+  assert.ok(m.monthly_gmv.every((b) => /^\d{4}-\d{2}-\d{2}$/.test(b.day) && Number.isInteger(b.amount)), 'monthly buckets are {day, amount}')
+  assert.ok(m.mom_pct === null || typeof m.mom_pct === 'number', 'mom_pct is null or a number')
   for (const k of ['ship_on_time_rate', 'avg_delivery_days', 'claim_rate_pct']) {
     assert.ok(m[k] === null || typeof m[k] === 'number', `${k} is null or a number`)
   }

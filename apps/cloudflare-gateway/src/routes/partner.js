@@ -221,14 +221,60 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   }
 
   if (p === '/api/v1/partner/products' && request.method === 'GET') {
-    const { results } = await env.DB.prepare(
+    // 4-2: status tabs, keyword/category/period/stock filters, product paging.
+    const STOCK_SUM = '(SELECT COALESCE(SUM(stock_quantity),0) FROM product_skus WHERE product_id = p.id)';
+    const tab = String(url.searchParams.get('status') || 'ALL').toUpperCase();
+    if (!['ALL', 'ACTIVE', 'SOLDOUT', 'PENDING', 'REJECTED', 'HIDDEN'].includes(tab)) throw bad('INVALID_STATUS', 'status는 ALL·ACTIVE·SOLDOUT·PENDING·REJECTED·HIDDEN 중 하나여야 합니다.');
+    const q = str(url.searchParams.get('q') || '', { max: 100 });
+    const cat = str(url.searchParams.get('category') || '', { max: 100 });
+    const from = url.searchParams.get('from') || null;
+    const to = url.searchParams.get('to') || null;
+    const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+    if ((from && !dayRe.test(from)) || (to && !dayRe.test(to))) throw bad('INVALID_PERIOD', 'from·to는 YYYY-MM-DD 형식이어야 합니다.');
+    const stockMin = url.searchParams.get('stock_min');
+    const stockMax = url.searchParams.get('stock_max');
+    const sMin = stockMin === null || stockMin === '' ? null : Number(stockMin);
+    const sMax = stockMax === null || stockMax === '' ? null : Number(stockMax);
+    if ((sMin !== null && (!Number.isInteger(sMin) || sMin < 0)) || (sMax !== null && (!Number.isInteger(sMax) || sMax < 0))) {
+      throw bad('INVALID_STOCK_RANGE', 'stock_min·stock_max는 0 이상의 정수여야 합니다.');
+    }
+    const where = ['p.partner_id = ?', "p.status != 'DELETED'"];
+    const args = [partnerId];
+    if (tab === 'ACTIVE') where.push("p.status = 'ACTIVE'");
+    else if (tab === 'SOLDOUT') where.push(`p.status = 'ACTIVE' AND ${STOCK_SUM} = 0`);
+    else if (tab === 'PENDING') where.push("p.review_status = 'PENDING'");
+    else if (tab === 'REJECTED') where.push("p.review_status = 'REJECTED'");
+    else if (tab === 'HIDDEN') where.push("p.status = 'HIDDEN'");
+    if (q) {
+      const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      where.push(`(p.title LIKE ? ESCAPE '\\' OR p.id LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM product_skus s WHERE s.product_id = p.id AND (s.sku_code LIKE ? ESCAPE '\\' OR s.id LIKE ? ESCAPE '\\')))`);
+      args.push(like, like, like, like);
+    }
+    if (cat) { where.push('(p.category_id = ? OR c.slug = ?)'); args.push(cat, cat); }
+    if (from) { where.push('date(p.created_at) >= date(?)'); args.push(from); }
+    if (to) { where.push('date(p.created_at) <= date(?)'); args.push(to); }
+    if (sMin !== null) { where.push(`${STOCK_SUM} >= ?`); args.push(sMin); }
+    if (sMax !== null) { where.push(`${STOCK_SUM} <= ?`); args.push(sMax); }
+    const whereSql = where.join(' AND ');
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '30', 10) || 30));
+    const total = await env.DB.prepare(
+      `SELECT COUNT(DISTINCT p.id) AS c FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE ${whereSql}`
+    ).bind(...args).first('c') || 0;
+    const { results: idRows } = await env.DB.prepare(
+      `SELECT p.id FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE ${whereSql} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...args, perPage, (page - 1) * perPage).all();
+    const ids = idRows.map((r) => r.id);
+    const { results } = ids.length ? await env.DB.prepare(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug, s.id AS sku_id, s.sku_code, s.option_combination_json,
-              s.stock_quantity, s.original_price AS sku_original_price, s.sale_price, s.status AS sku_status
+              s.stock_quantity, s.original_price AS sku_original_price, s.sale_price, s.status AS sku_status,
+              ${STOCK_SUM} AS stock_sum
        FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN product_skus s ON s.product_id = p.id
-       WHERE p.partner_id = ? ORDER BY p.created_at DESC, s.sku_code ASC`
-    ).bind(partnerId).all();
+       WHERE p.id IN (${ids.map(() => '?').join(',')}) ORDER BY p.created_at DESC, s.sku_code ASC`
+    ).bind(...ids).all() : { results: [] };
     const data = results.map((r) => ({ ...r, option_summary: optionSummary(r.option_combination_json), quality_score: computeServerQualityScore(r) }));
-    return json(corsHeaders, { success: true, partner_id: partnerId, business_name: partner.business_name, count: data.length, data });
+    return json(corsHeaders, { success: true, partner_id: partnerId, business_name: partner.business_name, count: data.length,
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data });
   }
 
   if (p === '/api/v1/partner/products' && request.method === 'POST') {
@@ -435,7 +481,10 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         const stmts = [];
         if (u.status !== undefined) {
           const st = String(u.status).toUpperCase();
-          if (!['HIDDEN', 'DRAFT'].includes(st)) throw bad('INVALID_STATUS', '일괄 변경은 판매중지(HIDDEN·DRAFT)만 가능합니다. 판매 개시는 심사를 거쳐 주세요.');
+          // 4-2: resume to ACTIVE needs an approved review (content unchanged
+          // needs no re-review); anything unapproved still goes through review.
+          if (st === 'ACTIVE' && prod.review_status !== 'APPROVED') throw bad('REVIEW_REQUIRED', '심사 승인된 상품만 판매 재개할 수 있습니다.');
+          if (!['HIDDEN', 'DRAFT', 'ACTIVE'].includes(st)) throw bad('INVALID_STATUS', '일괄 변경은 판매중지(HIDDEN·DRAFT)와 승인 상품 재개(ACTIVE)만 가능합니다.');
           stmts.push(env.DB.prepare('UPDATE products SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(st, pid));
         }
         if (u.price !== undefined) {
@@ -477,6 +526,18 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   }
 
   const prodM = p.match(/^\/api\/v1\/partner\/products\/([^/]+)(?:\/(price|stock))?$/);
+  // 4-3: own product with gallery and skus for the edit form.
+  if (prodM && !prodM[2] && request.method === 'GET') {
+    const prod = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND partner_id = ?').bind(prodM[1], partnerId).first();
+    if (!prod) throw notFound('상품을 찾을 수 없거나 권한이 없습니다.');
+    const { results: images } = await env.DB.prepare(
+      'SELECT image_url, alt_text, sort_order FROM product_images WHERE product_id = ? ORDER BY sort_order ASC'
+    ).bind(prod.id).all();
+    const { results: skus } = await env.DB.prepare(
+      'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sku_code ASC'
+    ).bind(prod.id).all();
+    return json(corsHeaders, { success: true, data: { ...prod, images, skus } });
+  }
   if (prodM && (request.method === 'PUT' || request.method === 'PATCH')) {
     const b = await readJson(request);
     const targetId = prodM[1];
@@ -1211,10 +1272,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const claims = await q("SELECT COUNT(*) c FROM returns r JOIN sub_orders so ON so.id = r.sub_order_id WHERE so.partner_id = ? AND r.status = 'REQUESTED'");
     const review = await q("SELECT COUNT(*) c FROM products WHERE partner_id = ? AND review_status = 'PENDING'");
     // Weekly GMV buckets (UTC days, oldest first) + week-over-week change.
+    // 4-1: same for the trailing 30 days with a month-over-month change.
     const { results: buckets } = await env.DB.prepare(
       `SELECT date(created_at) d, COALESCE(SUM(goods_amount + shipping_fee),0) s FROM sub_orders
        WHERE partner_id = ? AND status NOT IN ('PAYMENT_PENDING','EXPIRED','CANCELLED')
-         AND date(created_at) >= date('now','-13 days') GROUP BY d`
+         AND date(created_at) >= date('now','-59 days') GROUP BY d`
     ).bind(partnerId).all();
     const byDay = new Map((buckets || []).map((x) => [x.d, x.s]));
     const dayKeys = [];
@@ -1230,6 +1292,19 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       prevWeek += byDay.get(dd.toISOString().slice(0, 10)) || 0;
     }
     const wowPct = prevWeek > 0 ? Math.round(((thisWeek - prevWeek) / prevWeek) * 1000) / 10 : null;
+    const monthKeys = [];
+    for (let i = 29; i >= 0; i--) {
+      const dd = new Date(Date.now() - i * 86400000);
+      monthKeys.push(dd.toISOString().slice(0, 10));
+    }
+    const monthlyGmv = monthKeys.map((day) => ({ day, amount: byDay.get(day) || 0 }));
+    const thisMonth = monthlyGmv.reduce((t, x) => t + x.amount, 0);
+    let prevMonth = 0;
+    for (let i = 30; i <= 59; i++) {
+      const dd = new Date(Date.now() - i * 86400000);
+      prevMonth += byDay.get(dd.toISOString().slice(0, 10)) || 0;
+    }
+    const momPct = prevMonth > 0 ? Math.round(((thisMonth - prevMonth) / prevMonth) * 1000) / 10 : null;
     // Fulfillment quality gauges (null until measurable — never invented).
     const ship = await q("SELECT COUNT(*) c, COALESCE(SUM(CASE WHEN shipped_at IS NOT NULL AND (julianday(shipped_at) - julianday(created_at)) * 24 <= 24 THEN 1 ELSE 0 END),0) n FROM sub_orders WHERE partner_id = ? AND shipped_at IS NOT NULL");
     const shipOnTime = ship.c > 0 ? Math.round((ship.n / ship.c) * 1000) / 10 : null;
@@ -1243,6 +1318,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       products_count: prod.c, orders_count: ord.c, total_sales_amount: ord.s, to_ship_count: toShip.c,
       settlement_expected_amount: stl.n, waiting_qna_count: qna.c, open_claims_count: claims.c, pending_review_count: review.c,
       weekly_gmv: weeklyGmv, wow_pct: wowPct,
+      monthly_gmv: monthlyGmv, mom_pct: momPct,
       ship_on_time_rate: shipOnTime, avg_delivery_days: avgDays, claim_rate_pct: claimRate
     });
   }

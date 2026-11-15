@@ -74,14 +74,13 @@ function violationsOf(file) {
 
 // Measured 2026-11-13 with this scanner (storefront 265, admin 294,
 // partner 358, ui package 21). Lower per stage; never raise.
-// 3-11: storefront zeroed except the N02 native-confirm hold in
-// OrderDetailView (converts with its e2e script update, per its own comment).
+// 3-11: storefront zeroed. The N02 native-confirm hold converted with its
+// e2e script update under autonomous authority (see Q-G3a).
 // Brand-color exceptions (work order 3-11, S-11): exact hexes only.
 const HEX_EXCEPTIONS = {
   'apps/storefront/src/views/LoginView.vue': new Set(['#FEE500', '#000000'])
 }
 const CAPS = {
-  'apps/storefront/src/views/OrderDetailView.vue': 1,
   'apps/admin/src/App.vue': 46,
   'apps/admin/src/views/AuditLogView.vue': 6,
   'apps/admin/src/views/BusinessEntitiesView.vue': 7,
@@ -108,10 +107,9 @@ const CAPS = {
   'apps/partner/src/views/ApplyView.vue': 4,
   'apps/partner/src/views/BiddingView.vue': 31,
   'apps/partner/src/views/BulkUploadView.vue': 10,
-  'apps/partner/src/views/DashboardView.vue': 22,
+  'apps/partner/src/views/DashboardView.vue': 0,
   'apps/partner/src/views/LoginView.vue': 8,
   'apps/partner/src/views/MultiChannelListingView.vue': 51,
-  'apps/partner/src/views/ProductManageView.vue': 54,
   'apps/partner/src/views/ProfileManageView.vue': 14,
   'apps/partner/src/views/QnaManageView.vue': 16,
   'apps/partner/src/views/ReturnsManageView.vue': 23,

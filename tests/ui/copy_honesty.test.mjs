@@ -151,7 +151,7 @@ await t.test('H11-02 admin order empty names the selected filters', async () => 
 })
 
 await t.test('H11-03 seller product table marks loading, rows and empty', async () => {
-  const v = read('apps/partner/src/views/ProductManageView.vue')
+  const v = read('apps/partner/src/views/products/ProductListView.vue')
   assert.ok(v.includes('상품을 불러오는 중입니다...'), 'honest loading copy present')
   assert.ok(v.includes('data-loading'), 'loading marker present')
   assert.ok(v.includes('data-row'), 'row marker present')

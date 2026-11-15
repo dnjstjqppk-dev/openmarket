@@ -814,6 +814,24 @@ paths:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/partner/products/{id}:
+    get:
+      summary: Read one own product with gallery and SKUs
+      tags: [Partner]
+      description: '4-3: edit-form read. Only the seller''s own products (404 otherwise).'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product id.
+      responses:
+        '200':
+          description: Product with images and skus
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+        '404':
+          description: Unknown product or another seller's (NOT_FOUND)
     put:
       summary: Update a product's content, price and operation model
       tags: [Partner]

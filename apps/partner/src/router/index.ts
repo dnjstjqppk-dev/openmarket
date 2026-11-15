@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
-import ProductManageView from '../views/ProductManageView.vue';
 import BulkUploadView from '../views/BulkUploadView.vue';
 import ShipmentView from '../views/ShipmentView.vue';
 import SettlementView from '../views/SettlementView.vue';
@@ -35,7 +34,19 @@ const router = createRouter({
     {
       path: '/products',
       name: 'products',
-      component: ProductManageView,
+      component: () => import('../views/products/ProductListView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/products/new',
+      name: 'products-new',
+      component: () => import('../views/products/ProductEditView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/products/:id/edit',
+      name: 'products-edit',
+      component: () => import('../views/products/ProductEditView.vue'),
       meta: { requiresAuth: true }
     },
     {

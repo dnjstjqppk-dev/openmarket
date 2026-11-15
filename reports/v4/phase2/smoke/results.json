@@ -1,6 +1,7 @@
 {
   "api": "http://127.0.0.1:8787",
-  "generated": "2026-11-05T12:24:24.468Z",
+  "logged_in": true,
+  "generated": "2026-11-15T06:42:40.311Z",
   "results": [
     {
       "app": "storefront",
@@ -11,25 +12,86 @@
         "final_path": "/",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -42,19 +104,61 @@
         "final_path": "/categories",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/categories",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -67,19 +171,61 @@
         "final_path": "/category/womens-clothing",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/category/womens-clothing",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/category/womens-clothing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CategoryView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -87,24 +233,72 @@
       "app": "storefront",
       "route": "/product/:slug",
       "view": "ProductDetailView",
-      "url": "http://localhost:5173/product/prod_001",
+      "url": "http://localhost:5173/product/prod_002",
       "desktop": {
-        "final_path": "/product/prod_001",
+        "final_path": "/product/prod_002",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/product/prod_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/product/prod_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/product/prod_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/product/prod_001",
+        "final_path": "/product/prod_002",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/product/prod_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProductDetailView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -117,19 +311,61 @@
         "final_path": "/cart",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/cart",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/cart",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CartView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -139,47 +375,533 @@
       "view": "CheckoutView",
       "url": "http://localhost:5173/checkout",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/checkout",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/checkout",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/checkout",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/checkout",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/checkout",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/checkout",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CheckoutView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
     {
       "app": "storefront",
-      "route": "/profile",
-      "view": "ProfileView",
-      "url": "http://localhost:5173/profile",
+      "route": "/my",
+      "view": "MyHomeView",
+      "url": "http://localhost:5173/my",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/my",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/my",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyHomeView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/reviews",
+      "view": "MyReviewsView",
+      "url": "http://localhost:5173/my/reviews",
+      "desktop": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyReviewsView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/qna",
+      "view": "MyQnaView",
+      "url": "http://localhost:5173/my/qna",
+      "desktop": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/MyQnaView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/recent",
+      "view": "RecentlyViewedView",
+      "url": "http://localhost:5173/my/recent",
+      "desktop": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/recent",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RecentlyViewedView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/credits",
+      "view": "CreditsView",
+      "url": "http://localhost:5173/my/credits",
+      "desktop": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/credits",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CreditsView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/stores",
+      "view": "FollowedStoresView",
+      "url": "http://localhost:5173/my/stores",
+      "desktop": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/stores",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/FollowedStoresView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/my/settings",
+      "view": "ProfileView",
+      "url": "http://localhost:5173/my/settings",
+      "desktop": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/my/settings",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ProfileView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -189,22 +911,64 @@
       "view": "OrdersView",
       "url": "http://localhost:5173/orders",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/orders",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/orders",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrdersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -214,24 +978,90 @@
       "view": "OrderDetailView",
       "url": "http://localhost:5173/orders/unknown-order",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/orders/unknown-order",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
-        "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_desktop.png"
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/orders/unknown-order",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/orders/unknown-order",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/orders/unknown-order",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/orders/unknown-order",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
-        "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_mobile.png"
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_mobile_390.png"
       },
-      "verdict": "PASS"
+      "mobile360": {
+        "final_path": "/orders/unknown-order",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:8787/api/v1/orders/unknown-order"
+        ],
+        "http_errors": [
+          "404 API/api/v1/orders/unknown-order"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/OrderDetailView_mobile360_360.png"
+      },
+      "verdict": "WARN_CONSOLE"
     },
     {
       "app": "storefront",
@@ -242,26 +1072,80 @@
         "final_path": "/search",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/search",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/search",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -274,21 +1158,61 @@
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
-        ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_desktop.png"
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -301,19 +1225,128 @@
         "final_path": "/forgot-password",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/forgot-password",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/forgot-password",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/ForgotPasswordView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/verify-email",
+      "view": "VerifyEmailView",
+      "url": "http://localhost:5173/verify-email",
+      "desktop": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/verify-email",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/VerifyEmailView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -326,19 +1359,61 @@
         "final_path": "/register",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/register",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/register",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/RegisterView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -351,19 +1426,61 @@
         "final_path": "/channel/lightning-deals",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/channel/lightning-deals",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/channel/lightning-deals",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LightningDealsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -376,25 +1493,61 @@
         "final_path": "/channel/best-sellers",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
-        ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_desktop.png"
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/channel/best-sellers",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
-        ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_mobile.png"
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/channel/best-sellers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/BestSellersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -407,29 +1560,63 @@
         "final_path": "/coupons",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
-        "console_errors": [
-          "Failed to load resource: the server responded with a status of 401 (Unauthorized) http://127.0.0.1:8787/api/v1/credits?customer_id="
-        ],
-        "http_errors": [
-          "401 API/api/v1/credits?customer_id="
-        ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_desktop.png"
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/coupons",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
-        "console_errors": [
-          "Failed to load resource: the server responded with a status of 401 (Unauthorized) http://127.0.0.1:8787/api/v1/credits?customer_id="
-        ],
-        "http_errors": [
-          "401 API/api/v1/credits?customer_id="
-        ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_mobile.png"
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_mobile_390.png"
       },
-      "verdict": "WARN_CONSOLE"
+      "mobile360": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/CouponsView_mobile360_360.png"
+      },
+      "verdict": "PASS"
     },
     {
       "app": "storefront",
@@ -437,22 +1624,64 @@
       "view": "AddressesView",
       "url": "http://localhost:5173/addresses",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/addresses",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/addresses",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/addresses",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/addresses",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/addresses",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/addresses",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/AddressesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -462,22 +1691,64 @@
       "view": "WishlistView",
       "url": "http://localhost:5173/wishlist",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/wishlist",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/wishlist",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/wishlist",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/wishlist",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/wishlist",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/wishlist",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/WishlistView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -485,32 +1756,78 @@
       "app": "storefront",
       "route": "/store/:id",
       "view": "SellerStoreView",
-      "url": "http://localhost:5173/store/pt_001",
+      "url": "http://localhost:5173/store/pt_002",
       "desktop": {
-        "final_path": "/store/pt_001",
+        "final_path": "/store/pt_002",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/store/pt_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/store/pt_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/store/pt_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/store/pt_001",
+        "final_path": "/store/pt_002",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
-          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/store/pt_002",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -520,22 +1837,64 @@
       "view": "SupportView",
       "url": "http://localhost:5173/support",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/support",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/support",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/support",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/support",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/support",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/support",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/SupportView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -548,19 +1907,61 @@
         "final_path": "/policy/shipping",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/policy/shipping",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/policy/shipping",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PolicyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -573,19 +1974,61 @@
         "final_path": "/legal/terms",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/terms",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/legal/terms",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalTermsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -598,19 +2041,61 @@
         "final_path": "/legal/privacy",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/privacy",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/legal/privacy",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalPrivacyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -620,24 +2105,90 @@
       "view": "PaymentResultView",
       "url": "http://localhost:5173/payments/success",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/payments/success",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
-        "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop.png"
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/payments/success",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/payments/success",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/payments/success",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/payments/success",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
-        "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile.png"
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile_390.png"
       },
-      "verdict": "PASS"
+      "mobile360": {
+        "final_path": "/payments/success",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [
+          "Failed to load resource: the server responded with a status of 400 (Bad Request) http://127.0.0.1:8787/api/v1/payments/confirm"
+        ],
+        "http_errors": [
+          "400 API/api/v1/payments/confirm"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile360_360.png"
+      },
+      "verdict": "WARN_CONSOLE"
     },
     {
       "app": "storefront",
@@ -645,22 +2196,64 @@
       "view": "PaymentResultView",
       "url": "http://localhost:5173/payments/fail",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/payments/fail",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/payments/fail",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/payments/fail",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/payments/fail",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/payments/fail",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/payments/fail",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/PaymentResultView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -673,19 +2266,128 @@
         "final_path": "/legal/refund",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/legal/refund",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/legal/refund",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/LegalRefundView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "storefront",
+      "route": "/:pathMatch(.*)*",
+      "view": "NotFoundView",
+      "url": "http://localhost:5173/:pathMatch(.*)*",
+      "desktop": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/storefront/NotFoundView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -698,19 +2400,61 @@
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -720,22 +2464,64 @@
       "view": "DashboardView",
       "url": "http://localhost:5174/",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/DashboardView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -745,22 +2531,64 @@
       "view": "ProductManageView",
       "url": "http://localhost:5174/products",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/products",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/products",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ProductManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -770,22 +2598,64 @@
       "view": "PartnerVerifyView",
       "url": "http://localhost:5174/partners",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/partners",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/partners",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/partners",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/partners",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/partners",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/partners",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerVerifyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -795,22 +2665,64 @@
       "view": "LedgerAuditView",
       "url": "http://localhost:5174/ledger",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/ledger",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/ledger",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/ledger",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/ledger",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/ledger",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/ledger",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/LedgerAuditView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -820,22 +2732,64 @@
       "view": "OrdersView",
       "url": "http://localhost:5174/orders",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/orders",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/orders",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/orders",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/OrdersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -845,22 +2799,64 @@
       "view": "UsersView",
       "url": "http://localhost:5174/users",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/users",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/users",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/users",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/users",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/users",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/users",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/UsersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -870,22 +2866,64 @@
       "view": "ReviewsView",
       "url": "http://localhost:5174/reviews",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/reviews",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/reviews",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/reviews",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReviewsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -895,22 +2933,64 @@
       "view": "CouponsView",
       "url": "http://localhost:5174/coupons",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/coupons",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/coupons",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/coupons",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CouponsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -920,22 +3000,64 @@
       "view": "CategoriesView",
       "url": "http://localhost:5174/categories",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/categories",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/categories",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/categories",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/CategoriesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -945,22 +3067,64 @@
       "view": "MarketingView",
       "url": "http://localhost:5174/marketing",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/marketing",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/marketing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/marketing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/marketing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/marketing",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/marketing",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/MarketingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -970,22 +3134,64 @@
       "view": "BusinessEntitiesView",
       "url": "http://localhost:5174/business",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/business",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/business",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/business",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/business",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/business",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/business",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/BusinessEntitiesView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -995,22 +3201,64 @@
       "view": "SuppliersView",
       "url": "http://localhost:5174/suppliers",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/suppliers",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/suppliers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/suppliers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/suppliers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/suppliers",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/suppliers",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SuppliersView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1020,22 +3268,64 @@
       "view": "SupplierIntegrationView",
       "url": "http://localhost:5174/supplier-integrations",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/supplier-integrations",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/supplier-integrations",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/supplier-integrations",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/supplier-integrations",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/supplier-integrations",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/supplier-integrations",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SupplierIntegrationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1045,22 +3335,64 @@
       "view": "ReconciliationView",
       "url": "http://localhost:5174/reconciliation",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/reconciliation",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/reconciliation",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/reconciliation",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/reconciliation",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/reconciliation",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/reconciliation",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ReconciliationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1070,22 +3402,64 @@
       "view": "PartnerApplicationsView",
       "url": "http://localhost:5174/partner-applications",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/partner-applications",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/partner-applications",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/partner-applications",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/partner-applications",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/partner-applications",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/partner-applications",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/PartnerApplicationsView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1095,22 +3469,332 @@
       "view": "SecurityView",
       "url": "http://localhost:5174/security",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/security",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/security",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/security",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/security",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/security",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/security",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/SecurityView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/audit-log",
+      "view": "AuditLogView",
+      "url": "http://localhost:5174/audit-log",
+      "desktop": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/audit-log",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/AuditLogView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/inquiries",
+      "view": "InquiriesView",
+      "url": "http://localhost:5174/inquiries",
+      "desktop": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/inquiries",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/InquiriesView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/shipping-zones",
+      "view": "ShippingZonesView",
+      "url": "http://localhost:5174/shipping-zones",
+      "desktop": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/shipping-zones",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/ShippingZonesView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "admin",
+      "route": "/:pathMatch(.*)*",
+      "view": "NotFoundView",
+      "url": "http://localhost:5174/:pathMatch(.*)*",
+      "desktop": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/admin/NotFoundView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1123,19 +3807,61 @@
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/login",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/login",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/LoginView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1148,19 +3874,61 @@
         "final_path": "/apply",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_tablet_portrait_768.png"
       },
       "mobile": {
         "final_path": "/apply",
         "rendered": true,
         "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/apply",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplyView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1170,22 +3938,64 @@
       "view": "ApplicationView",
       "url": "http://localhost:5175/application",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/application",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/application",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/application",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/application",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/application",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/application",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ApplicationView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1195,22 +4005,64 @@
       "view": "DashboardView",
       "url": "http://localhost:5175/",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/DashboardView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1220,22 +4072,88 @@
       "view": "ProductManageView",
       "url": "http://localhost:5175/products",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/products",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_desktop.png"
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/products",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_mobile.png"
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/products",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500"
+        ],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProductManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1245,22 +4163,64 @@
       "view": "BiddingView",
       "url": "http://localhost:5175/bidding",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/bidding",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/bidding",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/bidding",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/bidding",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/bidding",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/bidding",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BiddingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1270,22 +4230,64 @@
       "view": "BulkUploadView",
       "url": "http://localhost:5175/bulk-upload",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/bulk-upload",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/bulk-upload",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/bulk-upload",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/bulk-upload",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/bulk-upload",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/bulk-upload",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/BulkUploadView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1295,22 +4297,64 @@
       "view": "UrlImportView",
       "url": "http://localhost:5175/imports",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/imports",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/imports",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/imports",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/imports",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/imports",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/imports",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/UrlImportView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1320,22 +4364,64 @@
       "view": "MultiChannelListingView",
       "url": "http://localhost:5175/channels",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/channels",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/channels",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/channels",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/channels",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/channels",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/channels",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/MultiChannelListingView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1345,22 +4431,64 @@
       "view": "ShipmentView",
       "url": "http://localhost:5175/shipments",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/shipments",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/shipments",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/shipments",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/shipments",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/shipments",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/shipments",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ShipmentView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1370,22 +4498,64 @@
       "view": "ReturnsManageView",
       "url": "http://localhost:5175/returns",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/returns",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/returns",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/returns",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/returns",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/returns",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/returns",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ReturnsManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1395,22 +4565,64 @@
       "view": "SettlementView",
       "url": "http://localhost:5175/settlements",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/settlements",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/settlements",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/settlements",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/settlements",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/settlements",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/settlements",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/SettlementView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1420,22 +4632,64 @@
       "view": "QnaManageView",
       "url": "http://localhost:5175/qna",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/qna",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/qna",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/qna",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/QnaManageView_mobile360_360.png"
       },
       "verdict": "PASS"
     },
@@ -1445,22 +4699,131 @@
       "view": "ProfileManageView",
       "url": "http://localhost:5175/profile",
       "desktop": {
-        "final_path": "/login",
+        "final_path": "/profile",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_desktop.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/profile",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/profile",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/profile",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_tablet_portrait_768.png"
       },
       "mobile": {
-        "final_path": "/login",
+        "final_path": "/profile",
         "rendered": true,
-        "redirected_to_login": true,
+        "redirected_to_login": false,
+        "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [],
-        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_mobile.png"
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/profile",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/ProfileManageView_mobile360_360.png"
+      },
+      "verdict": "PASS"
+    },
+    {
+      "app": "partner",
+      "route": "/:pathMatch(.*)*",
+      "view": "NotFoundView",
+      "url": "http://localhost:5175/:pathMatch(.*)*",
+      "desktop": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1440,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_desktop_1440.png"
+      },
+      "desktop1280": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1280,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_desktop1280_1280.png"
+      },
+      "tablet_landscape": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 1024,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_tablet_landscape_1024.png"
+      },
+      "tablet_portrait": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 768,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_tablet_portrait_768.png"
+      },
+      "mobile": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 390,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_mobile_390.png"
+      },
+      "mobile360": {
+        "final_path": "/:pathMatch(.*)*",
+        "rendered": true,
+        "redirected_to_login": false,
+        "width": 360,
+        "horizontal_overflow": false,
+        "console_errors": [],
+        "http_errors": [],
+        "screenshot": "reports/v4/phase2/smoke/partner/NotFoundView_mobile360_360.png"
       },
       "verdict": "PASS"
     }
