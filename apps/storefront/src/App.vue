@@ -3,7 +3,7 @@
 // Everything shown here comes from an API or the user's own state; no badges, counts or claims are invented.
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Bell, ChevronUp, Heart, House, LayoutGrid, LogOut, Monitor, Moon, Package, Search, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
+import { Bell, ChevronUp, Heart, History, House, LayoutGrid, LogOut, Monitor, Moon, Package, Search, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
 import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, OmConfirmDialog, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
@@ -158,7 +158,8 @@ const bottomNav = computed<NavItem[]>(() => [
   { to: '/', label: '홈', icon: House, exact: true },
   { to: '/categories', label: '카테고리', icon: LayoutGrid },
   { to: '/search', label: '검색', icon: Search },
-  { to: auth.isAuthenticated ? '/profile' : '/login', label: auth.isAuthenticated ? '마이' : '로그인', icon: User }
+  { to: auth.isAuthenticated ? '/my' : '/login', label: auth.isAuthenticated ? '마이' : '로그인', icon: User },
+  { to: '/my/recent', label: '최근 본', icon: History }
 ])
 const footerColumns: FooterColumn[] = [
   { title: '쇼핑', links: [{ label: '번개특가', to: '/channel/lightning-deals' }, { label: '베스트', to: '/channel/best-sellers' }, { label: '전체 카테고리', to: '/categories' }, { label: '쿠폰·적립금', to: '/coupons' }] },
@@ -324,7 +325,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
               </template>
               <template #default="{ close }">
                 <ul class="py-1 text-sm">
-                  <li><RouterLink to="/profile" class="flex items-center gap-2 px-4 py-2 hover:bg-surface-2" @click="close()"><User :size="16" />마이페이지</RouterLink></li>
+                  <li><RouterLink to="/my" class="flex items-center gap-2 px-4 py-2 hover:bg-surface-2" @click="close()"><User :size="16" />마이페이지</RouterLink></li>
                   <li><RouterLink to="/orders" class="flex items-center gap-2 px-4 py-2 hover:bg-surface-2" @click="close()"><Package :size="16" />주문·배송</RouterLink></li>
                   <li><RouterLink to="/coupons" class="flex items-center gap-2 px-4 py-2 hover:bg-surface-2" @click="close()"><Ticket :size="16" />쿠폰·적립금</RouterLink></li>
                   <li class="my-1 h-px bg-line-divider" role="separator" />

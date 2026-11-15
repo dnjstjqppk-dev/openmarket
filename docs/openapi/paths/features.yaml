@@ -920,6 +920,39 @@ paths:
         '401':
           description: Missing or expired JWT (UNAUTHENTICATED)
 
+  /api/v1/me/reviews:
+    get:
+      summary: Reviews I wrote
+      tags: [Features]
+      description: '3-9: my reviews newest first with product info, parsed images and seller replies.'
+      responses:
+        '200':
+          description: My reviews
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/me/reviewable:
+    get:
+      summary: My reviewable purchases
+      tags: [Features]
+      description: '3-9: delivered/confirmed lines not fully refunded and not reviewed yet, one row per (product, order).'
+      responses:
+        '200':
+          description: Reviewable purchase lines
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
+  /api/v1/me/order-summary:
+    get:
+      summary: My order phase counts
+      tags: [Features]
+      description: '3-9: whole-account upcoming/purchasing/completed counts using the buyer-list phase rule.'
+      responses:
+        '200':
+          description: Order phase counts
+        '401':
+          description: Missing or expired JWT (UNAUTHENTICATED)
+
   /api/v1/restock-subscriptions:
     post:
       summary: Subscribe to a restock alert

@@ -1,10 +1,12 @@
 <script setup lang="ts">
+// 3-9: address book with the shared postcode search (manual entry while the
+// PO-13 external script is undecided) and design tokens throughout.
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
 import { validateKrPhone } from '../utils/phone'
-import { userErrorMessage, OmEmptyState, OmSkeleton, useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmAddressSearch, OmEmptyState, OmSkeleton, useConfirm } from '@olmoa/ui'
 
 const { confirm } = useConfirm()
 const formError = ref('')
@@ -41,7 +43,6 @@ const loadAddresses = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses`, {
       headers: { ...authHeader() }
     })
@@ -102,6 +103,13 @@ const deleteAddress = async (addrId: string) => {
   }
 }
 
+// Fills the form when a postcode provider is configured (PO-13); until then
+// OmAddressSearch renders its manual entry block.
+const onPostalPick = (p: { zonecode: string; address: string }) => {
+  form.value.postal_code = p.zonecode
+  form.value.address_line1 = p.address
+}
+
 const handleCreateAddress = async () => {
   formError.value = ''
   if (!form.value.recipient_name || !form.value.phone || !form.value.address_line1) {
@@ -120,7 +128,6 @@ const handleCreateAddress = async () => {
 
   submitting.value = true
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses`, {
       method: 'POST',
       headers: {
@@ -159,19 +166,20 @@ onMounted(loadAddresses)
 </script>
 
 <template>
-  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <div class="mx-auto max-w-[1100px] px-4 py-8 sm:px-6">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-black text-gray-900">배송지 관리 (Address Book)</h1>
-        <p class="text-xs text-gray-500 mt-0.5">자주 사용하는 배송지를 등록하고 기본 배송지를 설정하세요.</p>
+        <h1 class="text-2xl font-bold text-ink">배송지 관리</h1>
+        <p class="mt-0.5 text-xs text-ink-muted">자주 사용하는 배송지를 등록하고 기본 배송지를 설정하세요.</p>
       </div>
       <div class="flex items-center gap-2">
-        <RouterLink to="/orders" class="text-xs font-bold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl border border-gray-200 bg-white">
+        <RouterLink to="/orders" class="rounded-xl border border-line bg-surface px-3 py-2 text-xs font-bold text-ink-muted hover:text-ink">
           ← 주문 내역 보기
         </RouterLink>
         <button
+          type="button"
+          class="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-on hover:bg-primary-hover"
           @click="showModal = true"
-          class="px-4 py-2 rounded-xl bg-[#FF5000] text-white text-xs font-black hover:bg-orange-600 shadow-sm shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
         >
           <span>+</span> 신규 배송지 등록
         </button>
@@ -179,19 +187,19 @@ onMounted(loadAddresses)
     </div>
 
     <!-- Feedback Message -->
-    <div v-if="msg" class="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800">
+    <div v-if="msg" class="mb-4 rounded-xl border border-success bg-success-soft p-3.5 text-xs font-bold text-success">
       {{ msg }}
     </div>
-    <div v-if="errorMsg" class="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
+    <div v-if="errorMsg" class="mb-4 rounded-xl border border-danger bg-danger-soft p-3.5 text-xs font-bold text-danger">
       {{ errorMsg }}
     </div>
-    <div v-if="actionError" class="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800 flex items-center justify-between gap-3">
+    <div v-if="actionError" class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-warning bg-warning-soft p-3.5 text-xs font-bold text-warning">
       <span>{{ actionError }}</span>
-      <button @click="retryAction" class="px-3 py-1.5 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 cursor-pointer">다시 시도</button>
+      <button type="button" class="cursor-pointer rounded-lg border border-line bg-surface px-3 py-1.5 hover:bg-surface-2" @click="retryAction">다시 시도</button>
     </div>
 
     <!-- Loading Skeleton -->
-    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div v-if="loading" class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <OmSkeleton variant="rect" height="h-40" :count="2" />
     </div>
 
@@ -202,62 +210,65 @@ onMounted(loadAddresses)
       description="자주 사용하는 배송지를 등록하여 빠른 주문 결제를 진행해보세요."
     >
       <button
+        type="button"
+        class="rounded-full bg-primary px-5 py-2.5 text-xs font-bold text-primary-on hover:bg-primary-hover"
         @click="showModal = true"
-        class="px-5 py-2.5 rounded-full bg-[#FF5000] text-white text-xs font-black hover:bg-orange-600"
       >
         새 배송지 등록하기
       </button>
     </OmEmptyState>
 
     <!-- Address Card Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div
         v-for="addr in addresses"
         :key="addr.id"
         :class="[
-          'bg-white rounded-2xl p-6 border transition-all relative flex flex-col justify-between',
-          addr.is_default ? 'border-[#FF5000] shadow-sm ring-1 ring-[#FF5000]/30' : 'border-gray-200/80 hover:border-gray-300'
+          'relative flex flex-col justify-between rounded-2xl border bg-surface p-6 transition-colors',
+          addr.is_default ? 'border-primary' : 'border-line hover:border-line-strong'
         ]"
       >
         <div>
-          <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="mb-2 flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <span class="font-black text-gray-900 text-sm">{{ addr.recipient_name }}</span>
+              <span class="text-sm font-bold text-ink">{{ addr.recipient_name }}</span>
               <span
                 v-if="addr.is_default"
-                class="px-2 py-0.5 rounded-full bg-orange-100 text-[#FF5000] text-[10px] font-black"
+                class="rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink"
               >
                 기본 배송지
               </span>
             </div>
-            <span class="text-xs font-bold text-gray-500">{{ addr.phone }}</span>
+            <span class="om-num text-xs font-bold text-ink-muted">{{ addr.phone }}</span>
           </div>
 
-          <div class="space-y-1 text-xs text-gray-700 mb-3">
-            <p class="font-mono text-gray-500 text-[11px]">[우편번호 {{ addr.postal_code }}]</p>
-            <p class="font-medium text-gray-900">{{ addr.address_line1 }}</p>
-            <p v-if="addr.address_line2" class="text-gray-600">{{ addr.address_line2 }}</p>
+          <div class="mb-3 space-y-1 text-xs text-ink-muted">
+            <p class="om-num text-2xs text-ink-subtle">[우편번호 {{ addr.postal_code }}]</p>
+            <p class="font-medium text-ink">{{ addr.address_line1 }}</p>
+            <p v-if="addr.address_line2">{{ addr.address_line2 }}</p>
           </div>
 
-          <div v-if="addr.delivery_note" class="p-2.5 rounded-xl bg-gray-50 text-[11px] text-gray-600 flex items-center gap-1.5 mb-4">
-            <span class="text-gray-400">📦 요청사항:</span>
+          <div v-if="addr.delivery_note" class="mb-4 flex items-center gap-1.5 rounded-xl bg-surface-2 p-2.5 text-2xs text-ink-muted">
+            <span class="text-ink-subtle">요청사항:</span>
             <span>{{ addr.delivery_note }}</span>
           </div>
         </div>
 
-        <div class="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+        <div class="flex items-center justify-between border-t border-line pt-3 text-xs">
           <button
             v-if="!addr.is_default"
+            type="button"
+            class="cursor-pointer font-bold text-primary hover:underline"
             @click="setDefault(addr.id)"
-            class="text-[#FF5000] font-bold hover:underline cursor-pointer"
           >
             기본 배송지로 설정
           </button>
-          <span v-else class="text-gray-400 text-[11px]">기본 설정됨</span>
+          <span v-else class="text-2xs text-ink-subtle">기본 설정됨</span>
 
           <button
+            type="button"
+            class="cursor-pointer font-semibold text-ink-muted hover:text-danger"
             @click="deleteAddress(addr.id)"
-            class="text-gray-400 hover:text-red-600 font-semibold cursor-pointer"
           >
             삭제
           </button>
@@ -268,105 +279,94 @@ onMounted(loadAddresses)
     <!-- Add Address Modal Form -->
     <div
       v-if="showModal"
-      class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-      @click.self="showModal = false"
+      class="fixed inset-0 z-modal flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="신규 배송지 등록"
     >
-      <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4">
-        <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-          <h3 class="text-base font-black text-gray-900">신규 배송지 등록</h3>
-          <button @click="showModal = false" class="text-gray-400 hover:text-gray-600 text-lg cursor-pointer">✕</button>
+      <div class="absolute inset-0 bg-overlay/50" aria-hidden="true" @click="showModal = false" />
+      <div class="relative max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-line bg-surface p-6">
+        <div class="flex items-center justify-between border-b border-line pb-3">
+          <h3 class="text-base font-bold text-ink">신규 배송지 등록</h3>
+          <button type="button" class="cursor-pointer text-lg text-ink-muted hover:text-ink" aria-label="닫기" @click="showModal = false">✕</button>
         </div>
 
-        <form @submit.prevent="handleCreateAddress" class="space-y-3.5 text-xs">
+        <form class="space-y-3.5 text-xs" @submit.prevent="handleCreateAddress">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block font-bold text-gray-700 mb-1">수령인 성명 *</label>
+              <label class="mb-1 block font-bold text-ink-muted">수령인 성명 *</label>
               <input
                 v-model="form.recipient_name"
                 required
                 type="text"
                 placeholder="홍길동"
-                class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
+                class="h-10 w-full rounded-xl border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
               />
             </div>
             <div>
-              <label class="block font-bold text-gray-700 mb-1">연락처 *</label>
+              <label class="mb-1 block font-bold text-ink-muted">연락처 *</label>
               <input
                 v-model="form.phone"
                 required
                 type="tel"
                 placeholder="010-0000-0000"
-                class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
+                class="h-10 w-full rounded-xl border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
               />
             </div>
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">우편번호 *</label>
-            <input
-              v-model="form.postal_code"
-              required
-              type="text"
-              inputmode="numeric"
-              maxlength="5"
-              placeholder="06236"
-              class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
+            <label class="mb-1 block font-bold text-ink-muted">우편번호·기본 주소 *</label>
+            <OmAddressSearch
+              v-model:zip="form.postal_code"
+              v-model:address="form.address_line1"
+              :required="true"
+              @pick="onPostalPick"
             />
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">기본 도로명 주소 *</label>
-            <input
-              v-model="form.address_line1"
-              required
-              type="text"
-              placeholder="서울특별시 강남구 테헤란로 152"
-              class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
-            />
-          </div>
-
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">상세 주소 (동/호수, 건물명)</label>
+            <label class="mb-1 block font-bold text-ink-muted">상세 주소 (동/호수, 건물명)</label>
             <input
               v-model="form.address_line2"
               type="text"
               placeholder="강남파이낸스센터 12층 1201호"
-              class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000]"
+              class="h-10 w-full rounded-xl border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
             />
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">배송 요청사항</label>
+            <label class="mb-1 block font-bold text-ink-muted">배송 요청사항</label>
             <select
               v-model="form.delivery_note"
-              class="w-full h-10 px-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5000] bg-white"
+              class="h-10 w-full rounded-xl border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
             >
               <option v-for="opt in deliveryNoteOptions" :key="opt" :value="opt">{{ opt }}</option>
             </select>
           </div>
 
-          <label class="flex items-center gap-2 pt-2 cursor-pointer text-gray-700 font-semibold">
+          <label class="flex cursor-pointer items-center gap-2 pt-2 font-semibold text-ink-muted">
             <input
               v-model="form.is_default"
               type="checkbox"
-              class="rounded text-[#FF5000] focus:ring-[#FF5000]"
+              class="rounded"
             />
             <span>이 배송지를 기본 배송지로 설정합니다.</span>
           </label>
 
           <p v-if="formError" role="alert" class="rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs font-bold text-danger">{{ formError }}</p>
-          <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+          <div class="flex items-center justify-end gap-2 border-t border-line pt-3">
             <button
               type="button"
+              class="rounded-xl border border-line px-4 py-2.5 font-bold text-ink-muted hover:bg-surface-2"
               @click="showModal = false"
-              class="px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50"
             >
               취소
             </button>
             <button
               type="submit"
               :disabled="submitting"
-              class="px-5 py-2.5 rounded-xl bg-[#FF5000] hover:bg-orange-600 disabled:opacity-50 text-white font-extrabold shadow-sm shadow-orange-500/20"
+              class="rounded-xl bg-primary px-5 py-2.5 font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50"
             >
               {{ submitting ? '저장 중...' : '배송지 저장' }}
             </button>
@@ -376,4 +376,3 @@ onMounted(loadAddresses)
     </div>
   </div>
 </template>
-

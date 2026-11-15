@@ -883,6 +883,76 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, ...data, data });
   }
 
+  // 14b. My reviews (3-9): everything I wrote, newest first. My own
+  // blinded reviews stay visible to me with their visibility flag; other
+  // members' rows never appear.
+  if (url.pathname === '/api/v1/me/reviews' && request.method === 'GET') {
+    const me = await requireCustomer(request, env);
+    const { results } = await env.DB.prepare(
+      `SELECT r.*, p.title AS product_title, p.thumbnail_url
+       FROM product_reviews r JOIN products p ON p.id = r.product_id
+       WHERE r.user_id = ? ORDER BY r.created_at DESC, r.rowid DESC`
+    ).bind(me.userId).all();
+    const replies = {};
+    if (results.length) {
+      const { results: replyRows } = await env.DB.prepare(
+        `SELECT review_id, body, created_at FROM review_replies WHERE review_id IN (${results.map(() => '?').join(',')})`
+      ).bind(...results.map((r) => r.id)).all();
+      for (const rr of replyRows) replies[rr.review_id] = { body: rr.body, created_at: rr.created_at };
+    }
+    const data = results.map((r) => {
+      let images = [];
+      try { images = JSON.parse(r.images_json || '[]'); } catch (_) { /* keep empty */ }
+      if (!Array.isArray(images)) images = [];
+      return { ...r, comment: r.content, customer_name: r.reviewer_name, images, reply: replies[r.id] || null };
+    });
+    return json(corsHeaders, { success: true, count: data.length, data });
+  }
+
+  // 14c. Reviewable purchases (3-9): the same rule as POST reviews — a
+  // delivered/confirmed line I have not fully refunded and not reviewed yet,
+  // one row per (product, order) like the duplicate guard.
+  if (url.pathname === '/api/v1/me/reviewable' && request.method === 'GET') {
+    const me = await requireCustomer(request, env);
+    const { results } = await env.DB.prepare(
+      `SELECT i.product_id, p.title AS product_title, p.thumbnail_url,
+              o.id AS order_id, o.order_no, o.created_at AS ordered_at,
+              MIN(i.option_summary) AS option_summary
+       FROM order_items i
+       JOIN sub_orders s ON s.id = i.sub_order_id
+       JOIN orders o ON o.id = s.parent_order_id
+       JOIN products p ON p.id = i.product_id
+       WHERE o.customer_id = ? AND s.status IN ('DELIVERED','PURCHASE_CONFIRMED')
+         AND i.refunded_quantity < i.quantity
+         AND NOT EXISTS (SELECT 1 FROM product_reviews r
+                         WHERE r.product_id = i.product_id AND r.user_id = o.customer_id AND r.order_id = o.id)
+       GROUP BY i.product_id, o.id ORDER BY o.created_at DESC, i.product_id ASC`
+    ).bind(me.userId).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
+  // 14d. Order phase summary (3-9): whole-account counts using the exact
+  // buyer-list rule — all-pending is upcoming, all-terminal is completed,
+  // everything else (including sub-less orders) is purchasing.
+  if (url.pathname === '/api/v1/me/order-summary' && request.method === 'GET') {
+    const me = await requireCustomer(request, env);
+    const { results } = await env.DB.prepare(
+      `SELECT o.id, COUNT(s.id) AS sub_count,
+              SUM(CASE WHEN s.status = 'PAYMENT_PENDING' THEN 1 ELSE 0 END) AS pending_count,
+              SUM(CASE WHEN s.status IN ('PURCHASE_CONFIRMED','CANCELLED','RETURNED','EXPIRED') THEN 1 ELSE 0 END) AS terminal_count
+       FROM orders o LEFT JOIN sub_orders s ON s.parent_order_id = o.id
+       WHERE o.customer_id = ? GROUP BY o.id`
+    ).bind(me.userId).all();
+    const data = { upcoming: 0, purchasing: 0, completed: 0, total: results.length };
+    for (const o of results) {
+      const subs = Number(o.sub_count);
+      if (subs > 0 && Number(o.pending_count) === subs) data.upcoming += 1;
+      else if (subs > 0 && Number(o.terminal_count) === subs) data.completed += 1;
+      else data.purchasing += 1;
+    }
+    return json(corsHeaders, { success: true, ...data, data });
+  }
+
   // 15. Restock subscriptions (2-9): only genuinely stocked-out SKUs.
   if (url.pathname === '/api/v1/restock-subscriptions' && (request.method === 'POST' || request.method === 'DELETE')) {
     const me = await requireCustomer(request, env);

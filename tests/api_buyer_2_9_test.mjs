@@ -378,6 +378,96 @@ await t.test('B19. claims take a pickup date inside the 3-day window', async () 
   assert.equal(g.db.prepare('SELECT pickup_date d FROM returns WHERE id = ?').get(ok.json.claim_id).d, day(2), 'date stored');
 });
 
+await t.test('B21. my reviews list mine with replies, never others', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const anon = await g.call('/api/v1/me/reviews');
+  assert.equal(anon.status, 401, 'login required');
+  const before = await g.call('/api/v1/me/reviews', { token: cust });
+  assert.equal(before.status, 200, before.text);
+  const baseCount = before.json.count;
+  const pid = g.db.prepare("SELECT partner_id FROM products WHERE id = 'prod_001'").get().partner_id;
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, images_json)
+    VALUES ('rv_b21a', 'prod_001', 'u_customer_001', '나', 5, '좋아요', '["https://x/y.png"]')`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, visibility, blind_reason)
+    VALUES ('rv_b21b', 'prod_001', 'u_customer_001', '나', 1, '별로', 'BLIND', 'spam')`).run();
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content)
+    VALUES ('rv_b21c', 'prod_001', 'cust_demo_001', '남', 4, '괜찮아요')`).run();
+  g.db.prepare('INSERT INTO review_replies (id, review_id, partner_id, body) VALUES (?, ?, ?, ?)')
+    .run('vr_b21', 'rv_b21a', pid, '감사합니다');
+  const r = await g.call('/api/v1/me/reviews', { token: cust });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.count, baseCount + 2, 'only my two new reviews counted');
+  const ids = r.json.data.map((x) => x.id);
+  assert.ok(ids.includes('rv_b21a') && ids.includes('rv_b21b'), 'my reviews listed');
+  assert.ok(!ids.includes('rv_b21c'), 'another member review excluded');
+  const mine = r.json.data.find((x) => x.id === 'rv_b21a');
+  assert.equal(mine.product_title, g.db.prepare("SELECT title FROM products WHERE id = 'prod_001'").get().title, 'product title joined');
+  assert.deepEqual(mine.images, ['https://x/y.png'], 'images parsed');
+  assert.equal(mine.reply.body, '감사합니다', 'seller reply attached');
+  const blind = r.json.data.find((x) => x.id === 'rv_b21b');
+  assert.equal(blind.visibility, 'BLIND', 'my blinded review stays visible to me');
+});
+
+await t.test('B22. reviewable mirrors the write rule exactly', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const anon = await g.call('/api/v1/me/reviewable');
+  assert.equal(anon.status, 401, 'login required');
+  const prodId = g.db.prepare("SELECT product_id FROM product_skus WHERE id = 'sku_001_w'").get().product_id;
+  const { orderId, subId } = await deliveredOrder(g, cust);
+  const item = g.db.prepare('SELECT id FROM order_items WHERE sub_order_id = ?').get(subId).id;
+  const has = async () => (await g.call('/api/v1/me/reviewable', { token: cust })).json.data
+    .some((x) => x.product_id === prodId && x.order_id === orderId);
+  assert.equal(await has(), true, 'delivered line is reviewable');
+  g.db.prepare('UPDATE order_items SET refunded_quantity = quantity WHERE id = ?').run(item);
+  assert.equal(await has(), false, 'fully refunded line drops out');
+  g.db.prepare('UPDATE order_items SET refunded_quantity = 0 WHERE id = ?').run(item);
+  const post = await g.call(`/api/v1/products/${prodId}/reviews`, {
+    method: 'POST', token: cust, body: { rating: 5, content: '후기' }
+  });
+  assert.equal(post.status, 201, post.text);
+  const after = await g.call('/api/v1/me/reviewable', { token: cust });
+  assert.equal(after.json.data.some((x) => x.product_id === prodId && x.order_id === orderId), false, 'reviewed pair drops out');
+  assert.equal(after.json.count, after.json.data.length, 'count matches rows');
+});
+
+await t.test('B23. order summary phases match the buyer list tabs', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const anon = await g.call('/api/v1/me/order-summary');
+  assert.equal(anon.status, 401, 'login required');
+  const base = (await g.call('/api/v1/me/order-summary', { token: cust })).json.data;
+  const skus = g.db.prepare(
+    `SELECT s.id FROM product_skus s JOIN products p ON p.id = s.product_id
+     WHERE p.status = 'ACTIVE' AND s.stock_quantity > 0 LIMIT 3`).all().map((r) => r.id);
+  assert.equal(skus.length, 3, 'three stocked SKUs available');
+  const checkout = async (skuId) => (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust, body: { ...addr('06236'), items: [{ sku_id: skuId, quantity: 1 }] }
+  })).json;
+  const pay = async (o) => {
+    const r = await g.call('/api/v1/payments/confirm', { method: 'POST', token: cust,
+      body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount } });
+    assert.equal(r.status, 200, r.text);
+  };
+  const unpaid = await checkout(skus[0]);
+  assert.ok(g.db.prepare('SELECT COUNT(*) n FROM sub_orders WHERE parent_order_id = ? AND status = ?').get(unpaid.order_id, 'PAYMENT_PENDING').n > 0, 'unpaid sub-order stays pending');
+  const o2 = await checkout(skus[1]);
+  await pay(o2);
+  const sub2 = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o2.order_id).id;
+  g.db.prepare("UPDATE sub_orders SET status = 'DELIVERED', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(sub2);
+  const o3 = await checkout(skus[2]);
+  await pay(o3);
+  const sub3 = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o3.order_id).id;
+  g.db.prepare("UPDATE sub_orders SET status = 'PURCHASE_CONFIRMED' WHERE id = ?").run(sub3);
+  const sum = (await g.call('/api/v1/me/order-summary', { token: cust })).json.data;
+  assert.equal(sum.upcoming, base.upcoming + 1, 'unpaid order phases upcoming');
+  assert.equal(sum.purchasing, base.purchasing + 1, 'delivered order phases purchasing');
+  assert.equal(sum.completed, base.completed + 1, 'confirmed order phases completed');
+  assert.equal(sum.total, base.total + 3, 'total covers all three');
+  assert.equal(sum.upcoming + sum.purchasing + sum.completed, sum.total, 'phases partition the total');
+});
+
 await t.test('B20. open claims cancel and reopen the sub-order', async () => {
   const g = await newGateway();
   const cust = await login(g, 'customer@example.com');

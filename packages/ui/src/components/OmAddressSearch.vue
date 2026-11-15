@@ -7,11 +7,14 @@ export interface PostalPick { zonecode: string; address: string }
 const props = withDefaults(defineProps<{
   find?: (query: string) => Promise<PostalPick[]>
   disabled?: boolean
+  required?: boolean
 }>(), {})
 const emit = defineEmits<{ pick: [PostalPick] }>()
 const query = ref('')
 const results = ref<PostalPick[]>([])
-const manual = ref(false)
+// 3-9: with no search provider configured (PO-13 undecided) the form opens
+// on manual entry instead of a search box that can never return results.
+const manual = ref(!props.find)
 const busy = ref(false)
 const error = ref('')
 const manualZip = defineModel<string>('zip', { default: '' })
@@ -69,8 +72,8 @@ const search = async () => {
     <div v-if="manual" class="space-y-2 rounded-lg border border-dashed border-line-strong p-3">
       <p class="text-xs font-bold text-ink">직접 입력</p>
       <div class="flex gap-2">
-        <input v-model="manualZip" inputmode="numeric" aria-label="우편번호 직접 입력" placeholder="우편번호" class="om-num h-9 w-28 rounded-lg border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-focus" />
-        <input v-model="manualAddr" aria-label="주소 직접 입력" placeholder="기본 주소" class="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-focus" />
+        <input v-model="manualZip" inputmode="numeric" maxlength="5" :required="required" :aria-required="required || undefined" aria-label="우편번호 직접 입력" placeholder="우편번호" class="om-num h-9 w-28 rounded-lg border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-focus" />
+        <input v-model="manualAddr" :required="required" :aria-required="required || undefined" aria-label="주소 직접 입력" placeholder="기본 주소" class="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-focus" />
       </div>
     </div>
     <button v-if="!manual" type="button" class="text-xs font-semibold text-ink-muted underline hover:text-ink" @click="manual = true">

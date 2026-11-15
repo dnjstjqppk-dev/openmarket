@@ -513,6 +513,12 @@ paths:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1recently-viewed~1merge'
   /api/v1/me/recently-viewed/{productId}:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1recently-viewed~1{productId}'
+  /api/v1/me/reviews:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1reviews'
+  /api/v1/me/reviewable:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1reviewable'
+  /api/v1/me/order-summary:
+    $ref: './paths/features.yaml#/paths/~1api~1v1~1me~1order-summary'
   /api/v1/restock-subscriptions:
     $ref: './paths/features.yaml#/paths/~1api~1v1~1restock-subscriptions'
   /api/v1/products/facets:

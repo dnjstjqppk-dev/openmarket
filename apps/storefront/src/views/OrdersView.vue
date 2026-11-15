@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Check, ChevronRight, Coins, Copy, Pencil, Repeat, RotateCw, ShieldCheck, ShoppingCart, TriangleAlert, Truck } from 'lucide-vue-next'
-import { ref, computed, onMounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { useCartStore } from '../stores/cart'
 import { API_BASE_URL, authHeader } from '../config'
@@ -20,6 +20,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key']
 
 const router = useRouter()
+const route = useRoute()
 const locale = useLocaleStore()
 const cart = useCartStore()
 const orders = ref<any[]>([])
@@ -28,7 +29,11 @@ const totalPages = ref(1)
 const loading = ref(true)
 const loadingMore = ref(false)
 const loadError = ref('')
-const activeTab = ref<TabKey>('purchasing')
+// 3-9: the my-home pipeline deep-links with ?tab=; unknown values fall back
+// to the default tab instead of rendering an empty list.
+const tabFromQuery = (q: unknown): TabKey => (q === 'upcoming' || q === 'completed' ? q : 'purchasing')
+const activeTab = ref<TabKey>(tabFromQuery(route.query.tab))
+watch(() => route.query.tab, (q) => { activeTab.value = tabFromQuery(q) })
 const actionMsg = ref('')
 const copyToast = ref('')
 const showCancelModal = ref(false)

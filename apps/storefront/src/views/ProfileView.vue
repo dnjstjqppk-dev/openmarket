@@ -1,10 +1,13 @@
 <script setup lang="ts">
+// 3-9: /my/settings — member info, password, privacy export and withdrawal.
+// Same behaviors as before, inside the my-page frame with design tokens.
 import { ref, onMounted } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader } from '../config'
 import { userErrorMessage, useConfirm, useToast } from '@olmoa/ui'
+import MyLayout from './my/MyLayout.vue'
 
 const { confirm } = useConfirm()
 const toastApi = useToast()
@@ -28,12 +31,6 @@ const userInfo = ref<any>({
   created_at: ''
 })
 
-const stats = ref({
-  credit_balance: 0,
-  available_coupons: 0,
-  wishlist_count: 0
-})
-
 // Profile Form
 const formName = ref('')
 const formPhone = ref('')
@@ -52,7 +49,6 @@ const loadUserProfile = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
       headers: {
         ...authHeader()
@@ -63,9 +59,6 @@ const loadUserProfile = async () => {
       userInfo.value = json.data.user || {}
       formName.value = userInfo.value.full_name || auth.user?.name || ''
       formPhone.value = userInfo.value.phone || ''
-      stats.value.credit_balance = json.data.credit_balance || 0
-      stats.value.available_coupons = json.data.available_coupons || 0
-      stats.value.wishlist_count = json.data.wishlist_count || 0
       const consents = Array.isArray(json.data.consents) ? json.data.consents : []
       const mkt = consents.find((c: any) => c.consent_type === 'MARKETING')
       if (mkt) notifyMarketing.value = Number(mkt.consented) === 1
@@ -131,7 +124,6 @@ const handlePasswordChange = async () => {
 
   changingPassword.value = true
   try {
-    const cid = auth.user?.id || ''
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
       method: 'PUT',
       headers: {
@@ -241,276 +233,185 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-[1000px] mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8">
-    <!-- Breadcrumb -->
-    <div class="flex items-center gap-2 text-xs text-gray-500">
-      <RouterLink to="/" class="hover:text-gray-900">홈</RouterLink>
-      <span>/</span>
-      <span class="text-gray-900 font-bold">마이페이지 (회원 정보 설정)</span>
-    </div>
+  <MyLayout title="회원정보">
+    <div v-if="loading" class="rounded-2xl border border-line bg-surface p-6 text-sm text-ink-muted">회원 정보를 불러오는 중입니다...</div>
+    <div v-else class="space-y-6">
+      <div v-if="toast" class="flex items-center justify-between rounded-2xl border border-success bg-success-soft p-4 text-xs font-bold text-success">
+        <span>{{ toast }}</span>
+        <button type="button" class="hover:underline" @click="toast = ''">닫기</button>
+      </div>
+      <p v-if="errorMsg" role="alert" class="rounded-2xl border border-danger bg-danger-soft p-4 text-xs font-bold text-danger">{{ errorMsg }}</p>
 
-    <!-- Alert Toast -->
-    <div v-if="toast" class="p-4 rounded-2xl bg-emerald-600 text-white font-bold text-xs flex items-center justify-between shadow-lg animate-fade-in">
-      <span>{{ toast }}</span>
-      <button @click="toast = ''" class="text-white/80 hover:text-white">✕</button>
-    </div>
-
-    <!-- Profile Header Card -->
-    <div class="bg-gradient-to-r from-[#111111] via-[#222222] to-[#FF5000] rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl sm:text-3xl font-black text-amber-400">
-            {{ (userInfo.full_name || auth.user?.name || 'U').charAt(0) }}
-          </div>
-          <div>
-            <div class="flex items-center gap-2 mb-1">
-              <h1 class="text-xl sm:text-2xl font-black tracking-tight">{{ userInfo.full_name || auth.user?.name || '구매 고객' }}</h1>
+      <!-- Member card -->
+      <section class="rounded-2xl border border-line bg-surface p-5" aria-label="회원 요약">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-soft text-xl font-bold text-primary-soft-ink" aria-hidden="true">
+              {{ (userInfo.full_name || auth.user?.name || '회').charAt(0) }}
+            </span>
+            <div>
+              <p class="text-base font-bold text-ink">{{ userInfo.full_name || auth.user?.name || '회원' }}</p>
+              <p class="mt-0.5 text-xs text-ink-muted">{{ userInfo.email || '-' }}</p>
+              <p class="om-num mt-0.5 text-2xs text-ink-subtle">가입일 {{ formatDate(userInfo.created_at) }}</p>
             </div>
-            <p class="text-xs text-gray-300 font-mono">{{ userInfo.email || '-' }}</p>
-            <p class="text-[11px] text-gray-400 mt-1">가입일: {{ formatDate(userInfo.created_at) }}</p>
           </div>
-        </div>
-
-        <button
-          @click="handleLogout"
-          class="self-start md:self-center px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition border border-white/20 cursor-pointer"
-        >
-          로그아웃
-        </button>
-      </div>
-
-      <!-- Quick Benefit Indicators -->
-      <div class="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-white/10 text-center">
-        <RouterLink to="/coupons" class="bg-black/20 hover:bg-black/30 p-3 rounded-2xl transition backdrop-blur-xs">
-          <span class="text-[11px] text-gray-300 block">보유 크레딧(적립금)</span>
-          <span class="text-base sm:text-lg font-black text-amber-400">
-            {{ stats.credit_balance.toLocaleString('ko-KR') }}원
-          </span>
-        </RouterLink>
-        <RouterLink to="/coupons" class="bg-black/20 hover:bg-black/30 p-3 rounded-2xl transition backdrop-blur-xs">
-          <span class="text-[11px] text-gray-300 block">사용 가능 쿠폰</span>
-          <span class="text-base sm:text-lg font-black text-white">
-            {{ stats.available_coupons }}장
-          </span>
-        </RouterLink>
-        <RouterLink to="/wishlist" class="bg-black/20 hover:bg-black/30 p-3 rounded-2xl transition backdrop-blur-xs">
-          <span class="text-[11px] text-gray-300 block">찜한 상품</span>
-          <span class="text-base sm:text-lg font-black text-white">
-            {{ stats.wishlist_count }}개
-          </span>
-        </RouterLink>
-      </div>
-    </div>
-
-    <!-- Quick Navigation Shortcuts -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <RouterLink
-        to="/orders"
-        class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs hover:border-[#FF5000] hover:shadow-md transition flex items-center gap-3"
-      >
-        <div class="w-10 h-10 rounded-xl bg-orange-50 text-[#FF5000] flex items-center justify-center text-lg">📦</div>
-        <div>
-          <span class="font-bold text-xs text-gray-900 block">주문·배송 내역</span>
-          <span class="text-[10px] text-gray-400">배송추적 및 취소</span>
-        </div>
-      </RouterLink>
-
-      <RouterLink
-        to="/addresses"
-        class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs hover:border-[#FF5000] hover:shadow-md transition flex items-center gap-3"
-      >
-        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">📍</div>
-        <div>
-          <span class="font-bold text-xs text-gray-900 block">배송지 관리</span>
-          <span class="text-[10px] text-gray-400">기본 배송지 설정</span>
-        </div>
-      </RouterLink>
-
-      <RouterLink
-        to="/coupons"
-        class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs hover:border-[#FF5000] hover:shadow-md transition flex items-center gap-3"
-      >
-        <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-lg">🎟️</div>
-        <div>
-          <span class="font-bold text-xs text-gray-900 block">쿠폰 & 적립금</span>
-          <span class="text-[10px] text-gray-400">할인 혜택 확인</span>
-        </div>
-      </RouterLink>
-
-      <RouterLink
-        to="/support"
-        class="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs hover:border-[#FF5000] hover:shadow-md transition flex items-center gap-3"
-      >
-        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">💬</div>
-        <div>
-          <span class="font-bold text-xs text-gray-900 block">고객센터 / 1:1</span>
-          <span class="text-[10px] text-gray-400">자주 묻는 질문</span>
-        </div>
-      </RouterLink>
-    </div>
-
-    <!-- Edit Forms Layout -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- Profile Information Card -->
-      <div class="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h2 class="font-black text-gray-900 text-sm flex items-center gap-2">
-            <span>👤 기본 회원정보 수정</span>
-          </h2>
-          <span class="text-[11px] text-gray-400">D1 실시간 동기화</span>
-        </div>
-
-        <form @submit.prevent="saveProfile" class="space-y-4 text-xs">
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">이메일 계정 (아이디)</label>
-            <input
-              :value="userInfo.email"
-              disabled
-              type="text"
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 font-mono cursor-not-allowed"
-            />
-            <span class="text-[10px] text-gray-400 mt-1 block">이메일은 변경할 수 없습니다.</span>
-          </div>
-
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">성명 / 닉네임</label>
-            <input
-              v-model="formName"
-              type="text"
-              required
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
-            />
-          </div>
-
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">휴대전화번호</label>
-            <span v-if="!formPhone" class="text-[10px] text-gray-400 block mb-1">주문·배송 안내를 위해 휴대폰 번호를 등록해 주세요.</span>
-            <input
-              v-model="formPhone"
-              type="text"
-              required
-              placeholder="010-1234-5678"
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
-            />
-          </div>
-
-          <!-- Notification Checkboxes -->
-          <div class="pt-2 border-t border-gray-100 space-y-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="notifySms" disabled checked class="rounded text-[#FF5000] focus:ring-0 disabled:opacity-70" />
-              <span class="text-gray-700 font-medium">주문 및 배송 현황 SMS 안내 (주문 처리에 필수이며 항상 발송됩니다)</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="notifyMarketing" class="rounded text-[#FF5000] focus:ring-0" />
-              <span class="text-gray-700 font-medium">올모아 번개특가 & 할인 쿠폰 안내 수신 (선택)</span>
-            </label>
-          </div>
-
           <button
-            type="submit"
-            :disabled="savingProfile"
-            class="w-full h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-sm disabled:opacity-50"
+            type="button"
+            class="rounded-xl border border-line px-4 py-2 text-xs font-bold text-ink-muted hover:border-line-strong hover:text-ink"
+            @click="handleLogout"
           >
-            {{ savingProfile ? '저장 중...' : '회원정보 변경사항 저장' }}
+            로그아웃
           </button>
-        </form>
-      </div>
-
-      <!-- Password Change Card -->
-      <div class="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h2 class="font-black text-gray-900 text-sm flex items-center gap-2">
-            <span>🔒 비밀번호 보안 변경</span>
-          </h2>
-          <span class="text-[11px] text-gray-400">보안 암호화</span>
         </div>
+      </section>
 
-        <form @submit.prevent="handlePasswordChange" class="space-y-4 text-xs">
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">현재 비밀번호</label>
-            <input
-              v-model="currentPassword"
-              type="password"
-              placeholder="현재 사용 중인 비밀번호"
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
-            />
-          </div>
-
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">새 비밀번호 (10자 이상, 영문 대/소문자·숫자·특수문자 중 3종류)</label>
-            <input
-              v-model="newPassword"
-              type="password"
-              placeholder="새로운 비밀번호 입력"
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
-            />
-          </div>
-
-          <div>
-            <label class="block font-bold text-gray-700 mb-1">새 비밀번호 확인</label>
-            <input
-              v-model="confirmPassword"
-              type="password"
-              placeholder="새로운 비밀번호 재입력"
-              class="w-full h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]"
-            />
-          </div>
-
-          <p v-if="pwError" class="text-rose-600 font-bold text-[11px]">{{ pwError }}</p>
-
-          <button
-            type="submit"
-            :disabled="changingPassword"
-            class="w-full h-11 rounded-xl bg-[#FF5000] hover:bg-[#e04700] text-white font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50"
-          >
-            {{ changingPassword ? '변경 중...' : '새 비밀번호로 변경' }}
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <!-- 개인정보 열람 · 회원 탈퇴 (O10) -->
-    <section class="bg-white p-6 rounded-3xl border border-gray-200/80 shadow-xs space-y-4 text-xs" data-testid="privacy-section">
-      <h2 class="font-black text-gray-900 text-sm border-b pb-3">개인정보 열람 · 회원 탈퇴</h2>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-gray-600">올모아가 보관 중인 내 개인정보(회원정보·배송지·주문·적립금·문의)를 파일로 내려받습니다.</p>
-        <button type="button" :disabled="exporting" class="h-10 px-4 rounded-xl border border-gray-300 font-bold hover:border-gray-900 disabled:opacity-50" @click="downloadMyData">
-          {{ exporting ? '준비 중...' : '내 정보 내려받기 (JSON)' }}
-        </button>
-      </div>
-
-      <div class="pt-4 border-t border-gray-100 space-y-3">
-        <button v-if="!withdrawOpen" type="button" class="text-gray-500 underline" @click="openWithdraw">회원 탈퇴</button>
-        <div v-else class="space-y-3" data-testid="withdraw-panel">
-          <ul class="list-disc pl-5 text-gray-600 space-y-1">
-            <li>회원정보(이름·이메일·휴대폰), 배송지, 찜, 알림은 즉시 삭제되며 복구할 수 없습니다.</li>
-            <li>주문·결제·환불 기록은 전자상거래법에 따라 {{ retentionYears }}년간 보관한 뒤 수령인 정보를 파기합니다.</li>
-            <li>작성한 상품 후기와 문의는 남지만 작성자는 '탈퇴회원'으로 표시됩니다.</li>
-            <li>같은 이메일로 다시 가입할 수 있지만, 이전 주문 내역·적립금은 이어지지 않습니다.</li>
-          </ul>
-          <div v-if="precheck && !precheck.can_withdraw" class="p-3 rounded-xl bg-amber-50 text-amber-900 font-bold" role="alert">
-            <p v-for="b in precheck.blockers" :key="b.code">{{ b.message }} ({{ b.count }}건)</p>
-          </div>
-          <template v-else-if="precheck">
-            <label v-if="precheck.credit_balance > 0" class="flex items-start gap-2">
-              <input v-model="forfeitCredit" type="checkbox" class="mt-0.5" />
-              <span>남은 적립금 <b>{{ precheck.credit_balance.toLocaleString('ko-KR') }}원</b>이 탈퇴와 함께 소멸되는 것에 동의합니다.</span>
-            </label>
-            <label class="flex items-start gap-2"><input v-model="withdrawConfirm" type="checkbox" class="mt-0.5" /><span>위 내용을 확인했으며 탈퇴합니다.</span></label>
-            <input v-model="withdrawPassword" type="password" autocomplete="current-password" placeholder="본인 확인을 위해 비밀번호 입력"
-              class="w-full sm:w-80 h-11 px-3.5 rounded-xl border border-gray-300 focus:outline-none focus:border-[#FF5000]" />
-            <p v-if="withdrawError" class="text-rose-600 font-bold" role="alert">{{ withdrawError }}</p>
-            <div class="flex gap-2">
-              <button type="button" class="h-10 px-4 rounded-xl border border-gray-300 font-bold" @click="withdrawOpen = false">취소</button>
-              <button type="button" :disabled="withdrawing || !withdrawConfirm || !withdrawPassword || (precheck.credit_balance > 0 && !forfeitCredit)"
-                class="h-10 px-4 rounded-xl bg-rose-600 text-white font-black disabled:opacity-40" @click="submitWithdraw">
-                {{ withdrawing ? '처리 중...' : '회원 탈퇴' }}
-              </button>
+      <!-- Edit forms -->
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section class="space-y-4 rounded-2xl border border-line bg-surface p-6" aria-label="기본 회원정보 수정">
+          <h2 class="border-b border-line pb-3 text-sm font-bold text-ink">기본 회원정보 수정</h2>
+          <form class="space-y-4 text-xs" @submit.prevent="saveProfile">
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">이메일 계정 (아이디)</label>
+              <input
+                :value="userInfo.email"
+                disabled
+                type="text"
+                class="h-11 w-full cursor-not-allowed rounded-xl border border-line bg-surface-2 px-3.5 text-ink-subtle"
+              />
+              <span class="mt-1 block text-2xs text-ink-subtle">이메일은 변경할 수 없습니다.</span>
             </div>
-          </template>
-        </div>
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">성명 / 닉네임</label>
+              <input
+                v-model="formName"
+                type="text"
+                required
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">휴대전화번호</label>
+              <span v-if="!formPhone" class="mb-1 block text-2xs text-ink-subtle">주문·배송 안내를 위해 휴대폰 번호를 등록해 주세요.</span>
+              <input
+                v-model="formPhone"
+                type="text"
+                required
+                placeholder="010-1234-5678"
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
+              />
+            </div>
+            <div class="space-y-2 border-t border-line pt-2">
+              <label class="flex cursor-pointer items-center gap-2">
+                <input v-model="notifySms" type="checkbox" disabled checked class="rounded disabled:opacity-70" />
+                <span class="font-medium text-ink-muted">주문 및 배송 현황 SMS 안내 (주문 처리에 필수이며 항상 발송됩니다)</span>
+              </label>
+              <label class="flex cursor-pointer items-center gap-2">
+                <input v-model="notifyMarketing" type="checkbox" class="rounded" />
+                <span class="font-medium text-ink-muted">올모아 번개특가 & 할인 쿠폰 안내 수신 (선택)</span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              :disabled="savingProfile"
+              class="h-11 w-full rounded-xl bg-secondary text-xs font-bold text-secondary-on transition-colors hover:bg-secondary-hover disabled:opacity-50"
+            >
+              {{ savingProfile ? '저장 중...' : '회원정보 변경사항 저장' }}
+            </button>
+          </form>
+        </section>
+
+        <section class="space-y-4 rounded-2xl border border-line bg-surface p-6" aria-label="비밀번호 보안 변경">
+          <h2 class="border-b border-line pb-3 text-sm font-bold text-ink">비밀번호 보안 변경</h2>
+          <form class="space-y-4 text-xs" @submit.prevent="handlePasswordChange">
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">현재 비밀번호</label>
+              <input
+                v-model="currentPassword"
+                type="password"
+                placeholder="현재 사용 중인 비밀번호"
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">새 비밀번호 (10자 이상, 영문 대/소문자·숫자·특수문자 중 3종류)</label>
+              <input
+                v-model="newPassword"
+                type="password"
+                placeholder="새로운 비밀번호 입력"
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block font-bold text-ink-muted">새 비밀번호 확인</label>
+              <input
+                v-model="confirmPassword"
+                type="password"
+                placeholder="새로운 비밀번호 재입력"
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"
+              />
+            </div>
+            <p v-if="pwError" class="text-2xs font-bold text-danger">{{ pwError }}</p>
+            <button
+              type="submit"
+              :disabled="changingPassword"
+              class="h-11 w-full rounded-xl bg-primary text-xs font-bold text-primary-on transition-colors hover:bg-primary-hover disabled:opacity-50"
+            >
+              {{ changingPassword ? '변경 중...' : '새 비밀번호로 변경' }}
+            </button>
+          </form>
+        </section>
       </div>
-    </section>
-  </div>
+
+      <!-- 개인정보 열람 · 회원 탈퇴 -->
+      <section class="space-y-4 rounded-2xl border border-line bg-surface p-6 text-xs" data-testid="privacy-section" aria-label="개인정보 열람 · 회원 탈퇴">
+        <h2 class="border-b border-line pb-3 text-sm font-bold text-ink">개인정보 열람 · 회원 탈퇴</h2>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="text-ink-muted">올모아가 보관 중인 내 개인정보(회원정보·배송지·주문·적립금·문의)를 파일로 내려받습니다.</p>
+          <button type="button" :disabled="exporting" class="h-10 rounded-xl border border-line px-4 font-bold text-ink hover:bg-surface-2 disabled:opacity-50" @click="downloadMyData">
+            {{ exporting ? '준비 중...' : '내 정보 내려받기 (JSON)' }}
+          </button>
+        </div>
+        <div class="space-y-3 border-t border-line pt-4">
+          <button v-if="!withdrawOpen" type="button" class="text-ink-muted underline hover:text-ink" @click="openWithdraw">회원 탈퇴</button>
+          <div v-else class="space-y-3" data-testid="withdraw-panel">
+            <ul class="list-disc space-y-1 pl-5 text-ink-muted">
+              <li>회원정보(이름·이메일·휴대폰), 배송지, 찜, 알림은 즉시 삭제되며 복구할 수 없습니다.</li>
+              <li>주문·결제·환불 기록은 전자상거래법에 따라 {{ retentionYears }}년간 보관한 뒤 수령인 정보를 파기합니다.</li>
+              <li>작성한 상품 후기와 문의는 남지만 작성자는 '탈퇴회원'으로 표시됩니다.</li>
+              <li>같은 이메일로 다시 가입할 수 있지만, 이전 주문 내역·적립금은 이어지지 않습니다.</li>
+            </ul>
+            <div v-if="precheck && !precheck.can_withdraw" role="alert" class="rounded-xl border border-warning bg-warning-soft p-3 font-bold text-warning">
+              <p v-for="b in precheck.blockers" :key="b.code">{{ b.message }} ({{ b.count }}건)</p>
+            </div>
+            <template v-else-if="precheck">
+              <label v-if="precheck.credit_balance > 0" class="flex items-start gap-2 text-ink">
+                <input v-model="forfeitCredit" type="checkbox" class="mt-0.5" />
+                <span>남은 적립금 <b class="om-num">{{ precheck.credit_balance.toLocaleString('ko-KR') }}원</b>이 탈퇴와 함께 소멸되는 것에 동의합니다.</span>
+              </label>
+              <label class="flex items-start gap-2 text-ink"><input v-model="withdrawConfirm" type="checkbox" class="mt-0.5" /><span>위 내용을 확인했으며 탈퇴합니다.</span></label>
+              <input
+                v-model="withdrawPassword"
+                type="password"
+                autocomplete="current-password"
+                placeholder="본인 확인을 위해 비밀번호 입력"
+                class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus sm:w-80"
+              />
+              <p v-if="withdrawError" role="alert" class="font-bold text-danger">{{ withdrawError }}</p>
+              <div class="flex gap-2">
+                <button type="button" class="h-10 rounded-xl border border-line px-4 font-bold text-ink hover:bg-surface-2" @click="withdrawOpen = false">취소</button>
+                <button
+                  type="button"
+                  :disabled="withdrawing || !withdrawConfirm || !withdrawPassword || (precheck.credit_balance > 0 && !forfeitCredit)"
+                  class="h-10 rounded-xl border border-danger bg-danger-soft px-4 font-bold text-danger disabled:opacity-40"
+                  @click="submitWithdraw"
+                >
+                  {{ withdrawing ? '처리 중...' : '회원 탈퇴' }}
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+    </div>
+  </MyLayout>
 </template>
-
