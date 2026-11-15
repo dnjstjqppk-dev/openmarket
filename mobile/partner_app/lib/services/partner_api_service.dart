@@ -176,6 +176,13 @@ class PartnerApiService {
   // Instance methods
   Future<Map<String, dynamic>> fetchDashboardMetrics() => PartnerApiService.getDashboardMetrics();
 
+  /// 4-23: same action pipeline the web seller console renders.
+  Future<Map<String, dynamic>> fetchPipeline() => PartnerApiService.getPipeline();
+
+  /// 4-23: 발주확인 (PAYMENT_CONFIRMED → PREPARING), same as web.
+  Future<Map<String, dynamic>> confirmOrder({required String subOrderId}) =>
+      PartnerApiService.confirmShipment(orderId: subOrderId);
+
   Future<List<SubOrder>> fetchPartnerOrders() => PartnerApiService.getPartnerOrders();
 
   /// Returns {ok, error?} — the server answer, never an optimistic guess.
@@ -367,6 +374,55 @@ class PartnerApiService {
       rethrow;
     } catch (_) {
       throw PartnerApiException('네트워크 오류로 지표를 불러오지 못했습니다.');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPipeline() async {
+    await PartnerAuthSession.restore();
+    if (!PartnerAuthSession.isAuthenticated) throw const PartnerAuthRequiredException();
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/partner/dashboard/pipeline');
+      final res = await _authed(() => http.get(uri, headers: PartnerAuthSession.headers()).timeout(const Duration(seconds: 8)));
+      if (res.statusCode == 401) {
+        await PartnerAuthSession.onUnauthorized();
+        throw const PartnerAuthRequiredException();
+      }
+      if (res.statusCode != 200) {
+        throw PartnerApiException(_decode(res.body)['error']?.toString() ?? '지표를 불러오지 못했습니다.');
+      }
+      final body = _decode(res.body);
+      final data = body['data'];
+      return data is Map ? Map<String, dynamic>.from(data) : body;
+    } on PartnerAuthRequiredException {
+      rethrow;
+    } on PartnerApiException {
+      rethrow;
+    } catch (_) {
+      throw PartnerApiException('네트워크 오류로 지표를 불러오지 못했습니다.');
+    }
+  }
+
+  static Future<Map<String, dynamic>> confirmShipment({required String orderId}) async {
+    await PartnerAuthSession.restore();
+    if (!PartnerAuthSession.isAuthenticated) {
+      return {'ok': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 필요합니다.'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/partner/orders/$orderId/prepare');
+      final res = await _authed(() => http
+          .post(uri, headers: PartnerAuthSession.headers())
+          .timeout(const Duration(seconds: 10)));
+      final body = _decode(res.body);
+      if (res.statusCode == 401) {
+        await PartnerAuthSession.onUnauthorized();
+        return {'ok': false, 'code': 'UNAUTHENTICATED', 'error': '로그인이 만료되었습니다. 다시 로그인해 주세요.'};
+      }
+      if (res.statusCode == 200 && body['success'] == true) {
+        return {'ok': true, 'status': body['status'] ?? 'PREPARING'};
+      }
+      return {'ok': false, 'error': body['error']?.toString() ?? '발주 확인에 실패했습니다.'};
+    } catch (_) {
+      return {'ok': false, 'error': '네트워크 오류로 발주 확인에 실패했습니다.'};
     }
   }
 

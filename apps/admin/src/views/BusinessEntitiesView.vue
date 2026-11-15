@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { adminApi, won } from '../config'
 import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
-const { confirm } = useConfirm()
+const { confirm: askConfirm } = useConfirm()
 
 const entities = ref<any[]>([])
 const loading = ref(true)
@@ -55,7 +55,7 @@ async function create() {
 }
 async function activate(e: any) {
   if (!confirmReview.value[e.id]) return say('세무·법률·PG 계약 검토 완료를 확인해 주세요.', 'err')
-  if (!(await confirm({ title: '운영 사업자 전환', body: `${e.legal_name}을(를) 현재 운영 사업자로 전환합니다. 이후 모든 신규 주문·정산이 이 사업자에 귀속됩니다.` }))) return
+  if (!(await askConfirm({ title: '운영 사업자 전환', body: `${e.legal_name}을(를) 현재 운영 사업자로 전환합니다. 이후 모든 신규 주문·정산이 이 사업자에 귀속됩니다.` }))) return
   const r = await adminApi(`/api/v1/admin/business-entities/${e.id}/activate`, { method: 'POST', json: { confirm_legal_review: true, note: '관리자 콘솔 전환' } })
   if (!r.ok) return say(r.data.error || '전환 실패', 'err')
   say(`전환 완료 (${r.data.data.effective_at}). 이전 사업자의 미결 채무를 아래에서 확인하세요.`)
@@ -68,28 +68,28 @@ onMounted(load)
   <div class="max-w-7xl mx-auto px-4 py-6 space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-xl font-black">운영 사업자 · 법인 전환</h1>
-        <p class="text-xs text-slate-500 mt-1">거래 기록은 발생 당시의 운영 사업자에 귀속되며 일괄 변경할 수 없습니다(DB 트리거로 강제).</p>
+        <h1 class="text-xl font-bold text-ink">운영 사업자 · 법인 전환</h1>
+        <p class="text-xs text-ink-muted mt-1">거래 기록은 발생 당시의 운영 사업자에 귀속되며 일괄 변경할 수 없습니다(DB 트리거로 강제).</p>
       </div>
-      <button class="h-10 px-4 rounded-lg bg-indigo-600 text-white text-xs font-black" @click="showForm = !showForm">+ 사업자 등록</button>
+      <button class="h-10 px-4 rounded-lg bg-primary text-primary-on text-xs font-bold hover:bg-primary-hover" @click="showForm = !showForm">+ 사업자 등록</button>
     </div>
 
-    <div v-if="msg" role="status" class="p-3 rounded-lg text-xs font-bold" :class="msgTone === 'ok' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'">{{ msg }}</div>
+    <div v-if="msg" role="status" class="p-3 rounded-lg text-xs font-bold" :class="msgTone === 'ok' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">{{ msg }}</div>
 
-    <form v-if="showForm" class="bg-white rounded-xl border border-slate-200 p-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs" @submit.prevent="create">
+    <form v-if="showForm" class="bg-surface rounded-xl border border-line p-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-ink" @submit.prevent="create">
       <label class="block"><span class="font-bold">사업자 유형</span>
-        <select v-model="form.entity_type" class="mt-1 w-full h-9 px-2 rounded border border-slate-300"><option value="INDIVIDUAL">개인사업자</option><option value="CORPORATION">법인사업자</option></select></label>
+        <select v-model="form.entity_type" class="mt-1 w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink"><option value="INDIVIDUAL">개인사업자</option><option value="CORPORATION">법인사업자</option></select></label>
       <label class="block"><span class="font-bold">과세 유형</span>
-        <select v-model="form.tax_type" class="mt-1 w-full h-9 px-2 rounded border border-slate-300"><option value="GENERAL">일반과세자</option><option value="SIMPLIFIED">간이과세자</option><option value="TAX_EXEMPT">면세사업자</option></select></label>
-      <label v-for="[k, l, req] in FIELDS" :key="k" class="block"><span class="font-bold">{{ l }}<span v-if="req" class="text-red-600">*</span></span>
-        <input v-model="form[k]" class="mt-1 w-full h-9 px-2 rounded border border-slate-300" /></label>
-      <div class="sm:col-span-2 lg:col-span-3 flex justify-end"><button class="h-10 px-5 rounded-lg bg-slate-900 text-white font-black">DRAFT 저장</button></div>
+        <select v-model="form.tax_type" class="mt-1 w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink"><option value="GENERAL">일반과세자</option><option value="SIMPLIFIED">간이과세자</option><option value="TAX_EXEMPT">면세사업자</option></select></label>
+      <label v-for="[k, l, req] in FIELDS" :key="k" class="block"><span class="font-bold">{{ l }}<span v-if="req" class="text-danger">*</span></span>
+        <input v-model="form[k]" class="mt-1 w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink" /></label>
+      <div class="sm:col-span-2 lg:col-span-3 flex justify-end"><button class="h-10 px-5 rounded-lg bg-secondary text-secondary-on font-bold hover:bg-secondary-hover">DRAFT 저장</button></div>
     </form>
 
-    <div v-if="loading" class="text-xs text-slate-500">불러오는 중...</div>
-    <div v-if="loadError" role="alert" class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700 font-bold flex flex-wrap items-center justify-between gap-2">
+    <div v-if="loading" class="text-xs text-ink-subtle">불러오는 중...</div>
+    <div v-if="loadError" role="alert" class="bg-danger-soft border border-line rounded-xl p-4 text-xs text-danger font-bold flex flex-wrap items-center justify-between gap-2">
       <span>문제가 발생했습니다. 잠시 후 다시 시도해주세요. ({{ loadError }})</span>
-      <button class="h-8 px-3 rounded-lg bg-red-600 text-white font-bold" @click="load">다시 시도</button>
+      <button class="h-8 px-3 rounded-lg bg-secondary text-secondary-on font-bold hover:bg-secondary-hover" @click="load">다시 시도</button>
     </div>
     <OmEmptyState
       v-else-if="!entities.length"
@@ -100,28 +100,28 @@ onMounted(load)
       <OmButton size="sm" @click="load">다시 불러오기</OmButton>
     </OmEmptyState>
 
-    <div v-for="e in entities" :key="e.id" class="bg-white rounded-xl border p-5 text-xs" :class="e.status === 'ACTIVE' ? 'border-emerald-400' : 'border-slate-200'">
+    <div v-for="e in entities" :key="e.id" class="bg-surface rounded-xl border border-line p-5 text-xs">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="text-sm font-black">{{ e.legal_name }}
-          <span class="ml-1 px-2 py-0.5 rounded text-[10px]" :class="e.entity_type === 'CORPORATION' ? 'bg-indigo-50 text-indigo-700' : 'bg-orange-50 text-orange-700'">{{ e.entity_type === 'CORPORATION' ? '법인' : '개인' }}</span>
-          <span class="ml-1 px-2 py-0.5 rounded text-[10px]" :class="{ 'bg-emerald-100 text-emerald-800': e.status === 'ACTIVE', 'bg-slate-100 text-slate-600': e.status === 'RETIRED', 'bg-amber-100 text-amber-800': e.status === 'DRAFT' }">{{ e.status }}</span>
+        <div class="text-sm font-bold text-ink">{{ e.legal_name }}
+          <span class="ml-1 px-2 py-0.5 rounded text-[10px]" :class="e.entity_type === 'CORPORATION' ? 'bg-primary-soft text-primary-soft-ink' : 'bg-warning-soft text-warning'">{{ e.entity_type === 'CORPORATION' ? '법인' : '개인' }}</span>
+          <span class="ml-1 px-2 py-0.5 rounded text-[10px]" :class="{ 'bg-success-soft text-success': e.status === 'ACTIVE', 'bg-surface-3 text-ink-muted': e.status === 'RETIRED', 'bg-warning-soft text-warning': e.status === 'DRAFT' }">{{ e.status }}</span>
         </div>
-        <div class="text-slate-500">운영기간 {{ e.operating_from || '-' }} ~ {{ e.operating_to || (e.status === 'ACTIVE' ? '현재' : '-') }}</div>
+        <div class="text-ink-muted">운영기간 {{ e.operating_from || '-' }} ~ {{ e.operating_to || (e.status === 'ACTIVE' ? '현재' : '-') }}</div>
       </div>
-      <div class="mt-2 grid sm:grid-cols-3 gap-1 text-slate-600">
+      <div class="mt-2 grid sm:grid-cols-3 gap-1 text-ink-muted">
         <div>사업자번호 {{ e.business_reg_number }}</div><div>대표 {{ e.representative_name }}</div><div>통신판매업 {{ e.mail_order_reg_number || '미등록' }}</div>
       </div>
-      <div v-if="e.status === 'DRAFT'" class="mt-4 flex flex-wrap items-center gap-3 border-t pt-3">
-        <label class="flex items-center gap-2"><input type="checkbox" v-model="confirmReview[e.id]" /> 세무·법률·PG·판매자 계약 승계 검토를 완료했습니다</label>
-        <button class="h-9 px-4 rounded-lg bg-emerald-600 text-white font-black" @click="activate(e)">현재 운영 사업자로 전환</button>
+      <div v-if="e.status === 'DRAFT'" class="mt-4 flex flex-wrap items-center gap-3 border-t border-line-divider pt-3 text-ink">
+        <label class="flex items-center gap-2"><input type="checkbox" v-model="confirmReview[e.id]" class="accent-primary" /> 세무·법률·PG·판매자 계약 승계 검토를 완료했습니다</label>
+        <button class="h-9 px-4 rounded-lg bg-success text-primary-on font-bold" @click="activate(e)">현재 운영 사업자로 전환</button>
       </div>
-      <div v-if="obligations[e.id]" class="mt-4 border-t pt-3 grid sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">결제대기 주문</div><b>{{ obligations[e.id].unpaid_orders.c }}건</b></div>
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">진행중 배송</div><b>{{ obligations[e.id].open_fulfilment_sub_orders }}건</b></div>
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">환불 가능 잔액</div><b>{{ won(obligations[e.id].refundable_to_customers.pg) }}</b></div>
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">미지급 판매자 정산</div><b>{{ won(obligations[e.id].seller_payables.amount) }}</b></div>
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">미결 발주</div><b>{{ obligations[e.id].open_purchase_orders }}건</b></div>
-        <div class="p-2 rounded bg-slate-50"><div class="text-slate-500">미결 클레임</div><b>{{ obligations[e.id].open_claims }}건</b></div>
+      <div v-if="obligations[e.id]" class="mt-4 border-t border-line-divider pt-3 grid sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">결제대기 주문</div><b class="text-ink">{{ obligations[e.id].unpaid_orders.c }}건</b></div>
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">진행중 배송</div><b class="text-ink">{{ obligations[e.id].open_fulfilment_sub_orders }}건</b></div>
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">환불 가능 잔액</div><b class="text-ink">{{ won(obligations[e.id].refundable_to_customers.pg) }}</b></div>
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">미지급 판매자 정산</div><b class="text-ink">{{ won(obligations[e.id].seller_payables.amount) }}</b></div>
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">미결 발주</div><b class="text-ink">{{ obligations[e.id].open_purchase_orders }}건</b></div>
+        <div class="p-2 rounded bg-surface-2"><div class="text-ink-muted">미결 클레임</div><b class="text-ink">{{ obligations[e.id].open_claims }}건</b></div>
       </div>
     </div>
   </div>

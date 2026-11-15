@@ -3,6 +3,7 @@ import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import PartnerListView from '../views/partners/PartnerListView.vue';
 import PartnerDetailView from '../views/partners/PartnerDetailView.vue';
+import PenaltyGradeView from '../views/partners/PenaltyGradeView.vue';
 import ProductListView from '../views/products/ProductListView.vue';
 import ReviewQueueView from '../views/products/ReviewQueueView.vue';
 import LedgerAuditView from '../views/LedgerAuditView.vue';
@@ -44,6 +45,7 @@ const routes = [
   { path: '/products/review-queue', name: 'products-review-queue', component: ReviewQueueView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS'] } },
   { path: '/partners', name: 'partners', component: PartnerListView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS'] } },
   { path: '/partners/:id', name: 'partner-detail', component: PartnerDetailView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS'] } },
+  { path: '/partners/penalties-grades', name: 'penalties-grades', component: PenaltyGradeView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS'] } },
   { path: '/ledger', name: 'ledger', component: LedgerAuditView, meta: { roles: ['SUPER_ADMIN', 'FINANCE'] } },
   { path: '/orders', name: 'orders', component: OrderListView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS', 'CS'] } },
   { path: '/orders/:id', name: 'order-detail', component: OrderDetailView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS', 'CS'] } },

@@ -19,14 +19,14 @@ function retentionDays(env, key, fallback) {
 }
 
 /** Statement recording that personal data was exposed / exported / destroyed. Commit it with the read or change. */
-export function piiAccessStatement(env, principal, { action, resource, subjectType, subjectIds = [], fields = null, request = null }) {
+export function piiAccessStatement(env, principal, { action, resource, subjectType, subjectIds = [], fields = null, request = null, reason = null }) {
   const ids = [...new Set(subjectIds.filter(Boolean).map(String))];
   return env.DB.prepare(
-    `INSERT INTO pii_access_log (id, actor_user_id, actor_role, actor_partner_id, action, resource, subject_type, subject_ids_json, subject_count, fields, ip, user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO pii_access_log (id, actor_user_id, actor_role, actor_partner_id, action, resource, subject_type, subject_ids_json, subject_count, fields, reason, ip, user_agent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     newId('pii'), principal ? principal.userId : null, principal ? principal.role : 'SYSTEM', principal ? principal.partnerId || null : null,
-    action, resource, subjectType, JSON.stringify(ids.slice(0, 500)), ids.length, fields,
+    action, resource, subjectType, JSON.stringify(ids.slice(0, 500)), ids.length, fields, reason ? String(reason).slice(0, 500) : null,
     request ? request.headers.get('CF-Connecting-IP') || null : null,
     request ? String(request.headers.get('User-Agent') || '').slice(0, 300) || null : null
   );
@@ -46,9 +46,15 @@ export function maskPccc(value) {
 }
 
 /** Convenience: log a VIEW of personal data. Awaited so the record exists before the data leaves the server. */
-export async function logPiiView(env, principal, resource, subjectType, subjectIds, fields, request) {
+export async function logPiiView(env, principal, resource, subjectType, subjectIds, fields, request, reason = null) {
   if (!subjectIds || !subjectIds.length) return;
-  await piiAccessStatement(env, principal, { action: 'VIEW', resource, subjectType, subjectIds, fields, request }).run();
+  await piiAccessStatement(env, principal, { action: 'VIEW', resource, subjectType, subjectIds, fields, request, reason }).run();
+}
+
+/** Convenience: log an EXPORT of personal data with the operator's stated reason. */
+export async function logPiiExport(env, principal, resource, subjectType, subjectIds, fields, request, reason) {
+  if (!subjectIds || !subjectIds.length) return;
+  await piiAccessStatement(env, principal, { action: 'EXPORT', resource, subjectType, subjectIds, fields, request, reason }).run();
 }
 
 /** Everything that blocks a withdrawal, as human-readable reasons (empty = may withdraw). */

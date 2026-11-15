@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue';
 import { API_BASE_URL, getAdminHeaders } from '../config';
 import { userErrorMessage, OmButton, OmEmptyState, useConfirm } from '@olmoa/ui'
 
-const { confirm } = useConfirm()
+const { confirm: askConfirm } = useConfirm()
 
 interface RemoteZone {
   postal_prefix: string;
@@ -69,7 +69,7 @@ async function saveZone() {
 }
 
 async function deleteZone(prefix: string) {
-  if (!(await confirm({ title: '지역 삭제', body: `우편번호 앞자리 '${prefix}' 지역을 삭제할까요? 해당 지역 주문에는 추가배송비가 붙지 않습니다.`, danger: true }))) return;
+  if (!(await askConfirm({ title: '지역 삭제', body: `우편번호 앞자리 '${prefix}' 지역을 삭제할까요? 해당 지역 주문에는 추가배송비가 붙지 않습니다.`, danger: true }))) return;
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/admin/shipping/remote-zones/${encodeURIComponent(prefix)}`, {
       method: 'DELETE',
@@ -92,29 +92,29 @@ onMounted(loadZones);
 <template>
   <div class="max-w-4xl mx-auto px-4 py-6 space-y-5 text-xs">
     <div>
-      <h1 class="text-xl font-black text-gray-900">도서산간 추가배송비</h1>
-      <p class="text-gray-500 mt-1">우편번호 앞자리(2-5자리) 최장일치로 지역을 판정합니다. 무료배송 주문에도 판매자별로 가산됩니다.</p>
+      <h1 class="text-xl font-bold text-ink">도서산간 추가배송비</h1>
+      <p class="text-ink-muted mt-1">우편번호 앞자리(2-5자리) 최장일치로 지역을 판정합니다. 무료배송 주문에도 판매자별로 가산됩니다.</p>
     </div>
-    <p v-if="toast" role="status" class="p-3 rounded-lg bg-indigo-50 text-indigo-900 font-bold">{{ toast }}</p>
+    <p v-if="toast" role="status" class="p-3 rounded-lg bg-primary-soft text-primary-soft-ink font-bold">{{ toast }}</p>
 
-    <section class="bg-white rounded-xl border p-4 space-y-3">
-      <h2 class="font-black text-sm">지역 등록/수정</h2>
+    <section class="bg-surface rounded-xl border border-line p-4 space-y-3">
+      <h2 class="font-bold text-sm text-ink">지역 등록/수정</h2>
       <div class="grid sm:grid-cols-4 gap-2">
-        <label class="block"><span class="font-bold">우편번호 앞자리 *</span><input v-model="form.postal_prefix" placeholder="예: 63" class="w-full h-9 px-2 rounded border" /></label>
-        <label class="block"><span class="font-bold">지역명 *</span><input v-model="form.zone_name" placeholder="예: 제주" class="w-full h-9 px-2 rounded border" /></label>
-        <label class="block"><span class="font-bold">추가배송비(원) *</span><input v-model.number="form.surcharge_amount" type="number" min="0" max="100000" class="w-full h-9 px-2 rounded border" /></label>
-        <div class="flex items-end"><button @click="saveZone" class="h-9 w-full rounded-lg bg-slate-900 text-white font-bold">저장</button></div>
+        <label class="block text-ink"><span class="font-bold">우편번호 앞자리 *</span><input v-model="form.postal_prefix" placeholder="예: 63" class="w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink" /></label>
+        <label class="block text-ink"><span class="font-bold">지역명 *</span><input v-model="form.zone_name" placeholder="예: 제주" class="w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink" /></label>
+        <label class="block text-ink"><span class="font-bold">추가배송비(원) *</span><input v-model.number="form.surcharge_amount" type="number" min="0" max="100000" class="w-full h-9 px-2 rounded-lg border border-line bg-surface text-ink" /></label>
+        <div class="flex items-end"><button @click="saveZone" class="h-9 w-full rounded-lg bg-secondary text-secondary-on font-bold hover:bg-secondary-hover">저장</button></div>
       </div>
-      <p v-if="formError" role="alert" class="text-red-600 font-bold">{{ formError }}</p>
+      <p v-if="formError" role="alert" class="text-danger font-bold">{{ formError }}</p>
     </section>
 
-    <section class="bg-white rounded-xl border p-4">
-      <h2 class="font-black text-sm mb-2">등록된 지역 ({{ zones.length }})</h2>
-      <p v-if="loading" class="text-gray-500">불러오는 중...</p>
+    <section class="bg-surface rounded-xl border border-line p-4">
+      <h2 class="font-bold text-sm mb-2 text-ink">등록된 지역 ({{ zones.length }})</h2>
+      <p v-if="loading" class="text-ink-subtle">불러오는 중...</p>
       <div v-else-if="loadError" class="space-y-2">
-        <p role="alert" class="text-red-600 font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
+        <p role="alert" class="text-danger font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
         <p class="text-ink-muted">{{ loadError }}</p>
-        <button @click="loadZones" class="px-3 py-1.5 rounded border font-bold">다시 시도</button>
+        <button @click="loadZones" class="px-3 py-1.5 rounded-lg border border-line font-bold text-ink hover:bg-surface-2">다시 시도</button>
       </div>
       <OmEmptyState
         v-else-if="!zones.length"
@@ -125,13 +125,13 @@ onMounted(loadZones);
         <OmButton size="sm" @click="loadZones">다시 불러오기</OmButton>
       </OmEmptyState>
       <table v-else class="w-full text-left">
-        <thead class="text-slate-500"><tr><th class="p-1">앞자리</th><th class="p-1">지역명</th><th class="p-1">추가배송비</th><th></th></tr></thead>
+        <thead class="text-ink-muted"><tr><th class="p-1">앞자리</th><th class="p-1">지역명</th><th class="p-1">추가배송비</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="z in zones" :key="z.postal_prefix" class="border-t">
-            <td class="p-1 font-mono font-bold">{{ z.postal_prefix }}</td>
-            <td class="p-1">{{ z.zone_name }}</td>
-            <td class="p-1 tabular-nums">{{ Number(z.surcharge_amount).toLocaleString() }}원</td>
-            <td class="p-1 text-right"><button @click="deleteZone(z.postal_prefix)" class="px-2 py-1 rounded border text-red-600 font-bold">삭제</button></td>
+          <tr v-for="z in zones" :key="z.postal_prefix" class="border-t border-line-divider">
+            <td class="p-1 font-mono font-bold text-ink">{{ z.postal_prefix }}</td>
+            <td class="p-1 text-ink">{{ z.zone_name }}</td>
+            <td class="p-1 tabular-nums text-ink">{{ Number(z.surcharge_amount).toLocaleString() }}원</td>
+            <td class="p-1 text-right"><button @click="deleteZone(z.postal_prefix)" class="px-2 py-1 rounded-lg border border-line text-danger font-bold hover:bg-danger-soft">삭제</button></td>
           </tr>
         </tbody>
       </table>

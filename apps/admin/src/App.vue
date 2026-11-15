@@ -38,7 +38,8 @@ const rawMenu: ConsoleMenuItem[] = [
     to: "/partner-applications", label: '입점·셀러', icon: Users,
     children: [
       { to: "/partner-applications", label: '입점 심사' },
-      { to: "/partners", label: '셀러 관리' }
+      { to: "/partners", label: '셀러 관리' },
+      { to: "/partners/penalties-grades", label: '페널티·등급' }
     ]
   },
   {

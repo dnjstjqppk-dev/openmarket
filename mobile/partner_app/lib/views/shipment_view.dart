@@ -81,6 +81,23 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
     if (mounted) setState(() => _isLoading = false);
   }
 
+  Future<void> _confirmOrder(SubOrder order) async {
+    final r = await _apiService.confirmOrder(subOrderId: order.id);
+    if (!mounted) return;
+    if (r['ok'] == true) {
+      setState(() => order.status = 'PREPARING');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('[${order.subOrderNo}] 발주 확인됨')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text((r['error'] ?? '발주 확인에 실패했습니다.').toString())),
+      );
+    }
+  }
+
   void _dispatchOrder(SubOrder order) {
     showDialog(
       context: context,
@@ -320,19 +337,39 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
                       fontSize: 12)),
             ],
             // P1-M07: dispatch only before shipment; terminal rows show no button.
+            // 4-23: confirm first (PAYMENT_CONFIRMED → PREPARING), then ship —
+            // same two steps as the web seller console.
             if (order.shippable) ...[
               const Divider(height: 20),
               Align(
                 alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: () => _dispatchOrder(order),
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('운송장 입력 및 출고',
-                      style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (order.status == 'PAYMENT_CONFIRMED')
+                      OutlinedButton(
+                        onPressed: () => _confirmOrder(order),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('발주확인',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    if (order.status == 'PAYMENT_CONFIRMED')
+                      const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _dispatchOrder(order),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('운송장 입력 및 출고',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ),
             ],

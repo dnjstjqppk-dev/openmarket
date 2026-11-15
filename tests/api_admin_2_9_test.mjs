@@ -774,4 +774,80 @@ await t.test('A24. platform coupon stats split platform and seller shares', asyn
   assert.equal(g.db.prepare('SELECT is_active FROM coupons WHERE id = ?').get(couponId).is_active, 0, 'suspended');
 });
 
+await t.test('A25. member search, withdrawal filter and reasoned export', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const byName = await g.call(`/api/v1/admin/users?q=${encodeURIComponent('Jane')}`, { token: adm });
+  assert.ok(byName.json.data.some((u) => u.id === 'u_customer_001'), 'name search hits');
+  const byPhone = await g.call('/api/v1/admin/users?q=5555', { token: adm });
+  assert.ok(byPhone.json.data.some((u) => u.id === 'u_customer_001'), 'phone search hits');
+  g.db.prepare("UPDATE users SET withdrawn_at = CURRENT_TIMESTAMP, is_active = 0 WHERE id = 'u_customer_001'").run();
+  const gone = await g.call('/api/v1/admin/users?status=WITHDRAWN', { token: adm });
+  assert.ok(gone.json.data.some((u) => u.id === 'u_customer_001'), 'withdrawal filter hits');
+  const live = await g.call('/api/v1/admin/users?status=ACTIVE', { token: adm });
+  assert.ok(!live.json.data.some((u) => u.id === 'u_customer_001'), 'withdrawn excluded from active');
+  const noReason = await g.call('/api/v1/admin/users?format=csv', { token: adm });
+  assert.equal(noReason.status, 400, 'export needs a reason');
+  const csv = await g.call(`/api/v1/admin/users?format=csv&reason=${encodeURIComponent('CS 처리')}`, { token: adm });
+  assert.equal(csv.status, 200, csv.text);
+  const logged = g.db.prepare("SELECT reason FROM pii_access_log WHERE action = 'EXPORT' AND resource = 'admin.users' ORDER BY created_at DESC LIMIT 1").get();
+  assert.equal(logged.reason, 'CS 처리', 'export reason recorded');
+});
+
+await t.test('A26. inquiries take an operator assignee', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  g.db.prepare(`INSERT INTO support_inquiries (id, user_id, category, subject, content, status) VALUES ('inq_a26', 'u_customer_001', 'OTHER', 's', 'c', 'OPEN')`).run();
+  const opId = g.db.prepare("SELECT id FROM users WHERE email = 'admin@openmarket.com'").get().id;
+  const bad = await g.call('/api/v1/admin/inquiries/inq_a26', { method: 'PUT', token: adm, body: { assignee_admin_id: 'u_customer_001' } });
+  assert.equal(bad.status, 400, 'non-operators refused');
+  const set = await g.call('/api/v1/admin/inquiries/inq_a26', { method: 'PUT', token: adm, body: { assignee_admin_id: opId } });
+  assert.equal(set.status, 200, set.text);
+  assert.equal(g.db.prepare('SELECT assignee_admin_id FROM support_inquiries WHERE id = ?').get('inq_a26').assignee_admin_id, opId, 'assignee stored');
+  const clear = await g.call('/api/v1/admin/inquiries/inq_a26', { method: 'PUT', token: adm, body: { assignee_admin_id: null } });
+  assert.equal(clear.status, 200, clear.text);
+  g.db.prepare("UPDATE support_inquiries SET status = 'CLOSED' WHERE id = 'inq_a26'").run();
+  const shut = await g.call('/api/v1/admin/inquiries/inq_a26', { method: 'PUT', token: adm, body: { assignee_admin_id: opId } });
+  assert.equal(shut.status, 409, 'closed inquiries frozen');
+});
+
+await t.test('A27. disabled rules block imposition; history and grades list', async () => {
+  const g = await newGateway();
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const rule = await g.call('/api/v1/admin/penalty-rules', {
+    method: 'PUT', token: adm, body: { code: 'A27_LATE', name: 'A27 지각', points: 5, amount: 10000, is_enabled: false }
+  });
+  assert.equal(rule.status, 200, rule.text);
+  const blocked = await g.call('/api/v1/admin/partners/pt_001/penalties', {
+    method: 'POST', token: adm, body: { rule_code: 'A27_LATE', reason: '발송 지연' }
+  });
+  assert.equal(blocked.status, 409, 'disabled rule blocks imposition');
+  await g.call('/api/v1/admin/penalty-rules', {
+    method: 'PUT', token: adm, body: { code: 'A27_LATE', name: 'A27 지각', points: 5, amount: 10000, is_enabled: true }
+  });
+  const imp = await g.call('/api/v1/admin/partners/pt_001/penalties', {
+    method: 'POST', token: adm, body: { rule_code: 'A27_LATE', reason: '발송 지연' }
+  });
+  assert.equal(imp.status, 201, imp.text);
+  const penId = imp.json.data.id;
+  const appeal = await g.call(`/api/v1/partner/penalties/${penId}/appeal`, {
+    method: 'POST', token: pt, body: { body: '택배사 파업으로 불가피했습니다' }
+  });
+  assert.equal(appeal.status, 200, appeal.text);
+  const hist = await g.call('/api/v1/admin/penalties?partner_id=pt_001', { token: adm });
+  assert.ok(hist.json.data.some((x) => x.id === penId && x.appeal_body), 'history carries the appeal');
+  const queue = await g.call('/api/v1/admin/penalties?appealed=true', { token: adm });
+  assert.ok(queue.json.data.some((x) => x.id === penId), 'appeal queue finds it');
+  const uphold = await g.call(`/api/v1/admin/penalties/${penId}`, { method: 'PUT', token: adm, body: { decision: 'UPHOLD', note: '기각' } });
+  assert.equal(uphold.status, 200, uphold.text);
+  const comp = await g.call('/api/v1/admin/grades/compute', { method: 'POST', token: adm, body: { month: '2026-10' } });
+  assert.equal(comp.status, 200, comp.text);
+  const grades = await g.call('/api/v1/admin/grades?month=2026-10', { token: adm });
+  assert.equal(grades.status, 200, grades.text);
+  assert.ok(grades.json.data.length > 0, 'monthly results listed');
+  const badMonth = await g.call('/api/v1/admin/grades?month=tomorrow', { token: adm });
+  assert.equal(badMonth.status, 400, 'month validated');
+});
+
 t.finish();

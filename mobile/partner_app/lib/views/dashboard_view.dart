@@ -1,5 +1,6 @@
 // mobile/partner_app/lib/views/dashboard_view.dart
-// Seller dashboard bound to GET /api/v1/partner/metrics (flat response).
+// Seller dashboard bound to GET /api/v1/partner/dashboard/pipeline.
+// 4-23: the same 8 action cards the web seller console renders.
 // Every figure is a live server aggregate; failures show a retry state.
 
 import 'package:flutter/material.dart';
@@ -29,7 +30,7 @@ class PartnerDashboardView extends StatefulWidget {
 
 class _PartnerDashboardViewState extends State<PartnerDashboardView> {
   final PartnerApiService _api = PartnerApiService();
-  Map<String, dynamic>? _metrics;
+  Map<String, dynamic>? _pipe;
   String? _error;
   bool _loading = true;
   bool _authReady = false;
@@ -53,8 +54,8 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
       _error = null;
     });
     try {
-      final m = await _api.fetchDashboardMetrics();
-      if (mounted) setState(() => _metrics = m);
+      final m = await _api.fetchPipeline();
+      if (mounted) setState(() => _pipe = m);
     } on PartnerAuthRequiredException {
       if (mounted) setState(() {});
     } on PartnerApiException catch (e) {
@@ -88,65 +89,35 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
         ),
       );
     }
-    final m = _metrics ?? {};
+    final m = _pipe ?? {};
+    final settlement =
+        m['settlement'] is Map ? Map<String, dynamic>.from(m['settlement'] as Map) : <String, dynamic>{};
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                colors: [OlmoaColors.lagoon900, OlmoaColors.lagoon500]),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                  (m['business_name'] ?? PartnerAuthSession.businessName ?? '')
-                      .toString(),
-                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              const SizedBox(height: 6),
-              Text(t?.dashTitle ?? '판매자 운영 현황',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _statItem(t?.statSales ?? '누적 매출',
-                      '₩${m['total_sales_amount'] ?? 0}'),
-                  _statItem(
-                      t?.statOrders ?? '주문',
-                      t?.countOrders(_asCount(m['orders_count'])) ??
-                          '${m['orders_count'] ?? 0}건'),
-                  _statItem(
-                      t?.statToShip ?? '출고 대기',
-                      t?.countOrders(_asCount(m['to_ship_count'])) ??
-                          '${m['to_ship_count'] ?? 0}건'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _statItem(
-                      t?.statProducts ?? '등록 상품',
-                      t?.countPieces(_asCount(m['products_count'])) ??
-                          '${m['products_count'] ?? 0}개'),
-                  _statItem(
-                      t?.statSettlement ?? '정산 예정',
-                      '₩${m['settlement_expected_amount'] ?? 0}'),
-                  _statItem(
-                      t?.statQna ?? '미답변 Q&A',
-                      t?.countOrders(_asCount(m['waiting_qna_count'])) ??
-                          '${m['waiting_qna_count'] ?? 0}건'),
-                ],
-              ),
-            ],
-          ),
+        Text(t?.dashTitle ?? '판매자 운영 현황',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text('처리해야 할 일부터 보여줍니다.',
+            style: TextStyle(fontSize: 12, color: Colors.black54)),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.1,
+          children: [
+            _kpiCard('신규 주문', _countText(_asCount(m['new_orders']), '건')),
+            _kpiCard('발송 대기', _countText(_asCount(m['preparing']), '건')),
+            _kpiCard('배송 중', _countText(_asCount(m['in_transit']), '건')),
+            _kpiCard('취소 요청', _countText(_asCount(m['cancel_requests']), '건')),
+            _kpiCard('반품 요청', _countText(_asCount(m['return_requests']), '건')),
+            _kpiCard('교환 요청', _countText(_asCount(m['exchange_requests']), '건')),
+            _kpiCard('미답변 문의', _countText(_asCount(m['unanswered_qna']), '건')),
+            _kpiCard('정산 예정금', _wonText(settlement['expected_amount'])),
+          ],
         ),
         const SizedBox(height: 20),
         Text(t?.sectionManage ?? '판매 관리',
@@ -259,19 +230,33 @@ class _PartnerDashboardViewState extends State<PartnerDashboardView> {
     );
   }
 
-  Widget _statItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(color: Colors.white60, fontSize: 11)),
-        const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w900)),
-      ],
+  static String _countText(int v, String unit) => '$v$unit';
+
+  static String _wonText(dynamic v) {
+    final n = (v as num?)?.toInt() ?? 0;
+    return '₩${n.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+  }
+
+  Widget _kpiCard(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(label,
+              style: const TextStyle(color: Colors.black54, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w900)),
+        ],
+      ),
     );
   }
 }

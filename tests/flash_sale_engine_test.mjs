@@ -206,7 +206,7 @@ await t.test('8. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_66_banner_placement.sql', 'pin names d1_66');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_67_support_sla_pii_reason.sql', 'pin names d1_67');
 });
 
 t.finish();

@@ -1,171 +1,227 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { API_BASE_URL, getAdminHeaders } from '../config';
-import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
+// Member console (4-20): identity/phone search, joined period, status and
+// role filters, password resets, withdrawal history and reasoned CSV export.
+import { ref, onMounted, watch } from 'vue'
+import { adminApi, API_BASE_URL, getAdminHeaders } from '../config'
+import { userErrorMessage, useToast, OmDataTable, OmStatusTabs, OmModal, OmSkeleton } from '@olmoa/ui'
 
-interface AdminUser {
-  id: string;
-  email: string;
-  full_name: string;
-  phone: string;
-  role: string;
-  is_active: number;
-  created_at: string;
-  order_count: number;
+const toastApi = useToast()
+const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
+const PER_PAGE = 50
+const STATUS_LABEL: Record<string, string> = { ACTIVE: '활성', INACTIVE: '비활성', WITHDRAWN: '탈퇴' }
+
+const tab = ref('')
+const role = ref('')
+const q = ref('')
+const from = ref('')
+const to = ref('')
+const rows = ref<any[]>([])
+const page = ref(1)
+const total = ref(0)
+const loading = ref(true)
+const loadError = ref('')
+const exportOpen = ref(false)
+const exportReason = ref('')
+const exporting = ref(false)
+const resetTarget = ref<any>(null)
+const resetPw = ref('')
+const resetPw2 = ref('')
+const resetBusy = ref(false)
+const resetError = ref('')
+const resetDone = ref(false)
+
+const columns = [
+  { key: 'member', label: '회원', primary: true },
+  { key: 'contact', label: '연락처', mobileHidden: true },
+  { key: 'orders', label: '주문 수', align: 'right' as const },
+  { key: 'status', label: '상태' },
+  { key: 'date', label: '가입일', mobileHidden: true }
+]
+
+function query(csv = false) {
+  const params = new URLSearchParams({ page: String(page.value), per_page: String(PER_PAGE) })
+  if (tab.value) params.set('status', tab.value)
+  if (role.value) params.set('role', role.value)
+  if (q.value.trim()) params.set('q', q.value.trim())
+  if (from.value) params.set('from', from.value)
+  if (to.value) params.set('to', to.value)
+  if (csv) params.set('format', 'csv')
+  return params.toString()
 }
 
-const users = ref<AdminUser[]>([]);
-const loading = ref(true);
-const searchQuery = ref('');
-
 async function loadUsers() {
-  loading.value = true;
+  loading.value = true
+  loadError.value = ''
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
-      headers: getAdminHeaders()
-    });
-    const json = await res.json();
-    if (json.success && json.data) {
-      users.value = json.data;
-    }
-  } catch (_) {
+    const r = await adminApi(`/api/v1/admin/users?${query()}`)
+    if (!r.ok) throw new Error(r.data.error || '회원 목록을 불러오지 못했습니다.')
+    rows.value = Array.isArray(r.data.data) ? r.data.data : []
+    total.value = r.data.pagination?.total ?? rows.value.length
+  } catch (e: any) {
+    loadError.value = userErrorMessage(e, U)
   } finally {
-    loading.value = false;
+    loading.value = false
+  }
+}
+watch(page, () => void loadUsers())
+function setTab(v: string) { tab.value = v; page.value = 1; void loadUsers() }
+const statusOf = (u: any) => (u.withdrawn_at ? 'WITHDRAWN' : Number(u.is_active) === 1 ? 'ACTIVE' : 'INACTIVE')
+
+async function exportCsv() {
+  if (!exportReason.value.trim()) { toastApi.error('내려받기 사유를 입력해 주세요.'); return }
+  exporting.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/users?${query(true)}&reason=${encodeURIComponent(exportReason.value.trim())}`, { headers: getAdminHeaders() })
+    if (!res.ok) throw new Error('CSV를 내려받지 못했습니다.')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'admin_users.csv'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    exportOpen.value = false
+    exportReason.value = ''
+    toastApi.success('회원 목록을 내려받았습니다. 사유가 접속 기록에 남았습니다.')
+  } catch (e: any) {
+    toastApi.error(userErrorMessage(e, 'CSV를 내려받지 못했습니다.'))
+  } finally {
+    exporting.value = false
   }
 }
 
-const resetTarget = ref<AdminUser | null>(null);
-const resetPw = ref('');
-const resetPw2 = ref('');
-const resetBusy = ref(false);
-const resetError = ref('');
-const resetDone = ref(false);
-
-function openReset(u: AdminUser) {
-  resetTarget.value = u;
-  resetPw.value = '';
-  resetPw2.value = '';
-  resetError.value = '';
-  resetDone.value = false;
+function openReset(u: any) {
+  resetTarget.value = u
+  resetPw.value = ''
+  resetPw2.value = ''
+  resetError.value = ''
+  resetDone.value = false
 }
 
 async function submitReset() {
-  if (!resetTarget.value || resetBusy.value) return;
+  if (!resetTarget.value || resetBusy.value) return
   if (resetPw.value !== resetPw2.value) {
-    resetError.value = '새 비밀번호가 일치하지 않습니다.';
-    return;
+    resetError.value = '새 비밀번호가 일치하지 않습니다.'
+    return
   }
-  resetBusy.value = true;
-  resetError.value = '';
+  resetBusy.value = true
+  resetError.value = ''
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/users/${resetTarget.value.id}/reset-password`, {
-      method: 'POST',
-      headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ new_password: resetPw.value })
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `재설정하지 못했습니다. 잠시 후 다시 시도해주세요.`);
-    resetDone.value = true;
+    const r = await adminApi(`/api/v1/admin/users/${resetTarget.value.id}/reset-password`, {
+      method: 'POST', json: { new_password: resetPw.value }
+    })
+    if (!r.ok) throw new Error(r.data.error || '재설정하지 못했습니다. 잠시 후 다시 시도해주세요.')
+    resetDone.value = true
   } catch (e: any) {
-    resetError.value = userErrorMessage(e, '재설정에 실패했습니다.');
+    resetError.value = userErrorMessage(e, '재설정에 실패했습니다.')
   } finally {
-    resetBusy.value = false;
+    resetBusy.value = false
   }
 }
 
-const filteredUsers = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase();
-  if (!q) return users.value;
-  return users.value.filter(u =>
-    (u.email || '').toLowerCase().includes(q) ||
-    (u.full_name || '').toLowerCase().includes(q) ||
-    (u.id || '').toLowerCase().includes(q)
-  );
-});
-
-onMounted(loadUsers);
+onMounted(() => void loadUsers())
 </script>
 
 <template>
-  <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-    <div class="flex items-center justify-between border-b pb-3">
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-base font-bold text-slate-900">회원 관리</h2>
-        <p class="text-xs text-slate-500 mt-0.5">가입 고객 계정과 주문 수를 모니터링합니다.</p>
+        <h1 class="text-xl font-bold text-ink">회원 관리</h1>
+        <p class="mt-1 text-xs text-ink-muted">이메일·이름·전화로 검색합니다. 내려받기에는 사유 입력이 필요하며 접속 기록에 남습니다.</p>
       </div>
-      <div class="flex items-center gap-2">
-        <input v-model="searchQuery" placeholder="이메일/이름 검색" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5" />
-        <button @click="loadUsers" class="text-xs text-indigo-600 font-bold hover:underline">
-          <RotateCw class="h-4 w-4 mr-1" aria-hidden="true" />새로고침
-        </button>
-      </div>
+      <button type="button" class="h-9 rounded-lg bg-secondary px-4 text-xs font-bold text-secondary-on hover:bg-secondary-hover" @click="exportOpen = true">CSV 내보내기</button>
     </div>
 
-    <div v-if="loading" class="p-12 text-center text-slate-400 text-xs">
-      <LoaderCircle class="h-4 w-4 animate-spin mr-2" aria-hidden="true" />회원 목록을 불러오는 중...
+    <div class="flex flex-wrap items-center gap-2">
+      <OmStatusTabs
+        v-model="tab"
+        :tabs="[
+          { value: '', label: '전체' },
+          { value: 'ACTIVE', label: '활성' },
+          { value: 'INACTIVE', label: '비활성' },
+          { value: 'WITHDRAWN', label: '탈퇴 이력' }
+        ]"
+        @update:model-value="setTab"
+      />
+      <select v-model="role" aria-label="권한" class="h-9 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @change="page = 1; loadUsers()">
+        <option value="">전체 권한</option>
+        <option value="ROLE_CUSTOMER">구매자</option>
+        <option value="ROLE_PARTNER">판매자</option>
+        <option value="ROLE_ADMIN">운영자</option>
+      </select>
+      <input v-model="from" type="date" aria-label="가입 시작일" class="h-9 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @change="page = 1; loadUsers()" />
+      <span class="text-xs text-ink-subtle">~</span>
+      <input v-model="to" type="date" aria-label="가입 종료일" class="h-9 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @change="page = 1; loadUsers()" />
+      <input v-model="q" type="search" placeholder="이메일·이름·전화" aria-label="회원 검색" class="h-9 w-56 rounded-lg border border-line bg-surface px-3 text-xs text-ink" @keyup.enter="page = 1; loadUsers()" />
+      <button type="button" class="h-9 rounded-lg bg-secondary px-4 text-xs font-bold text-secondary-on hover:bg-secondary-hover" @click="page = 1; loadUsers()">검색</button>
     </div>
 
-    <div v-else class="overflow-x-auto text-xs">
-      <table class="w-full text-left">
-        <thead class="bg-slate-50 text-slate-500 uppercase border-b text-[10px]">
-          <tr>
-            <th class="p-3">회원 ID</th>
-            <th class="p-3">이름</th>
-            <th class="p-3">이메일</th>
-            <th class="p-3">연락처</th>
-            <th class="p-3">권한</th>
-            <th class="p-3">주문 수</th>
-            <th class="p-3">가입일</th>
-            <th class="p-3">조치</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          <tr v-for="u in filteredUsers" :key="u.id" class="hover:bg-slate-50">
-            <td class="p-3 font-mono text-slate-700">{{ u.id }}</td>
-            <td class="p-3 font-bold text-slate-900">{{ u.full_name }}</td>
-            <td class="p-3 text-slate-600">{{ u.email }}</td>
-            <td class="p-3 text-slate-500">{{ u.phone }}</td>
-            <td class="p-3">
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">{{ u.role }}</span>
-            </td>
-            <td class="p-3 font-bold text-slate-900">{{ u.order_count || 0 }}</td>
-            <td class="p-3 text-slate-400">{{ new Date(u.created_at).toLocaleString() }}</td>
-            <td class="p-3">
-              <button v-if="u.role !== 'ROLE_ADMIN'" @click="openReset(u)" class="text-indigo-600 font-bold hover:underline">비밀번호 재설정</button>
-              <span v-else class="text-slate-300">보안 절차</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <OmEmptyState
-        v-if="filteredUsers.length === 0"
-        compact
-        title="조건에 맞는 회원이 없습니다."
-        description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
+    <div v-if="loading && !rows.length" class="rounded-2xl border border-line bg-surface p-6">
+      <p class="mb-3 text-xs text-ink-muted">불러오는 중입니다…</p>
+      <OmSkeleton variant="row" :count="8" />
+    </div>
+    <div v-else-if="loadError" class="rounded-2xl border border-danger bg-danger-soft p-6 text-center text-xs text-danger" role="alert">
+      <p class="font-bold">{{ U }}</p>
+      <p class="mt-1">{{ loadError }}</p>
+      <button type="button" class="mx-auto mt-2 block rounded-full bg-secondary px-4 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover" @click="loadUsers">다시 불러오기</button>
+    </div>
+    <div v-else>
+      <OmDataTable
+        :columns="columns"
+        :rows="rows"
+        row-key="id"
+        v-model:page="page"
+        :total="total"
+        :page-size="PER_PAGE"
+        :loading="loading"
+        empty-title="조건에 맞는 회원이 없습니다."
+        empty-description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요."
       >
-        <OmButton size="sm" @click="loadUsers">다시 불러오기</OmButton>
-      </OmEmptyState>
+        <template #cell-member="{ row }">
+          <div class="min-w-0">
+            <p class="truncate font-bold text-ink">{{ row.full_name }}</p>
+            <p class="truncate font-mono text-2xs text-ink-subtle">{{ row.email }}</p>
+          </div>
+        </template>
+        <template #cell-contact="{ row }"><span class="om-num text-ink-muted">{{ row.phone }}</span></template>
+        <template #cell-orders="{ row }"><span class="om-num text-ink-muted">{{ row.order_count || 0 }}</span></template>
+        <template #cell-status="{ row }">
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="statusOf(row) === 'ACTIVE' ? 'bg-success-soft text-success' : statusOf(row) === 'WITHDRAWN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[statusOf(row)] }}</span>
+        </template>
+        <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
+        <template #actions="{ row }">
+          <button v-if="row.role !== 'ROLE_ADMIN' && statusOf(row) !== 'WITHDRAWN'" type="button" class="rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2" @click="openReset(row)">비밀번호 재설정</button>
+          <span v-else class="text-2xs text-ink-subtle">{{ statusOf(row) === 'WITHDRAWN' ? '탈퇴 계정' : '보안 절차' }}</span>
+        </template>
+      </OmDataTable>
+      <OmEmptyState v-if="!loading && !rows.length" title="조건에 맞는 회원이 없습니다." description="검색 조건을 바꾸거나 잠시 후 다시 확인해 보세요." compact />
     </div>
-  </div>
-    <div v-if="resetTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="resetTarget = null">
-      <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h3 class="text-sm font-bold text-slate-900">비밀번호 재설정</h3>
-        <p class="mt-1 text-xs text-slate-500">{{ resetTarget.email }} · 모든 세션 로그아웃 + 잠금 해제</p>
-        <div v-if="!resetDone" class="mt-4 space-y-2">
-          <input v-model="resetPw" type="password" autocomplete="new-password" placeholder="새 비밀번호 (10자+, 3종류 조합)" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
-          <input v-model="resetPw2" type="password" autocomplete="new-password" placeholder="새 비밀번호 확인" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
-          <p v-if="resetError" class="text-xs font-bold text-red-600">{{ resetError }}</p>
-          <div class="flex justify-end gap-2 pt-2">
-            <button @click="resetTarget = null" class="rounded-lg border px-3 py-1.5 text-xs font-bold text-slate-600">취소</button>
-            <button @click="submitReset" :disabled="resetBusy" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">{{ resetBusy ? '처리 중...' : '재설정' }}</button>
-          </div>
-        </div>
-        <div v-else class="mt-4">
-          <p class="text-xs font-bold text-emerald-700">재설정되었습니다. 새 비밀번호를 안전한 경로로 전달하고, 로그인 후 변경을 안내해 주세요.</p>
-          <div class="flex justify-end pt-3">
-            <button @click="resetTarget = null" class="rounded-lg border px-3 py-1.5 text-xs font-bold text-slate-600">닫기</button>
-          </div>
-        </div>
+
+    <OmModal v-model:open="exportOpen" title="CSV 내보내기">
+      <div class="space-y-3 text-xs">
+        <p class="text-ink-muted">개인정보 내려받기 사유를 입력해 주세요. 사유는 접속 기록에 함께 남습니다.</p>
+        <input v-model="exportReason" maxlength="200" placeholder="예: CS 민원 처리" aria-label="내려받기 사유" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" />
       </div>
-    </div>
+      <template #footer>
+        <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="exportOpen = false">취소</button>
+        <button type="button" :disabled="exporting || !exportReason.trim()" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="exportCsv">{{ exporting ? '내려받는 중…' : '내려받기' }}</button>
+      </template>
+    </OmModal>
+
+    <OmModal v-model:open="!!resetTarget" title="비밀번호 재설정" @update:open="(v: boolean) => { if (!v) resetTarget = null }">
+      <div v-if="resetTarget" class="space-y-2 text-xs">
+        <p class="text-ink-muted">{{ resetTarget.email }} · 모든 세션 로그아웃 + 잠금 해제</p>
+        <template v-if="!resetDone">
+          <input v-model="resetPw" type="password" autocomplete="new-password" placeholder="새 비밀번호 (10자+, 3종류 조합)" aria-label="새 비밀번호" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" />
+          <input v-model="resetPw2" type="password" autocomplete="new-password" placeholder="새 비밀번호 확인" aria-label="새 비밀번호 확인" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" />
+          <p v-if="resetError" role="alert" class="font-bold text-danger">{{ resetError }}</p>
+        </template>
+        <p v-else class="font-bold text-success">재설정되었습니다. 새 비밀번호를 안전한 경로로 전달하고, 로그인 후 변경을 안내해 주세요.</p>
+      </div>
+      <template #footer>
+        <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="resetTarget = null">{{ resetDone ? '닫기' : '취소' }}</button>
+        <button v-if="!resetDone" type="button" :disabled="resetBusy" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitReset">{{ resetBusy ? '처리 중…' : '재설정' }}</button>
+      </template>
+    </OmModal>
+  </div>
 </template>

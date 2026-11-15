@@ -10,7 +10,7 @@ import { newId } from '../lib/ids.js';
 import { auditStatement, grantCreditStatements } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle, mapDbError } from '../services/orders.js';
 import { pushClaimCreditGranted, pushClaimRejected } from '../services/push.js';
-import { logPiiView, maskLast4 } from '../services/privacy.js';
+import { logPiiView, logPiiExport, maskLast4 } from '../services/privacy.js';
 import { isSealedPii, maybeOpenPii, sealPii } from '../lib/pii-crypto.js';
 import { decidePayoutRequest, markRequestTransferred } from '../services/payouts.js';
 import { computeMonthlyGrades } from '../services/grading.js';
@@ -200,6 +200,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
 
   if (url.pathname === '/api/v1/admin/users' && request.method === 'GET') {
     // P2-A01: ?q= narrows to one customer picker page (id/email prefix); 2-9 adds page + period + CSV.
+    // 4-20: q covers name/phone too; status/role narrow; CSV needs an export reason.
     const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
     const dayRe = /^\d{4}-\d{2}-\d{2}$/;
     const from = url.searchParams.get('from') || null;
@@ -207,21 +208,40 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     if ((from && !dayRe.test(from)) || (to && !dayRe.test(to))) throw bad('INVALID_PERIOD', 'from·to는 YYYY-MM-DD 형식이어야 합니다.');
     const where = [];
     const args = [];
-    if (q) { where.push(`(users.id = ? OR users.email LIKE ? ESCAPE '\\')`); args.push(q, `${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`); }
+    if (q) {
+      const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+      where.push(`(users.id = ? OR users.email LIKE ? ESCAPE '\\' OR users.full_name LIKE ? ESCAPE '\\' OR users.phone LIKE ? ESCAPE '\\')`);
+      args.push(q, like, like, like);
+    }
     if (from) { where.push('date(users.created_at) >= date(?)'); args.push(from); }
     if (to) { where.push('date(users.created_at) <= date(?)'); args.push(to); }
+    const fStatus = str(url.searchParams.get('status') || '', { max: 20 }).toUpperCase();
+    if (fStatus) {
+      if (fStatus === 'ACTIVE') where.push('users.is_active = 1 AND users.withdrawn_at IS NULL');
+      else if (fStatus === 'INACTIVE') where.push('users.is_active = 0 AND users.withdrawn_at IS NULL');
+      else if (fStatus === 'WITHDRAWN') where.push('users.withdrawn_at IS NOT NULL');
+      else throw bad('INVALID_STATUS', 'status는 ACTIVE·INACTIVE·WITHDRAWN 중 하나여야 합니다.');
+    }
+    const fRole = str(url.searchParams.get('role') || '', { max: 20 }).toUpperCase();
+    if (fRole) {
+      if (!['ROLE_CUSTOMER', 'ROLE_PARTNER', 'ROLE_ADMIN'].includes(fRole)) throw bad('INVALID_ROLE', 'role 값이 올바르지 않습니다.');
+      where.push('users.role = ?'); args.push(fRole);
+    }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
     const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).bind(...args).first('c') || 0;
     const asCsv = String(url.searchParams.get('format') || '').toLowerCase() === 'csv';
+    const exportReason = (url.searchParams.get('reason') || '').trim();
+    if (asCsv && !exportReason) throw bad('EXPORT_REASON_REQUIRED', '회원 목록 내려받기에는 사유 입력이 필요합니다.');
     const { results } = await env.DB.prepare(
-      `SELECT id, email, full_name, phone, role, is_active, created_at,
+      `SELECT id, email, full_name, phone, role, is_active, withdrawn_at, created_at,
               (SELECT COUNT(*) FROM orders o WHERE o.customer_id = users.id) as order_count
        FROM users ${whereSql} ORDER BY created_at DESC ${asCsv ? 'LIMIT 5000' : 'LIMIT ? OFFSET ?'}`
     ).bind(...args, ...(asCsv ? [] : [perPage, (page - 1) * perPage])).all();
     await logPiiView(env, admin, 'admin.users', 'user', results.map((u) => u.id), 'email,full_name,phone', request);
     if (asCsv) {
+      await logPiiExport(env, admin, 'admin.users', 'user', results.map((u) => u.id), 'email,full_name,phone', request, exportReason);
       return csvResponse(corsHeaders, 'admin_users.csv',
         ['id', 'email', 'full_name', 'phone', 'role', 'is_active', 'order_count', 'created_at'],
         results.map((u) => [u.id, u.email, u.full_name, u.phone, u.role, u.is_active, u.order_count, u.created_at]));
@@ -959,13 +979,25 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const action = url.searchParams.get('action');
     const targetType = url.searchParams.get('target_type');
     const targetId = url.searchParams.get('target_id');
+    const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = url.searchParams.get('from') || null;
+    const to = url.searchParams.get('to') || null;
+    if ((from && !dayRe.test(from)) || (to && !dayRe.test(to))) throw bad('INVALID_PERIOD', 'from·to는 YYYY-MM-DD 형식이어야 합니다.');
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 100, 1), 500);
+    const asCsv = String(url.searchParams.get('format') || '').toLowerCase() === 'csv';
     const { results } = await env.DB.prepare(
       `SELECT * FROM admin_audit_log
        WHERE (? IS NULL OR actor_user_id = ?) AND (? IS NULL OR action = ?)
          AND (? IS NULL OR target_type = ?) AND (? IS NULL OR target_id = ?)
-       ORDER BY created_at DESC, rowid DESC LIMIT ?`
-    ).bind(actor, actor, action, action, targetType, targetType, targetId, targetId, limit).all();
+         AND (? IS NULL OR date(created_at) >= date(?)) AND (? IS NULL OR date(created_at) <= date(?))
+       ORDER BY created_at DESC, rowid DESC ${asCsv ? 'LIMIT 5000' : 'LIMIT ?'}`
+    ).bind(actor, actor, action, action, targetType, targetType, targetId, targetId,
+      from, from, to, to, ...(asCsv ? [] : [limit])).all();
+    if (asCsv) {
+      return csvResponse(corsHeaders, 'admin_audit_log.csv',
+        ['created_at', 'actor_user_id', 'actor_role', 'action', 'target_type', 'target_id', 'ip'],
+        results.map((r) => [r.created_at, r.actor_user_id, r.actor_role, r.action, r.target_type, r.target_id, r.ip]));
+    }
     return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
@@ -1001,6 +1033,25 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       audit('INQUIRY_REPLY', 'inquiry', inq.id, { status: inq.status }, { status: nextStatus })
     ]);
     return json(corsHeaders, { success: true, inquiry_id: inq.id, status: nextStatus });
+  }
+
+  // 4-20: inquiry assignee (CS operators only; closed inquiries stay put).
+  const inqAssignM = url.pathname.match(/^\/api\/v1\/admin\/inquiries\/([^/]+)$/);
+  if (inqAssignM && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const inq = await env.DB.prepare('SELECT * FROM support_inquiries WHERE id = ?').bind(inqAssignM[1]).first();
+    if (!inq) throw notFound('문의를 찾을 수 없습니다.');
+    if (inq.status === 'CLOSED') throw conflict('INQUIRY_CLOSED', '종결된 문의는 담당자를 바꿀 수 없습니다.');
+    const body = await readJson(request);
+    const assignee = body.assignee_admin_id === null || body.assignee_admin_id === '' ? null : str(body.assignee_admin_id, { field: '담당자', max: 64 });
+    if (assignee) {
+      const op = await env.DB.prepare("SELECT id FROM users WHERE id = ? AND role = 'ROLE_ADMIN' AND is_active = 1").bind(assignee).first();
+      if (!op) throw bad('INVALID_ASSIGNEE', '담당자는 활성 운영자 계정이어야 합니다.');
+    }
+    await env.DB.batch([
+      env.DB.prepare('UPDATE support_inquiries SET assignee_admin_id = ? WHERE id = ?').bind(assignee, inq.id),
+      audit('INQUIRY_ASSIGN', 'inquiry', inq.id, { assignee_admin_id: inq.assignee_admin_id }, { assignee_admin_id: assignee })
+    ]);
+    return json(corsHeaders, { success: true, inquiry_id: inq.id, assignee_admin_id: assignee });
   }
 
   // 11. Admin Coupon Management
@@ -1632,6 +1683,34 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, ...decided, data: decided });
   }
 
+  // 4-21: penalty history across sellers (impose/revoke/appeal trail).
+  if (url.pathname === '/api/v1/admin/penalties' && request.method === 'GET') {
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || '50', 10) || 50));
+    const where = [];
+    const args = [];
+    const fPartner = str(url.searchParams.get('partner_id') || '', { max: 64 });
+    if (fPartner) { where.push('pp.partner_id = ?'); args.push(fPartner); }
+    const fStatus = str(url.searchParams.get('status') || '', { max: 20 }).toUpperCase();
+    if (fStatus) {
+      if (!['IMPOSED', 'REVOKED', 'UPHELD'].includes(fStatus)) throw bad('INVALID_STATUS', 'status는 IMPOSED·REVOKED·UPHELD 중 하나여야 합니다.');
+      where.push('pp.status = ?'); args.push(fStatus);
+    }
+    const appealed = url.searchParams.get('appealed');
+    if (appealed === 'true') where.push("pp.appeal_body IS NOT NULL AND pp.appeal_body != '' AND pp.status = 'IMPOSED'");
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const total = await env.DB.prepare(`SELECT COUNT(*) AS c FROM partner_penalties pp ${whereSql}`).bind(...args).first('c') || 0;
+    const { results } = await env.DB.prepare(
+      `SELECT pp.*, p.business_name FROM partner_penalties pp LEFT JOIN partners p ON p.id = pp.partner_id
+       ${whereSql} ORDER BY pp.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...args, perPage, (page - 1) * perPage).all();
+    return json(corsHeaders, {
+      success: true, count: results.length,
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
+      data: results
+    });
+  }
+
   // 2-9: grade policies + monthly recompute.
   if (url.pathname === '/api/v1/admin/grade-policies' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM grade_policies ORDER BY sort_order ASC').all();
@@ -1676,6 +1755,23 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     await audit('GRADES_COMPUTE', 'grade_month', month, null, { computed: n }).run();
     const data = { month, computed: n };
     return json(corsHeaders, { success: true, ...data, data });
+  }
+
+  // 4-21: monthly grade results per seller.
+  if (url.pathname === '/api/v1/admin/grades' && request.method === 'GET') {
+    const month = str(url.searchParams.get('month') || '', { max: 7 });
+    if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw bad('INVALID_MONTH', 'month는 YYYY-MM 형식이어야 합니다.');
+    const fPartner = str(url.searchParams.get('partner_id') || '', { max: 64 });
+    const where = [];
+    const args = [];
+    if (month) { where.push('g.month = ?'); args.push(month); }
+    if (fPartner) { where.push('g.partner_id = ?'); args.push(fPartner); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const { results } = await env.DB.prepare(
+      `SELECT g.*, p.business_name FROM partner_grades g LEFT JOIN partners p ON p.id = g.partner_id
+       ${whereSql} ORDER BY g.month DESC, p.business_name ASC LIMIT 500`
+    ).bind(...args).all();
+    return json(corsHeaders, { success: true, count: results.length, data: results });
   }
 
   return null;

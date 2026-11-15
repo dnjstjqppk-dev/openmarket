@@ -81,26 +81,7 @@ const HEX_EXCEPTIONS = {
   'apps/storefront/src/views/LoginView.vue': new Set(['#FEE500', '#000000'])
 }
 const CAPS = {
-  'apps/admin/src/App.vue': 46,
-  'apps/admin/src/views/AuditLogView.vue': 6,
-  'apps/admin/src/views/BusinessEntitiesView.vue': 7,
-  'apps/admin/src/views/CategoriesView.vue': 0,
-  'apps/admin/src/views/CouponsView.vue': 0,
-  'apps/admin/src/views/DashboardView.vue': 0,
-  'apps/admin/src/views/InquiriesView.vue': 11,
-  'apps/admin/src/views/LedgerAuditView.vue': 5,
-  'apps/admin/src/views/LoginView.vue': 4,
-  // 4-18: MarketingView deleted (views/marketing/ defaults to 0).
-  // 4-16: OrdersView deleted (views/orders/ + views/claims/ default to 0).
-  // 4-13: PartnerVerifyView + PartnerApplicationsView deleted (views/partners/ defaults to 0).
-  // 4-14: ProductManageView deleted (views/products/ defaults to 0).
-  // 4-17: ReconciliationView deleted (views/finance/ defaults to 0).
-  'apps/admin/src/views/ReviewsView.vue': 7,
-  'apps/admin/src/views/SecurityView.vue': 7,
-  'apps/admin/src/views/ShippingZonesView.vue': 4,
-  'apps/admin/src/views/SupplierIntegrationView.vue': 47,
-  'apps/admin/src/views/SuppliersView.vue': 25,
-  'apps/admin/src/views/UsersView.vue': 6,
+  // 4-22: admin zeroed (all console views converted to tokens).
   // 4-11: partner zeroed (all seller-center views converted to tokens).
   'packages/ui/src/components/OmAlert.vue': 1,
   'packages/ui/src/components/OmBadge.vue': 5,

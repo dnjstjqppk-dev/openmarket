@@ -1746,6 +1746,38 @@ paths:
         '409':
           description: INQUIRY_CLOSED when the inquiry is already closed
 
+  /api/v1/admin/inquiries/{id}:
+    put:
+      summary: Assign a customer inquiry to an operator
+      tags: [Admin]
+      description: 4-20 assignee_admin_id must be an active ROLE_ADMIN user; null clears.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignee_admin_id:
+                  type: string
+      responses:
+        '200':
+          description: Assignee stored
+        '400':
+          description: Assignee is not an active operator
+        '401':
+          description: Missing or expired JWT
+        '404':
+          description: Unknown inquiry id
+        '409':
+          description: INQUIRY_CLOSED when the inquiry is already closed
+
   /api/v1/admin/notice-templates:
     get:
       summary: List notice templates
@@ -2240,6 +2272,31 @@ paths:
         '409':
           description: Already decided (PENALTY_DECIDED)
 
+  /api/v1/admin/penalties:
+    get:
+      summary: Penalty history across sellers
+      tags: [Admin]
+      description: 4-21 partner_id/status filters plus appealed=true for the appeal queue.
+      parameters:
+        - name: partner_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [IMPOSED, REVOKED, UPHELD]
+        - name: appealed
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Penalties with seller names and pagination
+        '401':
+          description: Missing or expired JWT
+
   /api/v1/admin/grade-policies:
     get:
       summary: List grade policies
@@ -2302,6 +2359,28 @@ paths:
       responses:
         '200':
           description: Graded seller count
+        '400':
+          description: Bad month (INVALID_MONTH)
+        '401':
+          description: Missing or expired JWT
+
+  /api/v1/admin/grades:
+    get:
+      summary: Monthly grade results per seller
+      tags: [Admin]
+      description: 4-21 month (YYYY-MM) and partner_id narrow the computed rows.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: string
+        - name: partner_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Grade rows with seller names
         '400':
           description: Bad month (INVALID_MONTH)
         '401':

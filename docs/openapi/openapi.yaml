@@ -243,6 +243,8 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries'
   /api/v1/admin/inquiries/{id}/reply:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries~1{id}~1reply'
+  /api/v1/admin/inquiries/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries~1{id}'
   /api/v1/admin/partners:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners'
   /api/v1/admin/products:
@@ -621,6 +623,10 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1partners~1{id}~1penalties'
   /api/v1/admin/penalties/{id}:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1penalties~1{id}'
+  /api/v1/admin/penalties:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1penalties'
+  /api/v1/admin/grades:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1grades'
   /api/v1/admin/grade-policies:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1grade-policies'
   /api/v1/admin/grades/compute:

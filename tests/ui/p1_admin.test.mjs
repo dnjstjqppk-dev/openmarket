@@ -97,9 +97,10 @@ await t.test('P1-A09 product status change confirms and reports failures', async
 
 await t.test('P1-A10 terminal PO cancel (and FAILED) requires confirmation', async () => {
   const v = read('apps/admin/src/views/SuppliersView.vue')
-  const fn = v.split('async function movePo')[1].split('async function createSupplier')[0]
-  assert.ok(fn.includes('CANCELLED') && fn.includes('confirm('), 'CANCELLED path confirms')
-  assert.ok(fn.includes('FAILED') && fn.includes('confirm('), 'FAILED path confirms')
+  const fn = v.split('async function submitPoMove')[1].split('async function createSupplier')[0]
+  assert.ok(fn.includes('CANCELLED') && fn.includes('askConfirm'), 'CANCELLED path confirms')
+  assert.ok(fn.includes('FAILED') && fn.includes('askConfirm'), 'FAILED path confirms')
+  assert.ok(!v.includes('prompt('), 'no native prompts remain')
 })
 
 await t.test('P1-A11 payout button relabeled and passes partner context', async () => {
