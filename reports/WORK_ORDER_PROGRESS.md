@@ -35,7 +35,10 @@
 3-10 | 통과 | c5295b7 | store 9/9 + buyer 25/25 + openapi 3/3 + browser 13/13 + test:ui + typecheck | 헤더·탭4·채우기·PLP고정·리뷰공개·팔로우E2E·B04b/B06 단계수정, 해석 → Q-3-10
 3-11 | 통과 | add8579 | misc 7/7 + flash 9/9 + products 5/5 + buyer 25/25 + openapi 3/3 + test:ui + typecheck + 빌드 | 특가·베스트기간·쿠폰3탭·고객센터·약관3·가입단계·스토어린트0(홀드1)·카카오예외, 해석 → Q-3-11
 3-12 | 통과 | e6e8753 | analyze 0 + customer 76/76 + goldens 4동일 + p1phase4 10/10 + npm 전체 | 테마토큰·옵션시트·쿠폰2단·장바구니판매자, 해석 → Q-3-12
-G3 | 통과 | PENDING | browser 16/16 + LCP 최대820 + smoke 68+의도2 + lint 0 | 홀드전환·전여정확장·인벤토리재생성, 해석 → Q-G3a·Q-G3b
-4-1 | 통과 | PENDING | p4a 8/8 + metrics + test:ui + typecheck | KPI8·추이7/30·임박10·장기미답변, 해석 → Q-4-1
-4-2 | 통과 | PENDING | P16·P17 + p4a 8/8 + 핀8이관 | 탭6·서버페이징·일괄·복제·CSV, 해석 → Q-4-2
-4-3 | 통과 | PENDING | P18 + openapi 3/3 + p4a 8/8 | 등록수정·옵션행렬·SKU표·품질점수, 해석 → Q-4-3
+G3 | 통과 | 04af54a | browser 16/16 + LCP 최대820 + smoke 68+의도2 + lint 0 | 홀드전환·전여정확장·인벤토리재생성, 해석 → Q-G3a·Q-G3b
+4-1 | 통과 | 04af54a | p4a 8/8 + metrics + test:ui + typecheck | KPI8·추이7/30·임박10·장기미답변, 해석 → Q-4-1
+4-2 | 통과 | 04af54a | P16·P17 + p4a 8/8 + 핀8이관 | 탭6·서버페이징·일괄·복제·CSV, 해석 → Q-4-2
+4-3 | 통과 | 04af54a | P18 + openapi 3/3 + p4a 8/8 | 등록수정·옵션행렬·SKU표·품질점수, 해석 → Q-4-3
+4-4 | 통과 | PENDING | P19·P20 + p4b 5/5 + test:ui + typecheck | 탭6·검색·일괄확인·발송·지연·연락처열람, 해석 → Q-4-4
+4-5 | 통과 | PENDING | p4b 5/5 + 핀5이관 | 취소내역·반품·교환재발송, 해석 → Q-4-5
+4-6 | 통과 | PENDING | S04이관 + p4b 5/5 | 개요·예치금·출금모달·세금계산서, 해석 → Q-4-6

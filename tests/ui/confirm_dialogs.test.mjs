@@ -37,9 +37,11 @@ const CONVERTED = [
   'apps/partner/src/views/products/ProductListView.vue',
   'apps/partner/src/views/products/ProductEditView.vue',
   'apps/partner/src/views/BiddingView.vue',
-  'apps/partner/src/views/ReturnsManageView.vue',
+  'apps/partner/src/views/claims/CancelListView.vue',
+  'apps/partner/src/views/claims/ReturnListView.vue',
+  'apps/partner/src/views/claims/ExchangeListView.vue',
   'apps/partner/src/views/ShipmentView.vue',
-  'apps/partner/src/views/SettlementView.vue'
+  'apps/partner/src/views/settlements/SettlementOverviewView.vue'
 ]
 
 // Q-1-9: four admin sites stay native because existing tests pin

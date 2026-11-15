@@ -69,13 +69,9 @@ async function loadMetrics() {
 async function loadDue() {
   dueError.value = ''
   try {
-    const [a, b] = await Promise.all([
-      getJson('/api/v1/partner/orders?status=PAYMENT_CONFIRMED&per_page=200'),
-      getJson('/api/v1/partner/orders?status=PREPARING&per_page=200')
-    ])
-    const rows = [...(a.data || []), ...(b.data || [])]
-    rows.sort((x, y) => String(x.ship_by_deadline || '9999').localeCompare(String(y.ship_by_deadline || '9999')))
-    dueList.value = rows.slice(0, 10)
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+    const json = await getJson(`/api/v1/partner/orders?status=PREPARING&due_before=${tomorrow}&per_page=10`)
+    dueList.value = Array.isArray(json.data) ? json.data : []
   } catch (e: any) {
     dueError.value = userErrorMessage(e, '출고 임박 주문을 불러오지 못했습니다.')
   }

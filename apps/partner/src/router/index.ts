@@ -3,10 +3,8 @@ import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import BulkUploadView from '../views/BulkUploadView.vue';
 import ShipmentView from '../views/ShipmentView.vue';
-import SettlementView from '../views/SettlementView.vue';
 import QnaManageView from '../views/QnaManageView.vue';
 import ProfileManageView from '../views/ProfileManageView.vue';
-import ReturnsManageView from '../views/ReturnsManageView.vue';
 import BiddingView from '../views/BiddingView.vue';
 import UrlImportView from '../views/UrlImportView.vue';
 import MultiChannelListingView from '../views/MultiChannelListingView.vue';
@@ -79,16 +77,35 @@ const router = createRouter({
       component: ShipmentView,
       meta: { requiresAuth: true }
     },
+    { path: '/returns', redirect: '/claims/return' },
     {
-      path: '/returns',
-      name: 'returns',
-      component: ReturnsManageView,
+      path: '/claims/cancel',
+      name: 'claims-cancel',
+      component: () => import('../views/claims/CancelListView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/claims/return',
+      name: 'claims-return',
+      component: () => import('../views/claims/ReturnListView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/claims/exchange',
+      name: 'claims-exchange',
+      component: () => import('../views/claims/ExchangeListView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/settlements',
       name: 'settlements',
-      component: SettlementView,
+      component: () => import('../views/settlements/SettlementOverviewView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/settlements/deposits',
+      name: 'settlements-deposits',
+      component: () => import('../views/settlements/WithdrawableDepositsView.vue'),
       meta: { requiresAuth: true }
     },
     {

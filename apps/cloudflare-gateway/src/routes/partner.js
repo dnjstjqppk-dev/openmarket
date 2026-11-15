@@ -768,8 +768,9 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const SUB_STATUSES = ['PAYMENT_PENDING', 'PAYMENT_CONFIRMED', 'PREPARING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED',
       'PURCHASE_CONFIRMED', 'COMPLETED', 'CANCEL_REQUESTED', 'CANCELLED', 'RETURN_REQUESTED', 'RETURNED', 'EXPIRED'];
     const statusRaw = url.searchParams.get('status');
-    const status = statusRaw ? String(statusRaw).toUpperCase() : null;
-    if (status && !SUB_STATUSES.includes(status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
+    // 4-4: comma-combined statuses (배송중 = SHIPPED,IN_TRANSIT).
+    const statuses = statusRaw ? String(statusRaw).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) : [];
+    for (const st of statuses) if (!SUB_STATUSES.includes(st)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
     const dateFieldRaw = String(url.searchParams.get('date_field') || 'paid').toLowerCase();
     const dateCol = { paid: 'o.paid_at', confirmed: 's.confirmed_at', shipped: 's.shipped_at' }[dateFieldRaw];
     if (!dateCol) throw bad('INVALID_DATE_FIELD', 'date_field은 paid·confirmed·shipped 중 하나여야 합니다.');
@@ -781,17 +782,23 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const carrier = str(url.searchParams.get('carrier') || '', { max: 40 });
     const where = ['s.partner_id = ?'];
     const args = [partnerId];
-    if (status) { where.push('s.status = ?'); args.push(status); }
+    if (statuses.length) { where.push(`s.status IN (${statuses.map(() => '?').join(',')})`); args.push(...statuses); }
     else where.push("s.status NOT IN ('PAYMENT_PENDING','EXPIRED')");
     if (from) { where.push(`date(${dateCol}) >= date(?)`); args.push(from); }
     if (to) { where.push(`date(${dateCol}) <= date(?)`); args.push(to); }
+    const dueBefore = url.searchParams.get('due_before') || null;
+    if (dueBefore) {
+      if (!dayRe.test(dueBefore)) throw bad('INVALID_DATE', 'due_before는 YYYY-MM-DD 형식이어야 합니다.');
+      where.push('date(s.ship_by_deadline) <= date(?)');
+      args.push(dueBefore);
+    }
     if (carrier) { where.push('s.carrier_code = ?'); args.push(carrier); }
     if (q) {
       const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
       where.push(`(o.id LIKE ? ESCAPE '\\' OR o.order_no LIKE ? ESCAPE '\\' OR s.id LIKE ? ESCAPE '\\' OR s.sub_order_no LIKE ? ESCAPE '\\'
-        OR o.recipient_name LIKE ? ESCAPE '\\' OR o.recipient_phone LIKE ? ESCAPE '\\'
+        OR o.recipient_name LIKE ? ESCAPE '\\' OR o.recipient_phone LIKE ? ESCAPE '\\' OR s.tracking_number LIKE ? ESCAPE '\\'
         OR EXISTS (SELECT 1 FROM order_items i WHERE i.sub_order_id = s.id AND (i.product_title LIKE ? ESCAPE '\\' OR i.sku_id LIKE ? ESCAPE '\\')))`);
-      args.push(like, like, like, like, like, like, like, like);
+      args.push(like, like, like, like, like, like, like, like, like);
     }
     const whereSql = where.join(' AND ');
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);

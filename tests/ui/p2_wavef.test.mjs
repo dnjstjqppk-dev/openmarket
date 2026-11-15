@@ -211,7 +211,7 @@ await t.test('F-AN04 review content expands before delete', async () => {
 
 // ---------- Partner ----------
 await t.test('F-T01 return/bid statuses render Korean labels', async () => {
-  const r = read('apps/partner/src/views/ReturnsManageView.vue')
+  const r = read('apps/partner/src/views/claims/ReturnListView.vue')
   assert.ok(!r.includes('{{ item.status }}'), 'no raw return status')
   assert.ok(r.includes('statusLabel') || r.includes('STATUS_LABEL'), 'return label map exists')
   const b = read('apps/partner/src/views/BiddingView.vue')

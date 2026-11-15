@@ -34,13 +34,13 @@ await t.test('S03 support center reports load and submit failures', async () => 
 })
 
 await t.test('S04a partner settlement shows a loading state', async () => {
-  const v = read('apps/partner/src/views/SettlementView.vue')
+  const v = read('apps/partner/src/views/settlements/SettlementOverviewView.vue')
   assert.ok(v.includes('v-if="loading"'), 'loading block renders while fetching')
   assert.ok(v.includes('정산 내역을 불러오는 중'), 'loading copy is present')
 })
 
 await t.test('S04b partner settlement surfaces load failures with retry', async () => {
-  const v = read('apps/partner/src/views/SettlementView.vue')
+  const v = read('apps/partner/src/views/settlements/SettlementOverviewView.vue')
   assert.ok(v.includes('loadError'), 'loadError state exists')
   assert.ok(v.includes('v-else-if="loadError"'), 'error block renders before the empty state')
   assert.ok(v.includes('@click="loadSettlements"'), 'retry calls the loader')
@@ -49,13 +49,13 @@ await t.test('S04b partner settlement surfaces load failures with retry', async 
 })
 
 await t.test('S04c partner settlement shows an empty state', async () => {
-  const v = read('apps/partner/src/views/SettlementView.vue')
+  const v = read('apps/partner/src/views/settlements/SettlementOverviewView.vue')
   assert.ok(v.includes('settlements.length === 0'), 'empty condition is checked')
   assert.ok(v.includes('정산 내역이 없습니다'), 'empty copy is present')
 })
 
 await t.test('S04d partner settlement CSV escapes cells and keeps Excel-readable output', async () => {
-  const v = read('apps/partner/src/views/SettlementView.vue')
+  const v = read('apps/partner/src/views/settlements/SettlementOverviewView.vue')
   assert.ok(v.includes("replace(/\"/g, '\"\"')"), 'double quotes are escaped per RFC 4180')
   assert.ok(v.includes('\\uFEFF'), 'BOM prefix keeps Korean readable in Excel')
   assert.ok(v.includes('effective_net_payout,settlement_status'), 'CSV header names the effective payout column it exports')
@@ -63,7 +63,7 @@ await t.test('S04d partner settlement CSV escapes cells and keeps Excel-readable
 })
 
 await t.test('S04e partner settlement copy follows the Korean partner-app convention', async () => {
-  const v = read('apps/partner/src/views/SettlementView.vue')
+  const v = read('apps/partner/src/views/settlements/SettlementOverviewView.vue')
   for (const stale of ['Automated Partner Settlement Ledger', 'Gross Non-Cancelled Sales',
     'Platform Commission', 'Net Partner Payout', 'Escrow Pending', 'Export Tax & Settlement CSV',
     '>Gross Sales<', '>Commission<', '>Shipping Fee<', '>Net Payout<', '>Status<']) {
@@ -124,8 +124,10 @@ await t.test('E03 custom load-error blocks use the unified heading', async () =>
     'apps/partner/src/views/products/ProductListView.vue',
     'apps/partner/src/views/ProfileManageView.vue',
     'apps/partner/src/views/QnaManageView.vue',
-    'apps/partner/src/views/ReturnsManageView.vue',
-    'apps/partner/src/views/SettlementView.vue',
+    'apps/partner/src/views/claims/CancelListView.vue',
+    'apps/partner/src/views/claims/ReturnListView.vue',
+    'apps/partner/src/views/claims/ExchangeListView.vue',
+    'apps/partner/src/views/settlements/SettlementOverviewView.vue',
     'apps/partner/src/views/ShipmentView.vue'
   ]
   for (const f of files) assert.ok(read(f).includes(U), `${f} shows the unified sentence`)
@@ -173,8 +175,10 @@ await t.test('E05 list-empty screens use the shared empty state', async () => {
     'apps/partner/src/views/DashboardView.vue',
     'apps/partner/src/views/MultiChannelListingView.vue',
     'apps/partner/src/views/QnaManageView.vue',
-    'apps/partner/src/views/ReturnsManageView.vue',
-    'apps/partner/src/views/SettlementView.vue',
+    'apps/partner/src/views/claims/CancelListView.vue',
+    'apps/partner/src/views/claims/ReturnListView.vue',
+    'apps/partner/src/views/claims/ExchangeListView.vue',
+    'apps/partner/src/views/settlements/SettlementOverviewView.vue',
     'apps/partner/src/views/ShipmentView.vue'
   ]
   for (const f of files) assert.ok(read(f).includes('<OmEmptyState'), `${f} renders the shared empty state`)

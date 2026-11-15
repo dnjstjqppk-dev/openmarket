@@ -33,7 +33,7 @@ await t.test('A2 dashboard trends 7/30 days with prior-period deltas', async () 
 
 await t.test('A3 dashboard lists due shipments and stale Q&A', async () => {
   const v = dash();
-  assert.ok(v.includes('status=PAYMENT_CONFIRMED') && v.includes('status=PREPARING'), 'unshipped orders fetched');
+  assert.ok(v.includes('status=PREPARING&due_before='), 'due shipments fetched server-side');
   assert.ok(v.includes('ship_by_deadline'), 'sorted by the ship-by deadline');
   assert.ok(v.includes('/api/v1/partner/qna'), 'qna fetched');
   assert.ok(v.includes('24 * 3600 * 1000') || v.includes('86400000'), '24h overdue rule');

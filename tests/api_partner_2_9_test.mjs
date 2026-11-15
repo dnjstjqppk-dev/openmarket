@@ -82,6 +82,7 @@ await t.test('P2. orders list filters, masks and reveals with a reason', async (
   const o2 = await checkoutPaid(g, cust, 'sku_003_set');
   const s1 = g.db.prepare('SELECT id, sub_order_no FROM sub_orders WHERE parent_order_id = ?').get(o1).id;
   await g.call(`/api/v1/partner/orders/${s1}/prepare`, { method: 'POST', token: pt });
+  g.db.prepare("UPDATE sub_orders SET ship_by_deadline = date('now') WHERE id = ?").run(s1);
   const prep = await g.call('/api/v1/partner/orders?status=PREPARING', { token: pt });
   assert.equal(prep.json.pagination.total, 1, 'status narrows');
   const paid = await g.call('/api/v1/partner/orders?status=PAYMENT_CONFIRMED', { token: pt });
@@ -101,6 +102,14 @@ await t.test('P2. orders list filters, masks and reveals with a reason', async (
   assert.equal(ship.status, 200, ship.text);
   const byCarrier = await g.call('/api/v1/partner/orders?carrier=' + encodeURIComponent('CJ대한통운'), { token: pt });
   assert.equal(byCarrier.json.pagination.total, 1, 'carrier narrows');
+  const byTracking = await g.call('/api/v1/partner/orders?q=TRKP2000001', { token: pt });
+  assert.equal(byTracking.json.pagination.total, 1, 'tracking search hits');
+  const dueFar = await g.call('/api/v1/partner/orders?due_before=2999-01-01', { token: pt });
+  assert.ok(dueFar.json.data.some((r) => r.id === s1), 'far due date keeps the dated row');
+  const duePast = await g.call('/api/v1/partner/orders?due_before=2001-01-01', { token: pt });
+  assert.equal(duePast.json.pagination.total, 0, 'past due date matches none');
+  const dueBad = await g.call('/api/v1/partner/orders?due_before=nope', { token: pt });
+  assert.equal(dueBad.status, 400, 'bad due date rejected');
   const page = await g.call('/api/v1/partner/orders?per_page=1', { token: pt });
   assert.equal(page.json.data.length, 1, 'pagination applies');
   assert.equal(page.json.pagination.total, 2, 'total counts all');
@@ -709,6 +718,41 @@ await t.test('P18. single product carries gallery and skus for the edit form', a
   const other = pt2Product(g);
   const denied = await g.call(`/api/v1/partner/products/${other.id}`, { token: pt });
   assert.equal(denied.status, 404, 'other seller product hidden');
+});
+
+await t.test('P19. shipment ships without double-moving stock', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const stockOf = () => g.db.prepare('SELECT stock_quantity FROM product_skus WHERE id = ?').get('sku_001_w').stock_quantity;
+  const before = stockOf();
+  const o = await checkoutPaid(g, cust, 'sku_001_w');
+  assert.equal(stockOf(), before - 1, 'checkout reserves stock');
+  const sub = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o).id;
+  await g.call('/api/v1/partner/orders/confirm', { method: 'PUT', token: pt, body: { sub_order_ids: [sub] } });
+  const ship = await g.call(`/api/v1/partner/orders/${sub}/shipment`, { method: 'PUT', token: pt, body: { carrier: 'CJ대한통운', tracking_number: 'TRKP190001' } });
+  assert.equal(ship.status, 200, ship.text);
+  assert.equal(stockOf(), before - 1, 'shipment moves no stock twice');
+  const s = g.db.prepare('SELECT status, tracking_number FROM sub_orders WHERE id = ?').get(sub);
+  assert.equal(s.status, 'SHIPPED', 'shipped');
+  assert.equal(s.tracking_number, 'TRKP190001', 'tracking stored');
+  const log = g.db.prepare("SELECT COUNT(*) AS n FROM milestone_tracking_logs WHERE sub_order_id = ? AND stage_code = 'SHIPPED'").get(sub).n;
+  assert.equal(log, 1, 'milestone logged');
+});
+
+await t.test('P20. orders list accepts combined statuses', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const o1 = await checkoutPaid(g, cust, 'sku_001_w');
+  const o2 = await checkoutPaid(g, cust, 'sku_001_b');
+  const s1 = g.db.prepare('SELECT id FROM sub_orders WHERE parent_order_id = ?').get(o1).id;
+  await g.call(`/api/v1/partner/orders/${s1}/prepare`, { method: 'POST', token: pt });
+  const both = await g.call('/api/v1/partner/orders?status=PREPARING,PAYMENT_CONFIRMED', { token: pt });
+  assert.equal(both.status, 200, both.text);
+  assert.ok(both.json.pagination.total >= 2, 'union returned');
+  const bad = await g.call('/api/v1/partner/orders?status=PREPARING,BOGUS', { token: pt });
+  assert.equal(bad.status, 400, 'bad element rejected');
 });
 
 t.finish();
