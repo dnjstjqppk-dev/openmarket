@@ -354,6 +354,7 @@ class ApiService {
     String memo = '',
     required List<Product> products,
     String? userCouponId,
+    List<String> storeCouponIds = const [],
     int useCreditAmount = 0,
     String? pccc,
   }) =>
@@ -366,6 +367,7 @@ class ApiService {
         memo: memo,
         products: products,
         userCouponId: userCouponId,
+        storeCouponIds: storeCouponIds,
         useCreditAmount: useCreditAmount,
         pccc: pccc,
       );
@@ -789,6 +791,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getQuote({
     required List<Map<String, Object>> items,
     String? userCouponId,
+    List<String> storeCouponIds = const [],
     int useCreditAmount = 0,
     String? pccc,
     String? postalCode,
@@ -806,6 +809,7 @@ class ApiService {
             body: jsonEncode({
               'items': items,
               if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
+              if (storeCouponIds.isNotEmpty) 'store_coupon_ids': storeCouponIds,
               if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
               if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
               if (postalCode != null && postalCode.isNotEmpty) 'shipping_postal_code': postalCode,
@@ -839,11 +843,19 @@ class ApiService {
     if (res.statusCode != 200) {
       throw ApiException(_decode(res.body)['error']?.toString() ?? '쿠폰 목록을 불러오지 못했습니다.');
     }
-    final List<dynamic> list = _decode(res.body)['data'] ?? [];
-    return list
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .where((c) => c['is_claimed'] == true && c['is_used'] != true)
-        .toList();
+    // 3-12: the wallet groups holdings server-side (usable/claimable/
+    // used_expired); the old list shape with is_claimed no longer exists.
+    final body = _decode(res.body);
+    final data = body['data'];
+    final List<dynamic> list;
+    if (data is Map) {
+      list = data['usable'] ?? [];
+    } else if (data is List) {
+      list = data;
+    } else {
+      list = body['usable'] ?? [];
+    }
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
   /// P1-M04: current credit balance (0 when the ledger is empty).
@@ -883,6 +895,7 @@ class ApiService {
     String memo = '',
     required List<Product> products,
     String? userCouponId,
+    List<String> storeCouponIds = const [],
     int useCreditAmount = 0,
     String? pccc,
   }) async {
@@ -910,6 +923,7 @@ class ApiService {
               'shipping_address_line2': addressLine2,
               'shipping_memo': memo,
               if (userCouponId != null && userCouponId.isNotEmpty) 'user_coupon_id': userCouponId,
+              if (storeCouponIds.isNotEmpty) 'store_coupon_ids': storeCouponIds,
               if (useCreditAmount > 0) 'use_credit_amount': useCreditAmount,
               if (pccc != null && pccc.isNotEmpty) 'pccc': pccc,
             }),

@@ -26,6 +26,7 @@ class CartLine {
         lowestOriginalPrice: orig is int ? orig : int.tryParse(orig?.toString() ?? '') ?? 0,
         lowestSalePrice: price is int ? price : int.tryParse(price?.toString() ?? '') ?? 0,
         totalSoldCount: 0,
+        partnerId: (row['partner_id'] ?? '').toString(),
         defaultSkuId: (row['sku_id'] ?? '').toString(),
       ),
       quantity: (row['quantity'] is int)

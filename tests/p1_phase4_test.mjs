@@ -131,6 +131,8 @@ await t.test('M05 cart PUT replaces lines, GET returns live prices; unknown SKU 
   const w = get.json.data.find((l) => l.sku_id === 'sku_001_w');
   assert.equal(w.quantity, 2);
   assert.ok(w.title && w.sale_price > 0, 'enriched with live product data');
+  const wpid = g.db.prepare("SELECT product_id FROM product_skus WHERE id = 'sku_001_w'").get().product_id;
+  assert.equal(w.partner_id, g.db.prepare('SELECT partner_id FROM products WHERE id = ?').get(wpid).partner_id, 'seller id joined for coupon grouping');
   const badSku = await g.call('/api/v1/cart', { method: 'PUT', token: cust, body: { items: [{ sku_id: 'sku_nope', quantity: 1 }] } });
   assert.equal(badSku.status, 400);
   assert.equal(badSku.json.code, 'INVALID_SKU');

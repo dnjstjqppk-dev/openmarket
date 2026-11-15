@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/cart_line.dart';
 import '../models/contact_input.dart';
+import '../models/coupon_selection.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
@@ -54,7 +55,10 @@ class _CartViewState extends State<CartView> {
   final _credit = TextEditingController();
   final _pccc = TextEditingController();
   List<Map<String, dynamic>> _coupons = [];
-  String? _couponId;
+  // 3-12: two-level picks like the web order sheet — one platform coupon
+  // plus one store coupon per seller in the cart.
+  String? _platformCouponId;
+  Map<String, String> _storePicks = {};
   int _creditBalance = 0;
   bool _optionsLoading = false;
   String? _optionsError;
@@ -171,7 +175,10 @@ class _CartViewState extends State<CartView> {
   Future<void> _mutate(FutureOr<void> Function() change) async {
     await change();
     if (!mounted) return;
-    setState(() {});
+    setState(() {
+      _storePicks =
+          pruneStorePicks(_storePicks, _cartSellers.toSet(), _coupons);
+    });
     _scheduleQuote();
     await _pushCart();
   }
@@ -190,6 +197,11 @@ class _CartViewState extends State<CartView> {
       setState(() {
         _coupons = (results[0] as List<Map<String, dynamic>>);
         _creditBalance = (results[1] as int);
+        _storePicks = pruneStorePicks(_storePicks, _cartSellers.toSet(), _coupons);
+        if (_platformCouponId != null &&
+            !platformCoupons(_coupons).any((c) => (c['user_coupon_id'] ?? '').toString() == _platformCouponId)) {
+          _platformCouponId = null;
+        }
       });
     } on AuthRequiredException {
       await _handleSessionExpired();
@@ -221,7 +233,8 @@ class _CartViewState extends State<CartView> {
     });
     final r = await ApiService.getQuote(
       items: _orderItems,
-      userCouponId: _couponId,
+      userCouponId: _platformCouponId,
+      storeCouponIds: _storePicks.values.toList(),
       useCreditAmount: _creditWant,
       pccc: _pccc.text.trim().isEmpty ? null : _pccc.text.trim().toUpperCase(),
       postalCode: _zip.text.trim().isEmpty ? null : _zip.text.trim(),
@@ -422,7 +435,8 @@ class _CartViewState extends State<CartView> {
       postalCode: _zip.text.trim(),
       memo: _memo.text.trim(),
       products: units,
-      userCouponId: _couponId,
+      userCouponId: _platformCouponId,
+      storeCouponIds: _storePicks.values.toList(),
       useCreditAmount: _creditWant,
       pccc: _pccc.text.trim().isEmpty ? null : _pccc.text.trim().toUpperCase(),
     );
@@ -439,6 +453,22 @@ class _CartViewState extends State<CartView> {
           title: '주문 실패',
           message: (result['error'] ?? '주문을 생성하지 못했습니다.').toString());
     }
+  }
+
+  List<String> get _cartSellers =>
+      cartSellerIds(widget.lines.map((l) => l.product.partnerId).toList());
+
+  String _sellerLabel(String sellerId, List<Map<String, dynamic>> rows) {
+    for (final l in widget.lines) {
+      if (l.product.partnerId == sellerId && l.product.businessName.isNotEmpty) {
+        return l.product.businessName;
+      }
+    }
+    for (final c in rows) {
+      final name = (c['seller_name'] ?? '').toString();
+      if (name.isNotEmpty) return name;
+    }
+    return '스토어';
   }
 
   String _couponLabel(Map<String, dynamic> c) {
@@ -648,26 +678,67 @@ class _CartViewState extends State<CartView> {
                     ),
                   ]),
                 ),
-              DropdownButtonFormField<String>(
-                initialValue: _couponId,
-                decoration: const InputDecoration(
-                    labelText: '쿠폰 선택', border: OutlineInputBorder()),
-                items: [
-                  const DropdownMenuItem<String>(
-                      value: null, child: Text('쿠폰 사용 안 함')),
-                  for (final c in _coupons)
-                    DropdownMenuItem<String>(
-                      value: (c['user_coupon_id'] ?? '').toString(),
-                      child: Text(_couponLabel(c),
-                          overflow: TextOverflow.ellipsis),
+              Builder(builder: (context) {
+                final platform = platformCoupons(_coupons);
+                final bySeller = storeCouponsBySeller(_coupons);
+                final sellers = _cartSellers.where(bySeller.containsKey).toList();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final seller in sellers) ...[
+                      DropdownButtonFormField<String>(
+                        initialValue: _storePicks[seller],
+                        decoration: InputDecoration(
+                            labelText:
+                                '${_sellerLabel(seller, bySeller[seller]!)} 쿠폰',
+                            border: const OutlineInputBorder()),
+                        items: [
+                          const DropdownMenuItem<String>(
+                              value: null, child: Text('스토어 쿠폰 사용 안 함')),
+                          for (final c in bySeller[seller]!)
+                            DropdownMenuItem<String>(
+                              value: (c['user_coupon_id'] ?? '').toString(),
+                              child: Text(_couponLabel(c),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == null) {
+                              _storePicks.remove(seller);
+                            } else {
+                              _storePicks[seller] = v;
+                            }
+                          });
+                          _scheduleQuote();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    DropdownButtonFormField<String>(
+                      initialValue: _platformCouponId,
+                      decoration: const InputDecoration(
+                          labelText: '플랫폼 쿠폰 선택',
+                          border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String>(
+                            value: null, child: Text('플랫폼 쿠폰 사용 안 함')),
+                        for (final c in platform)
+                          DropdownMenuItem<String>(
+                            value: (c['user_coupon_id'] ?? '').toString(),
+                            child: Text(_couponLabel(c),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _platformCouponId = v);
+                        _scheduleQuote();
+                      },
                     ),
-                ],
-                onChanged: (v) {
-                  setState(() => _couponId = v);
-                  _scheduleQuote();
-                },
-              ),
-              const SizedBox(height: 10),
+                    const SizedBox(height: 10),
+                  ],
+                );
+              }),
               TextField(
                 controller: _credit,
                 decoration: InputDecoration(

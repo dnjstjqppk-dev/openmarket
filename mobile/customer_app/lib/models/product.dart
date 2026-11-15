@@ -43,6 +43,9 @@ class Product {
   final int totalSoldCount;
   final String categoryName;
   final String businessName;
+  // 3-12: seller identity for per-seller coupon grouping (GET /products p.*,
+  // GET /cart join). Empty for legacy cached rows.
+  final String partnerId;
   // Cheapest in-stock variant from GET /api/v1/products (routes/catalog.js).
   // The app never invents a SKU id: without this, the line cannot be ordered.
   final String defaultSkuId;
@@ -57,6 +60,7 @@ class Product {
     required this.totalSoldCount,
     this.categoryName = '',
     this.businessName = '',
+    this.partnerId = '',
     this.defaultSkuId = '',
   });
 
@@ -77,6 +81,7 @@ class Product {
       totalSoldCount: _asInt(json['total_sold_count']),
       categoryName: (json['category_name'] ?? '').toString(),
       businessName: (json['business_name'] ?? json['brand'] ?? '').toString(),
+      partnerId: (json['partner_id'] ?? '').toString(),
       defaultSkuId: (json['default_sku_id'] ?? '').toString(),
     );
   }
@@ -97,6 +102,7 @@ class Product {
         totalSoldCount: totalSoldCount,
         categoryName: categoryName,
         businessName: businessName,
+        partnerId: partnerId,
         defaultSkuId: defaultSkuId ?? this.defaultSkuId,
       );
 }

@@ -50,6 +50,37 @@ abstract final class OlmoaColors {
   static const Color dangerSoft = Color(0xFFFDECEE);
   static const Color info = Color(0xFF2463D1);
   static const Color infoSoft = Color(0xFFE9F0FC);
+
+  // Semantic aliases (3-12; mirror --om-primary/--om-secondary/--om-accent).
+  static const Color primary = lagoon600;
+  static const Color primaryHover = lagoon700;
+  static const Color primaryActive = lagoon800;
+  static const Color primarySoft = lagoon50;
+  static const Color primarySoftText = lagoon800;
+  static const Color onPrimary = stone0;
+  static const Color secondary = stone900;
+  static const Color secondaryHover = stone700;
+  static const Color onSecondary = stone0;
+  static const Color textInverse = stone0;
+  static const Color accent = ruby500;
+  static const Color accentSoft = ruby50;
+  static const Color highlight = amber400;
+  static const Color highlightSoft = amber50;
+  static const Color highlightText = amber700;
+  static const Color overlay = Color(0xFF0F1214);
+  static const Color focus = lagoon400;
+
+  // Commerce (3-12; mirror --om-price/--om-discount/--om-urgent/... light).
+  static const Color price = Color(0xFF171716);
+  static const Color discount = Color(0xFFD6304A);
+  static const Color urgent = Color(0xFFE85D04);
+  static const Color urgentSoft = Color(0xFFFFEDDE);
+  static const Color shipFast = Color(0xFF2463D1);
+  static const Color shipFree = Color(0xFF16804A);
+  static const Color rating = Color(0xFFF2A900);
+  static const Color benefit = Color(0xFF095A63);
+  static const Color soldout = Color(0xFF9A9A92);
+  static const Color direct = Color(0xFF171716);
 }
 
 /// Corner radii, mirroring --om-radius-*.

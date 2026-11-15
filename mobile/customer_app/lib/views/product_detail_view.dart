@@ -9,6 +9,7 @@ import '../models/product.dart';
 import '../models/product_detail.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/option_sheet.dart';
 import '../widgets/product_grid_card.dart';
 
 class ProductDetailView extends StatefulWidget {
@@ -24,7 +25,6 @@ class ProductDetailView extends StatefulWidget {
 class _ProductDetailViewState extends State<ProductDetailView> {
   ProductDetail? _detail;
   String? _error;
-  final Map<String, String> _selection = {};
   // P2-MOB-P2: wishlist toggle state (server is the source of truth).
   bool _wished = false;
   bool _wishBusy = false;
@@ -63,13 +63,7 @@ class _ProductDetailViewState extends State<ProductDetailView> {
     try {
       final d = await ApiService.getProductDetail(widget.productId);
       if (!mounted) return;
-      setState(() {
-        _detail = d;
-        // A single possible combination is preselected so quick-add keeps working.
-        if (d.attributes.length == 1 && d.attributes.single.values.length == 1) {
-          _selection[d.attributes.single.name] = d.attributes.single.values.single;
-        }
-      });
+      setState(() => _detail = d);
       // H-3: co-view signal (silent; the server dedups per user+product+day).
       ApiService.logProductView(widget.productId);
     } on ApiException catch (e) {
@@ -99,13 +93,34 @@ class _ProductDetailViewState extends State<ProductDetailView> {
       body: _buildBody(),
       bottomNavigationBar: _DetailBottomBar(
         detail: _detail,
-        selection: _selection,
-        onAdd: (skuId) {
-          final d = _detail;
-          if (d == null) return;
-          widget.onAddToCart(d.product.copyWith(defaultSkuId: skuId));
+        onBuy: _openSheet,
+      ),
+    );
+  }
+
+  // 3-12: staged options live in the bottom sheet like the web purchase
+  // sheet; each submitted row lands as cart units under its own SKU.
+  void _openSheet() {
+    final d = _detail;
+    if (d == null || d.skus.isEmpty) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => OptionSheet(
+        detail: d,
+        onSubmit: (rows) {
+          var units = 0;
+          for (final r in rows) {
+            for (var i = 0; i < r.qty; i++) {
+              widget.onAddToCart(d.product.copyWith(defaultSkuId: r.sku.id));
+              units += 1;
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('[${d.product.title}] 장바구니에 담겼습니다.'), duration: const Duration(seconds: 1)),
+            SnackBar(
+                content: Text(
+                    '[${d.product.title}] $units개를 장바구니에 담았습니다.'),
+                duration: const Duration(seconds: 1)),
           );
         },
       ),
@@ -125,9 +140,8 @@ class _ProductDetailViewState extends State<ProductDetailView> {
     final d = _detail;
     if (d == null) return const Center(child: CircularProgressIndicator());
     final p = d.product;
-    final matched = d.skuForSelection(_selection);
-    final price = matched?.salePrice ?? p.lowestSalePrice;
-    final original = matched?.originalPrice ?? p.lowestOriginalPrice;
+    final price = p.lowestSalePrice;
+    final original = p.lowestOriginalPrice;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -178,25 +192,9 @@ class _ProductDetailViewState extends State<ProductDetailView> {
           ),
         ],
         const Divider(height: 32),
-        ...d.attributes.map((attr) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(attr.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: attr.values
-                    .map((v) => ChoiceChip(
-                          label: Text(v),
-                          selected: _selection[attr.name] == v,
-                          onSelected: (_) => setState(() => _selection[attr.name] = v),
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-            ])),
-        if (matched != null)
-          Text(matched.stockQuantity > 0 ? '재고 ${matched.stockQuantity}개' : '선택한 옵션은 품절입니다.',
-              style: TextStyle(color: matched.stockQuantity > 0 ? Colors.grey : OlmoaColors.ruby500, fontSize: 12)),
+        if (d.attributes.isNotEmpty)
+          Text('옵션 ${d.attributes.length}종 · 아래 구매하기에서 선택',
+              style: const TextStyle(color: OlmoaColors.stone500, fontSize: 12)),
         if (p.descriptionHtml.isNotEmpty) ...[
           const Divider(height: 32),
           const Text('상품 설명', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
@@ -576,25 +574,19 @@ class _RelatedSectionState extends State<_RelatedSection> {
 
 class _DetailBottomBar extends StatelessWidget {
   final ProductDetail? detail;
-  final Map<String, String> selection;
-  final void Function(String skuId) onAdd;
+  final VoidCallback onBuy;
 
-  const _DetailBottomBar({required this.detail, required this.selection, required this.onAdd});
+  const _DetailBottomBar({required this.detail, required this.onBuy});
 
   @override
   Widget build(BuildContext context) {
     final d = detail;
-    final matched = d?.skuForSelection(selection);
-    final canBuy = matched != null && matched.stockQuantity > 0 && matched.id.isNotEmpty;
+    final open = d != null && d.skus.isNotEmpty;
     final label = d == null
         ? '불러오는 중...'
         : d.skus.isEmpty
             ? '판매 중인 옵션이 없습니다'
-            : matched == null
-                ? '옵션을 선택해 주세요'
-                : matched.stockQuantity <= 0
-                    ? '선택한 옵션은 품절입니다'
-                    : '장바구니 담기';
+            : '구매하기';
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -603,7 +595,7 @@ class _DetailBottomBar extends StatelessWidget {
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: canBuy ? () => onAdd(matched.id) : null,
+            onPressed: open ? onBuy : null,
             style: ElevatedButton.styleFrom(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ),

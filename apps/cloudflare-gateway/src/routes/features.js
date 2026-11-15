@@ -554,7 +554,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
       const { results } = await env.DB.prepare(
         `SELECT c.sku_id, c.quantity, c.updated_at,
                 s.product_id, s.sale_price, s.original_price, s.stock_quantity,
-                p.title, p.thumbnail_url, p.status AS product_status
+                p.title, p.thumbnail_url, p.status AS product_status, p.partner_id
          FROM cart_items c
          JOIN product_skus s ON s.id = c.sku_id
          JOIN products p ON p.id = s.product_id
