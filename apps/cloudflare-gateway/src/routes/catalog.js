@@ -264,6 +264,15 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const minRatingParam = url.searchParams.get('min_rating');
     const todayShipParam = url.searchParams.get('today_shipment');
     const exhibitionParam = url.searchParams.get('exhibition_id') || url.searchParams.get('exhibition');
+    // 3-11: best-seller windows — paid, non-refunded units inside the window.
+    const periodParam = url.searchParams.get('period');
+    const periodDays = periodParam === null || periodParam === '' ? null : { day: 1, week: 7, month: 30 }[periodParam];
+    if (periodDays === undefined) throw bad('INVALID_PERIOD', 'period는 day·week·month 중 하나여야 합니다.');
+    const periodSelect = periodDays
+      ? `(SELECT COALESCE(SUM(i.quantity - i.refunded_quantity), 0) FROM order_items i
+               JOIN sub_orders s ON s.id = i.sub_order_id JOIN orders o ON o.id = s.parent_order_id
+               WHERE i.product_id = p.id AND o.payment_status = 'PAID' AND o.paid_at >= datetime('now', '-${periodDays} days')) as period_sales`
+      : `0 as period_sales`;
     // Offset pagination. `limit` stays as a legacy alias of `per_page`; invalid values fall back to defaults.
     const perPageRaw = Number.parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '100', 10);
     const perPage = Math.min(200, Math.max(1, Number.isSafeInteger(perPageRaw) ? perPageRaw : 100));
@@ -301,7 +310,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
                   WHERE t.coupon_id = cpn.id AND t.target_type = 'CATEGORY' AND t.target_id = p.category_id))
                 OR (cpn.scope = 'PRODUCT' AND EXISTS (SELECT 1 FROM coupon_targets t
                   WHERE t.coupon_id = cpn.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id)))) as has_coupon,
-             (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')) as earn_bps`;
+             (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')) as earn_bps,
+             ${periodSelect}`;
     const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
@@ -318,6 +328,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       if (sort === 'rating') return ` ORDER BY avg_rating DESC, ${col}total_sold_count DESC`;
       if (sort === 'reviews') return ` ORDER BY review_count DESC, ${col}total_sold_count DESC`;
       if (sort === 'relevance' && col === '') return ` ORDER BY CASE WHEN _rank IS NULL THEN 1 ELSE 0 END, _rank ASC, total_sold_count DESC`;
+      if (periodDays) return ` ORDER BY period_sales DESC, ${col}total_sold_count DESC`;
       return ` ORDER BY ${col}total_sold_count DESC`;
     };
 
@@ -325,7 +336,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       success: true,
       brand: 'OLMOA',
       count: rows.length,
-      filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam },
+      filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam, period: periodParam },
       pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
       data: rows.map((p) => {
         const sales30 = Number(p.sales_30d_raw) || 0;

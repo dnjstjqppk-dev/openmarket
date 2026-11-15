@@ -100,7 +100,11 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     const campaign = await env.DB.prepare(
       "SELECT * FROM flash_sale_campaigns WHERE status = 'ACTIVE' AND starts_at <= ? AND ends_at > ? ORDER BY ends_at LIMIT 1"
     ).bind(now, now).first();
-    if (!campaign) return json(corsHeaders, { success: true, campaign: null, items: [], data: { campaign: null, deals: [], items: [] } });
+    // 3-11: the nearest upcoming round for the next-session preview.
+    const nextRound = await env.DB.prepare(
+      "SELECT id, title, starts_at, ends_at FROM flash_sale_campaigns WHERE status = 'UPCOMING' AND starts_at > ? ORDER BY starts_at ASC LIMIT 1"
+    ).bind(now).first() || null;
+    if (!campaign) return json(corsHeaders, { success: true, campaign: null, items: [], next_campaign: nextRound, data: { campaign: null, deals: [], items: [], next_campaign: nextRound } });
     const { results: items } = await env.DB.prepare(
       `SELECT f.id, f.product_id, f.sku_id, f.deal_price, f.allocated_stock, f.sold_stock, f.sort_order, p.id as slug, p.title, p.thumbnail_url, p.partner_id,
               pt.business_name AS brand, pt.business_name,
@@ -121,7 +125,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
         ? (it.allocated_stock || 0) - (it.sold_stock || 0)
         : Math.min(it.sku_stock ?? 0, (it.allocated_stock || 0) - (it.sold_stock || 0)))
     }));
-    return json(corsHeaders, { success: true, campaign, items: mappedDeals, data: { campaign, deals: mappedDeals, items: mappedDeals } });
+    return json(corsHeaders, { success: true, campaign, items: mappedDeals, next_campaign: nextRound, data: { campaign, deals: mappedDeals, items: mappedDeals, next_campaign: nextRound } });
   }
 
   // 4. Product Reviews List & Create
@@ -350,9 +354,10 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/coupons' && request.method === 'GET') {
     const me = await authenticate(request, env);
     const now = sqlNow();
-    const { results: coupons } = await env.DB.prepare('SELECT * FROM coupons ORDER BY expires_at ASC').all();
+    const { results: coupons } = await env.DB.prepare(
+      'SELECT c.*, pt.business_name AS seller_name FROM coupons c LEFT JOIN partners pt ON pt.id = c.seller_id ORDER BY c.expires_at ASC').all();
     const { results: holdings } = me
-      ? await env.DB.prepare('SELECT uc.id AS user_coupon_id, uc.is_used, uc.used_at, uc.created_at AS held_at, c.* FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id WHERE uc.user_id = ? ORDER BY uc.created_at DESC').bind(me.userId).all()
+      ? await env.DB.prepare('SELECT uc.id AS user_coupon_id, uc.is_used, uc.used_at, uc.created_at AS held_at, c.*, pt.business_name AS seller_name FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id LEFT JOIN partners pt ON pt.id = c.seller_id WHERE uc.user_id = ? ORDER BY uc.created_at DESC').bind(me.userId).all()
       : { results: [] };
     const live = (c) => Number(c.is_active) === 1 && c.expires_at > now && (!c.starts_at || c.starts_at <= now);
     const usable = [];

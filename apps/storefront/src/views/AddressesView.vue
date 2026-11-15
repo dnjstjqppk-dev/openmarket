@@ -8,7 +8,7 @@ import { API_BASE_URL, authHeader } from '../config'
 import { validateKrPhone } from '../utils/phone'
 import { userErrorMessage, OmAddressSearch, OmEmptyState, OmSkeleton, useConfirm } from '@olmoa/ui'
 
-const { confirm } = useConfirm()
+const { confirm: askConfirm } = useConfirm()
 const formError = ref('')
 
 const auth = useAuthStore()
@@ -85,7 +85,7 @@ const setDefault = async (addrId: string) => {
 }
 
 const deleteAddress = async (addrId: string) => {
-  if (!(await confirm({ title: '배송지 삭제', body: '해당 배송지를 삭제하시겠습니까?' }))) return
+  if (!(await askConfirm({ title: '배송지 삭제', body: '해당 배송지를 삭제하시겠습니까?' }))) return
   lastAction = () => deleteAddress(addrId)
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/addresses/${addrId}`, {

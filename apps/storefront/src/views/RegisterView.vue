@@ -92,6 +92,11 @@ async function handleRegister() {
 
 <template>
   <AuthCard :title="success ? '가입을 환영합니다' : '회원가입'">
+    <ol class="mb-6 flex items-center gap-2 text-xs font-bold" aria-label="가입 단계">
+      <li :aria-current="!success ? 'step' : undefined" :class="!success ? 'text-primary' : 'text-ink-subtle'">1 정보 입력</li>
+      <li aria-hidden="true" class="h-px flex-1 bg-line" />
+      <li :aria-current="success ? 'step' : undefined" :class="success ? 'text-primary' : 'text-ink-subtle'">2 가입 완료</li>
+    </ol>
     <div v-if="success" class="text-center" role="status">
       <CircleCheck class="mx-auto h-12 w-12 text-success" aria-hidden="true" />
       <p class="mt-3 text-md text-ink">회원가입이 완료되었습니다.</p>

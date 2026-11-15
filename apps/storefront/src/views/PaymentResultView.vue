@@ -95,7 +95,7 @@ async function retryPayment() {
   }
 }
 
-async function confirm() {
+async function confirmPayment() {
   state.value = 'CONFIRMING'
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/payments/confirm`, {
@@ -141,7 +141,7 @@ onMounted(() => {
     return
   }
   if (isSimulator) { state.value = 'SIMULATOR_PROMPT'; return }
-  confirm()
+  confirmPayment()
 })
 function paidDate(s: string | null): string {
   if (!s) return ''
@@ -161,7 +161,7 @@ function paidDate(s: string | null): string {
         <p class="mt-1 text-sm text-ink-muted">주문번호 {{ orderNo }}</p>
         <div class="mt-6 flex gap-2">
           <OmButton class="flex-1" variant="outline" @click="router.replace('/orders')">취소</OmButton>
-          <OmButton class="flex-1" variant="primary" data-testid="sim-approve" @click="confirm">승인</OmButton>
+          <OmButton class="flex-1" variant="primary" data-testid="sim-approve" @click="confirmPayment">승인</OmButton>
         </div>
       </template>
 

@@ -7,7 +7,7 @@ import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel } from '../utils/orderStatus'
 import { userErrorMessage, OmSkeleton, useConfirm } from '@olmoa/ui'
 
-const { confirm } = useConfirm()
+const { confirm: askConfirm } = useConfirm()
 import { validateKrMobile, validateBrnDigits } from '../utils/phone'
 
 const route = useRoute()
@@ -224,7 +224,7 @@ const loadOrderDetail = async () => {
 
 async function handleCancelOrder() {
   if (!order.value) return
-  if (!(await confirm({ title: '주문 전체 취소', body: '결제 금액은 원결제 수단으로, 사용한 적립금은 적립금으로 환불됩니다.', amounts: [`주문 금액 ${won(order.value.total_pay_amount || order.value.total_amount)}`], danger: true }))) return
+  if (!(await askConfirm({ title: '주문 전체 취소', body: '결제 금액은 원결제 수단으로, 사용한 적립금은 적립금으로 환불됩니다.', amounts: [`주문 금액 ${won(order.value.total_pay_amount || order.value.total_amount)}`], danger: true }))) return
   const { ok, json } = await post(`/api/v1/orders/${order.value.id}/cancel`)
   say(ok ? (json.refund ? `주문이 취소되었습니다. 환불: 결제수단 ${won(json.refund.pg_amount)} · 적립금 ${won(json.refund.credit_amount)}` : '결제 전 주문이 취소되었습니다.') : (json.error || '취소하지 못했습니다.'), ok ? 'ok' : 'warn')
   await loadOrderDetail()
@@ -233,7 +233,7 @@ async function handleCancelOrder() {
 async function handleCancelQty(sub: any, it: any) {
   const remaining = it.quantity - (it.refunded_quantity || 0)
   const qty = Math.max(1, Math.min(remaining, Number(qtyCancel.value[it.id] || 1)))
-  if (!(await confirm({ title: '부분 취소', body: `${it.product_title} ${qty}개를 취소하시겠습니까?${qty === remaining && sub.items.every((x: any) => x.id === it.id || x.quantity === (x.refunded_quantity || 0)) ? ' (남은 상품이 없어 배송비도 환불됩니다)' : ' 배송비는 남은 상품과 함께 그대로 유지됩니다.'}`, amounts: [`해당 상품 ${won((it.unit_price || 0) * qty)}`], danger: true }))) return
+  if (!(await askConfirm({ title: '부분 취소', body: `${it.product_title} ${qty}개를 취소하시겠습니까?${qty === remaining && sub.items.every((x: any) => x.id === it.id || x.quantity === (x.refunded_quantity || 0)) ? ' (남은 상품이 없어 배송비도 환불됩니다)' : ' 배송비는 남은 상품과 함께 그대로 유지됩니다.'}`, amounts: [`해당 상품 ${won((it.unit_price || 0) * qty)}`], danger: true }))) return
   busy.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/orders/${order.value.id}/sub-orders/${sub.id}/cancel`, {
@@ -412,20 +412,20 @@ onMounted(loadOrderDetail)
 
 <template>
   <div class="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-    <RouterLink to="/orders" class="text-xs font-bold text-[#FF5000] hover:underline inline-flex items-center gap-1">
+    <RouterLink to="/orders" class="text-xs font-bold text-primary hover:underline inline-flex items-center gap-1">
       <ArrowLeft class="h-4 w-4" aria-hidden="true" />전체 주문 내역으로 돌아가기
     </RouterLink>
 
-    <div v-if="statusBanner" class="p-4 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-[#00A862] flex items-center justify-between">
+    <div v-if="statusBanner" class="p-4 rounded-xl bg-green-50 border border-green-200 text-xs font-bold text-success flex items-center justify-between">
       <span>{{ statusBanner }}</span>
       <button @click="statusBanner = ''" class="text-green-600 hover:text-green-800">✕</button>
     </div>
 
-    <div v-if="loading" class="bg-white rounded-2xl p-8"><OmSkeleton variant="rect" height="h-64" /></div>
+    <div v-if="loading" class="bg-surface rounded-2xl p-8"><OmSkeleton variant="rect" height="h-64" /></div>
 
     <div v-else-if="order" class="space-y-6">
       <!-- Order header -->
-      <div class="bg-white rounded-2xl p-6 border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="bg-surface rounded-2xl p-6 border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black" data-testid="order-status"
             :class="['PAID','PARTIAL_REFUNDED'].includes(order.payment_status) ? 'bg-emerald-50 text-emerald-700' : order.payment_status === 'READY' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'">
@@ -439,7 +439,7 @@ onMounted(loadOrderDetail)
           <div>결제수단 결제액 <strong class="text-lg text-gray-900">{{ won(order.total_pay_amount) }}</strong></div>
           <div v-if="order.payment_method">결제 수단 {{ order.payment_method }}</div>
           <div v-if="order.credit_used_amount">적립금 사용 {{ won(order.credit_used_amount) }}</div>
-          <div v-if="order.refunded_pg_amount || order.refunded_credit_amount" class="text-[#E60023] font-bold">환불 {{ won(order.refunded_pg_amount) }} · 적립금 {{ won(order.refunded_credit_amount) }}</div>
+          <div v-if="order.refunded_pg_amount || order.refunded_credit_amount" class="text-danger font-bold">환불 {{ won(order.refunded_pg_amount) }} · 적립금 {{ won(order.refunded_credit_amount) }}</div>
           <div v-if="order.payment_status === 'READY'" class="text-amber-700 font-bold">결제 기한 {{ order.payment_expires_at }} (UTC)</div>
         </div>
       </div>
@@ -448,10 +448,10 @@ onMounted(loadOrderDetail)
 
       <!-- Per-seller shipments with their own actions -->
       <div class="space-y-3">
-        <div v-for="sub in subs" :key="sub.id" class="bg-white rounded-2xl p-5 border border-gray-200/80" :data-testid="`sub-${sub.sales_model}`">
+        <div v-for="sub in subs" :key="sub.id" class="bg-surface rounded-2xl p-5 border border-gray-200/80" :data-testid="`sub-${sub.sales_model}`">
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
             <div class="text-sm font-black text-gray-900">{{ sub.business_name || '판매자' }}
-              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded" :class="sub.sales_model === 'DIRECT' ? 'bg-orange-50 text-[#FF5000]' : 'bg-slate-100 text-slate-600'">{{ sub.sales_model === 'DIRECT' ? '올모아 직영' : '입점 판매자' }}</span>
+              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded" :class="sub.sales_model === 'DIRECT' ? 'bg-orange-50 text-primary' : 'bg-slate-100 text-slate-600'">{{ sub.sales_model === 'DIRECT' ? '올모아 직영' : '입점 판매자' }}</span>
             </div>
             <span class="text-xs font-bold text-slate-700">{{ label(sub.status) }}</span>
           </div>
@@ -459,10 +459,10 @@ onMounted(loadOrderDetail)
             <li v-for="it in sub.items" :key="it.id" class="flex justify-between gap-3">
               <span class="text-gray-700">{{ it.product_title }} <span class="text-slate-400">· {{ it.option_summary }} × {{ it.quantity }}</span>
                 <span data-testid="locked-options" class="ml-1 text-[10px] font-bold text-slate-400 border border-slate-200 rounded-full px-1.5 py-0.5">주문 후 변경 불가</span>
-                <span v-if="it.refunded_quantity" class="ml-1 text-[#E60023]">({{ it.refunded_quantity }}개 환불)</span>
+                <span v-if="it.refunded_quantity" class="ml-1 text-danger">({{ it.refunded_quantity }}개 환불)</span>
                 <span v-if="['PAYMENT_CONFIRMED','PREPARING'].includes(sub.status) && it.quantity - (it.refunded_quantity || 0) > 1" class="ml-2 inline-flex items-center gap-1">
                   <input v-model.number="qtyCancel[it.id]" type="number" min="1" :max="it.quantity - (it.refunded_quantity || 0)" :aria-label="`${it.product_title} 취소 수량`" class="w-12 h-6 px-1 rounded border border-gray-300" placeholder="1" />
-                  <button type="button" :disabled="busy" class="text-[#E60023] font-bold underline" @click="handleCancelQty(sub, it)">수량 취소</button>
+                  <button type="button" :disabled="busy" class="text-danger font-bold underline" @click="handleCancelQty(sub, it)">수량 취소</button>
                 </span></span>
               <span class="font-bold whitespace-nowrap">{{ won(it.total_price) }}</span>
             </li>
@@ -470,22 +470,22 @@ onMounted(loadOrderDetail)
             <li v-if="sub.estimated_delivery_date" class="flex justify-between text-slate-500" data-testid="scheduled-arrival"><span>도착 예정일</span><span class="font-bold text-slate-700">{{ sub.estimated_delivery_date }}</span></li>
           </ul>
           <div v-if="sub.tracking_number" class="text-[11px] text-slate-600 mb-3">{{ sub.carrier_code }} · <button class="underline" @click="copyTracking(sub.tracking_number)">{{ sub.tracking_number }}</button>
-            <button class="ml-2 text-[#FF5000] font-bold" @click="loadMilestoneTracking(sub.id)">배송 조회</button></div>
+            <button class="ml-2 text-primary font-bold" @click="loadMilestoneTracking(sub.id)">배송 조회</button></div>
           <div class="flex flex-wrap gap-2">
             <button v-if="['PAYMENT_CONFIRMED','PREPARING'].includes(sub.status) && subs.filter(s => s.status !== 'CANCELLED').length > 1" :disabled="busy" @click="handleCancelSub(sub)"
-              class="px-3 py-1.5 rounded-full border border-red-300 text-[#E60023] text-xs font-bold">이 판매자 상품만 취소</button>
+              class="px-3 py-1.5 rounded-full border border-red-300 text-danger text-xs font-bold">이 판매자 상품만 취소</button>
             <button v-if="sub.status === 'DELIVERED'" :disabled="busy" @click="openClaim(sub)" class="px-3 py-1.5 rounded-full border border-slate-300 text-xs font-bold">반품 · 교환 신청</button>
           </div>
         </div>
       </div>
 
       <!-- Order-level actions (only the ones valid for the current state are shown) -->
-      <div class="bg-white rounded-2xl p-4 border border-gray-200/80 flex flex-wrap gap-2">
+      <div class="bg-surface rounded-2xl p-4 border border-gray-200/80 flex flex-wrap gap-2">
         <button v-if="canCancelWhole" :disabled="busy" @click="handleCancelOrder" data-testid="cancel-order"
-          class="px-4 py-2 rounded-full border border-red-300 text-[#E60023] hover:bg-red-50 text-xs font-bold">{{ order.payment_status === 'READY' ? '주문 취소' : '주문 전체 취소 · 환불' }}</button>
+          class="px-4 py-2 rounded-full border border-red-300 text-danger hover:bg-red-50 text-xs font-bold">{{ order.payment_status === 'READY' ? '주문 취소' : '주문 전체 취소 · 환불' }}</button>
         <button v-if="deliveredSubs.length" :disabled="busy" @click="handleConfirmOrder" data-testid="confirm-order"
-          class="px-4 py-2 rounded-full bg-[#00A862] text-white text-xs font-black">구매확정 ({{ deliveredSubs.length }}건)</button>
-        <button v-if="canPriceAdjust" :disabled="busy" @click="handlePriceAdjust" class="px-4 py-2 rounded-full bg-orange-50 text-[#FF5000] border border-orange-200 text-xs font-bold">판매가 인하 차액 보상 신청</button>
+          class="px-4 py-2 rounded-full bg-success text-primary-on text-xs font-black">구매확정 ({{ deliveredSubs.length }}건)</button>
+        <button v-if="canPriceAdjust" :disabled="busy" @click="handlePriceAdjust" class="px-4 py-2 rounded-full bg-orange-50 text-primary border border-orange-200 text-xs font-bold">판매가 인하 차액 보상 신청</button>
         <button v-if="canPriceAdjust" :disabled="busy" @click="handleLateDeliveryClaim" class="px-4 py-2 rounded-full bg-amber-50 text-amber-800 border border-amber-300 text-xs font-bold">배송 지연 보상 신청</button>
         <button v-if="order.pccc" @click="loadCommercialInvoice" class="px-4 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">통관 인보이스</button>
         <button v-if="['PAID', 'PARTIAL_REFUNDED'].includes(order.payment_status)" @click="openCashReceiptModal" class="px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
@@ -497,12 +497,12 @@ onMounted(loadOrderDetail)
             <option v-for="m in RESUME_METHODS" :key="m" :value="m">{{ m }}</option>
           </select></label>
         <button v-if="order.payment_status === 'READY'" :disabled="busy || resuming" @click="resumePayment" data-testid="resume-payment"
-          class="px-4 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black">{{ resuming ? '결제창 여는 중...' : '결제 계속하기' }}</button>
+          class="px-4 py-2 rounded-full bg-primary text-primary-on text-xs font-black">{{ resuming ? '결제창 여는 중...' : '결제 계속하기' }}</button>
         <span v-if="order.payment_status === 'READY'" class="text-[11px] text-amber-700 self-center">결제가 완료되지 않은 주문입니다. 결제 기한이 지나면 자동 취소됩니다.</span>
       </div>
 
       <!-- Claim Modal -->
-      <div v-if="showClaimModal" class="bg-white rounded-2xl p-6 border-2 border-[#FF5000] space-y-4" role="dialog" aria-labelledby="claim-title">
+      <div v-if="showClaimModal" class="bg-surface rounded-2xl p-6 border-2 border-primary space-y-4" role="dialog" aria-labelledby="claim-title">
         <div class="flex items-center justify-between">
           <h3 id="claim-title" class="text-base font-black text-gray-900">반품 · 교환 신청</h3>
           <button @click="showClaimModal = false" class="text-xs text-gray-400 hover:text-gray-700">닫기</button>
@@ -524,7 +524,7 @@ onMounted(loadOrderDetail)
           <div class="block"><span class="block font-bold text-gray-700 mb-1">증거 사진 (선택, 최대 3장)</span>
             <input type="file" accept="image/*" :disabled="claimUploading || claimPhotos.length >= 3" data-testid="claim-photo-input" @change="uploadClaimPhoto" class="w-full text-xs" />
             <p v-if="claimUploading" class="text-[11px] text-slate-500 mt-1">올리는 중...</p>
-            <p v-if="claimUploadError" class="text-[11px] text-[#E60023] mt-1">{{ claimUploadError }}</p>
+            <p v-if="claimUploadError" class="text-[11px] text-danger mt-1">{{ claimUploadError }}</p>
             <ul v-if="claimPhotos.length" class="mt-1 space-y-0.5 text-[11px] text-slate-600">
               <li v-for="(u, i) in claimPhotos" :key="u" class="flex items-center justify-between gap-2"><span class="truncate">{{ u.split('/').pop() }}</span><button type="button" class="underline" @click="claimPhotos.splice(i, 1)">삭제</button></li>
             </ul></div>
@@ -547,17 +547,17 @@ onMounted(loadOrderDetail)
         <p class="text-[11px] text-slate-500">환불 금액은 실제 결제 금액(쿠폰·적립금 배분 반영)을 기준으로 판매자 확인 후 확정됩니다. 단순 변심 반품 시 반품 배송비가 부과될 수 있습니다.</p>
         <div class="flex justify-end gap-2 pt-2">
           <button @click="showClaimModal = false" class="px-4 py-2 rounded-full border border-gray-300 text-xs font-bold">취소</button>
-          <button @click="submitClaim" :disabled="busy" class="px-5 py-2 rounded-full bg-[#FF5000] text-white text-xs font-black">신청하기</button>
+          <button @click="submitClaim" :disabled="busy" class="px-5 py-2 rounded-full bg-primary text-primary-on text-xs font-black">신청하기</button>
         </div>
       </div>
 
       <!-- Shipping Destination & Payment Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Delivery Destination Card -->
-        <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
+        <div class="bg-surface rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
           <div class="flex items-center justify-between border-b pb-3">
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
-              <MapPin class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />배송지 정보
+              <MapPin class="h-4 w-4 text-primary" aria-hidden="true" />배송지 정보
             </h2>
             
           </div>
@@ -573,7 +573,7 @@ onMounted(loadOrderDetail)
             <div class="pt-1">
               <span class="text-gray-400 block mb-0.5">배송 주소:</span>
               <div class="font-medium text-gray-900 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                <span class="font-mono font-bold text-[#FF5000]">[{{ order.shipping_postal_code || '-' }}]</span>
+                <span class="font-mono font-bold text-primary">[{{ order.shipping_postal_code || '-' }}]</span>
                 {{ order.shipping_address_line1 || '-' }}
                 {{ order.shipping_address_line2 || '' }}
               </div>
@@ -597,10 +597,10 @@ onMounted(loadOrderDetail)
         </div>
 
         <!-- Payment Breakdown Card -->
-        <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
+        <div class="bg-surface rounded-2xl p-6 border border-gray-200/80 shadow-xs space-y-3">
           <div class="flex items-center justify-between border-b pb-3">
             <h2 class="text-sm font-black text-gray-900 flex items-center gap-2">
-              <CreditCard class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />결제 내역 요약
+              <CreditCard class="h-4 w-4 text-primary" aria-hidden="true" />결제 내역 요약
             </h2>
             <span class="text-[11px] font-mono text-gray-500">{{ order.pg_provider === 'SANDBOX' ? '결제 시뮬레이터' : (order.pg_provider || '-') }}</span>
           </div>
@@ -613,13 +613,13 @@ onMounted(loadOrderDetail)
               <span>배송비</span>
               <span class="font-bold text-gray-900">{{ locale.formatPrice(order.total_shipping_amount ?? 0) }}</span>
             </div>
-            <div v-if="order.total_discount_amount && order.total_discount_amount > 0" class="flex justify-between text-[#FF5000]">
+            <div v-if="order.total_discount_amount && order.total_discount_amount > 0" class="flex justify-between text-primary">
               <span>할인 및 적립금 적용</span>
               <span class="font-bold">- {{ locale.formatPrice(order.total_discount_amount) }}</span>
             </div>
             <div class="pt-2 border-t border-gray-100 flex justify-between items-center text-sm">
               <span class="font-black text-gray-900">최종 결제 금액</span>
-              <span class="text-lg font-black text-[#FF5000]">
+              <span class="text-lg font-black text-primary">
                 {{ locale.formatPrice(order.total_pay_amount || order.total_amount) }}
               </span>
             </div>
@@ -628,7 +628,7 @@ onMounted(loadOrderDetail)
       </div>
 
       <!-- Ordered Items & Partner Fulfillment -->
-      <div class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs">
+      <div class="bg-surface rounded-2xl p-6 border border-gray-200/80 shadow-xs">
         <h2 class="text-base font-black text-gray-900 mb-4 flex items-center gap-2">
           <PackageOpen class="h-4 w-4 text-gray-600" aria-hidden="true" />주문 상품 및 배송 현황
         </h2>
@@ -668,14 +668,14 @@ onMounted(loadOrderDetail)
                   </button>
                   <button
                     @click="loadMilestoneTracking(item.sub_order_id || order.id)"
-                    class="text-[11px] px-2.5 py-0.5 bg-[#111827] hover:bg-gray-800 text-white rounded font-bold cursor-pointer"
+                    class="text-[11px] px-2.5 py-0.5 bg-secondary hover:bg-secondary-hover text-secondary-on rounded font-bold cursor-pointer"
                   >
                     🌐 7단계 글로벌 통관/배송 추적
                   </button>
                 </div>
-                <div v-else class="pt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#00A862] font-semibold">
+                <div v-else class="pt-1 flex flex-wrap items-center gap-2 text-[11px] text-success font-semibold">
                   <span class="inline-flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-[#00A862] animate-pulse"></span>
+                    <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
                     판매자 출고 준비 중 ({{ item.status || 'PREPARING' }})
                   </span>
                   <button
@@ -718,8 +718,8 @@ onMounted(loadOrderDetail)
               :key="m.code"
               :class="[
                 'p-2.5 rounded-lg border text-left transition-all',
-                m.current ? 'bg-orange-50 border-[#FF5000] ring-1 ring-[#FF5000]' :
-                m.completed ? 'bg-white border-emerald-200' : 'bg-gray-100/70 border-gray-200 opacity-60'
+                m.current ? 'bg-orange-50 border-primary ring-1 ring-primary' :
+                m.completed ? 'bg-surface border-emerald-200' : 'bg-gray-100/70 border-gray-200 opacity-60'
               ]"
             >
               <div class="flex items-center justify-between mb-1">
@@ -734,8 +734,8 @@ onMounted(loadOrderDetail)
       </div>
 
       <!-- Cash Receipt (현금영수증) Modal -->
-      <div v-if="showCashReceiptModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+      <div v-if="showCashReceiptModal" class="fixed inset-0 bg-overlay/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-surface rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
           <div class="flex items-center justify-between border-b border-gray-100 pb-3">
             <h3 class="text-base font-black text-gray-900 flex items-center gap-2">
               <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs">🧾</span>
@@ -753,7 +753,7 @@ onMounted(loadOrderDetail)
             <div :class="['p-3.5 rounded-xl border space-y-1', cashReceiptData.issue_status === 'ISSUED' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : cashReceiptData.issue_status === 'FAILED' ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50 border-amber-200 text-amber-900']">
               <div class="font-black text-sm flex items-center justify-between">
                 <span>{{ cashReceiptData.issue_status === 'ISSUED' ? '✓ 발행 완료' : cashReceiptData.issue_status === 'FAILED' ? '발행 불가' : '발행 요청 접수' }}</span>
-                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-white/70">{{ cashReceiptData.identifier_type === 'BUSINESS_REG_NO' ? '사업자 지출증빙용' : '개인 소득공제용' }}</span>
+                <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface/70">{{ cashReceiptData.identifier_type === 'BUSINESS_REG_NO' ? '사업자 지출증빙용' : '개인 소득공제용' }}</span>
               </div>
               <div class="text-[11px]">
                 {{ cashReceiptData.issue_status === 'ISSUED' ? '국세청 승인번호가 기록되었습니다. 홈택스에서도 조회할 수 있습니다.'
@@ -771,7 +771,7 @@ onMounted(loadOrderDetail)
               <div v-if="cashReceiptData.issued_at" class="flex justify-between text-[11px]"><span class="text-gray-500">발행일시</span><span>{{ cashReceiptData.issued_at }}</span></div>
             </div>
 
-            <button @click="showCashReceiptModal = false" class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs">
+            <button @click="showCashReceiptModal = false" class="w-full py-2.5 rounded-xl bg-secondary hover:bg-secondary-hover text-secondary-on font-bold text-xs">
               확인
             </button>
           </div>
@@ -830,7 +830,7 @@ onMounted(loadOrderDetail)
               <button
                 type="submit"
                 :disabled="cashReceiptLoading || !cashReceiptIdentity.trim()"
-                class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black disabled:opacity-50"
+                class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-primary-on font-black disabled:opacity-50"
               >
                 실시간 발급 신청
               </button>
@@ -840,17 +840,17 @@ onMounted(loadOrderDetail)
       </div>
 
       <!-- Submitted Claims History -->
-      <div v-if="claims.length > 0" class="bg-white rounded-2xl p-6 border border-gray-200/80 shadow-xs">
+      <div v-if="claims.length > 0" class="bg-surface rounded-2xl p-6 border border-gray-200/80 shadow-xs">
         <h2 class="text-base font-black text-gray-900 mb-3">고객 안심 케어 신청 내역</h2>
         <div class="space-y-2">
           <div v-for="cl in claims" :key="cl.id" class="p-3.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-between text-xs">
             <div>
-              <span class="font-black text-[#FF5000] mr-2">[{{ cl.claim_type || cl.type }}]</span>
+              <span class="font-black text-primary mr-2">[{{ cl.claim_type || cl.type }}]</span>
               <span class="text-gray-700">{{ cl.reason }}</span>
               <span class="text-gray-400 ml-2 font-mono text-[11px]">#{{ cl.id }}</span>
             </div>
             <div class="flex items-center gap-2">
-              <div class="font-bold text-[#00A862]">
+              <div class="font-bold text-success">
                 {{ cl.status }} ({{ locale.formatPrice(cl.refund_amount || 0) }})
               </div>
               <button v-if="cl.status === 'REQUESTED'" :disabled="busy" @click="withdrawClaim(cl)" class="px-2.5 py-1 rounded-full border border-slate-300 text-slate-600 font-bold">신청 철회</button>

@@ -200,16 +200,16 @@ onMounted(loadOrders)
         @click="activeTab = tab.key"
         :class="[
           'px-4 py-2 rounded-full text-xs font-black transition',
-          activeTab === tab.key ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400'
+          activeTab === tab.key ? 'bg-secondary text-secondary-on' : 'bg-surface border border-gray-200 text-gray-600 hover:border-gray-400'
         ]"
       >
         {{ tab.label }} {{ tabCount(tab.key) }}
       </button>
     </div>
 
-    <div v-if="loading" class="bg-white rounded-2xl border border-gray-200 p-8"><OmSkeleton variant="rect" height="h-64" /></div>
+    <div v-if="loading" class="bg-surface rounded-2xl border border-gray-200 p-8"><OmSkeleton variant="rect" height="h-64" /></div>
 
-    <div v-else-if="loadError" class="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+    <div v-else-if="loadError" class="bg-surface rounded-2xl border border-gray-200 p-8 text-center">
       <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-2xl">
         <TriangleAlert class="h-4 w-4" aria-hidden="true" />
       </div>
@@ -217,7 +217,7 @@ onMounted(loadOrders)
       <p class="text-xs text-gray-500 mb-5">{{ loadError }}</p>
       <button
         @click="loadOrders"
-        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-black shadow-md transition"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-secondary hover:bg-primary-hover text-secondary-on text-xs font-black shadow-md transition"
       >
         <RotateCw class="h-4 w-4" aria-hidden="true" />
         <span>다시 시도</span>
@@ -228,7 +228,7 @@ onMounted(loadOrders)
       <div
         v-for="order in filteredOrders"
         :key="order.id"
-        class="bg-white rounded-2xl border border-gray-200 overflow-hidden"
+        class="bg-surface rounded-2xl border border-gray-200 overflow-hidden"
       >
         <div class="bg-gray-50 px-5 py-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -236,7 +236,7 @@ onMounted(loadOrders)
               {{ orderStatus(order) }}
             </span>
             <span class="font-mono font-bold text-xs text-gray-900">#{{ order.order_no || order.id }}</span>
-            <button @click="copyText(order.order_no || order.id)" title="주문번호 복사" class="text-gray-400 hover:text-[#FF5000]">
+            <button @click="copyText(order.order_no || order.id)" title="주문번호 복사" class="text-gray-400 hover:text-primary">
               <Check v-if="copyToast === (order.order_no || order.id)" class="h-4 w-4 text-emerald-600" aria-hidden="true" /><Copy v-else class="h-4 w-4" aria-hidden="true" />
             </button>
             <span class="text-xs text-gray-400 hidden sm:inline">{{ order.created_at }}</span>
@@ -269,12 +269,12 @@ onMounted(loadOrders)
                 </div>
                 <RouterLink
                   :to="item.product_id ? `/product/${item.product_id}` : `/orders/${order.id}`"
-                  class="font-black text-xs sm:text-sm text-gray-900 hover:text-[#FF5000] line-clamp-2 transition"
+                  class="font-black text-xs sm:text-sm text-gray-900 hover:text-primary line-clamp-2 transition"
                 >
                   {{ item.product_title }}
                 </RouterLink>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <span class="bg-orange-50 text-[#FF5000] px-2 py-0.5 rounded text-[11px] font-medium">
+                  <span class="bg-orange-50 text-primary px-2 py-0.5 rounded text-[11px] font-medium">
                     옵션: {{ item.option_summary || '기본 표준형' }}
                   </span>
                   <span class="font-bold text-gray-700">x {{ item.quantity }}개</span>
@@ -300,9 +300,9 @@ onMounted(loadOrders)
             >
               <RouterLink
                 :to="`/product/${item.product_id}#reviews`"
-                class="px-3 py-1.5 rounded-xl border border-gray-300 hover:border-[#FF5000] text-gray-700 hover:text-[#FF5000] text-xs font-bold transition inline-flex items-center gap-1"
+                class="px-3 py-1.5 rounded-xl border border-gray-300 hover:border-primary text-gray-700 hover:text-primary text-xs font-bold transition inline-flex items-center gap-1"
               >
-                <Pencil class="h-4 w-4 text-[#FF5000]" aria-hidden="true" />
+                <Pencil class="h-4 w-4 text-primary" aria-hidden="true" />
                 <span>리뷰 쓰기</span>
               </RouterLink>
             </div>
@@ -315,7 +315,7 @@ onMounted(loadOrders)
 
         <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
           <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
-            <ShieldCheck class="h-4 w-4 text-[#00A862]" aria-hidden="true" />
+            <ShieldCheck class="h-4 w-4 text-success" aria-hidden="true" />
             <span>결제 후 30일 내 판매가 인하 시 차액 적립 · 수령 후 7일 내 반품 신청</span>
           </div>
 
@@ -331,7 +331,7 @@ onMounted(loadOrders)
             <button
               v-if="anyDelivered(order)"
               @click="confirmPurchase(order.id)"
-              class="px-4 py-1.5 rounded-full bg-orange-50 text-[#FF5000] hover:bg-[#FF5000] hover:text-white border border-orange-200 text-xs font-black transition cursor-pointer inline-flex items-center gap-1"
+              class="px-4 py-1.5 rounded-full bg-orange-50 text-primary hover:bg-primary hover:text-primary-on border border-orange-200 text-xs font-black transition cursor-pointer inline-flex items-center gap-1"
             >
               <Coins class="h-4 w-4" aria-hidden="true" />
               <span>구매확정 (+1% 적립)</span>
@@ -340,7 +340,7 @@ onMounted(loadOrders)
             <button
               v-if="anyTracking(order)"
               @click="openTracking(order)"
-              class="px-3.5 py-1.5 rounded-full bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white border border-sky-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
+              class="px-3.5 py-1.5 rounded-full bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-primary-on border border-sky-200 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
             >
               <Truck class="h-4 w-4" aria-hidden="true" />
               <span>배송 조회</span>
@@ -349,7 +349,7 @@ onMounted(loadOrders)
             <button
               v-if="repurchasable(order)"
               @click="repurchase(order)"
-              class="px-3.5 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:border-[#FF5000] hover:text-[#FF5000] text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
+              class="px-3.5 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:border-primary hover:text-primary text-xs font-bold transition cursor-pointer inline-flex items-center gap-1"
             >
               <Repeat class="h-4 w-4" aria-hidden="true" />
               <span>재구매</span>
@@ -357,7 +357,7 @@ onMounted(loadOrders)
 
             <RouterLink
               :to="`/orders/${order.id}`"
-              class="px-4 py-1.5 rounded-full bg-gray-900 hover:bg-[#FF5000] text-white text-xs font-bold transition text-center inline-flex items-center gap-1"
+              class="px-4 py-1.5 rounded-full bg-secondary hover:bg-primary-hover text-secondary-on text-xs font-bold transition text-center inline-flex items-center gap-1"
             >
               <span>상세 조회 / 보상·반품 신청</span>
               <ChevronRight class="h-3 w-3" aria-hidden="true" />
@@ -379,11 +379,11 @@ onMounted(loadOrders)
 
     <div
       v-if="showCancelModal && orderToCancel"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60 p-4"
       role="dialog"
       aria-label="주문 취소 신청"
     >
-      <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 border border-gray-100">
+      <div class="bg-surface rounded-2xl max-w-md w-full p-6 space-y-4 border border-gray-100">
         <div class="flex items-center justify-between border-b border-gray-100 pb-3">
           <h3 class="font-black text-base text-gray-900">주문 취소 신청</h3>
           <button @click="showCancelModal = false" class="text-gray-400 hover:text-gray-600 p-1">✕</button>
@@ -403,13 +403,13 @@ onMounted(loadOrders)
               <span>배송비</span>
               <span>{{ locale.formatPrice(orderToCancel.total_shipping_amount || 0) }}</span>
             </div>
-            <div v-if="orderToCancel.total_discount_amount" class="flex justify-between text-[#FF5000]">
+            <div v-if="orderToCancel.total_discount_amount" class="flex justify-between text-primary">
               <span>할인 적용액</span>
               <span>-{{ locale.formatPrice(orderToCancel.total_discount_amount) }}</span>
             </div>
             <div class="flex justify-between font-black text-sm text-gray-900 pt-2 border-t border-gray-200">
               <span>최종 환불 예정액</span>
-              <span class="text-[#FF5000]">{{ locale.formatPrice(orderToCancel.total_pay_amount || 0) }}</span>
+              <span class="text-primary">{{ locale.formatPrice(orderToCancel.total_pay_amount || 0) }}</span>
             </div>
           </div>
 
@@ -428,7 +428,7 @@ onMounted(loadOrders)
           <button
             @click="confirmCancel"
             :disabled="isCancelling"
-            class="flex-1 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs disabled:opacity-50 cursor-pointer"
+            class="flex-1 py-2.5 rounded-xl bg-secondary hover:bg-secondary-hover text-secondary-on font-bold text-xs disabled:opacity-50 cursor-pointer"
           >
             {{ isCancelling ? '취소 처리 중...' : '확인 (주문 취소)' }}
           </button>
@@ -443,7 +443,7 @@ onMounted(loadOrders)
     >
       <RouterLink
         to="/"
-        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF5000] hover:bg-[#e04700] text-white text-xs font-black shadow-md transition transform active:scale-95"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary hover:bg-primary-hover text-primary-on text-xs font-black shadow-md transition transform active:scale-95"
       >
         <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         <span>인기 특가 쇼핑하러 가기</span>

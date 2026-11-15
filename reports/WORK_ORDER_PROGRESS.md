@@ -32,4 +32,5 @@
 3-7 | 통과 | fa74513 | payment_result 4/4 + test:ui + typecheck | 영수증·카드마스킹·주소정리·공유없음, 해석 → Q-3-7
 3-8 | 통과 | 95a8698 | order 8/8 + buyer 20/20 + partner 15/15 + admin 12/12 + e2e 26/26 + test:ui + typecheck | 탭3·20개씩·카드·재구매·옵션잠금·회수일·사진·철회, d1_64, 해석 → Q-3-8
 3-9 | 통과 | abc67fb | my 12/12 + buyer 23/23 + openapi 3/3 + test:ui + typecheck + 빌드 | /my 7주소·리다이렉트·메뉴200·바로가기9·얇은읽기3·우편검색장착·주문탭연결, 해석 → Q-3-9
-3-10 | 통과 | PENDING | store 9/9 + buyer 25/25 + openapi 3/3 + browser 13/13 + test:ui + typecheck | 헤더·탭4·채우기·PLP고정·리뷰공개·팔로우E2E·B04b/B06 단계수정, 해석 → Q-3-10
+3-10 | 통과 | c5295b7 | store 9/9 + buyer 25/25 + openapi 3/3 + browser 13/13 + test:ui + typecheck | 헤더·탭4·채우기·PLP고정·리뷰공개·팔로우E2E·B04b/B06 단계수정, 해석 → Q-3-10
+3-11 | 통과 | PENDING | misc 7/7 + flash 9/9 + products 5/5 + buyer 25/25 + openapi 3/3 + test:ui + typecheck + 빌드 | 특가·베스트기간·쿠폰3탭·고객센터·약관3·가입단계·스토어린트0(홀드1)·카카오예외, 해석 → Q-3-11

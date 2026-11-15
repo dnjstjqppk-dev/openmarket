@@ -1,19 +1,42 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+// Buyer support center (3-11): FAQ category tabs plus search, 1:1 inquiry
+// write and history. Categories match the server allowlist.
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
-import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, OmStatusTabs } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const faqs = ref<any[]>([])
 const inquiries = ref<any[]>([])
 const category = ref('DELIVERY')
+const faqTab = ref('')
+const faqQuery = ref('')
 const subject = ref('')
 const message = ref('')
 const submitMsg = ref('')
 const loadError = ref<string | null>(null)
-// P2-S10: block double submit while a request is in flight.
 const submitting = ref(false)
+
+const CATEGORY_LABEL: Record<string, string> = {
+  DELIVERY: '배송',
+  REFUND_RETURN: '반품·환불',
+  PRICE_MATCH: '가격 보상',
+  PAYMENT: '결제',
+  PARTNER_JOIN: '입점',
+  OTHER: '기타'
+}
+const statusLabel = (s: string) => (s === 'ANSWERED' ? '답변 완료' : s === 'CLOSED' ? '종료' : '답변 대기')
+
+const faqTabs = computed(() => {
+  const cats = [...new Set(faqs.value.map((f: any) => String(f.category || 'OTHER')))]
+  return [{ value: '', label: '전체' }, ...cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] || '기타' }))]
+})
+const filteredFaqs = computed(() => {
+  const q = faqQuery.value.trim()
+  return faqs.value.filter((f: any) => (!faqTab.value || f.category === faqTab.value)
+    && (!q || `${f.q} ${f.a}`.includes(q)))
+})
 
 const loadSupport = async () => {
   const cid = auth.user?.id || ''
@@ -53,10 +76,10 @@ const submitInquiry = async () => {
     if (res.ok && json?.success) {
       subject.value = ''
       message.value = ''
-      submitMsg.value = `✓ 1:1 Inquiry (${json.data.id}) registered! Our support team will review it and reply here.`
+      submitMsg.value = `1:1 문의가 접수되었습니다(${json.data.id}). 답변이 달리면 이곳에 표시됩니다.`
       await loadSupport()
     } else {
-      submitMsg.value = `⚠️ ${json?.error || '문의 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'}`
+      submitMsg.value = `${json?.error || '문의 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'}`
     }
   } finally {
     submitting.value = false
@@ -67,77 +90,88 @@ onMounted(loadSupport)
 </script>
 
 <template>
-  <div class="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 space-y-8">
+  <div class="mx-auto max-w-[1100px] space-y-8 px-4 py-8 sm:px-6">
     <div>
-      <span class="text-xs font-extrabold text-[#FF5000] uppercase">Buyer Protection & 1:1 Support</span>
-      <h1 class="text-2xl sm:text-3xl font-black text-gray-900 mt-1">Customer Support & 1:1 Inquiry Center</h1>
+      <h1 class="text-2xl font-bold text-ink sm:text-3xl">고객센터</h1>
+      <p class="mt-1 text-xs text-ink-muted">자주 묻는 질문과 1:1 문의를 이용하세요.</p>
     </div>
 
-    <!-- FAQ Accordion Cards -->
-    <section class="bg-white rounded-2xl p-6 border border-gray-200/80">
-      <h2 class="text-base font-black text-gray-900 mb-4">Frequently Asked Questions</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div v-for="(f, idx) in faqs" :key="idx" class="p-4 rounded-xl bg-gray-50 border border-gray-200/60">
-          <span class="text-[10px] font-black text-[#FF5000] uppercase">{{ f.category }}</span>
-          <h3 class="text-xs sm:text-sm font-bold text-gray-900 mt-0.5 mb-1.5">Q. {{ f.q }}</h3>
-          <p class="text-xs text-gray-600 leading-relaxed">{{ f.a }}</p>
+    <section class="rounded-2xl border border-line bg-surface p-6">
+      <h2 class="mb-4 text-base font-bold text-ink">자주 묻는 질문</h2>
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <OmStatusTabs v-model="faqTab" :tabs="faqTabs" class="min-w-0 flex-1" />
+        <input
+          v-model="faqQuery"
+          type="search"
+          aria-label="FAQ 검색"
+          placeholder="궁금한 내용을 검색하세요"
+          class="h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus sm:w-56"
+        />
+      </div>
+      <div v-if="filteredFaqs.length" class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div v-for="(f, idx) in filteredFaqs" :key="idx" class="rounded-xl border border-line bg-surface-2 p-4">
+          <span class="text-2xs font-bold text-primary">{{ CATEGORY_LABEL[f.category] || '기타' }}</span>
+          <h3 class="mb-1.5 mt-0.5 text-sm font-bold text-ink">Q. {{ f.q }}</h3>
+          <p class="text-xs leading-relaxed text-ink-muted">A. {{ f.a }}</p>
         </div>
       </div>
+      <OmEmptyState v-else title="조건에 맞는 질문이 없습니다" description="분류나 검색어를 바꿔 보세요." compact />
     </section>
 
-    <!-- 1:1 Inquiry Submission & History -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <form @submit.prevent="submitInquiry" class="lg:col-span-6 bg-white rounded-2xl p-6 border border-gray-200/80 space-y-4">
-        <h2 class="text-base font-black text-gray-900">Submit a 1:1 Support Ticket</h2>
+    <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
+      <form class="space-y-4 rounded-2xl border border-line bg-surface p-6 lg:col-span-6" @submit.prevent="submitInquiry">
+        <h2 class="text-base font-bold text-ink">1:1 문의 쓰기</h2>
         <div class="text-xs">
-          <label class="block font-bold text-gray-700 mb-1">Inquiry Topic</label>
-          <select v-model="category" class="w-full h-10 px-3 rounded-lg border border-gray-300 font-bold">
-            <option value="DELIVERY">Shipping & On-Time Guarantee</option>
-            <option value="PRICE_MATCH">30-Day Price-Drop Credit</option>
-            <option value="RETURN">Return / Refund (within 7 days of delivery)</option>
-            <option value="PARTNER">Partner Store / Bulk Purchase</option>
+          <label class="mb-1 block font-bold text-ink-muted">문의 분류</label>
+          <select v-model="category" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-bold text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus">
+            <option value="DELIVERY">배송</option>
+            <option value="REFUND_RETURN">반품·환불</option>
+            <option value="PRICE_MATCH">가격 보상</option>
+            <option value="PAYMENT">결제</option>
+            <option value="PARTNER_JOIN">입점</option>
+            <option value="OTHER">기타</option>
           </select>
         </div>
         <div class="text-xs">
-          <label class="block font-bold text-gray-700 mb-1">Subject</label>
-          <input v-model="subject" required placeholder="Brief summary of your request" class="w-full h-10 px-3 rounded-lg border border-gray-300" />
+          <label class="mb-1 block font-bold text-ink-muted">제목</label>
+          <input v-model="subject" required placeholder="문의 제목을 입력하세요" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" />
         </div>
         <div class="text-xs">
-          <label class="block font-bold text-gray-700 mb-1">Message</label>
-          <textarea v-model="message" required rows="4" placeholder="Include your Order ID if applicable..." class="w-full p-3 rounded-lg border border-gray-300"></textarea>
+          <label class="mb-1 block font-bold text-ink-muted">내용</label>
+          <textarea v-model="message" required rows="4" placeholder="주문번호가 있으면 함께 적어주세요" class="w-full rounded-lg border border-line bg-surface p-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus"></textarea>
         </div>
-        <p v-if="submitMsg" class="text-xs font-bold text-[#00A862]">{{ submitMsg }}</p>
-        <button type="submit" :disabled="submitting" class="w-full h-11 rounded-full bg-[#FF5000] text-white text-xs font-black cursor-pointer disabled:opacity-60">
-          Send 1:1 Inquiry
+        <p v-if="submitMsg" role="status" class="text-xs font-bold text-success">{{ submitMsg }}</p>
+        <button type="submit" :disabled="submitting" class="h-11 w-full cursor-pointer rounded-full bg-primary text-xs font-bold text-primary-on hover:bg-primary-hover disabled:opacity-60">
+          {{ submitting ? '접수 중…' : '1:1 문의 보내기' }}
         </button>
       </form>
 
-      <div class="lg:col-span-6 bg-white rounded-2xl p-6 border border-gray-200/80">
-        <h2 class="text-base font-black text-gray-900 mb-4">My 1:1 Tickets ({{ inquiries.length }})</h2>
-        <div v-if="loadError" class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
+      <div class="rounded-2xl border border-line bg-surface p-6 lg:col-span-6">
+        <h2 class="mb-4 text-base font-bold text-ink">내 문의 내역 ({{ inquiries.length }})</h2>
+        <div v-if="loadError" class="rounded-xl border border-danger bg-danger-soft p-4 text-center text-xs text-danger">
           <p class="font-bold">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</p>
           <p class="mt-1">{{ loadError }}</p>
-          <button @click="loadSupport" class="block mx-auto mt-2 px-4 py-1.5 rounded-full bg-gray-900 text-white font-bold">다시 시도</button>
+          <button type="button" class="mx-auto mt-2 block rounded-full bg-secondary px-4 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover" @click="loadSupport">다시 시도</button>
         </div>
         <OmEmptyState
           v-else-if="inquiries.length === 0"
           compact
-          title="No support tickets submitted yet."
-          description="Use the form to send your first 1:1 inquiry."
+          title="아직 문의 내역이 없습니다."
+          description="왼쪽 양식으로 첫 문의를 보내보세요."
         >
           <OmButton size="sm" @click="loadSupport">다시 불러오기</OmButton>
         </OmEmptyState>
         <div v-else class="space-y-3">
-          <div v-for="inq in inquiries" :key="inq.id" class="p-4 rounded-xl border border-gray-200 text-xs">
-            <div class="flex items-center justify-between mb-1">
-              <span class="font-black text-[#FF5000]">[{{ inq.category }}] {{ inq.subject }}</span>
-              <span :class="['px-2 py-0.5 rounded text-[10px] font-bold', inq.status === 'ANSWERED' ? 'bg-green-50 text-[#00A862]' : 'bg-amber-50 text-amber-700']">
-                {{ inq.status }}
+          <div v-for="inq in inquiries" :key="inq.id" class="rounded-xl border border-line p-4 text-xs">
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <span class="min-w-0 truncate font-bold text-ink">[{{ CATEGORY_LABEL[inq.category] || '기타' }}] {{ inq.subject }}</span>
+              <span :class="['shrink-0 rounded px-2 py-0.5 text-2xs font-bold', inq.status === 'ANSWERED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted']">
+                {{ statusLabel(inq.status) }}
               </span>
             </div>
-            <p class="text-gray-600 mb-2">{{ inq.message }}</p>
-            <div v-if="inq.answer" class="p-2.5 rounded bg-gray-50 border-l-2 border-[#00A862] text-gray-700">
-              <strong class="text-[#00A862] block mb-0.5">Concierge Response:</strong>
+            <p class="mb-2 whitespace-pre-wrap text-ink-muted">{{ inq.message || inq.content }}</p>
+            <div v-if="inq.answer" class="rounded bg-surface-2 p-2.5 text-ink-muted">
+              <strong class="mb-0.5 block text-success">고객센터 답변:</strong>
               {{ inq.answer }}
             </div>
           </div>

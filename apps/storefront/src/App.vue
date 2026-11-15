@@ -337,7 +337,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
           <RouterLink v-else to="/login" class="flex h-10 items-center gap-1.5 rounded px-3 text-sm font-medium hover:bg-surface-2"><User :size="20" />로그인</RouterLink>
           <RouterLink to="/cart" class="ml-1 flex h-10 items-center gap-2 rounded bg-primary px-4 text-sm font-semibold text-primary-on hover:bg-primary-hover">
             <ShoppingBag :size="18" aria-hidden="true" />장바구니
-            <span v-if="cart.totalCount" class="rounded-full bg-white/20 px-1.5 text-xs om-num">{{ cart.totalCount }}</span>
+            <span v-if="cart.totalCount" class="rounded-full bg-primary-on/20 px-1.5 text-xs om-num">{{ cart.totalCount }}</span>
           </RouterLink>
         </div>
         <OmIconButton class="sm:hidden" label="장바구니" :badge="cart.totalCount || null" @click="router.push('/cart')"><ShoppingBag :size="20" /></OmIconButton>

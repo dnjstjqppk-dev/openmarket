@@ -307,7 +307,7 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
       <MobileBuySheet v-model:open="showSheet" :product="product" :sel="sel" />
 
       <OmModal v-if="product.video_url" v-model:open="showVideo" title="판매자 등록 영상" size="lg">
-        <video v-if="showVideo" :src="product.video_url" controls playsinline class="aspect-video w-full rounded bg-black" />
+        <video v-if="showVideo" :src="product.video_url" controls playsinline class="aspect-video w-full rounded bg-overlay" />
       </OmModal>
     </template>
   </div>

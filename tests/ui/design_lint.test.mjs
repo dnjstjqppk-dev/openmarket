@@ -39,6 +39,8 @@ function walk(dir, out = []) {
 }
 
 function violationsOf(file) {
+  const key = relative(ROOT, file).split(sep).join('/')
+  const allowedHex = HEX_EXCEPTIONS[key]
   const lines = strip(readFileSync(file, 'utf8')).split('\n')
   let n = 0
   const details = []
@@ -59,8 +61,9 @@ function violationsOf(file) {
       n++
       if (details.length < 5) details.push(`${i + 1}:${m[0].trim()}`)
     }
-    const hex = line.match(/#[0-9a-fA-F]{3,8}\b/g)
-    if (hex) { n += hex.length; if (details.length < 5) details.push(`${i + 1}:${hex[0]}`) }
+    const hexAll = line.match(/#[0-9a-fA-F]{3,8}\b/g) || []
+    const hex = allowedHex ? hexAll.filter((h) => !allowedHex.has(h.toUpperCase())) : hexAll
+    if (hex.length) { n += hex.length; if (details.length < 5) details.push(`${i + 1}:${hex[0]}`) }
     const fa = line.match(/fa-(?:solid|regular)/g)
     if (fa) { n += fa.length; if (details.length < 5) details.push(`${i + 1}:${fa[0]}`) }
     const dlg = line.match(/\b(?:alert|confirm|prompt)\s*\(/g)
@@ -71,21 +74,14 @@ function violationsOf(file) {
 
 // Measured 2026-11-13 with this scanner (storefront 265, admin 294,
 // partner 358, ui package 21). Lower per stage; never raise.
+// 3-11: storefront zeroed except the N02 native-confirm hold in
+// OrderDetailView (converts with its e2e script update, per its own comment).
+// Brand-color exceptions (work order 3-11, S-11): exact hexes only.
+const HEX_EXCEPTIONS = {
+  'apps/storefront/src/views/LoginView.vue': new Set(['#FEE500', '#000000'])
+}
 const CAPS = {
-  'apps/storefront/src/App.vue': 1,
-  'apps/storefront/src/views/AddressesView.vue': 32,
-  'apps/storefront/src/views/CouponsView.vue': 20,
-  'apps/storefront/src/views/HomeView.vue': 4,
-  'apps/storefront/src/views/LegalPrivacyView.vue': 1,
-  'apps/storefront/src/views/LegalRefundView.vue': 1,
-  'apps/storefront/src/views/LegalTermsView.vue': 1,
-  'apps/storefront/src/views/LoginView.vue': 2,
-  'apps/storefront/src/views/OrderDetailView.vue': 55,
-  'apps/storefront/src/views/OrdersView.vue': 77,
-  'apps/storefront/src/views/PaymentResultView.vue': 2,
-  'apps/storefront/src/views/ProductDetailView.vue': 1,
-  'apps/storefront/src/views/ProfileView.vue': 51,
-  'apps/storefront/src/views/SupportView.vue': 13,
+  'apps/storefront/src/views/OrderDetailView.vue': 1,
   'apps/admin/src/App.vue': 46,
   'apps/admin/src/views/AuditLogView.vue': 6,
   'apps/admin/src/views/BusinessEntitiesView.vue': 7,
@@ -152,6 +148,13 @@ await t.test('D01 no file exceeds its design-lint cap', async () => {
     assert.ok(n <= cap, `${key} has ${n} violations (cap ${cap}): ${details.join(' ')}`)
   }
   assert.ok(total > 0, 'scanner must find the known violations')
+})
+
+await t.test('D03 brand exceptions stay pinned to their exact hexes', async () => {
+  const v = readFileSync(join(ROOT, 'apps/storefront/src/views/LoginView.vue'), 'utf8')
+  assert.ok(v.includes('#FEE500') && v.includes('#000000'), 'kakao button keeps its brand colors')
+  const others = (v.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter((h) => !['#FEE500', '#000000'].includes(h.toUpperCase()))
+  assert.equal(others.length, 0, `no non-brand hex may ride the exception: ${others.join(',')}`)
 })
 
 await t.test('D02 no font awesome usage remains (work order 1-6)', async () => {

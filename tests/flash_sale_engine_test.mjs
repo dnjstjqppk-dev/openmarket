@@ -185,6 +185,21 @@ await t.test('7. lightning feed reports measured deal figures', async () => {
   assert.ok(deal.remaining_stock <= 6, 'remaining respects the allocation');
 });
 
+await t.test('9. lightning feed names the next round', async () => {
+  const g = await newGateway();
+  g.db.prepare("UPDATE flash_sale_campaigns SET status = 'ENDED' WHERE status = 'UPCOMING'").run();
+  const none = await g.call('/api/v1/campaigns/lightning');
+  assert.equal(none.status, 200, none.text);
+  assert.equal(none.json.data.next_campaign, null, 'no upcoming round, no preview');
+  const stamp = (d) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const far = mkCampaign(g, { status: 'UPCOMING', starts_at: stamp(5), ends_at: stamp(6) });
+  const near = mkCampaign(g, { status: 'UPCOMING', starts_at: stamp(2), ends_at: stamp(3) });
+  const r = await g.call('/api/v1/campaigns/lightning');
+  assert.equal(r.json.data.next_campaign.id, near, 'nearest upcoming round previewed');
+  assert.ok(r.json.data.next_campaign.title && r.json.data.next_campaign.starts_at, 'preview carries title and start');
+  assert.notEqual(r.json.data.next_campaign.id, far, 'farther round not picked');
+});
+
 await t.test('8. schema version pin tracks the new migration', async () => {
   const { pathToFileURL } = await import('node:url');
   const { ROOT } = await import('./lib/harness.mjs');

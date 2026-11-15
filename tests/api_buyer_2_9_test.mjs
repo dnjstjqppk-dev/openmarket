@@ -246,6 +246,15 @@ await t.test('B14. coupon wallet groups holdings honestly', async () => {
   assert.ok(held, 'seed holding listed as usable');
   assert.equal(held.issuer, 'PLATFORM', 'issuer shown');
   assert.equal(held.scope, 'ALL', 'scope shown');
+  const seller = g.db.prepare("SELECT id, business_name FROM partners WHERE status = 'APPROVED' LIMIT 1").get();
+  g.db.prepare(`INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, expires_at,
+    is_active, issuer, seller_id, scope, dup_group, issue_method, issued_count)
+    VALUES ('cp_b14s', 'B14STORE', 't', 'FIXED_AMOUNT', 1000, 0, '2099-01-01 00:00:00', 1, 'SELLER', ?, 'SELLER', 'STORE', 'DOWNLOAD', 0)`)
+    .run(seller.id);
+  const r2 = await g.call('/api/v1/coupons', { token: cust });
+  const store = r2.json.data.claimable.find((c) => c.code === 'B14STORE');
+  assert.ok(store, 'store coupon claimable');
+  assert.equal(store.seller_name, seller.business_name, 'store name joined');
 });
 
 await t.test('B15. best-coupon search maximizes cart savings', async () => {

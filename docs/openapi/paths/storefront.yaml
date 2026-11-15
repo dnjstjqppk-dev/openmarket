@@ -27,6 +27,12 @@ paths:
             enum: [popular, price_asc, price_desc, newest, rating, reviews, relevance]
             default: popular
           description: Keyword searches (q) default to relevance (FTS bm25, then units sold); without q the default is popular.
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+          description: '3-11: ranks the popular sort by paid non-refunded units in the window (else 400 INVALID_PERIOD). Rows carry period_sales.'
         - name: q
           in: query
           schema:

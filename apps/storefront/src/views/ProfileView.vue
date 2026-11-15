@@ -9,7 +9,7 @@ import { API_BASE_URL, authHeader } from '../config'
 import { userErrorMessage, useConfirm, useToast } from '@olmoa/ui'
 import MyLayout from './my/MyLayout.vue'
 
-const { confirm } = useConfirm()
+const { confirm: askConfirm } = useConfirm()
 const toastApi = useToast()
 
 const router = useRouter()
@@ -153,7 +153,7 @@ const handlePasswordChange = async () => {
 }
 
 const handleLogout = async () => {
-  if (await confirm({ title: '로그아웃', body: '로그아웃 하시겠습니까?' })) {
+  if (await askConfirm({ title: '로그아웃', body: '로그아웃 하시겠습니까?' })) {
     auth.logout()
     router.push('/')
   }

@@ -145,9 +145,9 @@ async function selectRankTab(slug: string) {
         <template #default="{ index }">
           <div class="relative aspect-video w-full overflow-hidden bg-secondary text-white sm:aspect-auto sm:h-[360px]">
             <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-60" :fetchpriority="index === 0 ? 'high' : 'auto'" />
-            <div class="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-transparent" aria-hidden="true" />
+            <div class="absolute inset-0 bg-gradient-to-r from-overlay/75 via-overlay/40 to-transparent" aria-hidden="true" />
             <div class="relative flex h-full flex-col justify-end gap-3 p-6 sm:p-10" aria-live="polite">
-              <span v-if="banners[index].badge_text" class="w-fit rounded-sm bg-white/15 px-2 py-0.5 text-2xs font-semibold tracking-wide backdrop-blur">{{ banners[index].badge_text }}</span>
+              <span v-if="banners[index].badge_text" class="w-fit rounded-sm bg-primary-on/15 px-2 py-0.5 text-2xs font-semibold tracking-wide backdrop-blur">{{ banners[index].badge_text }}</span>
               <h1 class="max-w-xl text-2xl font-bold leading-tight sm:text-4xl">{{ banners[index].title }}</h1>
               <p v-if="banners[index].subtitle" class="max-w-xl text-sm text-white/85 sm:text-md">{{ banners[index].subtitle }}</p>
               <div><OmButton :to="banners[index].link_url" variant="primary" size="md">자세히 보기</OmButton></div>
@@ -156,7 +156,7 @@ async function selectRankTab(slug: string) {
         </template>
       </OmCarousel>
       <div v-if="banners.length > 1" class="relative" aria-hidden="true">
-        <span class="absolute -top-10 right-4 rounded-full bg-black/40 px-2.5 py-1 text-2xs text-white tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
+        <span class="absolute -top-10 right-4 rounded-full bg-overlay/40 px-2.5 py-1 text-2xs text-white tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
       </div>
     </section>
 
