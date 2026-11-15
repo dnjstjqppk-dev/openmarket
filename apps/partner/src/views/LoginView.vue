@@ -37,7 +37,7 @@ const handlePartnerLogin = async () => {
 
 // P2-T03: post-login redirect stays in-app — single leading slash, no
 // protocol-relative '//', and only known seller routes (query strings allowed).
-const REDIRECT_ALLOWLIST = ['/', '/apply', '/application', '/products', '/bidding', '/bulk-upload', '/imports', '/channels', '/shipments', '/returns', '/settlements', '/qna', '/profile']
+const REDIRECT_ALLOWLIST = ['/', '/apply', '/application', '/products', '/bidding', '/bulk-upload', '/imports', '/channels', '/shipments', '/returns', '/claims', '/settlements', '/promotions', '/qna', '/reviews', '/profile', '/store-profile']
 function safeRedirect(raw: string): string {
   if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/'
   const path = raw.split('?')[0].split('#')[0]
@@ -56,36 +56,36 @@ function fillDev(which: 1 | 2) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0F172A] flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
-      <div class="flex items-center gap-2.5 mb-6">
-        <div class="w-9 h-9 rounded-xl bg-[#FF5000] flex items-center justify-center text-white font-black text-lg">P</div>
+  <div class="flex min-h-screen items-center justify-center bg-surface-2 p-4">
+    <div class="w-full max-w-md rounded-2xl bg-surface p-8 shadow-2xl">
+      <div class="mb-6 flex items-center gap-2.5">
+        <img src="/olmoa-symbol.svg" alt="OLMOA" class="h-9 w-9 object-contain" />
         <div>
-          <h1 class="text-xl font-black text-gray-900 leading-none">OLMOA 판매자 센터</h1>
-          <span class="text-xs text-gray-500">상품 · 주문 · 배송 · 정산 관리</span>
+          <h1 class="text-xl font-bold leading-none text-ink">OLMOA 판매자 센터</h1>
+          <span class="text-xs text-ink-muted">상품 · 주문 · 배송 · 정산 관리</span>
         </div>
       </div>
-      <p v-if="route.query.expired === '1'" role="status" class="mb-4 p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-bold">세션이 만료되었습니다. 다시 로그인해주세요.</p>
+      <p v-if="route.query.expired === '1'" role="status" class="mb-4 rounded-xl border border-warning bg-warning-soft p-3 text-xs font-bold text-warning">세션이 만료되었습니다. 다시 로그인해주세요.</p>
       <form @submit.prevent="handlePartnerLogin" class="space-y-4 text-xs">
         <div>
-          <label for="pt-email" class="block font-bold text-gray-700 mb-1">판매자 계정 이메일</label>
-          <input id="pt-email" v-model="email" type="email" autocomplete="username" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
+          <label for="pt-email" class="mb-1 block font-bold text-ink-muted">판매자 계정 이메일</label>
+          <input id="pt-email" v-model="email" type="email" autocomplete="username" required class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" />
         </div>
         <div>
-          <label for="pt-pw" class="block font-bold text-gray-700 mb-1">비밀번호</label>
-          <input id="pt-pw" v-model="password" type="password" autocomplete="current-password" required class="w-full h-11 px-3.5 rounded-xl border border-gray-300" />
+          <label for="pt-pw" class="mb-1 block font-bold text-ink-muted">비밀번호</label>
+          <input id="pt-pw" v-model="password" type="password" autocomplete="current-password" required class="h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" />
         </div>
-        <p v-if="errorMsg" role="alert" class="text-red-600 font-bold">{{ errorMsg }}</p>
-        <button type="submit" :disabled="loading" class="w-full h-12 rounded-xl bg-[#FF5000] hover:bg-[#E04600] disabled:opacity-50 text-white font-black text-sm">
+        <p v-if="errorMsg" role="alert" class="font-bold text-danger">{{ errorMsg }}</p>
+        <button type="submit" :disabled="loading" class="h-12 w-full rounded-xl bg-primary text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50">
           {{ loading ? '확인 중...' : '로그인' }}
         </button>
         <div v-if="isDev" class="flex gap-2">
-          <button type="button" class="flex-1 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold" @click="fillDev(1)">개발용: 직영 스토어</button>
-          <button type="button" class="flex-1 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold" @click="fillDev(2)">개발용: 입점 판매자</button>
+          <button type="button" class="h-9 flex-1 rounded-lg bg-surface-3 font-bold text-ink-muted" @click="fillDev(1)">개발용: 직영 스토어</button>
+          <button type="button" class="h-9 flex-1 rounded-lg bg-surface-3 font-bold text-ink-muted" @click="fillDev(2)">개발용: 입점 판매자</button>
         </div>
       </form>
-      <p class="mt-6 text-xs text-slate-600">아직 판매자가 아니신가요? <router-link to="/apply" class="font-bold text-[#FF5000] underline">입점 신청하기</router-link></p>
-      <p class="mt-2 text-[11px] text-slate-400">입점 심사 중인 계정은 로그인 후 신청 현황과 서류 제출만 이용할 수 있습니다.</p>
+      <p class="mt-6 text-xs text-ink-muted">아직 판매자가 아니신가요? <router-link to="/apply" class="font-bold text-primary underline">입점 신청하기</router-link></p>
+      <p class="mt-2 text-[11px] text-ink-subtle">입점 심사 중인 계정은 로그인 후 신청 현황과 서류 제출만 이용할 수 있습니다.</p>
     </div>
   </div>
 </template>

@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders } from '../../config'
-import { userErrorMessage, useConfirm, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar } from '@olmoa/ui'
+import { userErrorMessage, useConfirm, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar, OmSearchFilterBar, OmDateRangePicker } from '@olmoa/ui'
 
 const { confirm: askConfirm } = useConfirm()
 const toastApi = useToast()
@@ -34,8 +34,7 @@ const categories = ref<any[]>([])
 // Search form (applied on button, not keystroke).
 const fQ = ref('')
 const fCategory = ref('')
-const fFrom = ref('')
-const fTo = ref('')
+const fRange = ref<[string, string]>(['', ''])
 const fStockMin = ref('')
 const fStockMax = ref('')
 
@@ -93,8 +92,8 @@ async function load() {
     const params = new URLSearchParams({ status: tab.value, page: String(page.value), per_page: String(PER_PAGE) })
     if (fQ.value.trim()) params.set('q', fQ.value.trim())
     if (fCategory.value) params.set('category', fCategory.value)
-    if (fFrom.value) params.set('from', fFrom.value)
-    if (fTo.value) params.set('to', fTo.value)
+    if (fRange.value[0]) params.set('from', fRange.value[0])
+    if (fRange.value[1]) params.set('to', fRange.value[1])
     if (fStockMin.value !== '') params.set('stock_min', fStockMin.value)
     if (fStockMax.value !== '') params.set('stock_max', fStockMax.value)
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products?${params}`, { headers: getPartnerHeaders() })
@@ -112,7 +111,7 @@ async function load() {
 
 function applySearch() { page.value = 1; void load() }
 function resetSearch() {
-  fQ.value = ''; fCategory.value = ''; fFrom.value = ''; fTo.value = ''; fStockMin.value = ''; fStockMax.value = ''
+  fQ.value = ''; fCategory.value = ''; fRange.value = ['', '']; fStockMin.value = ''; fStockMax.value = ''
   page.value = 1; void load()
 }
 watch(tab, () => { page.value = 1; void load() })
@@ -214,23 +213,24 @@ onMounted(() => { loadCategories(); void load() })
 
     <OmStatusTabs v-model="tab" :tabs="TABS.map((t) => ({ value: t.value, label: t.label }))" />
 
-    <div class="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-surface p-4 text-xs md:grid-cols-6">
-      <input v-model="fQ" placeholder="상품명·ID·SKU 검색" aria-label="키워드 검색" class="h-9 rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus md:col-span-2" @keyup.enter="applySearch" />
-      <select v-model="fCategory" aria-label="카테고리" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink">
-        <option value="">전체 카테고리</option>
-        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
-      <input v-model="fFrom" type="date" aria-label="등록 시작일" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink" />
-      <input v-model="fTo" type="date" aria-label="등록 종료일" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink" />
-      <div class="flex gap-1">
-        <input v-model="fStockMin" type="number" min="0" placeholder="재고≥" aria-label="최소 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
-        <input v-model="fStockMax" type="number" min="0" placeholder="≤" aria-label="최대 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
+    <OmSearchFilterBar title="상품 검색">
+      <div class="grid grid-cols-2 gap-2 text-xs md:grid-cols-6">
+        <input v-model="fQ" placeholder="상품명·ID·SKU 검색" aria-label="키워드 검색" class="h-9 rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus md:col-span-2" @keyup.enter="applySearch" />
+        <select v-model="fCategory" aria-label="카테고리" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink">
+          <option value="">전체 카테고리</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+        <div class="md:col-span-2"><OmDateRangePicker v-model="fRange" /></div>
+        <div class="flex gap-1">
+          <input v-model="fStockMin" type="number" min="0" placeholder="재고≥" aria-label="최소 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
+          <input v-model="fStockMax" type="number" min="0" placeholder="≤" aria-label="최대 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
+        </div>
       </div>
-      <div class="col-span-2 flex gap-2 md:col-span-6">
-        <button type="button" class="h-9 rounded-lg bg-secondary px-4 font-bold text-secondary-on hover:bg-secondary-hover" @click="applySearch">검색</button>
+      <template #actions>
         <button type="button" class="h-9 rounded-lg border border-line px-4 font-bold text-ink-muted hover:bg-surface-2" @click="resetSearch">초기화</button>
-      </div>
-    </div>
+        <button type="button" class="h-9 rounded-lg bg-secondary px-4 font-bold text-secondary-on hover:bg-secondary-hover" @click="applySearch">검색</button>
+      </template>
+    </OmSearchFilterBar>
 
     <div v-if="loading && !products.length" data-loading class="rounded-2xl border border-line bg-surface p-6">
       <p class="mb-3 text-xs text-ink-muted">상품을 불러오는 중입니다...</p>

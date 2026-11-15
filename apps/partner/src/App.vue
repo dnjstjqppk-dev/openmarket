@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Truck } from 'lucide-vue-next'
+import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Ticket, Truck } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
-import { API_BASE_URL, getPartnerHeaders, getPartnerName, clearPartnerSession } from './config';
+import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession } from './config';
 
 const router = useRouter();
 const route = useRoute();
@@ -20,15 +20,51 @@ const menu = computed<ConsoleMenuItem[]>(() => [
     to: '/products', label: '상품', icon: Boxes,
     children: [
       { to: '/products', label: '목록' },
+      { to: '/products/new', label: '등록' },
       { to: '/bulk-upload', label: '대량 등록' },
       { to: '/imports', label: 'URL 수집' }
     ]
   },
   { to: '/shipments', label: '주문·배송', icon: Truck },
-  { to: '/returns', label: '클레임', icon: Reply },
-  { to: '/settlements', label: '정산', icon: Receipt },
-  { to: '/qna', label: '고객', icon: MessageSquare },
-  { to: '/profile', label: '스토어', icon: Settings },
+  {
+    to: '/claims/return', label: '클레임', icon: Reply,
+    children: [
+      { to: '/claims/cancel', label: '취소 내역' },
+      { to: '/claims/return', label: '반품' },
+      { to: '/claims/exchange', label: '교환' }
+    ]
+  },
+  {
+    to: '/settlements', label: '정산', icon: Receipt,
+    children: [
+      { to: '/settlements', label: '정산 내역' },
+      { to: '/settlements?action=payout', label: '출금 신청' },
+      { to: '/settlements/deposits', label: '출금 가능 예치금' }
+    ]
+  },
+  {
+    to: '/promotions/coupons', label: '프로모션', icon: Ticket,
+    children: [
+      { to: '/promotions/coupons', label: '스토어 쿠폰' },
+      { to: '/promotions/flash-sales', label: '번개특가 신청' },
+      { to: '/promotions/exhibitions', label: '기획전 현황' }
+    ]
+  },
+  {
+    to: '/qna', label: '고객', icon: MessageSquare,
+    children: [
+      { to: '/qna', label: '상품 문의' },
+      { to: '/reviews', label: '리뷰 관리' }
+    ]
+  },
+  {
+    to: '/profile', label: '스토어', icon: Settings,
+    children: [
+      { to: '/profile', label: '판매자 설정' },
+      { to: '/store-profile', label: '스토어 장식' },
+      { to: '/store/shipping-policies', label: '배송·반품 정책' }
+    ]
+  },
   {
     to: '/channels', label: '확장', icon: Network,
     children: [
@@ -38,17 +74,28 @@ const menu = computed<ConsoleMenuItem[]>(() => [
   }
 ]);
 
-interface HeaderProfile { status: string; payout_account_verified: boolean }
+interface HeaderProfile { status: string; payout_account_verified: boolean; penalty_count: number; grade_code: string }
 const profile = ref<HeaderProfile | null>(null);
+const storeUrl = computed(() => {
+  const id = (route.path, getPartnerId());
+  return id ? `${STOREFRONT_URL}/store/${id}` : '';
+});
 
 async function loadHeader() {
   if (isLoginPage.value) return;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/partner/profile`, { headers: getPartnerHeaders() });
-    const json = await res.json().catch(() => ({}));
-    if (res.ok && json.success && json.data) {
-      profile.value = { status: json.data.status ?? '', payout_account_verified: json.data.payout_account_verified === true };
-    }
+    const [pr, pp] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/v1/partner/profile`, { headers: getPartnerHeaders() }).then((r) => r.json().catch(() => ({}))),
+      fetch(`${API_BASE_URL}/api/v1/partner/dashboard/pipeline`, { headers: getPartnerHeaders() }).then((r) => r.json().catch(() => ({})))
+    ]);
+    const data = pr?.data || {};
+    const pipe = pp?.data || pp || {};
+    profile.value = {
+      status: data.status ?? '',
+      payout_account_verified: data.payout_account_verified === true,
+      penalty_count: Number(pipe.penalty_count) || 0,
+      grade_code: pipe.grade?.grade_code || ''
+    };
   } catch {
     // Header badges stay hidden when the profile cannot load.
   }
@@ -84,8 +131,11 @@ onMounted(() => { loadHeader(); });
           >
             정산계좌 {{ profile.payout_account_verified ? '확인됨' : '미확인' }}
           </span>
+          <span v-if="profile.penalty_count > 0" class="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">페널티 {{ profile.penalty_count }}건</span>
+          <span v-if="profile.grade_code" class="hidden shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">{{ profile.grade_code }} 등급</span>
         </template>
       </div>
+      <a v-if="storeUrl" :href="storeUrl" target="_blank" rel="noopener" class="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2 sm:flex">판매 전환</a>
       <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
         <LogOut class="h-4 w-4" aria-hidden="true" />로그아웃
       </button>
@@ -101,10 +151,17 @@ onMounted(() => { loadHeader(); });
         <li><RouterLink to="/bulk-upload" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대량 등록</RouterLink></li>
         <li><RouterLink to="/imports" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">URL 수집</RouterLink></li>
         <li><RouterLink to="/shipments" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">주문·배송</RouterLink></li>
-        <li><RouterLink to="/returns" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">반품·클레임</RouterLink></li>
+        <li><RouterLink to="/claims/cancel" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">취소 내역</RouterLink></li>
+        <li><RouterLink to="/claims/return" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink">반품 클레임</RouterLink></li>
+        <li><RouterLink to="/claims/exchange" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">교환 클레임</RouterLink></li>
         <li><RouterLink to="/settlements" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">정산 내역</RouterLink></li>
+        <li><RouterLink to="/promotions/coupons" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 쿠폰</RouterLink></li>
+        <li><RouterLink to="/promotions/flash-sales" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">번개특가 신청</RouterLink></li>
+        <li><RouterLink to="/promotions/exhibitions" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">기획전 현황</RouterLink></li>
         <li><RouterLink to="/qna" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">Q&A 문의</RouterLink></li>
+        <li><RouterLink to="/reviews" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">리뷰 관리</RouterLink></li>
         <li><RouterLink to="/profile" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 설정</RouterLink></li>
+        <li><RouterLink to="/store-profile" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 장식</RouterLink></li>
         <li><RouterLink to="/channels" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">멀티채널 연동</RouterLink></li>
         <li><RouterLink to="/bidding" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">역경매</RouterLink></li>
       </ul>

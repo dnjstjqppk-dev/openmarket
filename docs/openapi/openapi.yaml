@@ -553,6 +553,8 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons'
   /api/v1/partner/coupons/{id}:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons~1{id}'
+  /api/v1/partner/coupons/{id}/suspend:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons~1{id}~1suspend'
   /api/v1/partner/flash-sales:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1flash-sales'
   /api/v1/partner/flash-sales/{id}/apply:
@@ -563,6 +565,8 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1payout-requests~1{id}~1cancel'
   /api/v1/partner/store-profile:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1store-profile'
+  /api/v1/partner/reviews:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1reviews'
   /api/v1/partner/reviews/{id}/reply:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1reviews~1{id}~1reply'
   /api/v1/partner/reviews/{id}/report:

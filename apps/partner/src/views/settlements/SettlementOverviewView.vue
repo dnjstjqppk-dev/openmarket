@@ -3,12 +3,13 @@
 // statement rows with server-computed figures, payout requests and the
 // seller's commission tax invoices.
 import { ref, computed, onMounted, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { API_BASE_URL, getPartnerHeaders } from '../../config'
 import { userErrorMessage, useConfirm, OmDataTable, OmSkeleton, OmEmptyState } from '@olmoa/ui'
 import PayoutRequestModal from '../../components/settlement/PayoutRequestModal.vue'
 
 const { confirm: askConfirm } = useConfirm()
+const route = useRoute()
 const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
 const PER_PAGE = 20
 
@@ -135,7 +136,11 @@ function exportCsv() {
 }
 
 watch(month, () => { page.value = 1 })
-onMounted(async () => { await loadSettlements(); void loadSide() })
+onMounted(async () => {
+  await loadSettlements()
+  void loadSide()
+  if (route.query.action === 'payout') payoutOpen.value = true
+})
 </script>
 
 <template>

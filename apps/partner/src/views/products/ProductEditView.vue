@@ -9,6 +9,7 @@ import { userErrorMessage, useToast, OmSkeleton } from '@olmoa/ui'
 import ProductImageUploader, { type GalleryImage } from '../../components/product-form/ProductImageUploader.vue'
 import OptionMatrixEditor, { type OptionKind } from '../../components/product-form/OptionMatrixEditor.vue'
 import SkuTableEditor, { type SkuRow } from '../../components/product-form/SkuTableEditor.vue'
+import CategoryPicker from '../../components/product-form/CategoryPicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,8 +28,18 @@ const form = ref({
   custody_type: 'SEMI_MANAGED', supply_price: null as number | null, warehouse_location: '',
   package_length_cm: null as number | null, package_width_cm: null as number | null,
   package_height_cm: null as number | null, package_weight_kg: null as number | null,
-  description_html: '', kc_certified: false, kc_cert_number: ''
+  description_html: '', kc_certified: false, kc_cert_number: '',
+  shipping_policy_id: '', bundle_group_key: ''
 })
+const policies = ref<any[]>([])
+const checklist = computed(() => [
+  { label: '상품명 8자 이상', done: form.value.title.trim().length >= 8 },
+  { label: '카테고리 선택', done: !!form.value.category_id },
+  { label: '이미지 1장 이상', done: images.value.length > 0 },
+  { label: '상세 40자 이상', done: form.value.description_html.trim().length >= 40 },
+  { label: 'SKU 완성', done: skuRows.value.length > 0 && skuRows.value.every((r) => (r.sale_price || 0) >= 100 && (r.stock_quantity ?? -1) >= 0) },
+  { label: 'HS·원산지', done: !!form.value.hs_code.trim() && !!form.value.country_origin.trim() }
+])
 const images = ref<GalleryImage[]>([])
 const notice_rows = ref<{ key: string; value: string }[]>([{ key: '', value: '' }])
 const kinds = ref<OptionKind[]>([])
@@ -58,7 +69,7 @@ function rebuildRows() {
     const key = comboKey(m)
     const old = prev.get(key)
     const label = names.map((n) => m[n]).filter(Boolean).join(' / ') || '기본'
-    return old ? { ...old, key, label, combination: m } : { key, label, combination: m, sku_code: '', original_price: null, sale_price: null, stock_quantity: null }
+    return old ? { ...old, key, label, combination: m } : { key, label, combination: m, sku_code: '', original_price: null, sale_price: null, stock_quantity: null, safety_stock: null }
   })
 }
 function onKindsChange(v: OptionKind[]) { kinds.value = v; rebuildRows() }
@@ -108,6 +119,11 @@ async function loadCategories() {
     const json = await res.json().catch(() => null)
     if (res.ok && json?.success && Array.isArray(json.data)) categories.value = json.data
   } catch { /* category stays unlisted; submit validates */ }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/shipping-policies`, { headers: getPartnerHeaders() })
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.success && Array.isArray(json.data)) policies.value = json.data
+  } catch { /* policy select stays empty */ }
 }
 
 async function loadProduct() {
@@ -119,12 +135,13 @@ async function loadProduct() {
     if (!res.ok || !json?.success) throw new Error(json?.error || '상품을 불러오지 못했습니다.')
     const p = json.data
     form.value = {
-      title: p.title || '', brand: p.brand || '', category_id: p.category_id || '', country_origin: p.country_origin || 'KR',
+      title: (p.title || '').slice(0, 200), brand: p.brand || '', category_id: p.category_id || '', country_origin: p.country_origin || 'KR',
       hs_code: p.hs_code || '', custody_type: p.custody_type || 'SEMI_MANAGED', supply_price: p.supply_price ?? null,
       warehouse_location: p.warehouse_location || '', package_length_cm: p.package_length_cm ?? null,
       package_width_cm: p.package_width_cm ?? null, package_height_cm: p.package_height_cm ?? null,
       package_weight_kg: p.package_weight_kg ?? null, description_html: p.description_html || '',
-      kc_certified: Number(p.kc_certified) === 1, kc_cert_number: p.kc_cert_number || ''
+      kc_certified: Number(p.kc_certified) === 1, kc_cert_number: p.kc_cert_number || '',
+      shipping_policy_id: p.shipping_policy_id || '', bundle_group_key: p.bundle_group_key || ''
     }
     images.value = (p.images || []).map((im: any) => ({ image_url: im.image_url, alt_text: im.alt_text || '' }))
     try {
@@ -147,6 +164,7 @@ async function loadProduct() {
         row.original_price = s.original_price ?? null
         row.sale_price = s.sale_price ?? null
         row.stock_quantity = s.stock_quantity ?? null
+        row.safety_stock = s.safety_stock ?? null
       }
     }
   } catch (e: any) {
@@ -159,6 +177,7 @@ async function loadProduct() {
 async function submit() {
   formError.value = ''
   if (!form.value.title.trim()) { formError.value = '상품명을 입력해 주세요.'; return }
+  if (form.value.description_html.includes('[판매자 작성]')) { formError.value = '상세설명의 안내 문구([판매자 작성]…)를 지우고 실제 내용을 입력해 주세요.'; return }
   if (!form.value.category_id) { formError.value = '카테고리를 선택해 주세요.'; return }
   if (!images.value.length) { formError.value = '상품 이미지를 1장 이상 등록해 주세요.'; return }
   if (form.value.kc_certified && !form.value.kc_cert_number.trim()) { formError.value = 'KC 인증 대상 상품은 인증번호를 입력해야 합니다.'; return }
@@ -180,7 +199,8 @@ async function submit() {
       custody_type: form.value.custody_type, supply_price: form.value.supply_price ?? undefined,
       warehouse_location: form.value.warehouse_location.trim() || undefined,
       package_length_cm: form.value.package_length_cm ?? undefined, package_width_cm: form.value.package_width_cm ?? undefined,
-      package_height_cm: form.value.package_height_cm ?? undefined, package_weight_kg: form.value.package_weight_kg ?? undefined
+      package_height_cm: form.value.package_height_cm ?? undefined, package_weight_kg: form.value.package_weight_kg ?? undefined,
+      shipping_policy_id: form.value.shipping_policy_id || undefined, bundle_group_key: form.value.bundle_group_key.trim() || undefined
     }
     if (simple) {
       body.sale_price = first.sale_price
@@ -190,7 +210,8 @@ async function submit() {
       body.options = kinds.value.map((k) => ({ name: k.name.trim(), values: k.values }))
       body.skus = skuRows.value.map((r) => ({
         option_combination: r.combination, sku_code: r.sku_code.trim() || undefined,
-        original_price: r.original_price ?? r.sale_price, sale_price: r.sale_price, stock_quantity: r.stock_quantity
+        original_price: r.original_price ?? r.sale_price, sale_price: r.sale_price, stock_quantity: r.stock_quantity,
+        safety_stock: r.safety_stock ?? undefined
       }))
     }
     const res = await fetch(
@@ -228,21 +249,27 @@ onMounted(async () => {
       <p class="mt-1">{{ loadError }}</p>
       <button type="button" class="mx-auto mt-2 block rounded-full bg-secondary px-4 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover" @click="loadProduct">다시 불러오기</button>
     </div>
-    <form v-else class="space-y-6" @submit.prevent="submit">
-      <div class="flex items-center justify-between rounded-2xl border border-line bg-surface p-4 text-xs">
-        <span class="font-bold text-ink">작성 완성도 <span class="om-num text-primary">{{ quality }}점</span> / 100점</span>
-        <span class="text-ink-muted">상품명 8자·이미지·상세 40자·가격/재고·HS·원산지</span>
-      </div>
+    <form v-else class="gap-6 lg:flex lg:items-start" @submit.prevent="submit">
+      <aside class="mb-4 w-full shrink-0 space-y-2 rounded-2xl border border-line bg-surface p-4 text-xs lg:sticky lg:top-4 lg:mb-0 lg:w-52" aria-label="작성 진행 상황">
+        <p class="font-bold text-ink">작성 완성도 <span class="om-num text-primary">{{ quality }}점</span></p>
+        <ul class="space-y-1.5">
+          <li v-for="c in checklist" :key="c.label" class="flex items-center gap-1.5" :class="c.done ? 'font-bold text-success' : 'text-ink-subtle'">
+            <span aria-hidden="true">{{ c.done ? '●' : '○' }}</span> {{ c.label }}
+          </li>
+        </ul>
+      </aside>
+      <div class="min-w-0 flex-1 space-y-6">
+
+      <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="카테고리">
+        <h2 class="text-sm font-bold text-ink">카테고리 *</h2>
+        <CategoryPicker v-model="form.category_id" :categories="categories" />
+      </section>
 
       <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="기본 정보">
         <h2 class="text-sm font-bold text-ink">기본 정보</h2>
         <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-          <label class="space-y-1 sm:col-span-2">상품명 *<input v-model="form.title" maxlength="200" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" /></label>
+          <label class="space-y-1 sm:col-span-2">상품명(최대 200자) *<input v-model="form.title" maxlength="200" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" /></label>
           <label class="space-y-1">브랜드<input v-model="form.brand" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
-          <label class="space-y-1">카테고리 *<select v-model="form.category_id" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
-            <option value="" disabled>선택해 주세요</option>
-            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-          </select></label>
           <label class="space-y-1">원산지(2자리 국가코드)<input v-model="form.country_origin" maxlength="2" placeholder="KR" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
           <label class="space-y-1">HS 코드<input v-model="form.hs_code" maxlength="12" placeholder="예: 6109.10" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-ink" /></label>
           <label class="space-y-1">운영 모델<select v-model="form.custody_type" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
@@ -303,12 +330,24 @@ onMounted(async () => {
         <SkuTableEditor v-model="skuRows" />
       </section>
 
+      <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="배송">
+        <h2 class="text-sm font-bold text-ink">배송</h2>
+        <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+          <label class="space-y-1">배송비 템플릿<select v-model="form.shipping_policy_id" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
+            <option value="">기본 정책 사용</option>
+            <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select></label>
+          <label class="space-y-1">묶음배송 그룹<input v-model="form.bundle_group_key" maxlength="60" placeholder="예: BUNDLE-A" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
+        </div>
+      </section>
+
       <p v-if="formError" role="alert" class="rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs font-bold text-danger">{{ formError }}</p>
       <div class="flex gap-2">
         <button type="button" class="h-11 rounded-xl border border-line px-5 text-xs font-bold text-ink hover:bg-surface-2" @click="router.push('/products')">취소</button>
         <button type="submit" :disabled="saving" class="h-11 flex-1 rounded-xl bg-primary text-xs font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50">
           {{ saving ? '저장 중…' : isNew ? '심사 요청 등록' : '저장' }}
         </button>
+      </div>
       </div>
     </form>
   </div>

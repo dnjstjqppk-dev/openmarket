@@ -1,255 +1,213 @@
 <script setup lang="ts">
-import { CircleAlert, CircleCheck, LoaderCircle, Reply } from 'lucide-vue-next'
-import { ref, computed, onMounted } from 'vue';
-import { API_BASE, getPartnerHeaders } from '../config';
-import { userErrorMessage, OmButton, OmEmptyState } from '@olmoa/ui'
+// Seller product Q&A (4-8): waiting/answered tabs with counts, keyword search
+// and single plus bulk answers. Answers post immediately to the PDP.
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { API_BASE, getPartnerHeaders } from '../config'
+import { userErrorMessage, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar } from '@olmoa/ui'
 
-interface QnAItem {
-  id: string;
-  product_id: string;
-  product_title?: string;
-  questioner_name: string;
-  question: string;
-  answer?: string;
-  is_secret: number;
-  status: 'WAITING' | 'ANSWERED';
-  answered_at?: string;
-  created_at: string;
-}
+const toastApi = useToast()
+const route = useRoute()
+const router = useRouter()
+const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
 
-const qnaList = ref<QnAItem[]>([]);
-const loading = ref(true);
-const activeTab = ref<'ALL' | 'WAITING' | 'ANSWERED'>('WAITING');
-const answeringId = ref<string | null>(null);
-const answerText = ref('');
-const isSubmitting = ref(false);
-const toastMsg = ref('');
-const toastErr = ref(false);
-// T12: load failures are explicit with retry (never an empty list).
-const loadError = ref('');
+const qnaList = ref<any[]>([])
+const loading = ref(true)
+const loadError = ref('')
+const activeTab = ref(typeof route.query.status === 'string' && ['WAITING', 'ANSWERED'].includes(route.query.status) ? String(route.query.status) : 'WAITING')
+const query = ref('')
+const selected = ref<(string | number)[]>([])
+const answeringId = ref<string | null>(null)
+const answerText = ref('')
+const isSubmitting = ref(false)
+const bulkOpen = ref(false)
+const bulkText = ref('')
+const bulkBusy = ref(false)
 
 const filteredList = computed(() => {
-  if (activeTab.value === 'WAITING') {
-    return qnaList.value.filter(q => q.status === 'WAITING');
-  }
-  if (activeTab.value === 'ANSWERED') {
-    return qnaList.value.filter(q => q.status === 'ANSWERED');
-  }
-  return qnaList.value;
-});
+  const q = query.value.trim()
+  return qnaList.value.filter((item) => (activeTab.value === 'ALL' || item.status === activeTab.value)
+    && (!q || `${item.question} ${item.product_title || ''}`.includes(q)))
+})
+const waitingCount = computed(() => qnaList.value.filter((item) => item.status === 'WAITING').length)
+const answeredCount = computed(() => qnaList.value.filter((item) => item.status === 'ANSWERED').length)
+const isOverdue = (row: any) => {
+  if (row.status !== 'WAITING' || !row.created_at) return false
+  const at = new Date(String(row.created_at).replace(' ', 'T')).getTime()
+  return Number.isFinite(at) && Date.now() - at > 24 * 3600 * 1000
+}
+const ANSWER_TEMPLATES = [
+  { label: '접수 안내', text: '문의가 접수되었습니다. 확인 후 순차적으로 답변드리겠습니다.' },
+  { label: '확인 중', text: '추가 확인이 필요해 담당 부서에 전달했습니다. 확인되는 대로 안내드리겠습니다.' },
+  { label: '처리 완료', text: '안내드린 내용으로 처리해 드렸습니다. 감사합니다.' }
+]
 
-const waitingCount = computed(() => qnaList.value.filter(q => q.status === 'WAITING').length);
-const answeredCount = computed(() => qnaList.value.filter(q => q.status === 'ANSWERED').length);
+const columns = [
+  { key: 'q', label: '문의', primary: true },
+  { key: 'product', label: '상품', mobileHidden: true },
+  { key: 'status', label: '상태' },
+  { key: 'date', label: '등록일', mobileHidden: true }
+]
 
 async function loadQnA() {
-  loading.value = true;
-  loadError.value = '';
+  loading.value = true
+  loadError.value = ''
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/qna`, {
-      headers: getPartnerHeaders()
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `Q&A를 불러오지 못했습니다`);
-    qnaList.value = Array.isArray(json.data) ? json.data : [];
+    const res = await fetch(`${API_BASE}/api/v1/partner/qna`, { headers: getPartnerHeaders() })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success) throw new Error(json.error || 'Q&A를 불러오지 못했습니다')
+    qnaList.value = Array.isArray(json.data) ? json.data : []
+    selected.value = []
   } catch (e: any) {
-    loadError.value = userErrorMessage(e, 'Q&A 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
+    loadError.value = userErrorMessage(e, 'Q&A 목록을 불러오지 못했습니다. 다시 시도해 주세요.')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
-function openAnswerBox(q: QnAItem) {
-  answeringId.value = q.id;
-  answerText.value = q.answer || '';
+function setTab(v: string) {
+  activeTab.value = v
+  router.replace({ path: '/qna', query: { ...route.query, status: v } })
+}
+watch(() => route.query.status, (s) => { if (typeof s === 'string' && ['ALL', 'WAITING', 'ANSWERED'].includes(s)) activeTab.value = s })
+
+async function postAnswer(id: string, answer: string) {
+  const res = await fetch(`${API_BASE}/api/v1/partner/qna/${id}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
+    body: JSON.stringify({ answer })
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || !json.success) throw new Error(json.error || '답변을 등록하지 못했습니다. 잠시 후 다시 시도해주세요.')
 }
 
-async function submitAnswer(qnaId: string) {
-  if (!answerText.value.trim()) return;
-  isSubmitting.value = true;
-
+async function submitAnswer(id: string) {
+  if (!answerText.value.trim() || isSubmitting.value) return
+  isSubmitting.value = true
   try {
-    const res = await fetch(`${API_BASE}/api/v1/partner/qna/${qnaId}/answer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getPartnerHeaders() },
-      body: JSON.stringify({ answer: answerText.value.trim() })
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.success) throw new Error(json.error || `답변을 등록하지 못했습니다. 잠시 후 다시 시도해주세요.`);
-    toastErr.value = false;
-    toastMsg.value = '✓ 답변이 등록되어 상품 상세 페이지에 즉시 노출됩니다.';
-    answeringId.value = null;
-    answerText.value = '';
-    await loadQnA();
-    setTimeout(() => { toastMsg.value = ''; }, 3000);
+    await postAnswer(id, answerText.value.trim())
+    toastApi.success('답변이 등록되어 상품 상세 페이지에 즉시 노출됩니다.')
+    answeringId.value = null
+    answerText.value = ''
   } catch (e: any) {
-    toastErr.value = true;
-    toastMsg.value = `답변 등록 실패 — ${userErrorMessage(e, '네트워크 오류')}`;
+    toastApi.error(userErrorMessage(e, '답변을 등록하지 못했습니다.'))
   } finally {
-    isSubmitting.value = false;
+    isSubmitting.value = false
   }
+  void loadQnA()
 }
 
-onMounted(loadQnA);
+async function submitBulk() {
+  const ids = selected.value.map(String)
+  if (!ids.length || !bulkText.value.trim() || bulkBusy.value) return
+  bulkBusy.value = true
+  let ok = 0
+  let firstError = ''
+  try {
+    for (const id of ids) {
+      try {
+        await postAnswer(id, bulkText.value.trim())
+        ok += 1
+      } catch (e: any) {
+        if (!firstError) firstError = userErrorMessage(e, '등록 실패')
+      }
+    }
+    if (ok === ids.length) toastApi.success(`${ok}건 답변되었습니다.`)
+    else toastApi.error(`부분 실패 (성공 ${ok}건): ${firstError}`)
+    bulkOpen.value = false
+    bulkText.value = ''
+  } finally {
+    bulkBusy.value = false
+  }
+  void loadQnA()
+}
+
+onMounted(() => void loadQnA())
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-      <div>
-        <h1 class="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
-          <span>💬 고객 상품 문의(Q&A) 관리</span>
-          <span v-if="waitingCount > 0" class="text-xs px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-black animate-pulse">
-            미답변 {{ waitingCount }}건
-          </span>
-        </h1>
-        <p class="text-xs text-slate-500 mt-1">
-          고객의 상품 상세 문의에 빠르게 답변하여 구매 전환율을 높이고 브랜드 신뢰도를 확보하세요.
-        </p>
-      </div>
+  <div class="space-y-4">
+    <h1 class="text-xl font-bold text-ink">상품 문의</h1>
+    <OmStatusTabs
+      v-model="activeTab"
+      :tabs="[
+        { value: 'WAITING', label: '미답변', count: waitingCount },
+        { value: 'ANSWERED', label: '답변완료', count: answeredCount },
+        { value: 'ALL', label: '전체', count: qnaList.length }
+      ]"
+      @update:model-value="setTab"
+    />
+    <input v-model="query" type="search" placeholder="문의 내용·상품명 검색" aria-label="문의 검색" class="h-9 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus sm:w-72" />
 
-      <!-- Tab Buttons -->
-      <div class="flex items-center gap-1.5 self-start sm:self-auto">
-        <button
-          @click="activeTab = 'WAITING'"
-          :class="[
-            'px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer',
-            activeTab === 'WAITING' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-          ]"
-        >
-          답변 대기 ({{ waitingCount }})
-        </button>
-        <button
-          @click="activeTab = 'ANSWERED'"
-          :class="[
-            'px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer',
-            activeTab === 'ANSWERED' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-          ]"
-        >
-          답변 완료 ({{ answeredCount }})
-        </button>
-        <button
-          @click="activeTab = 'ALL'"
-          :class="[
-            'px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer',
-            activeTab === 'ALL' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-          ]"
-        >
-          전체 ({{ qnaList.length }})
-        </button>
-      </div>
+    <div v-if="loading && !qnaList.length" class="rounded-2xl border border-line bg-surface p-6">
+      <p class="mb-3 text-xs text-ink-muted">불러오는 중입니다…</p>
+      <OmSkeleton variant="row" :count="8" />
     </div>
-
-    <div v-if="toastMsg" role="status" class="p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 shadow-xs" :class="toastErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'">
-      <CircleAlert v-if="toastErr" class="h-4 w-4" aria-hidden="true" /><CircleCheck v-else class="h-4 w-4" aria-hidden="true" />
-      <span>{{ toastMsg }}</span>
+    <div v-else-if="loadError" class="rounded-2xl border border-danger bg-danger-soft p-6 text-center text-xs text-danger" role="alert">
+      <p class="font-bold">{{ U }}</p>
+      <p class="mt-1">{{ loadError }}</p>
+      <button type="button" class="mx-auto mt-2 block rounded-full bg-secondary px-4 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover" @click="loadQnA">다시 불러오기</button>
     </div>
-
-    <div v-if="loading" class="p-16 text-center text-slate-400">
-      <LoaderCircle class="h-4 w-4 animate-spin text-3xl mb-3 text-indigo-500" aria-hidden="true" />
-      <p class="text-xs font-bold">고객 Q&A 문의 내역을 불러오는 중입니다...</p>
-    </div>
-
-    <div v-else-if="loadError" class="bg-white rounded-2xl p-12 text-center border border-red-200 shadow-xs">
-      <div class="text-3xl mb-2">⚠️</div>
-      <h3 class="font-bold text-red-700 text-sm">문제가 발생했습니다. 잠시 후 다시 시도해주세요.</h3>
-      <p class="text-xs text-ink-muted mt-1">{{ loadError }}</p>
-      <button @click="loadQnA" class="mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer">다시 불러오기</button>
-    </div>
-
-    <OmEmptyState
-      v-else-if="filteredList.length === 0"
-      title="해당 조건의 고객 문의가 없습니다."
-      description="고객이 상품에 문의를 남기면 실시간으로 수신됩니다."
-    >
-      <OmButton size="sm" @click="loadQnA">다시 불러오기</OmButton>
-    </OmEmptyState>
-
-    <div v-else class="space-y-4">
-      <div
-        v-for="q in filteredList"
-        :key="q.id"
-        class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3"
+    <div v-else>
+      <OmDataTable
+        :columns="columns"
+        :rows="filteredList"
+        row-key="id"
+        selectable
+        v-model:selected="selected"
+        empty-title="문의가 없습니다"
+        empty-description="구매자의 상품 문의가 이곳에 표시됩니다."
       >
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-          <div class="flex items-center gap-2 text-xs">
-            <span
-              :class="[
-                'px-2 py-0.5 rounded-full text-[10px] font-black',
-                q.status === 'ANSWERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-              ]"
-            >
-              {{ q.status === 'ANSWERED' ? '✓ 답변완료' : '● 답변대기' }}
-            </span>
-            <span class="font-bold text-slate-900">{{ q.product_title || '상품 문의' }}</span>
-            <span class="text-slate-400">•</span>
-            <span class="text-slate-500 font-medium">{{ q.questioner_name }}</span>
-            <span v-if="q.is_secret" class="text-amber-600 text-[11px] font-bold">🔒 비밀글</span>
+        <template #cell-q="{ row }">
+          <div class="min-w-0">
+            <p class="flex flex-wrap items-center gap-1.5 text-ink">
+              <span v-if="Number(row.is_secret) === 1" class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">비밀글</span>
+              <span>{{ row.question }}</span>
+            </p>
+            <p v-if="row.answer" class="mt-1 whitespace-pre-wrap rounded-lg bg-surface-2 p-2 text-ink-muted">A. {{ row.answer }}</p>
+            <div v-if="answeringId === row.id" class="mt-2 space-y-2">
+              <div class="flex flex-wrap gap-1.5">
+                <button v-for="tpl in ANSWER_TEMPLATES" :key="tpl.label" type="button" class="rounded-full border border-line px-2.5 py-1 text-2xs font-bold text-ink-muted hover:bg-surface-2" @click="answerText = tpl.text">{{ tpl.label }}</button>
+              </div>
+              <div class="flex gap-2">
+                <input v-model="answerText" placeholder="답변을 입력해 주세요" aria-label="답변" class="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-xs text-ink" @keyup.enter="submitAnswer(row.id)" />
+                <button type="button" :disabled="isSubmitting" class="h-9 shrink-0 rounded-lg bg-primary px-3 text-xs font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitAnswer(row.id)">{{ isSubmitting ? '등록 중…' : '등록' }}</button>
+              </div>
+            </div>
           </div>
-          <span class="text-[11px] text-slate-400 font-mono">{{ new Date(q.created_at).toLocaleString() }}</span>
-        </div>
+        </template>
+        <template #cell-product="{ row }"><span class="text-ink-muted">{{ row.product_title || row.product_id }}</span></template>
+        <template #cell-status="{ row }">
+          <span class="flex flex-wrap items-center gap-1">
+            <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'WAITING' ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'">{{ row.status === 'WAITING' ? '미답변' : '답변완료' }}</span>
+            <span v-if="isOverdue(row)" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">24시간 경과</span>
+          </span>
+        </template>
+        <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
+        <template #actions="{ row }">
+          <button v-if="row.status === 'WAITING'" type="button" class="rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2" @click="answeringId = row.id; answerText = row.answer || ''">답변</button>
+        </template>
+      </OmDataTable>
+      <OmEmptyState v-if="!loading && !filteredList.length" title="문의가 없습니다" description="구매자의 상품 문의가 이곳에 표시됩니다." compact />
+    </div>
 
-        <!-- Question Body -->
-        <div class="p-3 bg-slate-50 rounded-xl text-xs space-y-1">
-          <p class="font-bold text-slate-700 flex items-center gap-1.5">
-            <span class="text-indigo-600 font-black">Q.</span>
-            <span>{{ q.question }}</span>
-          </p>
-        </div>
+    <OmBulkActionBar :count="selected.length" @clear="selected = []">
+      <button type="button" class="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-on hover:bg-primary-hover" @click="bulkOpen = true">선택 일괄 답변</button>
+    </OmBulkActionBar>
 
-        <!-- Answer Body (if answered) -->
-        <div v-if="q.answer && answeringId !== q.id" class="p-3 bg-indigo-50/60 rounded-xl text-xs space-y-1 border border-indigo-100">
-          <div class="flex items-center justify-between">
-            <span class="font-bold text-indigo-900 flex items-center gap-1.5">
-              <span class="text-[#FF5000] font-black">A.</span>
-              <span>판매자 공식 답변:</span>
-            </span>
-            <button
-              @click="openAnswerBox(q)"
-              class="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
-            >
-              답변 수정
-            </button>
-          </div>
-          <p class="text-slate-800 whitespace-pre-wrap pl-4">{{ q.answer }}</p>
-          <p v-if="q.answered_at" class="text-[10px] text-slate-400 pl-4 font-mono">답변일시: {{ new Date(q.answered_at).toLocaleString() }}</p>
+    <div v-if="bulkOpen" class="fixed inset-0 z-modal flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="일괄 답변">
+      <div class="absolute inset-0 bg-overlay/50" @click="bulkOpen = false" />
+      <div class="relative w-full max-w-md space-y-3 rounded-2xl border border-line bg-surface p-6">
+        <h2 class="text-sm font-bold text-ink">{{ selected.length }}건 일괄 답변</h2>
+        <div class="flex flex-wrap gap-1.5">
+          <button v-for="tpl in ANSWER_TEMPLATES" :key="tpl.label" type="button" class="rounded-full border border-line px-2.5 py-1 text-2xs font-bold text-ink-muted hover:bg-surface-2" @click="bulkText = tpl.text">{{ tpl.label }}</button>
         </div>
-
-        <!-- Inline Answer Editor -->
-        <div v-if="answeringId === q.id" class="space-y-2 pt-2 border-t border-slate-100">
-          <textarea
-            v-model="answerText"
-            rows="3"
-            placeholder="고객 문의에 대한 친절하고 정확한 답변을 입력해 주세요..."
-            class="w-full border border-indigo-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-          ></textarea>
-          <div class="flex justify-end gap-2">
-            <button
-              @click="answeringId = null"
-              class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
-            >
-              취소
-            </button>
-            <button
-              @click="submitAnswer(q.id)"
-              :disabled="isSubmitting || !answerText.trim()"
-              class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs disabled:opacity-50 cursor-pointer"
-            >
-              {{ isSubmitting ? '등록 중...' : '답변 등록 완료' }}
-            </button>
-          </div>
-        </div>
-
-        <div v-else-if="!q.answer" class="pt-1 flex justify-end">
-          <button
-            @click="openAnswerBox(q)"
-            class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition cursor-pointer flex items-center gap-1"
-          >
-            <Reply class="h-4 w-4" aria-hidden="true" />
-            <span>답변 작성하기</span>
-          </button>
+        <textarea v-model="bulkText" rows="4" placeholder="모든 선택 문의에 같은 답변을 등록합니다" aria-label="일괄 답변 내용" class="w-full rounded-lg border border-line bg-surface p-3 text-xs text-ink" />
+        <div class="flex justify-end gap-2">
+          <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="bulkOpen = false">취소</button>
+          <button type="button" :disabled="bulkBusy" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitBulk">{{ bulkBusy ? '등록 중…' : '등록' }}</button>
         </div>
       </div>
     </div>
   </div>
 </template>
-

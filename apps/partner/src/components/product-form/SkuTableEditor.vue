@@ -12,6 +12,7 @@ export interface SkuRow {
   original_price: number | null
   sale_price: number | null
   stock_quantity: number | null
+  safety_stock: number | null
 }
 const rows = defineModel<SkuRow[]>({ default: () => [] })
 const fillSale = ref('')
@@ -48,6 +49,7 @@ function fillAll() {
             <th class="px-3 py-2 text-right font-bold">정상가</th>
             <th class="px-3 py-2 text-right font-bold">판매가</th>
             <th class="px-3 py-2 text-right font-bold">재고</th>
+            <th class="px-3 py-2 text-right font-bold">안전재고</th>
           </tr>
         </thead>
         <tbody>
@@ -65,6 +67,9 @@ function fillAll() {
             <td class="px-3 py-1.5"><input :value="r.stock_quantity ?? ''" type="number" min="0" max="1000000" aria-label="재고"
               class="h-8 w-full rounded-lg border border-line bg-surface px-2 text-right text-ink"
               @input="rows = rows.map((x, n) => (n === i ? { ...x, stock_quantity: ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value) } : x))" /></td>
+            <td class="px-3 py-1.5"><input :value="r.safety_stock ?? ''" type="number" min="0" max="1000000" aria-label="안전재고"
+              class="h-8 w-full rounded-lg border border-line bg-surface px-2 text-right text-ink"
+              @input="rows = rows.map((x, n) => (n === i ? { ...x, safety_stock: ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value) } : x))" /></td>
           </tr>
         </tbody>
       </table>

@@ -11,6 +11,16 @@ const toastApi = useToast()
 const uploading = ref(false)
 const error = ref('')
 
+function checkPixels(file: File): Promise<boolean> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img.naturalWidth >= 500 && img.naturalHeight >= 500) }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(false) }
+    img.src = url
+  })
+}
+
 async function onFiles(e: Event) {
   const files = (e.target as HTMLInputElement).files
   if (!files?.length) return
@@ -22,6 +32,7 @@ async function onFiles(e: Event) {
   error.value = ''
   try {
     for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/') && !(await checkPixels(file))) throw new Error(`“${file.name}” 이미지가 작습니다. 500×500 이상으로 올려 주세요.`)
       const formData = new FormData()
       formData.append('file', file)
       formData.append('folder', 'products')

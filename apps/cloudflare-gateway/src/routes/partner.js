@@ -1334,9 +1334,22 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   // money and scope freeze once issuance starts (only suspend stays).
   if (p === '/api/v1/partner/coupons' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
-      "SELECT * FROM coupons WHERE issuer = 'SELLER' AND seller_id = ? ORDER BY created_at DESC"
+      `SELECT c.*, (SELECT COUNT(*) FROM user_coupons u WHERE u.coupon_id = c.id AND u.is_used = 1) AS used_count,
+        (SELECT COALESCE(SUM(i.store_coupon_alloc), 0) FROM order_items i
+         JOIN sub_orders s ON s.id = i.sub_order_id JOIN user_coupons u ON u.id = s.applied_store_coupon_id
+         WHERE u.coupon_id = c.id) AS discount_total
+       FROM coupons c WHERE c.issuer = 'SELLER' AND c.seller_id = ? ORDER BY c.created_at DESC`
     ).bind(partnerId).all();
     return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+  // 4-7: sellers stop their own coupons (money/scope stay frozen).
+  const cpnSuspM = p.match(/^\/api\/v1\/partner\/coupons\/([^/]+)\/suspend$/);
+  if (cpnSuspM && (request.method === 'PUT' || request.method === 'POST')) {
+    const r = await env.DB.prepare(
+      "UPDATE coupons SET is_active = 0 WHERE id = ? AND issuer = 'SELLER' AND seller_id = ?"
+    ).bind(cpnSuspM[1], partnerId).run();
+    if (r.meta.changes !== 1) throw notFound('쿠폰을 찾을 수 없거나 권한이 없습니다.');
+    return json(corsHeaders, { success: true, suspended: true });
   }
   if (p === '/api/v1/partner/coupons' && request.method === 'POST') {
     const b = await readJson(request);
@@ -1530,6 +1543,44 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, data: { profile } });
   }
 
+  // 4-8: own products' reviews with reply state, rating/answered filters, paging.
+  if (p === '/api/v1/partner/reviews' && request.method === 'GET') {
+    const prod = str(url.searchParams.get('product_id') || '', { max: 64 });
+    const minR = url.searchParams.get('min_rating');
+    const maxR = url.searchParams.get('max_rating');
+    const lo = minR === null || minR === '' ? null : Number(minR);
+    const hi = maxR === null || maxR === '' ? null : Number(maxR);
+    if ((lo !== null && (!Number.isFinite(lo) || lo < 0 || lo > 5)) || (hi !== null && (!Number.isFinite(hi) || hi < 0 || hi > 5))) {
+      throw bad('INVALID_RATING', 'min_rating·max_rating은 0~5 사이여야 합니다.');
+    }
+    const ansRaw = url.searchParams.get('answered');
+    const ans = ansRaw === null || ansRaw === '' ? null : ansRaw === 'true' ? 1 : ansRaw === 'false' ? 0 : null;
+    if (ansRaw !== null && ansRaw !== '' && ans === null) throw bad('INVALID_ANSWERED', 'answered는 true·false 중 하나여야 합니다.');
+    const photoRaw = url.searchParams.get('has_photo');
+    const photo = photoRaw === null || photoRaw === '' ? null : photoRaw === 'true' ? 1 : photoRaw === 'false' ? 0 : null;
+    if (photoRaw !== null && photoRaw !== '' && photo === null) throw bad('INVALID_HAS_PHOTO', 'has_photo는 true·false 중 하나여야 합니다.');
+    const where = ['pr.partner_id = ?'];
+    const args = [partnerId];
+    if (prod) { where.push('r.product_id = ?'); args.push(prod); }
+    if (lo !== null) { where.push('r.rating >= ?'); args.push(lo); }
+    if (hi !== null) { where.push('r.rating <= ?'); args.push(hi); }
+    if (ans !== null) { where.push(ans ? 'rp.id IS NOT NULL' : 'rp.id IS NULL'); }
+    if (photo !== null) { where.push(photo ? "COALESCE(r.images_json, '') NOT IN ('', '[]', 'null')" : "COALESCE(r.images_json, '') IN ('', '[]', 'null')"); }
+    const whereSql = where.join(' AND ');
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || '30', 10) || 30));
+    const total = await env.DB.prepare(
+      `SELECT COUNT(*) AS c FROM product_reviews r JOIN products pr ON pr.id = r.product_id LEFT JOIN review_replies rp ON rp.review_id = r.id WHERE ${whereSql}`
+    ).bind(...args).first('c') || 0;
+    const { results } = await env.DB.prepare(
+      `SELECT r.*, pr.title AS product_title, rp.id AS reply_id, rp.body AS reply_body, rp.created_at AS reply_at
+       FROM product_reviews r JOIN products pr ON pr.id = r.product_id LEFT JOIN review_replies rp ON rp.review_id = r.id
+       WHERE ${whereSql} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...args, perPage, (page - 1) * perPage).all();
+    const data = results.map((r) => ({ ...r, reply: r.reply_id ? { id: r.reply_id, body: r.reply_body, created_at: r.reply_at } : null }));
+    return json(corsHeaders, { success: true, count: data.length,
+      pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) }, data });
+  }
   // 2-9: review replies + reports on own products only.
   const prvReplyM = p.match(/^\/api\/v1\/partner\/reviews\/([^/]+)\/reply$/);
   if (prvReplyM && (request.method === 'PUT' || request.method === 'POST')) {

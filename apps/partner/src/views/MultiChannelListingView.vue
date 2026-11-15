@@ -13,6 +13,7 @@ interface Platform {
   api_docs_url: string;
   supported_models: string;
   status: string;
+  api_integrated?: boolean;
 }
 
 interface SalesChannel {
@@ -62,6 +63,13 @@ interface ChannelOrder {
 }
 
 const activeTab = ref<'channels' | 'listings' | 'orders' | 'calculator'>('channels');
+
+// 4-11: honest status labels — connectors without a live platform call stay
+// in simulation and never claim to be integrated.
+const LISTING_LABEL: Record<string, string> = { DRAFT: '임시저장', PENDING_REVIEW: '심사중', SYNC_FAILED: '동기화 실패', LIVE: '판매중', PAUSED: '일시중지' };
+const ORDER_LABEL: Record<string, string> = { COLLECTED: '수집됨', PO_DISPATCHED: '발주됨', SHIPPED: '출고됨' };
+const isLivePlatform = (platformId: string) => platforms.value.find((p) => p.id === platformId)?.api_integrated === true;
+const channelLive = (c: any) => isLivePlatform(c.platform_id);
 
 // State
 const platforms = ref<Platform[]>([]);
@@ -427,37 +435,40 @@ onMounted(() => {
 <template>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
     <!-- Header Hero Banner -->
-    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+    <div class="rounded-2xl border border-line bg-surface p-6 sm:p-8 shadow-xl relative overflow-hidden">
       <div class="relative z-10 space-y-2">
-        <div class="inline-flex items-center gap-2 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-          <Network class="h-4 w-4 text-cyan-400" aria-hidden="true" />
-          <span>GLOBAL MULTI-CHANNEL & SUPPLY CHAIN INTEGRATION</span>
+        <div class="inline-flex items-center gap-2 bg-primary-soft text-primary-soft-ink border border-line px-3 py-1 rounded-full text-xs font-semibold">
+          <Network class="h-4 w-4 text-primary" aria-hidden="true" />
+          <span>멀티채널 & 공급망 연동</span>
         </div>
-        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">글로벌 멀티채널 오픈마켓 연동 & 위탁배송 관리</h1>
-        <p class="text-sm sm:text-base text-slate-300 max-w-3xl leading-relaxed">
-          네이버 스마트스토어, 쿠팡, 11번가, Amazon US 등 전 세계 오픈마켓에 OLMOA 상품을 1-클릭 배포하고,
-          외부 마켓 주문 자동 수집부터 B2B 공급사 직발주, 3PL 실시간 송장 연동까지 통합 관리합니다.
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink">외부 판매채널 · B2B 발주 · 3PL 출고 관리</h1>
+        <p class="text-sm sm:text-base text-ink-muted max-w-3xl leading-relaxed">
+          판매채널 계정을 등록하고 채널별 상품 배포, 외부 주문 수집, B2B 발주, 3PL 송장 연동을 관리합니다.
         </p>
       </div>
     </div>
 
+    <div role="note" class="rounded-2xl border border-warning bg-warning-soft p-4 text-xs font-bold text-warning">
+      외부 플랫폼 실연동은 아직 제공되지 않습니다. 배포·수집·검증은 시뮬레이션으로 동작하며, 실연동 채널이 생기면 아래 목록에 실연동으로 표시됩니다.
+    </div>
+
     <!-- Alert Messages -->
-    <div v-if="errorMsg" class="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-3">
-      <TriangleAlert class="h-4 w-4 text-rose-500 text-lg flex-shrink-0" aria-hidden="true" />
+    <div v-if="errorMsg" class="p-4 bg-danger-soft border border-line text-danger rounded-xl flex items-center gap-3">
+      <TriangleAlert class="h-4 w-4 text-danger text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ errorMsg }}</span>
     </div>
-    <div v-if="successMsg" class="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-3">
-      <CircleCheck class="h-4 w-4 text-emerald-500 text-lg flex-shrink-0" aria-hidden="true" />
+    <div v-if="successMsg" class="p-4 bg-success-soft border border-line text-success rounded-xl flex items-center gap-3">
+      <CircleCheck class="h-4 w-4 text-success text-lg flex-shrink-0" aria-hidden="true" />
       <span class="text-sm font-medium">{{ successMsg }}</span>
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+    <div class="flex items-center gap-2 border-b border-line pb-2">
       <button
         @click="activeTab = 'channels'"
         type="button"
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
-        :class="activeTab === 'channels' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
+        :class="activeTab === 'channels' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Plug class="h-4 w-4" aria-hidden="true" />
         <span>판매채널 연결 & 계정 ({{ credentials.length }})</span>
@@ -466,7 +477,7 @@ onMounted(() => {
         @click="activeTab = 'listings'"
         type="button"
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
-        :class="activeTab === 'listings' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
+        :class="activeTab === 'listings' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Share2 class="h-4 w-4" aria-hidden="true" />
         <span>채널별 등록 상품 ({{ listings.length }})</span>
@@ -475,7 +486,7 @@ onMounted(() => {
         @click="activeTab = 'orders'"
         type="button"
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
-        :class="activeTab === 'orders' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
+        :class="activeTab === 'orders' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         <span>외부 채널 주문 & 발주 ({{ channelOrders.length }})</span>
@@ -484,7 +495,7 @@ onMounted(() => {
         @click="activeTab = 'calculator'"
         type="button"
         class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
-        :class="activeTab === 'calculator' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'"
+        :class="activeTab === 'calculator' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Calculator class="h-4 w-4" aria-hidden="true" />
         <span>글로벌 채널 마진 계산기</span>
@@ -495,12 +506,12 @@ onMounted(() => {
     <div v-if="activeTab === 'channels'" class="space-y-6">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-bold text-slate-900">연동 가능한 국내외 판매채널 및 B2B 공급망</h2>
-          <p class="text-xs text-slate-500">정식 판매자 API 키를 등록하면 채널별 자동 등록과 주문 수집이 활성화됩니다.</p>
+          <h2 class="text-lg font-bold text-ink">연동 가능한 국내외 판매채널 및 B2B 공급망</h2>
+          <p class="text-xs text-ink-muted">판매 채널 계정을 등록하면 배포·주문 수집 흐름을 테스트할 수 있습니다(현재 시뮬레이션 동작).</p>
         </div>
         <button
           @click="showCredModal = true"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
+          class="px-4 py-2 bg-primary hover:bg-primary-hover text-primary-on rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
         >
           <Key class="h-4 w-4" aria-hidden="true" />
           <span>새 판매채널 계정 연결</span>
@@ -512,43 +523,47 @@ onMounted(() => {
         <div
           v-for="c in channels"
           :key="c.id"
-          class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4"
+          class="bg-surface rounded-2xl p-5 border border-line shadow-sm flex flex-col justify-between space-y-4"
         >
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold px-2 py-0.5 rounded-md font-mono" :class="c.country_code === 'KR' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'">
+              <span class="text-xs font-bold px-2 py-0.5 rounded-md font-mono" :class="c.country_code === 'KR' ? 'bg-info-soft text-info' : 'bg-primary-soft text-primary-soft-ink'">
                 {{ c.country_code }}
               </span>
-              <span class="text-xs text-slate-400 font-mono">수수료 {{ (c.commission_bps / 100).toFixed(1) }}%</span>
+              <span class="text-xs text-ink-subtle font-mono">수수료 {{ (c.commission_bps / 100).toFixed(1) }}%</span>
             </div>
-            <h3 class="font-bold text-slate-900 text-base">{{ c.channel_name }}</h3>
-            <p class="text-xs text-slate-500">{{ c.platform_name }} 기반 정식 오픈마켓 API</p>
+            <h3 class="font-bold text-ink text-base">{{ c.channel_name }}</h3>
+            <p class="text-xs text-ink-muted">{{ c.platform_name }} 기반 정식 오픈마켓 API</p>
+            <p>
+              <span v-if="channelLive(c)" class="text-xs bg-success-soft text-success font-semibold px-2 py-1 rounded">실연동</span>
+              <span v-else class="text-xs bg-warning-soft text-warning font-semibold px-2 py-1 rounded">시뮬레이션</span>
+            </p>
           </div>
 
-          <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+          <div class="pt-2 border-t border-line-divider flex items-center justify-between">
             <button
               @click="handleSyncOrders(c.id)"
-              class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+              class="text-xs text-primary hover:underline font-bold flex items-center gap-1 cursor-pointer"
             >
               <RotateCw class="h-4 w-4" aria-hidden="true" /> 주문 수집 실행
             </button>
-            <span v-if="hasCredentialFor(c.platform_name)" class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-1 rounded">API 키 등록됨</span>
-            <span v-else class="text-xs bg-slate-100 text-slate-500 font-semibold px-2 py-1 rounded">API 키 미등록</span>
+            <span v-if="hasCredentialFor(c.platform_name)" class="text-xs bg-success-soft text-success font-semibold px-2 py-1 rounded">API 키 등록됨</span>
+            <span v-else class="text-xs bg-surface-3 text-ink-muted font-semibold px-2 py-1 rounded">API 키 미등록</span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- TAB 2: Channel Listings -->
-    <div v-if="activeTab === 'listings'" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+    <div v-if="activeTab === 'listings'" class="bg-surface rounded-2xl shadow-sm border border-line p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-line-divider pb-3">
         <div>
-          <h2 class="text-base font-bold text-slate-900">외부 오픈마켓 등록 상품 내역</h2>
-          <p class="text-xs text-slate-500">네이버/쿠팡/아마존 등으로 배포된 리스팅 상태를 조회합니다.</p>
+          <h2 class="text-base font-bold text-ink">외부 오픈마켓 등록 상품 내역</h2>
+          <p class="text-xs text-ink-muted">네이버/쿠팡/아마존 등으로 배포된 리스팅 상태를 조회합니다.</p>
         </div>
         <button
           @click="openDeployModal"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
+          class="px-4 py-2 bg-primary hover:bg-primary-hover text-primary-on rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
         >
           <Share2 class="h-4 w-4" aria-hidden="true" />
           <span>새 상품 배포</span>
@@ -557,7 +572,7 @@ onMounted(() => {
 
       <div class="overflow-x-auto">
         <table class="w-full text-xs text-left">
-          <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+          <thead class="bg-surface-2 text-ink-muted font-bold border-b border-line">
             <tr>
               <th class="px-3 py-2.5">판매 채널</th>
               <th class="px-3 py-2.5">상품명</th>
@@ -566,27 +581,27 @@ onMounted(() => {
               <th class="px-3 py-2.5">외부 상품 링크</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-line-divider">
             <tr v-if="listings.length === 0">
-              <td colspan="5" class="px-3 py-8 text-center text-slate-400">
+              <td colspan="5" class="px-3 py-8 text-center text-ink-subtle">
                 아직 외부 오픈마켓에 등록된 상품이 없습니다. 위 "새 상품 배포" 버튼으로 배포해 보세요.
               </td>
             </tr>
-            <tr v-for="l in listings" :key="l.id" class="hover:bg-slate-50">
-              <td class="px-3 py-2.5 font-bold text-slate-800">{{ l.channel_name }}</td>
-              <td class="px-3 py-2.5 text-slate-700 font-medium">{{ l.product_title }}</td>
-              <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-900">₩{{ l.channel_sale_price.toLocaleString() }}</td>
+            <tr v-for="l in listings" :key="l.id" class="hover:bg-surface-2">
+              <td class="px-3 py-2.5 font-bold text-ink">{{ l.channel_name }}</td>
+              <td class="px-3 py-2.5 text-ink-muted font-medium">{{ l.product_title }}</td>
+              <td class="px-3 py-2.5 text-right font-mono font-bold text-ink">₩{{ l.channel_sale_price.toLocaleString() }}</td>
               <td class="px-3 py-2.5 text-center">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  {{ l.status }}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success-soft text-success">
+                  {{ LISTING_LABEL[l.status] ?? l.status }}
                 </span>
               </td>
-              <td class="px-3 py-2.5 text-indigo-600 font-mono">
+              <td class="px-3 py-2.5 text-primary font-mono">
                 <a v-if="l.external_url" :href="l.external_url" target="_blank" class="hover:underline flex items-center gap-1">
                   <span>바로가기</span>
                   <ArrowUpRight class="h-4 w-4 text-[9px]" aria-hidden="true" />
                 </a>
-                <span v-else class="text-slate-400">-</span>
+                <span v-else class="text-ink-subtle">-</span>
               </td>
             </tr>
           </tbody>
@@ -595,17 +610,17 @@ onMounted(() => {
     </div>
 
     <!-- TAB 3: External Orders & PO Dispatch -->
-    <div v-if="activeTab === 'orders'" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+    <div v-if="activeTab === 'orders'" class="bg-surface rounded-2xl shadow-sm border border-line p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-line-divider pb-3">
         <div>
-          <h2 class="text-base font-bold text-slate-900">외부 판매채널 수집 주문 및 공급사 발주</h2>
-          <p class="text-xs text-slate-500">외부 오픈마켓에서 들어온 주문을 B2B 공급사에 1-클릭 위탁 발주하고 3PL로 출고합니다.</p>
+          <h2 class="text-base font-bold text-ink">외부 판매채널 수집 주문 및 공급사 발주</h2>
+          <p class="text-xs text-ink-muted">외부 오픈마켓에서 들어온 주문을 B2B 공급사에 1-클릭 위탁 발주하고 3PL로 출고합니다.</p>
         </div>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-xs text-left">
-          <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+          <thead class="bg-surface-2 text-ink-muted font-bold border-b border-line">
             <tr>
               <th class="px-3 py-2.5">외부 주문번호</th>
               <th class="px-3 py-2.5">채널</th>
@@ -615,44 +630,44 @@ onMounted(() => {
               <th class="px-3 py-2.5 text-center">작업 처리</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-line-divider">
             <tr v-if="channelOrders.length === 0">
-              <td colspan="6" class="px-3 py-8 text-center text-slate-400">
+              <td colspan="6" class="px-3 py-8 text-center text-ink-subtle">
                 수집된 외부 주문이 없습니다. 판매채널 탭에서 "주문 수집 실행"을 눌러보세요.
               </td>
             </tr>
-            <tr v-for="ord in channelOrders" :key="ord.id" class="hover:bg-slate-50">
-              <td class="px-3 py-2.5 font-mono font-bold text-slate-800">{{ ord.external_order_no }}</td>
-              <td class="px-3 py-2.5 text-slate-600">{{ ord.channel_name }}</td>
-              <td class="px-3 py-2.5 text-slate-700">
+            <tr v-for="ord in channelOrders" :key="ord.id" class="hover:bg-surface-2">
+              <td class="px-3 py-2.5 font-mono font-bold text-ink">{{ ord.external_order_no }}</td>
+              <td class="px-3 py-2.5 text-ink-muted">{{ ord.channel_name }}</td>
+              <td class="px-3 py-2.5 text-ink-muted">
                 <div class="font-medium">{{ ord.recipient_name }}</div>
-                <div class="text-[11px] text-slate-400 truncate max-w-xs">{{ ord.shipping_address }}</div>
+                <div class="text-[11px] text-ink-subtle truncate max-w-xs">{{ ord.shipping_address }}</div>
               </td>
-              <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-900">₩{{ ord.total_order_amount.toLocaleString() }}</td>
+              <td class="px-3 py-2.5 text-right font-mono font-bold text-ink">₩{{ ord.total_order_amount.toLocaleString() }}</td>
               <td class="px-3 py-2.5 text-center">
                 <span
                   class="px-2 py-0.5 rounded-full text-[10px] font-bold"
                   :class="{
-                    'bg-amber-100 text-amber-800': ord.order_status === 'COLLECTED',
-                    'bg-indigo-100 text-indigo-800': ord.order_status === 'PO_DISPATCHED',
-                    'bg-emerald-100 text-emerald-800': ord.order_status === 'SHIPPED'
+                    'bg-warning-soft text-warning': ord.order_status === 'COLLECTED',
+                    'bg-primary-soft text-primary-soft-ink': ord.order_status === 'PO_DISPATCHED',
+                    'bg-success-soft text-success': ord.order_status === 'SHIPPED'
                   }"
                 >
-                  {{ ord.order_status }}
+                  {{ ORDER_LABEL[ord.order_status] ?? ord.order_status }}
                 </span>
               </td>
               <td class="px-3 py-2.5 text-center space-x-1">
                 <button
                   v-if="ord.order_status === 'COLLECTED'"
                   @click="openDispatchModal(ord.id)"
-                  class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold cursor-pointer"
+                  class="px-2.5 py-1 bg-primary hover:bg-primary-hover text-primary-on rounded text-[11px] font-bold cursor-pointer"
                 >
                   B2B 발주
                 </button>
                 <button
                   v-if="ord.order_status === 'PO_DISPATCHED'"
                   @click="openFulfillModal(ord.id)"
-                  class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer"
+                  class="px-2.5 py-1 bg-success text-primary-on rounded text-[11px] font-bold cursor-pointer"
                 >
                   3PL 출고·송장연동
                 </button>
@@ -664,19 +679,19 @@ onMounted(() => {
     </div>
 
     <!-- TAB 4: Global Pricing Calculator -->
-    <div v-if="activeTab === 'calculator'" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+    <div v-if="activeTab === 'calculator'" class="bg-surface rounded-2xl shadow-sm border border-line p-6 space-y-6">
       <div>
-        <h2 class="text-base font-bold text-slate-900">글로벌 멀티채널 마진 시뮬레이터</h2>
-        <p class="text-xs text-slate-500">공급원가, 국제물류비, 관부가세, 채널 수수료, PG 수수료를 실시간 반영하여 역마진을 원천 차단합니다.</p>
+        <h2 class="text-base font-bold text-ink">글로벌 멀티채널 마진 시뮬레이터</h2>
+        <p class="text-xs text-ink-muted">공급원가·국제물류비·관부가세·채널 수수료·PG 수수료를 입력값 기준으로 계산해 역마진 여부를 미리 확인합니다.</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="space-y-4 md:col-span-1 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div class="space-y-4 md:col-span-1 bg-surface-2 p-4 rounded-xl border border-line">
           <div class="space-y-1">
-            <label class="text-xs font-bold text-slate-700">공급 도매원가</label>
+            <label class="text-xs font-bold text-ink-muted">공급 도매원가</label>
             <div class="flex gap-2">
-              <input v-model.number="calcWholesaleCost" @input="runCalculator" type="number" class="w-full px-3 py-2 text-sm rounded border border-slate-300 font-mono" />
-              <select v-model="calcCurrency" @change="runCalculator" class="px-2 py-2 text-xs rounded border border-slate-300 font-bold bg-white">
+              <input v-model.number="calcWholesaleCost" @input="runCalculator" type="number" class="w-full px-3 py-2 text-sm rounded border border-line font-mono bg-surface text-ink" />
+              <select v-model="calcCurrency" @change="runCalculator" class="px-2 py-2 text-xs rounded border border-line font-bold bg-surface text-ink">
                 <option value="KRW">KRW</option>
                 <option value="USD">USD</option>
                 <option value="CNY">CNY</option>
@@ -687,14 +702,14 @@ onMounted(() => {
           <div class="space-y-1">
             <div class="flex justify-between text-xs font-bold">
               <span>목표 마진율:</span>
-              <span class="text-indigo-600 font-mono">{{ calcTargetMargin }}%</span>
+              <span class="text-primary font-mono">{{ calcTargetMargin }}%</span>
             </div>
-            <input v-model.number="calcTargetMargin" @input="runCalculator" type="range" min="10" max="50" step="5" class="w-full accent-indigo-600" />
+            <input v-model.number="calcTargetMargin" @input="runCalculator" type="range" min="10" max="50" step="5" class="w-full accent-primary" />
           </div>
 
           <div class="space-y-1">
-            <label class="text-xs font-bold text-slate-700">판매 대상 채널</label>
-            <select v-model="calcChannel" @change="runCalculator" class="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white">
+            <label class="text-xs font-bold text-ink-muted">판매 대상 채널</label>
+            <select v-model="calcChannel" @change="runCalculator" class="w-full px-3 py-2 text-xs rounded border border-line bg-surface text-ink">
               <option value="NAVER_SMARTSTORE">네이버 스마트스토어 (5.5%)</option>
               <option value="COUPANG_MARKETPLACE">쿠팡 윙 오픈마켓 (10.8%)</option>
               <option value="ELEVEN_STREET_KR">11번가 오픈마켓 (12.0%)</option>
@@ -703,46 +718,46 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center gap-2 pt-2">
-            <input v-model="calcIsCrossborder" @change="runCalculator" type="checkbox" id="cbCheck" class="rounded accent-indigo-600" />
-            <label for="cbCheck" class="text-xs font-semibold text-slate-700 cursor-pointer">해외 직구 크로스보더 상품 (통관/항공운임)</label>
+            <input v-model="calcIsCrossborder" @change="runCalculator" type="checkbox" id="cbCheck" class="rounded accent-primary" />
+            <label for="cbCheck" class="text-xs font-semibold text-ink-muted cursor-pointer">해외 직구 크로스보더 상품 (통관/항공운임)</label>
           </div>
         </div>
 
         <!-- Simulation Result View -->
         <div v-if="calcResult" class="md:col-span-2 space-y-4">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-indigo-50 p-4 rounded-xl border border-indigo-100 font-mono text-center">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-primary-soft p-4 rounded-xl border border-line font-mono text-center">
             <div>
-              <div class="text-[11px] text-slate-500">총 랜드 원가</div>
-              <div class="text-base font-bold text-slate-900">₩{{ calcResult.cost_breakdown.total_landed_cost_krw.toLocaleString() }}</div>
+              <div class="text-[11px] text-ink-muted font-sans">총 랜드 원가</div>
+              <div class="text-base font-bold text-ink">₩{{ calcResult.cost_breakdown.total_landed_cost_krw.toLocaleString() }}</div>
             </div>
             <div>
-              <div class="text-[11px] text-slate-500">채널 수수료</div>
-              <div class="text-base font-bold text-amber-600">₩{{ calcResult.fees_breakdown.channel_commission_krw.toLocaleString() }}</div>
+              <div class="text-[11px] text-ink-muted font-sans">채널 수수료</div>
+              <div class="text-base font-bold text-warning">₩{{ calcResult.fees_breakdown.channel_commission_krw.toLocaleString() }}</div>
             </div>
             <div>
-              <div class="text-[11px] text-slate-500">최종 권장 판매가</div>
-              <div class="text-lg font-extrabold text-emerald-600">₩{{ calcResult.pricing_result.sale_price_krw.toLocaleString() }}</div>
+              <div class="text-[11px] text-ink-muted font-sans">최종 권장 판매가</div>
+              <div class="text-lg font-extrabold text-success">₩{{ calcResult.pricing_result.sale_price_krw.toLocaleString() }}</div>
             </div>
             <div>
-              <div class="text-[11px] text-slate-500">순수익 보장액</div>
-              <div class="text-base font-bold text-indigo-700">₩{{ calcResult.pricing_result.net_profit_krw.toLocaleString() }}</div>
+              <div class="text-[11px] text-ink-muted font-sans">순수익 보장액</div>
+              <div class="text-base font-bold text-primary">₩{{ calcResult.pricing_result.net_profit_krw.toLocaleString() }}</div>
             </div>
           </div>
 
-          <div class="text-xs space-y-1 text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200 leading-relaxed">
+          <div class="text-xs space-y-1 text-ink-muted bg-surface-2 p-4 rounded-xl border border-line leading-relaxed">
             <p><strong>수수료 세부 내역:</strong> 채널 수수료 {{ (calcResult.fees_breakdown.channel_commission_rate_bps / 100).toFixed(1) }}% + PG 결제수수료 3.0% + 반품 충당금 1.5% 포함</p>
-            <p><strong>역마진 방지 가드:</strong> <span class="font-bold text-emerald-600">안전 (보장 순이익 ₩{{ calcResult.pricing_result.net_profit_krw.toLocaleString() }})</span></p>
+            <p><strong>역마진 방지 가드:</strong> <span class="font-bold text-success">안전 (보장 순이익 ₩{{ calcResult.pricing_result.net_profit_krw.toLocaleString() }})</span></p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Credential Modal -->
-    <div v-if="showCredModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between border-b pb-2">
-          <h3 class="font-bold text-slate-900">판매채널 API 계정 연동</h3>
-          <button @click="showCredModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+    <div v-if="showCredModal" class="fixed inset-0 bg-overlay/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-line-divider pb-2">
+          <h3 class="font-bold text-ink">판매채널 API 계정 연동</h3>
+          <button @click="showCredModal = false" class="text-ink-subtle hover:text-ink cursor-pointer">
             <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -750,7 +765,7 @@ onMounted(() => {
         <div class="space-y-3 text-xs">
           <div>
             <label class="block font-bold mb-1">대상 플랫폼 선택</label>
-            <select v-model="selectedPlatformId" class="w-full p-2 border rounded-lg bg-white">
+            <select v-model="selectedPlatformId" class="w-full p-2 border border-line rounded-lg bg-surface text-ink">
               <option value="naver_smartstore">네이버 스마트스토어</option>
               <option value="coupang_wing">쿠팡 윙 오픈API</option>
               <option value="eleven_street">11번가 오픈API</option>
@@ -781,95 +796,95 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center gap-2 pt-1">
-            <input v-model="isSandbox" type="checkbox" id="sbxCheck" class="rounded accent-indigo-600" />
+            <input v-model="isSandbox" type="checkbox" id="sbxCheck" class="rounded accent-primary" />
             <label for="sbxCheck" class="cursor-pointer">테스트 샌드박스(Sandbox) 환경으로 등록</label>
           </div>
         </div>
 
-        <div class="flex justify-end gap-2 pt-2 border-t">
-          <button @click="showCredModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
-          <button @click="handleSaveCredential" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer">저장 및 연동</button>
+        <div class="flex justify-end gap-2 pt-2 border-t border-line-divider">
+          <button @click="showCredModal = false" class="px-4 py-2 border border-line rounded-lg text-ink-muted text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleSaveCredential" class="px-4 py-2 bg-primary text-primary-on rounded-lg text-xs font-bold cursor-pointer">저장 및 연동</button>
         </div>
       </div>
     </div>
 
     <!-- Dispatch PO modal -->
-    <div v-if="showDispatchModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between border-b pb-2">
-          <h3 class="font-bold text-slate-900">B2B 공급사 발주</h3>
-          <button @click="showDispatchModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+    <div v-if="showDispatchModal" class="fixed inset-0 bg-overlay/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-line-divider pb-2">
+          <h3 class="font-bold text-ink">B2B 공급사 발주</h3>
+          <button @click="showDispatchModal = false" class="text-ink-subtle hover:text-ink cursor-pointer">
             <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">공급사 선택</label>
-          <select v-model="dispatchSupplierId" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+          <label class="block text-xs font-bold text-ink-muted mb-1">공급사 선택</label>
+          <select v-model="dispatchSupplierId" class="w-full h-10 px-3 rounded-lg border border-line text-xs font-bold bg-surface text-ink cursor-pointer">
             <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">공급원가 합계 (원)</label>
+          <label class="block text-xs font-bold text-ink-muted mb-1">공급원가 합계 (원)</label>
           <input v-model.number="dispatchTotalCost" type="number" min="1" step="1" placeholder="예: 12000"
-            class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold" />
-          <p class="text-[11px] text-slate-400 mt-1">실제 공급원가를 입력해 주세요. 추정치로 발주할 수 없습니다.</p>
+            class="w-full h-10 px-3 rounded-lg border border-line text-xs font-bold bg-surface text-ink" />
+          <p class="text-[11px] text-ink-subtle mt-1">실제 공급원가를 입력해 주세요. 추정치로 발주할 수 없습니다.</p>
         </div>
-        <div class="flex justify-end gap-2 pt-2 border-t">
-          <button @click="showDispatchModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
-          <button @click="handleDispatchPo" :disabled="isDispatching" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDispatching ? '발주 중...' : '발주 실행' }}</button>
+        <div class="flex justify-end gap-2 pt-2 border-t border-line-divider">
+          <button @click="showDispatchModal = false" class="px-4 py-2 border border-line rounded-lg text-ink-muted text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleDispatchPo" :disabled="isDispatching" class="px-4 py-2 bg-primary text-primary-on rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDispatching ? '발주 중...' : '발주 실행' }}</button>
         </div>
       </div>
     </div>
 
     <!-- Fulfill modal -->
-    <div v-if="showFulfillModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between border-b pb-2">
-          <h3 class="font-bold text-slate-900">3PL 출고·송장 연동</h3>
-          <button @click="showFulfillModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+    <div v-if="showFulfillModal" class="fixed inset-0 bg-overlay/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-line-divider pb-2">
+          <h3 class="font-bold text-ink">3PL 출고·송장 연동</h3>
+          <button @click="showFulfillModal = false" class="text-ink-subtle hover:text-ink cursor-pointer">
             <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">택배사 선택</label>
-          <select v-model="fulfillCarrierCode" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+          <label class="block text-xs font-bold text-ink-muted mb-1">택배사 선택</label>
+          <select v-model="fulfillCarrierCode" class="w-full h-10 px-3 rounded-lg border border-line text-xs font-bold bg-surface text-ink cursor-pointer">
             <option v-for="c in carriers" :key="c.code" :value="c.code">{{ c.name }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">운송장 번호</label>
+          <label class="block text-xs font-bold text-ink-muted mb-1">운송장 번호</label>
           <input v-model="fulfillTrackingNumber" type="text" placeholder="택배사 발급 운송장 번호"
-            class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
-          <p class="text-[11px] text-slate-400 mt-1">운송장 번호는 택배사에서 발급받아야 합니다. 시스템이 임의로 만들지 않습니다.</p>
+            class="w-full h-10 px-3 rounded-lg border border-line text-xs font-mono bg-surface text-ink" />
+          <p class="text-[11px] text-ink-subtle mt-1">운송장 번호는 택배사에서 발급받아야 합니다. 시스템이 임의로 만들지 않습니다.</p>
         </div>
-        <div class="flex justify-end gap-2 pt-2 border-t">
-          <button @click="showFulfillModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
-          <button @click="handleFulfill" :disabled="isFulfilling" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isFulfilling ? '전송 중...' : '송장 전송' }}</button>
+        <div class="flex justify-end gap-2 pt-2 border-t border-line-divider">
+          <button @click="showFulfillModal = false" class="px-4 py-2 border border-line rounded-lg text-ink-muted text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleFulfill" :disabled="isFulfilling" class="px-4 py-2 bg-success text-primary-on rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isFulfilling ? '전송 중...' : '송장 전송' }}</button>
         </div>
       </div>
     </div>
 
     <!-- T14: deploy-to-channel modal (multi-product) -->
-    <div v-if="showDeployModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between border-b pb-2">
-          <h3 class="font-bold text-slate-900">외부 채널 상품 배포 (다건 가능)</h3>
-          <button @click="showDeployModal = false" class="text-slate-400 hover:text-slate-600 cursor-pointer">
+    <div v-if="showDeployModal" class="fixed inset-0 bg-overlay/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-line-divider pb-2">
+          <h3 class="font-bold text-ink">외부 채널 상품 배포 (다건 가능)</h3>
+          <button @click="showDeployModal = false" class="text-ink-subtle hover:text-ink cursor-pointer">
             <X class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">배포 채널</label>
-          <select v-model="deployChannelId" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-bold bg-white cursor-pointer">
+          <label class="block text-xs font-bold text-ink-muted mb-1">배포 채널</label>
+          <select v-model="deployChannelId" class="w-full h-10 px-3 rounded-lg border border-line text-xs font-bold bg-surface text-ink cursor-pointer">
             <option v-for="c in channels" :key="c.id" :value="c.id">{{ c.channel_name }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">배포 상품 ({{ deploySelected.length }}개 선택)</label>
-          <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-            <label v-for="p in deployProducts" :key="p.id" class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50">
-              <input type="checkbox" :value="p.id" v-model="deploySelected" class="rounded accent-indigo-600" />
-              <span class="font-medium text-slate-800 truncate">{{ p.title }}</span>
+          <label class="block text-xs font-bold text-ink-muted mb-1">배포 상품 ({{ deploySelected.length }}개 선택)</label>
+          <div class="max-h-40 overflow-y-auto border border-line rounded-lg divide-y divide-line-divider">
+            <label v-for="p in deployProducts" :key="p.id" class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-surface-2">
+              <input type="checkbox" :value="p.id" v-model="deploySelected" class="rounded accent-primary" />
+              <span class="font-medium text-ink truncate">{{ p.title }}</span>
             </label>
             <OmEmptyState
               v-if="deployProducts.length === 0"
@@ -883,48 +898,48 @@ onMounted(() => {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">채널 판매가 (선택)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">채널 판매가 (선택)</label>
             <input v-model.number="deploySalePrice" type="number" min="100" step="10" placeholder="미입력 시 올모아 판매가"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs bg-surface text-ink" />
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">브랜드 (필수)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">브랜드 (필수)</label>
             <input v-model="deployBrand" type="text" maxlength="100" placeholder="예: 자사 브랜드"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs bg-surface text-ink" />
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">배송 택배사 코드 (필수)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">배송 택배사 코드 (필수)</label>
             <input v-model="deployDeliveryCompany" type="text" maxlength="20" placeholder="예: CJGLS"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs font-mono bg-surface text-ink" />
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">채널 카테고리 ID (필수)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">채널 카테고리 ID (필수)</label>
             <input v-model="deployCategoryId" type="text" maxlength="20" placeholder="채널 카테고리 번호"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs font-mono" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs font-mono bg-surface text-ink" />
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">배송비 유형</label>
-            <select v-model="deployFeeType" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white">
+            <label class="block text-xs font-bold text-ink-muted mb-1">배송비 유형</label>
+            <select v-model="deployFeeType" class="w-full h-10 px-3 rounded-lg border border-line text-xs bg-surface text-ink">
               <option value="CHARGE">유료 배송</option>
               <option value="FREE">무료 배송</option>
               <option value="CONDITIONAL_FREE">조건부 무료</option>
             </select>
           </div>
           <div v-if="deployFeeType !== 'FREE'">
-            <label class="block text-xs font-bold text-slate-700 mb-1">배송비 (원)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">배송비 (원)</label>
             <input v-model.number="deployFee" type="number" min="0" step="100" placeholder="예: 3000"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs bg-surface text-ink" />
           </div>
           <div v-if="deployFeeType === 'CONDITIONAL_FREE'">
-            <label class="block text-xs font-bold text-slate-700 mb-1">무료배송 기준금액 (원)</label>
+            <label class="block text-xs font-bold text-ink-muted mb-1">무료배송 기준금액 (원)</label>
             <input v-model.number="deployThreshold" type="number" min="1" step="1000" placeholder="예: 30000"
-              class="w-full h-10 px-3 rounded-lg border border-slate-300 text-xs" />
+              class="w-full h-10 px-3 rounded-lg border border-line text-xs bg-surface text-ink" />
           </div>
         </div>
-        <p class="text-[11px] text-slate-400">외부 채널 API가 연동되지 않은 플랫폼은 명확한 안내와 함께 배포가 거부됩니다. 연동 전 배포분은 시뮬레이션으로만 기록됩니다.</p>
-        <div class="flex justify-end gap-2 pt-2 border-t">
-          <button @click="showDeployModal = false" class="px-4 py-2 border rounded-lg text-slate-600 text-xs font-bold cursor-pointer">취소</button>
-          <button @click="handleDeploy" :disabled="isDeploying || deploySelected.length === 0" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDeploying ? '배포 중...' : `배포 실행 (${deploySelected.length}건)` }}</button>
+        <p class="text-[11px] text-ink-subtle">외부 채널 API가 연동되지 않은 플랫폼은 명확한 안내와 함께 배포가 거부됩니다. 연동 전 배포분은 시뮬레이션으로만 기록됩니다.</p>
+        <div class="flex justify-end gap-2 pt-2 border-t border-line-divider">
+          <button @click="showDeployModal = false" class="px-4 py-2 border border-line rounded-lg text-ink-muted text-xs font-bold cursor-pointer">취소</button>
+          <button @click="handleDeploy" :disabled="isDeploying || deploySelected.length === 0" class="px-4 py-2 bg-primary text-primary-on rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50">{{ isDeploying ? '배포 중...' : `배포 실행 (${deploySelected.length}건)` }}</button>
         </div>
       </div>
     </div>

@@ -72,6 +72,24 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/promotions/coupons',
+      name: 'promotions-coupons',
+      component: () => import('../views/promotions/CouponListView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/promotions/flash-sales',
+      name: 'promotions-flash-sales',
+      component: () => import('../views/promotions/FlashSaleApplyView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/promotions/exhibitions',
+      name: 'promotions-exhibitions',
+      component: () => import('../views/promotions/ExhibitionApplyView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/shipments',
       name: 'shipments',
       component: ShipmentView,
@@ -115,9 +133,27 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/reviews',
+      name: 'reviews',
+      component: () => import('../views/ReviewManageView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: ProfileManageView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/store-profile',
+      name: 'store-profile',
+      component: () => import('../views/StoreProfileView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/store/shipping-policies',
+      name: 'store-shipping-policies',
+      component: () => import('../views/ShippingPolicyView.vue'),
       meta: { requiresAuth: true }
     },
     {

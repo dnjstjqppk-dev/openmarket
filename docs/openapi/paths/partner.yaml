@@ -1594,7 +1594,7 @@ paths:
     get:
       summary: My store coupons
       tags: [Partner]
-      description: '2-9: seller-issued coupons (issuer SELLER, dup_group STORE).'
+      description: '2-9: seller-issued coupons (issuer SELLER, dup_group STORE). 4-7: rows carry used_count and discount_total (sum of store_coupon_alloc).'
       responses:
         '200':
           description: Own coupons
@@ -1656,6 +1656,25 @@ paths:
           description: Unknown or foreign coupon (NOT_FOUND)
         '409':
           description: Frozen after issue start (COUPON_IMMUTABLE_AFTER_ISSUE)
+
+  /api/v1/partner/coupons/{id}/suspend:
+    put:
+      summary: Stop an own store coupon
+      tags: [Partner]
+      description: '4-7: sets is_active=0 on the seller''s own coupon. Money and scope stay frozen.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suspended
+        '401':
+          description: Missing or expired partner JWT
+        '404':
+          description: Unknown or foreign coupon (NOT_FOUND)
 
   /api/v1/partner/flash-sales:
     get:
@@ -1798,6 +1817,19 @@ paths:
           description: Saved profile
         '400':
           description: Invalid featured products or URLs
+        '401':
+          description: Missing or expired partner JWT
+
+  /api/v1/partner/reviews:
+    get:
+      summary: My products' reviews with reply state
+      tags: [Partner]
+      description: '4-8: own products only. Query: product_id, min_rating, max_rating (0-5), answered (true/false), has_photo (true/false), page, per_page.'
+      responses:
+        '200':
+          description: Reviews with reply objects and pagination
+        '400':
+          description: Bad rating range, answered flag or has_photo flag
         '401':
           description: Missing or expired partner JWT
 

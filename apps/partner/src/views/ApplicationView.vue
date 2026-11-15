@@ -89,47 +89,56 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 py-8 px-4">
-    <div class="max-w-2xl mx-auto space-y-4 text-xs">
+  <div class="min-h-screen bg-surface-2 px-4 py-8">
+    <div class="mx-auto max-w-2xl space-y-4 text-xs">
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-black text-gray-900">입점 신청 현황</h1>
-        <button type="button" class="text-gray-500 underline" @click="logout">로그아웃</button>
+        <h1 class="text-xl font-bold text-ink">입점 신청 현황</h1>
+        <button type="button" class="text-ink-muted underline" @click="logout">로그아웃</button>
       </div>
-      <p v-if="error" role="alert" class="p-3 rounded-xl bg-red-50 text-red-700 font-bold">{{ error }}</p>
-      <p v-if="msg" role="status" class="p-3 rounded-xl bg-emerald-50 text-emerald-800 font-bold">{{ msg }}</p>
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs font-bold" aria-label="입점 진행 단계">
+        <li><span class="rounded-full bg-success-soft px-2.5 py-1 text-success">1 신청서 완료</span></li>
+        <li aria-hidden="true" class="text-ink-subtle">→</li>
+        <li><span class="rounded-full px-2.5 py-1" :class="!app || app.kyc_status === 'DRAFT' || app.kyc_status === 'RESUBMIT_REQUIRED' ? 'bg-primary-soft text-primary-soft-ink' : 'bg-success-soft text-success'">2 서류 제출</span></li>
+        <li aria-hidden="true" class="text-ink-subtle">→</li>
+        <li><span class="rounded-full px-2.5 py-1" :class="app && (app.kyc_status === 'SUBMITTED' || app.kyc_status === 'REJECTED') ? 'bg-primary-soft text-primary-soft-ink' : app && app.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">3 심사</span></li>
+        <li aria-hidden="true" class="text-ink-subtle">→</li>
+        <li><span class="rounded-full px-2.5 py-1" :class="app && app.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">4 완료</span></li>
+      </ol>
+      <p v-if="error" role="alert" class="rounded-xl border border-danger bg-danger-soft p-3 font-bold text-danger">{{ error }}</p>
+      <p v-if="msg" role="status" class="rounded-xl border border-success bg-success-soft p-3 font-bold text-success">{{ msg }}</p>
 
-      <section v-if="app" class="bg-white rounded-2xl p-5 shadow-sm space-y-2" data-testid="application-status">
-        <div class="text-base font-black" :class="{ 'text-emerald-700': app.kyc_status === 'APPROVED', 'text-red-700': app.kyc_status === 'REJECTED', 'text-amber-700': app.kyc_status === 'RESUBMIT_REQUIRED' }">
+      <section v-if="app" class="space-y-2 rounded-2xl bg-surface p-5 shadow-sm" data-testid="application-status">
+        <div class="text-base font-bold" :class="{ 'text-success': app.kyc_status === 'APPROVED', 'text-danger': app.kyc_status === 'REJECTED', 'text-warning': app.kyc_status === 'RESUBMIT_REQUIRED' }">
           {{ KYC_LABEL[app.kyc_status] || app.kyc_status }}
         </div>
-        <p class="text-gray-600">{{ app.business_name }} · 사업자등록번호 {{ app.business_reg_number }} · 대표 {{ app.representative_name }}</p>
-        <p v-if="app.review_note" class="p-3 rounded-xl bg-amber-50 text-amber-900"><b>심사 의견:</b> {{ app.review_note }}</p>
-        <router-link v-if="app.status === 'APPROVED'" to="/" class="inline-block mt-2 h-10 leading-10 px-4 rounded-xl bg-[#FF5000] text-white font-black">판매자 센터로 이동</router-link>
-        <p v-if="app.status === 'APPROVED'" class="text-gray-500">정산 계좌 실명 확인이 끝나야 판매 대금이 지급됩니다.</p>
+        <p class="text-ink-muted">{{ app.business_name }} · 사업자등록번호 {{ app.business_reg_number }} · 대표 {{ app.representative_name }}</p>
+        <p v-if="app.review_note" class="rounded-xl border border-warning bg-warning-soft p-3 text-warning"><b>심사 의견:</b> {{ app.review_note }}</p>
+        <router-link v-if="app.status === 'APPROVED'" to="/" class="mt-2 inline-block h-10 rounded-xl bg-primary px-4 font-bold leading-10 text-primary-on">판매자 센터로 이동</router-link>
+        <p v-if="app.status === 'APPROVED'" class="text-ink-muted">정산 계좌 실명 확인이 끝나야 판매 대금이 지급됩니다.</p>
       </section>
 
-      <section v-if="app && app.kyc_status !== 'APPROVED'" class="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-        <h2 class="font-black text-sm">제출 서류 <span class="font-normal text-gray-400">(PDF·JPG·PNG, 10MB 이하 · 운영자만 열람)</span></h2>
-        <ul class="divide-y">
-          <li v-for="t in docTypes" :key="t" class="py-3 flex flex-wrap items-center justify-between gap-2">
+      <section v-if="app && app.kyc_status !== 'APPROVED'" class="space-y-3 rounded-2xl bg-surface p-5 shadow-sm">
+        <h2 class="text-sm font-bold">제출 서류 <span class="font-normal text-ink-subtle">(PDF·JPG·PNG, 10MB 이하 · 운영자만 열람)</span></h2>
+        <ul class="divide-y divide-line-divider">
+          <li v-for="t in docTypes" :key="t" class="flex flex-wrap items-center justify-between gap-2 py-3">
             <div>
-              <div class="font-bold">{{ DOC_LABEL[t] }} <span v-if="app.required_documents.includes(t)" class="text-red-600">*</span></div>
-              <div v-if="latest(t)" class="text-gray-500">
+              <div class="font-bold">{{ DOC_LABEL[t] }} <span v-if="app.required_documents.includes(t)" class="text-danger">*</span></div>
+              <div v-if="latest(t)" class="text-ink-muted">
                 <button type="button" class="underline" @click="openDoc(latest(t).file_id)">{{ latest(t).original_name }}</button>
-                · <span :class="latest(t).status === 'REJECTED' ? 'text-red-600 font-bold' : ''">{{ { SUBMITTED: '제출됨', ACCEPTED: '확인 완료', REJECTED: '보완 필요' }[latest(t).status as string] || latest(t).status }}</span>
+                · <span :class="latest(t).status === 'REJECTED' ? 'font-bold text-danger' : ''">{{ { SUBMITTED: '제출됨', ACCEPTED: '확인 완료', REJECTED: '보완 필요' }[latest(t).status as string] || latest(t).status }}</span>
                 <span v-if="latest(t).status === 'REJECTED' && latest(t).review_note"> — {{ latest(t).review_note }}</span>
               </div>
-              <div v-else class="text-gray-400">아직 올리지 않았습니다.</div>
+              <div v-else class="text-ink-subtle">아직 올리지 않았습니다.</div>
             </div>
-            <label v-if="app.editable" class="h-9 leading-9 px-3 rounded-lg border border-gray-300 font-bold cursor-pointer hover:border-gray-900">
+            <label v-if="app.editable" class="h-9 cursor-pointer rounded-lg border border-line px-3 font-bold leading-9 hover:border-line-strong">
               {{ busy === t ? '올리는 중...' : (latest(t) ? '다시 올리기' : '파일 선택') }}
               <input type="file" accept="application/pdf,image/jpeg,image/png" class="sr-only" :disabled="Boolean(busy)" @change="uploadDoc(t, $event)" />
             </label>
           </li>
         </ul>
-        <p v-if="app.missing_documents.length" class="text-amber-700">남은 필수 서류: {{ app.missing_documents.map((d: string) => DOC_LABEL[d]).join(', ') }}</p>
+        <p v-if="app.missing_documents.length" class="text-warning">남은 필수 서류: {{ app.missing_documents.map((d: string) => DOC_LABEL[d]).join(', ') }}</p>
         <button v-if="app.editable" type="button" :disabled="Boolean(busy) || app.missing_documents.length > 0"
-          class="w-full h-12 rounded-xl bg-slate-900 text-white font-black text-sm disabled:opacity-40" @click="submitForReview">
+          class="h-12 w-full rounded-xl bg-secondary text-sm font-bold text-secondary-on disabled:opacity-40" @click="submitForReview">
           {{ busy === 'submit' ? '요청 중...' : '심사 요청하기' }}
         </button>
       </section>

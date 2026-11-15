@@ -755,4 +755,82 @@ await t.test('P20. orders list accepts combined statuses', async () => {
   assert.equal(bad.status, 400, 'bad element rejected');
 });
 
+await t.test('P21. sellers suspend own coupons; list carries issue and use counts', async () => {
+  const g = await newGateway();
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const created = await g.call('/api/v1/partner/coupons', { method: 'POST', token: pt,
+    body: { code: 'P21STOP', title: 'P21 중지', discount_type: 'FIXED_AMOUNT', discount_value: 500 } });
+  assert.equal(created.status, 201, created.text);
+  const id = created.json.coupon_id || created.json.id || created.json.data?.id;
+  const list = await g.call('/api/v1/partner/coupons', { token: pt });
+  const row = list.json.data.find((c) => c.id === id);
+  assert.ok(row && Number.isInteger(row.issued_count) && Number.isInteger(row.used_count), 'issue and use counts present');
+  const stop = await g.call(`/api/v1/partner/coupons/${id}/suspend`, { method: 'PUT', token: pt });
+  assert.equal(stop.status, 200, stop.text);
+  assert.equal(g.db.prepare('SELECT is_active FROM coupons WHERE id = ?').get(id).is_active, 0, 'suspended');
+  g.db.prepare("INSERT INTO coupons (id, code, title, discount_type, discount_value, expires_at, is_active, issuer, seller_id, scope, dup_group, issue_method) VALUES ('cp_p21x', 'P21X', 'x', 'FIXED_AMOUNT', 100, '2099-01-01 00:00:00', 1, 'SELLER', 'pt_002', 'SELLER', 'STORE', 'DOWNLOAD')").run();
+  const denied = await g.call('/api/v1/partner/coupons/cp_p21x/suspend', { method: 'PUT', token: pt });
+  assert.equal(denied.status, 404, 'other seller coupon untouched');
+});
+
+await t.test('P22. review list shows own products with reply state', async () => {
+  const g = await newGateway();
+  const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
+  const pid = g.db.prepare("SELECT p.id FROM partners p JOIN users u ON u.id = p.owner_user_id WHERE u.email = 'seller@temu-supply.com'").get().id;
+  const prod = g.db.prepare('SELECT id FROM products WHERE partner_id = ? LIMIT 1').get(pid).id;
+  g.db.prepare(`INSERT INTO product_reviews (id, product_id, user_id, reviewer_name, rating, content, images_json)
+    VALUES ('rv_p22a', ?, 'u_customer_001', 'a', 5, 'x', '["https://x/p.png"]'), ('rv_p22b', ?, 'u_customer_001', 'b', 2, 'y', '[]')`).run(prod, prod);
+  g.db.prepare('INSERT INTO review_replies (id, review_id, partner_id, body) VALUES (?, ?, ?, ?)').run('vr_p22', 'rv_p22a', pid, '감사합니다');
+  const r = await g.call('/api/v1/partner/reviews', { token: pt });
+  assert.equal(r.status, 200, r.text);
+  const mine = r.json.data.filter((x) => x.product_id === prod);
+  assert.ok(mine.length >= 2, 'own reviews listed');
+  assert.equal(mine.find((x) => x.id === 'rv_p22a').reply.body, '감사합니다', 'reply joined');
+  assert.equal(mine.find((x) => x.id === 'rv_p22b').reply, null, 'unreplied stays null');
+  const low = await g.call('/api/v1/partner/reviews?max_rating=3', { token: pt });
+  assert.ok(low.json.data.some((x) => x.id === 'rv_p22b') && !low.json.data.some((x) => x.id === 'rv_p22a'), 'rating filter applies');
+  const un = await g.call('/api/v1/partner/reviews?answered=false', { token: pt });
+  assert.ok(un.json.data.some((x) => x.id === 'rv_p22b') && !un.json.data.some((x) => x.id === 'rv_p22a'), 'answered filter applies');
+  const photo = await g.call('/api/v1/partner/reviews?has_photo=true', { token: pt });
+  assert.ok(photo.json.data.some((x) => x.id === 'rv_p22a') && !photo.json.data.some((x) => x.id === 'rv_p22b'), 'photo filter applies');
+  const badPhoto = await g.call('/api/v1/partner/reviews?has_photo=maybe', { token: pt });
+  assert.equal(badPhoto.status, 400, 'photo filter validated');
+});
+
+await t.test('P23. store coupon issue, buyer use and settlement deduction', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com', 'CUSTOMER');
+  // pt_002 is the MARKETPLACE seller in the dev seed, so checkout writes a settlement row.
+  const pt = await login(g, 'partner2@olmoa-tech.com', 'PARTNER');
+  const { skuId } = pt2Product(g, { id: 'prod_pt2_p23', sku: 'sku_pt2_p23' });
+  const c = await g.call('/api/v1/partner/coupons', {
+    method: 'POST', token: pt,
+    body: { code: 'P23STORE', title: 'P23 스토어쿠폰', discount_type: 'FIXED_AMOUNT', discount_value: 1000 }
+  });
+  assert.equal(c.status, 201, c.text);
+  const couponId = c.json.data.id;
+  const claim = await g.call('/api/v1/coupons/claim', {
+    method: 'POST', token: cust, headers: { 'X-Idempotency-Key': 'p23-claim-1' }, body: { code: 'P23STORE' }
+  });
+  assert.equal(claim.status, 200, claim.text);
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: { ...addr('06236'), items: [{ sku_id: skuId, quantity: 1 }], store_coupon_ids: [claim.json.user_coupon_id] }
+  })).json;
+  assert.ok(o.order_id, `checkout with store coupon ok: ${JSON.stringify(o)}`);
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  const sub = g.db.prepare('SELECT id, applied_store_coupon_id FROM sub_orders WHERE parent_order_id = ?').get(o.order_id);
+  assert.equal(sub.applied_store_coupon_id, claim.json.user_coupon_id, 'store coupon recorded on the sub-order');
+  const stl = g.db.prepare('SELECT seller_coupon_burden FROM settlements WHERE sub_order_id = ?').get(sub.id);
+  assert.equal(stl.seller_coupon_burden, 1000, 'settlement deducts the seller burden');
+  const list = await g.call('/api/v1/partner/coupons', { token: pt });
+  const row = list.json.data.find((x) => x.id === couponId);
+  assert.equal(row.used_count, 1, 'use counted');
+  assert.equal(row.discount_total, 1000, 'discount total aggregates the allocation');
+});
+
 t.finish();
