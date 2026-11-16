@@ -24,6 +24,7 @@ const exportOpen = ref(false)
 const exportReason = ref('')
 const exporting = ref(false)
 const resetTarget = ref<any>(null)
+const resetOpen = ref(false)
 const resetPw = ref('')
 const resetPw2 = ref('')
 const resetBusy = ref(false)
@@ -96,6 +97,7 @@ function openReset(u: any) {
   resetPw2.value = ''
   resetError.value = ''
   resetDone.value = false
+  resetOpen.value = true
 }
 
 async function submitReset() {
@@ -208,7 +210,7 @@ onMounted(() => void loadUsers())
       </template>
     </OmModal>
 
-    <OmModal v-model:open="!!resetTarget" title="비밀번호 재설정" @update:open="(v: boolean) => { if (!v) resetTarget = null }">
+    <OmModal v-model:open="resetOpen" title="비밀번호 재설정">
       <div v-if="resetTarget" class="space-y-2 text-xs">
         <p class="text-ink-muted">{{ resetTarget.email }} · 모든 세션 로그아웃 + 잠금 해제</p>
         <template v-if="!resetDone">
@@ -219,7 +221,7 @@ onMounted(() => void loadUsers())
         <p v-else class="font-bold text-success">재설정되었습니다. 새 비밀번호를 안전한 경로로 전달하고, 로그인 후 변경을 안내해 주세요.</p>
       </div>
       <template #footer>
-        <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="resetTarget = null">{{ resetDone ? '닫기' : '취소' }}</button>
+        <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="resetOpen = false">{{ resetDone ? '닫기' : '취소' }}</button>
         <button v-if="!resetDone" type="button" :disabled="resetBusy" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitReset">{{ resetBusy ? '처리 중…' : '재설정' }}</button>
       </template>
     </OmModal>

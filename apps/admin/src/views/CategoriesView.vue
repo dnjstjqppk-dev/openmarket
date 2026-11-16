@@ -177,14 +177,14 @@ onMounted(loadCategories)
     </div>
 
     <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-4">
-      <input v-model="form.name" placeholder="카테고리명" aria-label="카테고리명" class="h-9 rounded-lg border border-line bg-surface px-3 text-ink" />
-      <input v-model="form.slug" placeholder="슬러그 (자동)" aria-label="슬러그" class="h-9 rounded-lg border border-line bg-surface px-3 text-ink" />
-      <select v-model="form.parent_id" aria-label="상위 카테고리" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink">
+      <input v-model="form.name" placeholder="카테고리명" aria-label="카테고리명" class="h-9 min-w-0 rounded-lg border border-line bg-surface px-3 text-ink" />
+      <input v-model="form.slug" placeholder="슬러그 (자동)" aria-label="슬러그" class="h-9 min-w-0 rounded-lg border border-line bg-surface px-3 text-ink" />
+      <select v-model="form.parent_id" aria-label="상위 카테고리" class="h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-ink">
         <option value="">최상위 (부모 없음)</option>
         <option v-for="c in categories.filter((x) => x.depth < 2)" :key="c.id" :value="c.id">{{ c.name }} ({{ c.slug }})</option>
       </select>
-      <div class="flex gap-2">
-        <input v-model.number="form.sort_order" type="number" min="0" placeholder="정렬순서" aria-label="정렬 순서" class="h-9 w-24 rounded-lg border border-line bg-surface px-2 text-ink" />
+      <div class="flex min-w-0 gap-2">
+        <input v-model.number="form.sort_order" type="number" min="0" placeholder="정렬순서" aria-label="정렬 순서" class="h-9 w-24 min-w-0 rounded-lg border border-line bg-surface px-2 text-ink" />
         <button type="button" class="h-9 flex-1 rounded-lg bg-primary px-3 font-bold text-primary-on hover:bg-primary-hover" @click="createCategory">생성</button>
       </div>
     </div>
