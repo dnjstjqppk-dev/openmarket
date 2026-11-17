@@ -1,0 +1,4 @@
+# phase-5 rehearsal rollback log — 2026-11-17T09:28:09Z — restore baseline copy, compare with baseline snapshot
+restored: 200 schema objects (sha256 a9eafde0db3a4901…), 602 rows total, ledger MAX=d1_50_wave_e_fds_purchase.sql, fk=0
+baseline: sha256 a9eafde0db3a4901… vs restored a9eafde0db3a4901… vs rehearsed ec9be5954cd0d08f…
+rollback PASS: {"row_counts_equal_baseline": true, "schema_objects_equal_baseline": true, "ledger_max_equal_baseline": true, "foreign_key_check_zero": true, "integrity_check_ok": true, "rollback_actually_reverted": true}
