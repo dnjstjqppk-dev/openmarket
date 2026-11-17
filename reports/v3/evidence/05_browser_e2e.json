@@ -1,14 +1,19 @@
 {
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "at": "2026-11-04T16:31:16.105Z",
+  "at": "2026-11-16T11:59:10.823Z",
   "steps": [
     {
       "name": "B01 storefront home renders with legal business disclosure from API",
       "ok": true,
       "error": null,
-      "ms": 3906,
+      "ms": 4303,
       "console_errors": [],
       "network_errors": [
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        },
         {
           "status": "FAILED",
           "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
@@ -20,7 +25,15 @@
       "name": "B02 protected route redirects anonymous users to login",
       "ok": true,
       "error": null,
-      "ms": 766,
+      "ms": 979,
+      "console_errors": [],
+      "network_errors": []
+    },
+    {
+      "name": "B02b search finds products and a price filter narrows to zero",
+      "ok": true,
+      "error": null,
+      "ms": 1624,
       "console_errors": [],
       "network_errors": []
     },
@@ -28,7 +41,7 @@
       "name": "B03 product detail (marketplace seller) and add to cart",
       "ok": true,
       "error": null,
-      "ms": 2752,
+      "ms": 3414,
       "console_errors": [],
       "network_errors": []
     },
@@ -36,15 +49,40 @@
       "name": "B04 add a direct-sales (MODEL A) product -> mixed cart",
       "ok": true,
       "error": null,
-      "ms": 3321,
+      "ms": 3960,
       "console_errors": [],
-      "network_errors": []
+      "network_errors": [
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        }
+      ]
+    },
+    {
+      "name": "B04b quick-add from the home grid grows the cart",
+      "ok": true,
+      "error": null,
+      "ms": 3405,
+      "console_errors": [],
+      "network_errors": [
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        },
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        }
+      ]
     },
     {
       "name": "B05 checkout requires login; login through the real form",
       "ok": true,
       "error": null,
-      "ms": 2787,
+      "ms": 2863,
       "console_errors": [
         {
           "type": "log",
@@ -60,10 +98,42 @@
       ]
     },
     {
+      "name": "B05b store follow toggles on and off in the UI",
+      "ok": true,
+      "error": null,
+      "ms": 3861,
+      "console_errors": [],
+      "network_errors": [
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        },
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        },
+        {
+          "status": "FAILED",
+          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "error": "net::ERR_BLOCKED_BY_ORB"
+        }
+      ]
+    },
+    {
+      "name": "B05c platform and store coupons minted and claimed for checkout",
+      "ok": true,
+      "error": null,
+      "ms": 403,
+      "console_errors": [],
+      "network_errors": []
+    },
+    {
       "name": "B06 checkout shows the server quote; pay with the local simulator",
       "ok": true,
       "error": null,
-      "ms": 5552,
+      "ms": 5725,
       "console_errors": [],
       "network_errors": []
     },
@@ -71,15 +141,35 @@
       "name": "B07 seller center: login, see the paid order, ship it",
       "ok": true,
       "error": null,
-      "ms": 6603,
-      "console_errors": [],
-      "network_errors": []
+      "ms": 6605,
+      "console_errors": [
+        {
+          "type": "log",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized) http://127.0.0.1:8787/api/v1/partner/profile"
+        },
+        {
+          "type": "log",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized) http://127.0.0.1:8787/api/v1/partner/dashboard/pipeline"
+        }
+      ],
+      "network_errors": [
+        {
+          "status": 401,
+          "url": "http://127.0.0.1:8787/api/v1/partner/profile",
+          "method": "GET"
+        },
+        {
+          "status": 401,
+          "url": "http://127.0.0.1:8787/api/v1/partner/dashboard/pipeline",
+          "method": "GET"
+        }
+      ]
     },
     {
       "name": "B08 operator console: login, reconciliation, entities, purchase orders",
       "ok": true,
       "error": null,
-      "ms": 11572,
+      "ms": 11698,
       "console_errors": [],
       "network_errors": []
     },
@@ -87,7 +177,7 @@
       "name": "B09 delivery (dev simulator) -> customer purchase confirmation in the UI",
       "ok": true,
       "error": null,
-      "ms": 5708,
+      "ms": 88335,
       "console_errors": [],
       "network_errors": []
     },
@@ -95,7 +185,15 @@
       "name": "B10 customer cancels the remaining (direct) shipment from the UI",
       "ok": true,
       "error": null,
-      "ms": 2010,
+      "ms": 402797,
+      "console_errors": [],
+      "network_errors": []
+    },
+    {
+      "name": "B10b partial return on one seller shipment from the UI",
+      "ok": true,
+      "error": null,
+      "ms": 60145,
       "console_errors": [],
       "network_errors": []
     },
@@ -103,7 +201,7 @@
       "name": "B11 reconciliation still clean after the browser journey",
       "ok": true,
       "error": null,
-      "ms": 875,
+      "ms": 2156,
       "console_errors": [],
       "network_errors": []
     }
@@ -118,25 +216,27 @@
     "07_store_cart_mobile.png",
     "08_store_login_desktop.png",
     "09_store_login_mobile.png",
-    "10_store_checkout_desktop.png",
-    "11_store_checkout_mobile.png",
-    "12_store_payment_simulator_desktop.png",
-    "13_store_order_detail_paid_desktop.png",
-    "14_store_order_detail_paid_mobile.png",
-    "15_partner_dashboard_desktop.png",
-    "16_partner_dashboard_mobile.png",
-    "17_partner_shipments_desktop.png",
-    "18_partner_shipments_mobile.png",
-    "19_admin_reconciliation_desktop.png",
-    "20_admin_reconciliation_mobile.png",
-    "21_admin_business_entities_desktop.png",
-    "22_admin_business_entities_mobile.png",
-    "23_admin_purchase_orders_desktop.png",
-    "24_admin_purchase_orders_mobile.png",
-    "25_admin_dashboard_desktop.png",
-    "26_admin_dashboard_mobile.png",
-    "27_store_order_confirmed_desktop.png",
-    "28_store_order_confirmed_mobile.png",
-    "29_store_partial_cancel_desktop.png"
+    "10_store_follow_on_desktop.png",
+    "11_store_checkout_desktop.png",
+    "12_store_checkout_mobile.png",
+    "13_store_payment_simulator_desktop.png",
+    "14_store_order_detail_paid_desktop.png",
+    "15_store_order_detail_paid_mobile.png",
+    "16_partner_dashboard_desktop.png",
+    "17_partner_dashboard_mobile.png",
+    "18_partner_shipments_desktop.png",
+    "19_partner_shipments_mobile.png",
+    "20_admin_reconciliation_desktop.png",
+    "21_admin_reconciliation_mobile.png",
+    "22_admin_business_entities_desktop.png",
+    "23_admin_business_entities_mobile.png",
+    "24_admin_purchase_orders_desktop.png",
+    "25_admin_purchase_orders_mobile.png",
+    "26_admin_dashboard_desktop.png",
+    "27_admin_dashboard_mobile.png",
+    "28_store_order_confirmed_desktop.png",
+    "29_store_order_confirmed_mobile.png",
+    "30_store_partial_cancel_desktop.png",
+    "31_store_partial_return_desktop.png"
   ]
 }
