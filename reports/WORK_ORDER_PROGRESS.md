@@ -10,7 +10,7 @@
 1-6 | 통과 | 4c80978 | design_lint D02 + vue-tsc 3앱 | fa- 159건→lucide 전환, CDN 3종 제거, 참조 0건
 1-7 | 통과 | 06d8319 | console_shell 11/11 + p1_admin 17/17 + wavef 33/33 | 양 콘솔 OmConsoleShell 전환, 기존주소 유지 → Q-1-7
 1-8 | 통과 | 1a7d558 | storefront_shell 8/8 + typecheck | 메가메뉴·검색패널·하단4탭·레일·스크롤바, 3건 분리 → Q-1-8
-1-9 | 실패 | 040ca81 | confirm_dialogs 5/5 + test:ui + typecheck 4종 | 47곳 전환, 테스트 고정 5곳 보류 → Q-1-9
+1-9 | 통과 | b6f45bb | confirm_dialogs 5/5 + test:ui + typecheck 4종 | 고정5 전환완료(04af54a 5→4·a26d238 4→2·b6f45bb 2→0), 3앱 alert/confirm/prompt 0건 → Q-1-9
 1-10 | 통과 | a061dfd | error_states 18/18 + test:ui + typecheck 4종 + 육안 5종 | 문구통일·401 3앱·빈 24곳·스켈레톤 detail·기술문구 88곳 차단, 해석 7건 → Q-1-10
 1-11 | 통과 | 10c64d4 | copy_honesty 11/11 + image_policy 3/3 + test:ui + typecheck 4종 | 표 10행 중 3행 적용·2행 현행적합·3행 부재·2행 제외, 예시 0건 → Q-1-11
 2-1 | 통과 | 40c9026 | catalog_media_notice 8/8 + migrations + p1 + openapi 3/3 + e2e 26/26 | 이미지 갤러리·고시 템플릿·상세 확장, URL 강제 연기 → Q-2-1
@@ -30,7 +30,7 @@
 3-5 | 통과 | 48781dc | cart 5/5 + plp 7/7 + test:ui + typecheck | 판매자박스·게이지·견적요약·가격표시, 해석 → Q-3-5
 3-6 | 통과 | c86a7be | checkout 4/4 + checkout36 3/3 + test:ui + typecheck | 주문자·쿠폰모달·예약일·금칙어·동의2종, 해석 → Q-3-6
 3-7 | 통과 | fa74513 | payment_result 4/4 + test:ui + typecheck | 영수증·카드마스킹·주소정리·공유없음, 해석 → Q-3-7
-3-8 | 통과 | 95a8698 | order 8/8 + buyer 20/20 + partner 15/15 + admin 12/12 + e2e 26/26 + test:ui + typecheck | 탭3·20개씩·카드·재구매·옵션잠금·회수일·사진·철회, d1_64, 해석 → Q-3-8
+3-8 | 실패(5-1에서 재작업) | 95a8698 | order 8/8 + buyer 20/20 + partner 15/15 + admin 12/12 + e2e 26/26 + test:ui + typecheck | 주문 화면 색상 미전환(번호셰이드 검사기 사각 Q-3-11c), 다크모드 캡처 없음 → Q-3-8
 3-9 | 통과 | abc67fb | my 12/12 + buyer 23/23 + openapi 3/3 + test:ui + typecheck + 빌드 | /my 7주소·리다이렉트·메뉴200·바로가기9·얇은읽기3·우편검색장착·주문탭연결, 해석 → Q-3-9
 3-10 | 통과 | c5295b7 | store 9/9 + buyer 25/25 + openapi 3/3 + browser 13/13 + test:ui + typecheck | 헤더·탭4·채우기·PLP고정·리뷰공개·팔로우E2E·B04b/B06 단계수정, 해석 → Q-3-10
 3-11 | 통과 | add8579 | misc 7/7 + flash 9/9 + products 5/5 + buyer 25/25 + openapi 3/3 + test:ui + typecheck + 빌드 | 특가·베스트기간·쿠폰3탭·고객센터·약관3·가입단계·스토어린트0(홀드1)·카카오예외, 해석 → Q-3-11
