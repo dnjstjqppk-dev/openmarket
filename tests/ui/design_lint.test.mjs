@@ -17,7 +17,11 @@ const ROOTS = ['apps/storefront/src', 'apps/admin/src', 'apps/partner/src', 'pac
 
 const PALETTE = '(?:white|black|gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)'
 const UTIL = '(?:bg|text|border|ring|divide|stroke|fill|placeholder|accent|caret|outline|decoration|from|via|to)'
-const paletteRe = new RegExp(`(?:^|[^a-zA-Z0-9_:-])!?(?:[a-z-]+:)*!?${UTIL}-${PALETTE}(?![a-zA-Z0-9-])`, 'g')
+// 5-1: also match numbered shades (-50..-950) and /opacity suffixes. The old
+// trailing lookahead rejected every shade, hiding 100+ violations (Q-3-11c).
+// Variant prefixes (hover:, dark:, sm:) were and are matched by [a-z-]+:.
+const SHADE = '(?:-(?:50|100|200|300|400|500|600|700|800|900|950))?'
+const paletteRe = new RegExp(`(?:^|[^a-zA-Z0-9_:-])!?(?:[a-z-]+:)*!?${UTIL}-${PALETTE}${SHADE}(?:/\\d{1,3})?(?![a-zA-Z0-9-])`, 'g')
 const overlayRe = /!?(?:[a-z-]+:)*!?(?:bg-black\/40|text-white)(?![a-zA-Z0-9-])/
 
 function strip(src) {
@@ -113,6 +117,16 @@ await t.test('D01 no file exceeds its design-lint cap', async () => {
     assert.ok(n <= cap, `${key} has ${n} violations (cap ${cap}): ${details.join(' ')}`)
   }
   assert.ok(total > 0, 'scanner must find the known violations')
+})
+
+await t.test('D04 scanner catches shades, opacity suffixes and variant prefixes (work order 5-1)', async () => {
+  const hits = (s) => { paletteRe.lastIndex = 0; let n = 0; while (paletteRe.exec(s) !== null) n++; return n }
+  for (const s of ['bg-gray-100', 'hover:text-green-800', 'border-gray-200/80', 'sm:bg-slate-100']) {
+    assert.equal(hits(` class="${s}" `), 1, `${s} must count 1`)
+  }
+  for (const s of ['bg-surface', 'text-ink-muted']) {
+    assert.equal(hits(` class="${s}" `), 0, `${s} must count 0`)
+  }
 })
 
 await t.test('D03 brand exceptions stay pinned to their exact hexes', async () => {

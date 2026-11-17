@@ -436,7 +436,7 @@ await t.test('P9. flash-sale applications validate deal and stock', async () => 
   assert.deepEqual([row.status, row.applicant_partner_id], ['REQUESTED', 'pt_001'], 'application queued for review');
 });
 
-await t.test('P10. payout requests guard amount, account and inflight', async () => {
+await t.test('P10. payout requests guard full-only amount, account and inflight (5-2)', async () => {
   const g = await newGateway();
   const cust = await login(g, 'customer@example.com', 'CUSTOMER');
   const pt2 = await login(g, 'partner2@olmoa-tech.com', 'PARTNER');
@@ -460,21 +460,34 @@ await t.test('P10. payout requests guard amount, account and inflight', async ()
   const over = await g.call('/api/v1/partner/payout-requests', {
     method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-2' }, body: { amount: avail + 1 }
   });
-  assert.equal(over.status, 409, 'over-available refused');
+  assert.equal(over.status, 400, 'over-full refused with 400');
+  assert.equal(over.json.code, 'WITHDRAWAL_FULL_AMOUNT_ONLY', 'over-full code');
+  const partial = await g.call('/api/v1/partner/payout-requests', {
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-2b' }, body: { amount: Math.max(0, avail - 1) }
+  });
+  assert.equal(partial.status, 400, 'partial amount refused with 400');
+  assert.equal(partial.json.code, 'WITHDRAWAL_FULL_AMOUNT_ONLY', 'partial code');
   const ok = await g.call('/api/v1/partner/payout-requests', {
-    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-3' }, body: { amount: avail }
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-3' }, body: {}
   });
   assert.equal(ok.status, 201, ok.text);
+  assert.equal(ok.json.data.amount, avail, 'server fills the full amount');
   const id = ok.json.data.id;
   const again = await g.call('/api/v1/partner/payout-requests', {
     method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-4' }, body: { amount: 1 }
   });
-  assert.equal(again.status, 409, 'inflight request blocks another');
+  assert.equal(again.status, 409, 'second request sees nothing left');
+  assert.equal(again.json.code, 'NOTHING_TO_WITHDRAW', 'second request code');
   const cancel = await g.call(`/api/v1/partner/payout-requests/${id}/cancel`, { method: 'POST', token: pt2 });
   assert.equal(cancel.status, 200, cancel.text);
   assert.equal(g.db.prepare('SELECT status FROM payout_requests WHERE id = ?').get(id).status, 'CANCELLED', 'cancel recorded');
   const recancel = await g.call(`/api/v1/partner/payout-requests/${id}/cancel`, { method: 'POST', token: pt2 });
   assert.equal(recancel.status, 409, 'cancel is one-way');
+  const equal = await g.call('/api/v1/partner/payout-requests', {
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'p10-req-5' }, body: { amount: avail }
+  });
+  assert.equal(equal.status, 201, equal.text);
+  assert.equal(equal.json.data.amount, avail, 'exact-full amount still accepted');
 });
 
 await t.test('P11. store profile decor restricts featured products', async () => {

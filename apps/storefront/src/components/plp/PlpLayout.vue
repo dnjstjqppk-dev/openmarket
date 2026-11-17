@@ -43,6 +43,10 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const loadError = ref<string | null>(null)
 const facets = ref<any>({ categories: [], brands: [], price: null, badges: {} })
+// 5-4: the today-shipment toggle/chip exist only while the list response
+// advertises the filter (policy-gated server-side). Starts off like the
+// empty facets above — the first response fills it in.
+const todayShipAvailable = ref(false)
 const sheetOpen = ref(false)
 const popular = ref<any[]>([])
 const suggestions = ref<string[]>([])
@@ -100,7 +104,7 @@ function filterParams(): URLSearchParams {
   if (fFlags.value.free_shipping) params.set('free_shipping', '1')
   if (fFlags.value.coupon_eligible) params.set('coupon_eligible', '1')
   if (fFlags.value.has_discount) params.set('has_discount', '1')
-  if (fFlags.value.today_shipment) params.set('today_shipment', '1')
+  if (fFlags.value.today_shipment && todayShipAvailable.value) params.set('today_shipment', '1')
   if (fFlags.value.exclude_overseas) params.set('exclude_overseas', '1')
   if (fSellers.value.length === 1) params.set('sales_model', fSellers.value[0])
   if (fFlags.value.rating4) params.set('min_rating', '4')
@@ -136,6 +140,14 @@ async function fetchPage(p: number) {
   const res = await fetch(`${API_BASE_URL}/api/v1/products?${params}`)
   const json = await res.json().catch(() => null)
   if (!res.ok || !json?.success) throw new Error(json?.error || '상품을 불러오지 못했습니다')
+  const avail: unknown = (json as any)?.available_filters
+  if (Array.isArray(avail)) {
+    todayShipAvailable.value = avail.includes('today_shipment')
+    if (!todayShipAvailable.value && fFlags.value.today_shipment) {
+      fFlags.value = { ...fFlags.value, today_shipment: false }
+      pushUrl(true)
+    }
+  }
   return json
 }
 
@@ -292,7 +304,7 @@ const toggles = computed(() => [
   { key: 'free_shipping', label: '무료배송' },
   { key: 'coupon_eligible', label: '쿠폰' },
   { key: 'has_discount', label: '할인' },
-  { key: 'today_shipment', label: '오늘출발' },
+  ...(todayShipAvailable.value ? [{ key: 'today_shipment', label: '오늘출발' }] : []),
   { key: 'exclude_overseas', label: '해외직구 제외' },
   { key: 'rating4', label: '평점 4점 이상' }
 ])
@@ -310,7 +322,11 @@ const chips = computed(() => {
   if (fPrice.value[0] !== null || fPrice.value[1] !== null) {
     out.push({ key: 'price', label: `${fPrice.value[0] ?? ''}~${fPrice.value[1] ?? ''}원` })
   }
-  for (const [k, on] of Object.entries(fFlags.value)) if (on && TOGGLE_LABEL[k]) out.push({ key: `flag:${k}`, label: TOGGLE_LABEL[k] })
+  for (const [k, on] of Object.entries(fFlags.value)) {
+    if (!on || !TOGGLE_LABEL[k]) continue
+    if (k === 'today_shipment' && !todayShipAvailable.value) continue
+    out.push({ key: `flag:${k}`, label: TOGGLE_LABEL[k] })
+  }
   for (const s of fSellers.value) out.push({ key: `seller:${s}`, label: s === 'DIRECT' ? '직영' : '입점' })
   return out
 })

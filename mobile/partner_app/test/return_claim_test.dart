@@ -42,7 +42,7 @@ void main() {
     expect(c.reasonLabel, '단순 변심');
     expect(c.awaitingReship, isFalse);
     final adj = ReturnClaim.fromJson({'id': 'c2', 'claim_type': 'PRICE_ADJUSTMENT', 'status': 'REFUNDED'});
-    expect(adj.typeLabel, '최저가 보상');
+    expect(adj.typeLabel, '가격 보상(종료된 제도)');
     expect(adj.statusLabel, '환불 완료');
   });
 

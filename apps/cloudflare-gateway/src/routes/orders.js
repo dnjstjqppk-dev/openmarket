@@ -4,14 +4,15 @@
 import { requireAuth, requireCustomer, authenticate } from '../lib/auth.js';
 import { json, readJson, bad, conflict, forbidden, notFound, str, safeUrl, idempotencyKey } from '../lib/http.js';
 import { newId, sqlNow } from '../lib/ids.js';
-import { grantCreditStatements } from '../lib/ledger.js';
 import { REASON_CODES, faultOf, partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 import {
-  createOrder, cancelOrder, cancelSubOrder, confirmPurchase, loadOrderBundle, mapDbError, autoConfirmDelivered, expireStaleOrders
+  createOrder, cancelOrder, cancelSubOrder, confirmPurchase, loadOrderBundle, autoConfirmDelivered, expireStaleOrders
 } from '../services/orders.js';
 
 export const RETURN_WINDOW_DAYS_DEFAULT = 7;
-const PRICE_ADJUST_WINDOW_DAYS = 30;
+// 5-5 (decision-15): the lowest-price compensation scheme is retired. New
+// PRICE_ADJUSTMENT/PRICE_MATCH claims are rejected below; rows stored before
+// the closure stay readable/settleable via the admin claims endpoints.
 
 // A claim blocks new claims until it is finished; an exchange is finished once the replacement has shipped.
 export const OPEN_CLAIM_SQL = "SELECT COUNT(*) c FROM returns WHERE sub_order_id = ? AND (status = 'REQUESTED' OR (status = 'APPROVED' AND COALESCE(exchange_status, '') != 'RESHIPPED'))";
@@ -166,7 +167,7 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, simulated: true, message: '배송 단계 시뮬레이션 (개발 환경 전용)' });
   }
 
-  // Claims: list / request return-exchange / price adjustment
+  // Claims: list / request return-exchange (price adjustment retired by 5-5).
   if (action === 'claims') {
     const { me, b } = await ownedBundle(request, env, ordId);
     if (request.method === 'GET') {
@@ -176,47 +177,10 @@ export async function handleOrderRoutes(request, url, env, corsHeaders) {
     if (request.method !== 'POST') return null;
     if (me.role !== 'ROLE_CUSTOMER') throw forbidden();
     const body = await readJson(request);
-    const rawType = String(body.claim_type || body.type || 'RETURN').toUpperCase();
-    const type = rawType === 'PRICE_MATCH' ? 'PRICE_ADJUSTMENT' : rawType;
-    if (!['RETURN', 'EXCHANGE', 'PRICE_ADJUSTMENT'].includes(type)) throw bad('INVALID_CLAIM_TYPE', '클레임 유형이 올바르지 않습니다.');
+    const type = String(body.claim_type || body.type || 'RETURN').toUpperCase();
+    if (!['RETURN', 'EXCHANGE'].includes(type)) throw bad('INVALID_CLAIM_TYPE', '클레임 유형이 올바르지 않습니다.');
     const reason = str(body.reason, { field: '사유', max: 500 }) || '고객 요청';
     const claimId = newId('clm');
-
-    if (type === 'PRICE_ADJUSTMENT') {
-      if (!['PAID', 'PARTIAL_REFUNDED'].includes(b.order.payment_status) || !b.order.paid_at) throw conflict('NOT_ELIGIBLE', '결제 완료된 주문만 신청할 수 있습니다.');
-      if (b.order.paid_at < sqlNow(-PRICE_ADJUST_WINDOW_DAYS * 86400000)) throw conflict('WINDOW_EXPIRED', `결제 후 ${PRICE_ADJUST_WINDOW_DAYS}일이 지나 신청할 수 없습니다.`);
-      // NEW-P0-01 anti-gaming gates: a crash price (seller-set 100-won bait) is excluded,
-      // and a lowered price must have been stable for 24h before a claim is accepted.
-      const lines = [];
-      for (const it of b.items) {
-        const row = await env.DB.prepare('SELECT sale_price, price_updated_at FROM product_skus WHERE id = ?').bind(it.sku_id).first();
-        const remaining = it.quantity - it.refunded_quantity;
-        if (!row || row.sale_price === null || remaining <= 0) continue;
-        const curUnit = row.sale_price - Math.floor((row.sale_price * it.volume_discount_pct * 100 + 5000) / 10000);
-        const unitDiff = it.unit_price - curUnit;
-        if (unitDiff <= 0) continue;
-        if (curUnit < it.unit_price * 0.7) {
-          throw conflict('PRICE_DROP_SUSPECT', '판매가 급락 건은 자동 보상 대상이 아닙니다. 고객센터 심사 후 처리됩니다.');
-        }
-        if (!row.price_updated_at || row.price_updated_at > sqlNow(-24 * 3600 * 1000)) {
-          throw conflict('PRICE_HOLD_PERIOD', '인하된 가격이 24시간 유지된 뒤에 보상 신청이 가능합니다.');
-        }
-        lines.push({ order_item_id: it.id, sub_order_id: it.sub_order_id, qty: remaining, unit_diff: unitDiff, line_diff: unitDiff * remaining });
-      }
-      const diff = lines.reduce((a, l) => a + l.line_diff, 0);
-      if (diff <= 0) throw conflict('NO_PRICE_DROP', '구매 이후 판매가 인하가 확인되지 않습니다.');
-      // Approval-gated: freeze a per-line snapshot and pay NOTHING until an admin approves
-      // (PUT /api/v1/admin/claims/:id), which caps the grant and charges the sellers.
-      try {
-        await env.DB.prepare(`INSERT INTO returns (id, order_id, user_id, claim_type, reason, status, refund_amount, notes, items_json)
-                        VALUES (?, ?, ?, 'PRICE_ADJUSTMENT', ?, 'REQUESTED', ?, ?, ?)`)
-          .bind(claimId, b.order.id, me.userId, reason, diff, `최저가 보상 심사 대기: 예상 차액 ${diff.toLocaleString()}원 (승인 시 상한 적용)`, JSON.stringify(lines)).run();
-      } catch (e) {
-        throw mapDbError(e) ? conflict('ALREADY_ADJUSTED', '이 주문은 이미 최저가 보상 신청되었습니다.') : e;
-      }
-      const data = { claim_id: claimId, claim_type: type, status: 'REQUESTED', refund_amount: diff };
-      return json(corsHeaders, { success: true, ...data, data }, 201);
-    }
 
     // RETURN / EXCHANGE: request only; money moves when the seller or operator approves
     const sub = b.subs.find((s) => s.id === body.sub_order_id) || (b.subs.length === 1 ? b.subs[0] : null);

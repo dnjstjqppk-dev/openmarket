@@ -1,7 +1,9 @@
 // tests/p1_funds_abuse_test.mjs
-// NEW-P0-01 (lowest-price compensation) + NEW-P0-02 (welcome credit) fund-abuse guards.
-// Baseline failures were proven by the 14:13 audit repro (instant +196,080 credit on a
-// 100-won bait drop; 9,900원 order paid 0원 with unverified welcome credit).
+// NEW-P0-01 (lowest-price compensation, RETIRED by 5-5/decision-15: new claims
+// rejected, legacy rows readable/settleable) + NEW-P0-02 (welcome credit)
+// fund-abuse guards. Baseline failures were proven by the 14:13 audit repro
+// (instant +196,080 credit on a 100-won bait drop; 9,900원 order paid 0원 with
+// unverified welcome credit).
 // Run: node tests/p1_funds_abuse_test.mjs
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -56,66 +58,75 @@ const setSku = (g, skuId, price, priceTs) =>
 
 const t = createRunner('P1 fund-abuse guards (NEW-P0-01/02)');
 
-// ---------- NEW-P0-01: price-adjustment claim gates ----------
-await t.test('P0-01 fresh drop (<24h) is held, not paid', async () => {
+// ---------- NEW-P0-01 RETIRED (5-5, decision-15): the lowest-price compensation
+// scheme is closed. New claims are rejected; only rows stored before the
+// closure stay readable and settleable as a terminated scheme.
+await t.test('P0-01 retired: PRICE_ADJUSTMENT claim is rejected 400', async () => {
   const g = await boot();
   const cust = await g.login('customer@example.com');
   const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
-  const { orderId } = mkPaidOrder(g, 'hold', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
-  setSku(g, 'sku_001_w', 49000, sqlNow());
+  const { orderId } = mkPaidOrder(g, 'rej', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
+  setSku(g, 'sku_001_w', 49000, '2020-01-01 00:00:00'); // a real, stable drop no longer matters
+  const before = balance(g, uid);
   const r = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(r.status, 409);
-  assert.equal(r.json.code, 'PRICE_HOLD_PERIOD');
+  assert.equal(r.status, 400);
+  assert.equal(r.json.code, 'INVALID_CLAIM_TYPE');
   assert.equal(g.one('SELECT COUNT(*) c FROM returns WHERE order_id = ?', orderId).c, 0);
+  assert.equal(balance(g, uid), before);
 });
 
-await t.test('P0-01 crash price (100-won bait) is excluded as suspect', async () => {
+await t.test('P0-01 retired: PRICE_MATCH alias is rejected 400, never mapped', async () => {
   const g = await boot();
   const cust = await g.login('customer@example.com');
   const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
-  const { orderId } = mkPaidOrder(g, 'suspect', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
-  setSku(g, 'sku_001_w', 100, '2020-01-01 00:00:00');
-  const r = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(r.status, 409);
-  assert.equal(r.json.code, 'PRICE_DROP_SUSPECT');
-  assert.equal(g.one('SELECT COUNT(*) c FROM returns WHERE order_id = ?', orderId).c, 0);
-});
-
-await t.test('P0-01 legit claim freezes REQUESTED with zero grant', async () => {
-  const g = await boot();
-  const cust = await g.login('customer@example.com');
-  const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
-  const { orderId, subId } = mkPaidOrder(g, 'pend', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
+  const { orderId } = mkPaidOrder(g, 'alias', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
   setSku(g, 'sku_001_w', 49000, '2020-01-01 00:00:00');
-  const r = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(r.status, 201);
-  assert.equal(r.json.status, 'REQUESTED');
-  assert.equal(r.json.refund_amount, 900);
-  assert.equal(g.one('SELECT COUNT(*) c FROM user_credits WHERE reference_id = ?', r.json.claim_id).c, 0);
-  const row = g.one('SELECT status, items_json FROM returns WHERE id = ?', r.json.claim_id);
-  assert.equal(row.status, 'REQUESTED');
-  const snap = JSON.parse(row.items_json);
-  assert.equal(snap.length, 1);
-  assert.equal(snap[0].sub_order_id, subId);
-  assert.equal(snap[0].line_diff, 900);
+  for (const body of [{ type: 'PRICE_MATCH' }, { claim_type: 'PRICE_MATCH' }, { type: 'price_match' }]) {
+    const r = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body });
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.equal(r.json.code, 'INVALID_CLAIM_TYPE');
+  }
+  assert.equal(g.one('SELECT COUNT(*) c FROM returns WHERE order_id = ?', orderId).c, 0);
 });
 
-await t.test('P0-01 approve pays capped grant and charges the seller settlement', async () => {
+await t.test('P0-01 legacy: stored claim stays readable in admin list and order detail', async () => {
   const g = await boot();
   const cust = await g.login('customer@example.com');
   const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
   const adm = await g.login('admin@openmarket.com', PW, 'ADMIN');
-  const { orderId, subId } = mkPaidOrder(g, 'appr', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 10, paid: 499000 });
-  const beforeAppr = balance(g, uid);
-  setSku(g, 'sku_001_w', 39900, '2020-01-01 00:00:00'); // 20% drop: passes the 70% suspect line
-  const c = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(c.status, 201);
-  assert.equal(c.json.refund_amount, 100000);
-  const a = await g.call(`/api/v1/admin/claims/${c.json.claim_id}`, { method: 'PUT', token: adm, body: { decision: 'APPROVE' } });
-  assert.equal(a.status, 200);
-  assert.equal(a.json.granted, 10000); // min(100000 raw, 49900 = 10% paid, 10000 hard cap)
-  assert.equal(balance(g, uid) - beforeAppr, 10000);
-  const claim = g.one('SELECT status, refund_amount FROM returns WHERE id = ?', c.json.claim_id);
+  const { orderId, subId } = mkPaidOrder(g, 'legacy', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
+  insertRow(g, 'returns', {
+    id: 'clm_legacy_551', order_id: orderId, user_id: uid, claim_type: 'PRICE_ADJUSTMENT',
+    reason: 'stored before the scheme closed', status: 'REQUESTED', refund_amount: 900,
+    notes: 'legacy', items_json: JSON.stringify([{ order_item_id: 'itm_funds_legacy', sub_order_id: subId, qty: 1, unit_diff: 900, line_diff: 900 }])
+  });
+  const list = await g.call('/api/v1/admin/claims', { token: adm });
+  assert.equal(list.status, 200, list.text);
+  assert.ok(list.json.data.some((r) => r.id === 'clm_legacy_551'), 'legacy row in the admin list');
+  const filtered = await g.call('/api/v1/admin/claims?claim_type=PRICE_ADJUSTMENT', { token: adm });
+  assert.equal(filtered.status, 200, filtered.text);
+  assert.ok(filtered.json.data.some((r) => r.id === 'clm_legacy_551'), 'legacy row under the terminated filter');
+  const detail = await g.call(`/api/v1/orders/${orderId}`, { token: cust });
+  assert.equal(detail.status, 200, detail.text);
+  assert.ok((detail.json.data.claims || []).some((r) => r.id === 'clm_legacy_551'), 'legacy row in the buyer order detail');
+});
+
+await t.test('P0-01 legacy: pending legacy claim settles exactly once under the old cap', async () => {
+  const g = await boot();
+  const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
+  const adm = await g.login('admin@openmarket.com', PW, 'ADMIN');
+  const { orderId, subId } = mkPaidOrder(g, 'settle', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 10, paid: 499000 });
+  const before = balance(g, uid);
+  insertRow(g, 'returns', {
+    id: 'clm_legacy_552', order_id: orderId, user_id: uid, claim_type: 'PRICE_ADJUSTMENT',
+    reason: 'stored before the scheme closed', status: 'REQUESTED', refund_amount: 100000,
+    notes: 'legacy', items_json: JSON.stringify([{ order_item_id: 'itm_funds_settle', sub_order_id: subId, qty: 10, unit_diff: 10000, line_diff: 100000 }])
+  });
+  const a1 = await g.call('/api/v1/admin/claims/clm_legacy_552', { method: 'PUT', token: adm, body: { decision: 'APPROVE' } });
+  assert.equal(a1.status, 200, a1.text);
+  assert.equal(a1.json.granted, 10000); // min(100000 raw, 49900 = 10% paid, 10000 hard cap)
+  assert.equal(balance(g, uid) - before, 10000);
+  const claim = g.one('SELECT status, refund_amount FROM returns WHERE id = ?', 'clm_legacy_552');
   assert.equal(claim.status, 'REFUNDED');
   assert.equal(claim.refund_amount, 10000);
   const stl = g.one('SELECT id FROM settlements WHERE sub_order_id = ?', subId);
@@ -123,38 +134,10 @@ await t.test('P0-01 approve pays capped grant and charges the seller settlement'
   assert.equal(adj.length, 1);
   assert.equal(adj[0].net_delta, -10000);
   assert.equal(adj[0].partner_id, 'pt_001');
-});
-
-await t.test('P0-01 duplicate claim on one order is rejected', async () => {
-  const g = await boot();
-  const cust = await g.login('customer@example.com');
-  const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
-  const { orderId } = mkPaidOrder(g, 'dup', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
-  setSku(g, 'sku_001_w', 49000, '2020-01-01 00:00:00');
-  const first = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(first.status, 201);
-  const second = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(second.status, 409);
-  assert.equal(second.json.code, 'ALREADY_ADJUSTED');
-});
-
-await t.test('P0-01 double approve pays exactly once', async () => {
-  const g = await boot();
-  const cust = await g.login('customer@example.com');
-  const uid = g.one('SELECT id FROM users WHERE email = ?', 'customer@example.com').id;
-  const adm = await g.login('admin@openmarket.com', PW, 'ADMIN');
-  const { orderId } = mkPaidOrder(g, 'dbl', { customerId: uid, skuId: 'sku_001_w', unitPrice: 49900, qty: 1, paid: 49900 });
-  const beforeDbl = balance(g, uid);
-  setSku(g, 'sku_001_w', 49000, '2020-01-01 00:00:00');
-  const c = await g.call(`/api/v1/orders/${orderId}/claims`, { method: 'POST', token: cust, body: { type: 'PRICE_ADJUSTMENT' } });
-  assert.equal(c.status, 201);
-  const a1 = await g.call(`/api/v1/admin/claims/${c.json.claim_id}`, { method: 'PUT', token: adm, body: { decision: 'APPROVE' } });
-  assert.equal(a1.status, 200);
-  assert.equal(a1.json.granted, 900); // min(900 raw, 4990 = 10% paid, 10000)
-  const a2 = await g.call(`/api/v1/admin/claims/${c.json.claim_id}`, { method: 'PUT', token: adm, body: { decision: 'APPROVE' } });
+  const a2 = await g.call('/api/v1/admin/claims/clm_legacy_552', { method: 'PUT', token: adm, body: { decision: 'APPROVE' } });
   assert.equal(a2.status, 409);
   assert.equal(a2.json.code, 'CLAIM_ALREADY_PROCESSED');
-  assert.equal(balance(g, uid) - beforeDbl, 900);
+  assert.equal(balance(g, uid) - before, 10000);
 });
 
 // ---------- NEW-P0-02: welcome credit after verification + spend rules ----------
@@ -219,12 +202,14 @@ await t.test('P0-02 credit clamps to 20% of net goods', async () => {
   assert.equal(r.json.data.credit_used_amount, 7560); // floor(37800 * 0.20)
 });
 
-await t.test('P0-02 UI copy matches the approval-gated, capped policy', async () => {
+await t.test('P0-02 UI copy matches the retired price scheme and the credit cap', async () => {
   const detail = fs.readFileSync('apps/storefront/src/views/OrderDetailView.vue', 'utf8');
-  assert.ok(detail.includes('관리자 승인 후 지급'), 'price-claim message names post-approval payout');
-  assert.ok(!detail.includes('차액 ${won(json.refund_amount)}이 적립금으로 지급되었습니다'), 'no instant-grant claim copy');
+  assert.ok(!detail.includes('PRICE_ADJUSTMENT'), 'no price-claim filing from the order screen');
+  assert.ok(!detail.includes('차액 보상 신청'), 'price-claim button gone from the order screen');
+  assert.ok(detail.includes('handleLateDeliveryClaim'), 'late-delivery claim stays on the order screen');
   const claims = fs.readFileSync('apps/admin/src/views/claims/ClaimListView.vue', 'utf8');
-  assert.ok(claims.includes('PRICE_ADJUSTMENT') && claims.includes('승인·적립금 지급'), 'admin can approve pending price claims');
+  assert.ok(claims.includes('PRICE_ADJUSTMENT') && claims.includes('종료된 제도'), 'admin still reads legacy price claims as a terminated scheme');
+  assert.ok(claims.includes('승인·적립금 지급'), 'admin can settle pending legacy price claims');
   const checkout = fs.readFileSync('apps/storefront/src/views/CheckoutView.vue', 'utf8');
   assert.ok(checkout.includes('20%까지'), 'checkout states the credit cap');
   const partner = fs.readFileSync('apps/cloudflare-gateway/src/routes/partner.js', 'utf8');

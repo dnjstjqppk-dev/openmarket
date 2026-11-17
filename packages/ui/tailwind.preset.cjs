@@ -26,7 +26,7 @@ module.exports = {
         primary: { DEFAULT: v('primary'), hover: v('primary-hover'), active: v('primary-active'), soft: v('primary-soft'), 'soft-ink': v('primary-soft-text'), on: v('on-primary') },
         secondary: { DEFAULT: v('secondary'), hover: v('secondary-hover'), on: v('on-secondary') },
         accent: { DEFAULT: v('accent'), soft: v('accent-soft') },
-        highlight: { DEFAULT: v('highlight'), soft: v('highlight-soft'), ink: v('highlight-text') },
+        highlight: { DEFAULT: v('highlight'), soft: v('highlight-soft'), ink: v('highlight-text'), on: v('on-highlight') },
         success: { DEFAULT: v('success'), soft: v('success-soft') },
         warning: { DEFAULT: v('warning'), soft: v('warning-soft') },
         danger: { DEFAULT: v('danger'), soft: v('danger-soft') },

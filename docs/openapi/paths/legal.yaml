@@ -1,0 +1,58 @@
+# Legal paths. Versioned operator-managed documents (5-6):
+# TERMS (이용약관), PRIVACY (개인정보처리방침), REFUND (취소·반품·환불 안내).
+# Public reads serve the current version plus upcoming/history; registration is
+# SUPER_ADMIN-only (see admin.yaml /api/v1/admin/legal-documents).
+paths:
+  /api/v1/legal/{kind}:
+    get:
+      summary: Read the current legal document with upcoming versions and history
+      tags: [Legal]
+      security: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [terms, privacy, refund]
+          description: Document kind (maps to TERMS/PRIVACY/REFUND).
+      responses:
+        '200':
+          description: Current version, upcoming list, full history and the 7-day revision notice
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [kind, today, current, upcoming, history, notice]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [TERMS, PRIVACY, REFUND]
+                      today:
+                        type: string
+                        description: KST calendar day (YYYY-MM-DD) the selection used.
+                      current:
+                        type: object
+                        description: Latest version with effective_date <= today (null when none yet).
+                      upcoming:
+                        type: array
+                        description: Versions with effective_date > today, earliest first.
+                        items:
+                          type: object
+                      history:
+                        type: array
+                        description: Superseded effective versions with full bodies, newest first.
+                        items:
+                          type: object
+                      notice:
+                        type: object
+                        nullable: true
+                        description: Set when the nearest upcoming version is <= 7 days out.
+        '400':
+          description: Unknown kind (INVALID_LEGAL_KIND)

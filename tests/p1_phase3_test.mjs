@@ -197,6 +197,22 @@ await t.test('NEW-09 reply validates: unknown id, empty answer, closed, and leas
   assert.equal((await g.call('/api/v1/admin/inquiries', { token: dpoTok })).status, 403);
 });
 
+await t.test('NEW-09 retired PRICE_MATCH inquiry category is rejected 400, never OTHER', async () => {
+  const g = await boot();
+  const cust = await g.login('customer@example.com');
+  const before = g.one('SELECT COUNT(*) AS c FROM support_inquiries').c;
+  const r = await g.call('/api/v1/support/inquiries', {
+    method: 'POST', token: cust, body: { category: 'PRICE_MATCH', subject: 's', content: 'c' }
+  });
+  assert.equal(r.status, 400, r.text);
+  assert.equal(r.json.code, 'INVALID_CATEGORY');
+  assert.equal(g.one('SELECT COUNT(*) AS c FROM support_inquiries').c, before, 'nothing stored, nothing remapped to OTHER');
+  const ok = await g.call('/api/v1/support/inquiries', {
+    method: 'POST', token: cust, body: { category: 'DELIVERY', subject: 's', content: 'c' }
+  });
+  assert.equal(ok.status, 201, ok.text);
+});
+
 await t.test('NEW-09 inquiries console view, route, and nav are wired', async () => {
   assert.ok(fs.existsSync('apps/admin/src/views/InquiriesView.vue'));
   const vw = fs.readFileSync('apps/admin/src/views/InquiriesView.vue', 'utf8');
@@ -356,7 +372,7 @@ await t.test('NEW-16 /health exposes the applied schema version', async () => {
   const g = await boot();
   const r = await g.call('/health');
   assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.schemaVersion, 'd1_67_support_sla_pii_reason.sql');
+  assert.equal(r.json.schemaVersion, 'd1_70_remind_notifs.sql');
   assert.ok(Number(r.json.migrationsApplied) >= 50);
   assert.equal(g.one("SELECT COUNT(*) AS c FROM schema_migrations WHERE version = 'd1_42_legal_compliance_fields.sql'").c, 1);
 });

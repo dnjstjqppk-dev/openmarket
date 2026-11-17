@@ -184,4 +184,54 @@ await t.test('H11-06 dev fixtures stay behind the DEV gate', async () => {
   assert.ok(u.includes('v-if="isDev"') && u.includes('env?.DEV'), 'sample presets are DEV-gated')
 })
 
+// ---- Work order 5-5 (decision-15): the price-guarantee scheme is retired ----
+// Buyer scope only: admin/seller keep terminated-scheme labels for legacy rows
+// ("가격 보상(종료된 제도)"), the review queue keeps its unverified-expression
+// guide, and the admin price filter keeps its "최저가" placeholder.
+const PRICE_GUARANTEE_BANNED = [
+  '최저가 보장',
+  '최저가 보상',
+  '가격 보상',
+  '차액 보상',
+  '차액 적립',
+  'price-drop credit',
+  '差額を還元'
+]
+
+await t.test('C06 buyer screens carry no price-guarantee copy', async () => {
+  const files = [
+    ...walk('apps/storefront/src', ['.vue', '.ts', '.json']),
+    ...walk('mobile/customer_app/lib', ['.dart']),
+    'packages/i18n/index.ts'
+  ]
+  assert.ok(files.length > 60, `expected dozens of buyer files, got ${files.length}`)
+  for (const f of files) {
+    const text = stripComments(read(f))
+    for (const phrase of PRICE_GUARANTEE_BANNED) {
+      assert.ok(!text.includes(phrase), `${f} must not promise "${phrase}"`)
+    }
+  }
+  // The FAQ is buyer-visible through the API.
+  const faq = stripComments(read('apps/cloudflare-gateway/src/routes/features.js'))
+  for (const phrase of PRICE_GUARANTEE_BANNED) {
+    assert.ok(!faq.includes(phrase), `gateway FAQ must not promise "${phrase}"`)
+  }
+  assert.ok(!faq.includes('판매가 인하'), 'retired price-drop FAQ entry gone')
+})
+
+await t.test('C07 terms articles stay contiguous after article 5 removal', async () => {
+  // 5-6: the body moved from the view into the legal_documents seed; the
+  // contiguity pin moved with it, and the view must read the versioned API.
+  const seed = read('migrations/d1_68_legal_documents.sql')
+  const termsBody = seed.split("'ld_terms_v11'")[1].split("'ld_privacy_v10'")[0]
+  const heads = [...termsBody.matchAll(/제(\d+)조/g)].map((m) => Number(m[1]))
+  assert.deepEqual([...new Set(heads)], [1, 2, 3, 4], 'seeded terms read 제1..4조 with no gap')
+  assert.ok(termsBody.includes("'v1.1'"), 'terms seed keeps v1.1')
+  assert.ok(!termsBody.includes('최저가'), 'guarantee article stays out of the seed')
+  const v = read('apps/storefront/src/views/LegalTermsView.vue')
+  assert.ok(v.includes('/api/v1/legal/terms'), 'terms view reads the versioned API')
+  assert.ok(v.includes('이전 버전') && v.includes('VERSION'), 'version history affordance kept')
+  assert.ok(!stripComments(v).includes('최저가'), 'guarantee article stays out of the view')
+})
+
 t.finish()

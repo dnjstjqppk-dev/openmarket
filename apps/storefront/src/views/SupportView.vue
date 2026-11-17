@@ -18,10 +18,11 @@ const submitMsg = ref('')
 const loadError = ref<string | null>(null)
 const submitting = ref(false)
 
+// 5-5: PRICE_MATCH retired — legacy rows render as 기타 here; the admin
+// console keeps reading them as a terminated scheme.
 const CATEGORY_LABEL: Record<string, string> = {
   DELIVERY: '배송',
   REFUND_RETURN: '반품·환불',
-  PRICE_MATCH: '가격 보상',
   PAYMENT: '결제',
   PARTNER_JOIN: '입점',
   OTHER: '기타'
@@ -126,7 +127,6 @@ onMounted(loadSupport)
           <select v-model="category" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-bold text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus">
             <option value="DELIVERY">배송</option>
             <option value="REFUND_RETURN">반품·환불</option>
-            <option value="PRICE_MATCH">가격 보상</option>
             <option value="PAYMENT">결제</option>
             <option value="PARTNER_JOIN">입점</option>
             <option value="OTHER">기타</option>

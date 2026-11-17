@@ -43,9 +43,11 @@ await t.test('F-S07 policy figures come from one module pinned to the server', a
   const p = 'apps/storefront/src/config/policy.ts'
   assert.ok(existsSync(join(ROOT, p)), 'shared policy module exists')
   const mod = read(p)
-  for (const k of ['WELCOME_CREDIT', 'LATE_COMPENSATION', 'RETURN_WINDOW_DAYS', 'PRICE_ADJUST_WINDOW_DAYS']) {
+  for (const k of ['WELCOME_CREDIT', 'LATE_COMPENSATION', 'RETURN_WINDOW_DAYS']) {
     assert.ok(mod.includes(k), `policy exports ${k}`)
   }
+  // 5-5 (decision-15): the price-match scheme is retired on both sides.
+  assert.ok(!mod.includes('PRICE_ADJUST'), 'policy no longer exports the price window')
   // Server truth (the module must equal these; drift fails the build of trust).
   const auth = read('apps/cloudflare-gateway/src/routes/auth.js')
   const ops = read('apps/cloudflare-gateway/src/routes/temu-ops.js')
@@ -54,7 +56,7 @@ await t.test('F-S07 policy figures come from one module pinned to the server', a
   assert.ok(ops.includes('LATE_COMPENSATION_KRW = 5300'), 'server late compensation read')
   assert.ok(mod.includes('10000') && mod.includes('5300'), 'policy matches server amounts')
   assert.ok(ord.includes('RETURN_WINDOW_DAYS_DEFAULT = 7'), 'server return window read')
-  assert.ok(ord.includes('PRICE_ADJUST_WINDOW_DAYS = 30'), 'server price-match window read')
+  assert.ok(!ord.includes('PRICE_ADJUST_WINDOW_DAYS'), 'server price-match window gone')
   const home = read('apps/storefront/src/views/HomeView.vue')
   const detail = read('apps/storefront/src/views/ProductDetailView.vue')
   // 3-1: the home hero renders no figures at all (empty sections hide), so only

@@ -6,10 +6,12 @@ import { ImageOff } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{
   src?: string | null
+  srcset?: string | null
+  sizes?: string | null
   alt?: string
   eager?: boolean
   ratio?: string
-}>(), { alt: '', eager: false, ratio: 'aspect-square' })
+}>(), { srcset: null, sizes: null, alt: '', eager: false, ratio: 'aspect-square' })
 const state = ref<'loading' | 'ready' | 'error'>(props.src ? 'loading' : 'error')
 watch(() => props.src, () => { state.value = props.src ? 'loading' : 'error' })
 </script>
@@ -20,6 +22,8 @@ watch(() => props.src, () => { state.value = props.src ? 'loading' : 'error' })
     <img
       v-if="src && state !== 'error'"
       :src="src"
+      :srcset="srcset || undefined"
+      :sizes="sizes || undefined"
       :alt="alt"
       :loading="eager ? 'eager' : 'lazy'"
       decoding="async"

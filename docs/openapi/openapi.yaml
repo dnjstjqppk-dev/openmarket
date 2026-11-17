@@ -635,6 +635,10 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1review-reports'
   /api/v1/admin/reviews/{id}/visibility:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1reviews~1{id}~1visibility'
+  /api/v1/legal/{kind}:
+    $ref: './paths/legal.yaml#/paths/~1api~1v1~1legal~1{kind}'
+  /api/v1/admin/legal-documents:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1legal-documents'
 
 components:
   securitySchemes:

@@ -392,21 +392,17 @@ await t.test('I16 repeated partial refunds of the same line sum exactly to what 
   const extra = await I.call(`/api/v1/admin/orders/${retOrder.order_id}/refund`, { method: 'POST', token: ad, body: { lines: [{ order_item_id: item.id, quantity: 1 }], reason: 'over' } });
   assert.equal(extra.status, 409, 'cannot refund beyond quantity');
 });
-await t.test('I17 price adjustment: only on a real price drop, once per order', async () => {
+await t.test('I17 retired price-match: new claims rejected 400, never granted', async () => {
   const o = (await I.checkout(c1, [{ sku_id: m2.id, quantity: 1 }])).json;
   await I.pay(c1, o);
-  assert.equal((await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } })).status, 409);
-  // NEW-P0-01: the drop must sit on the price clock for 24h (direct UPDATE here
-  // simulates a seller cut from long ago; partner/bidding PUTs stamp now).
-  I.db.prepare('UPDATE product_skus SET sale_price = sale_price - 1000, price_updated_at = ? WHERE id = ?').run('2020-01-01 00:00:00', m2.id);
   const cr0 = I.credit('u_customer_001');
-  const a = await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } });
-  assert.equal(a.status, 201, a.text);
-  assert.equal(a.json.status, 'REQUESTED');
-  assert.equal(a.json.refund_amount, 1000);
-  assert.equal(I.credit('u_customer_001') - cr0, 0);
-  assert.equal((await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type: 'PRICE_MATCH' } })).status, 409);
-  I.db.prepare('UPDATE product_skus SET sale_price = sale_price + 1000 WHERE id = ?').run(m2.id);
+  for (const type of ['PRICE_MATCH', 'PRICE_ADJUSTMENT', 'price_match']) {
+    const r = await I.call(`/api/v1/orders/${o.order_id}/claims`, { method: 'POST', token: c1, body: { type } });
+    assert.equal(r.status, 400, `${type}: ${r.text}`);
+    assert.equal(r.json.code, 'INVALID_CLAIM_TYPE');
+  }
+  assert.equal(I.credit('u_customer_001') - cr0, 0, 'no credit movement');
+  assert.equal(I.one('SELECT COUNT(*) c FROM returns WHERE order_id = ?', o.order_id).c, 0, 'no claim row stored');
 });
 await t.test('I18 refund after seller payout is carried as a deduction (no silent loss)', async () => {
   const o = (await I.checkout(c1, [{ sku_id: m0.id, quantity: 2 }])).json;

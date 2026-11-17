@@ -10,6 +10,7 @@ import { logPiiView, maskLast4 } from '../services/privacy.js';
 import { sealPii, maybeOpenPii } from '../lib/pii-crypto.js';
 import { partnerReturnFees, returnFeeFor, isFullReturn } from '../services/claims.js';
 import { pushOrderShipped, notifyUser } from '../services/push.js';
+import { notifyRestockedSkus } from '../services/restock.js';
 import { priceHistoryStatements, skuIdsOfProduct } from '../lib/price-history.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { payablePreview, withdrawableAmount, requestPayout, cancelPayoutRequest } from '../services/payouts.js';
@@ -479,6 +480,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         const prod = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND partner_id = ?').bind(pid, partnerId).first();
         if (!prod) throw notFound('상품을 찾을 수 없거나 권한이 없습니다.');
         const stmts = [];
+        let bulkRestock = [];
         if (u.status !== undefined) {
           const st = String(u.status).toUpperCase();
           // 4-2: resume to ACTIVE needs an approved review (content unchanged
@@ -507,15 +509,23 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         if (u.stock_quantity !== undefined) {
           const stock = intParam(u.stock_quantity, { min: 0, max: 1_000_000, field: '재고' });
           if (u.sku_id) {
-            const one = await env.DB.prepare('SELECT id FROM product_skus WHERE id = ? AND product_id = ?').bind(String(u.sku_id), pid).first();
+            const one = await env.DB.prepare('SELECT id, stock_quantity FROM product_skus WHERE id = ? AND product_id = ?').bind(String(u.sku_id), pid).first();
             if (!one) throw notFound('옵션을 찾을 수 없습니다.');
+            bulkRestock = [{ skuId: one.id, before: one.stock_quantity, after: stock }];
             stmts.push(env.DB.prepare("UPDATE product_skus SET stock_quantity = ?, status = CASE WHEN ? > 0 THEN 'IN_STOCK' ELSE 'OUT_OF_STOCK' END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(stock, stock, one.id));
           } else {
+            const { results: allSkus } = await env.DB.prepare('SELECT id, stock_quantity FROM product_skus WHERE product_id = ?').bind(pid).all();
+            bulkRestock = (allSkus || []).map((s) => ({ skuId: s.id, before: s.stock_quantity, after: stock }));
             stmts.push(env.DB.prepare("UPDATE product_skus SET stock_quantity = ?, status = CASE WHEN ? > 0 THEN 'IN_STOCK' ELSE 'OUT_OF_STOCK' END, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?").bind(stock, stock, pid));
           }
         }
         if (!stmts.length) throw bad('EMPTY_UPDATE', '변경할 항목이 없습니다.');
         await env.DB.batch(stmts);
+        if (bulkRestock.length) {
+          try {
+            await notifyRestockedSkus(env, bulkRestock);
+          } catch { /* restock notify must never fail the stock edit */ }
+        }
         updated.push(pid);
       } catch (e) {
         failed.push({ product_id: pid || null, error: e.message || String(e) });
@@ -558,6 +568,9 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
           .bind(newId('ldg'), sku.id, delta, target, partnerId, newId('adj'), sku.id, target)
       ]);
       if (r[0].meta.changes !== 1) throw conflict('STOCK_CHANGED', '그 사이 주문이 발생해 재고가 변경되었습니다. 새로고침 후 다시 시도해 주세요.');
+      try {
+        await notifyRestockedSkus(env, [{ skuId: sku.id, before: sku.stock_quantity, after: target }]);
+      } catch { /* restock notify must never fail the stock edit */ }
       return json(corsHeaders, { success: true, product_id: sku.product_id, sku_id: sku.id, stock_quantity: target, previous_stock: sku.stock_quantity, delta });
     }
 
@@ -659,6 +672,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     }
     // 2-9: explicit sku upserts replace the legacy whole-product price set.
     const hasTopPrice = ['sale_price', 'price', 'lowest_sale_price', 'original_price', 'lowest_original_price'].some((k) => b[k] !== undefined);
+    const editRestock = [];
     let skuStmts;
     if (b.skus !== undefined) {
       if (!Array.isArray(b.skus)) throw bad('INVALID_SKUS', 'skus는 배열이어야 합니다.');
@@ -683,6 +697,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
           }
           const pr = priceFields(entry, { sale: old.sale_price, orig: old.original_price });
           const stock = entry.stock_quantity !== undefined ? intParam(entry.stock_quantity, { min: 0, max: 1_000_000, field: '재고' }) : old.stock_quantity;
+          if (stock !== old.stock_quantity) editRestock.push({ skuId: old.id, before: old.stock_quantity, after: stock });
           const safety = entry.safety_stock !== undefined ? intParam(entry.safety_stock, { min: 0, max: 1_000_000, field: '안전재고' }) : old.safety_stock;
           skuStmts.push(env.DB.prepare(
             `UPDATE product_skus SET sku_code = ?, sale_price = ?, original_price = ?, stock_quantity = ?,
@@ -755,6 +770,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) throw conflict('SKU_CODE_TAKEN', '이미 사용 중인 SKU 코드입니다.');
       throw e;
+    }
+    if (editRestock.length) {
+      try {
+        await notifyRestockedSkus(env, editRestock);
+      } catch { /* restock notify must never fail the product edit */ }
     }
     return json(corsHeaders, {
       success: true, message: contentChanged ? '상세 내용이 변경되어 재심사 후 노출됩니다.' : '상품 정보가 수정되었습니다.',
@@ -1179,6 +1199,19 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const received = b.return_received === true;
     const items = JSON.parse(claim.exchange_items_json || '[]');
     if (!items.length) throw conflict('NO_EXCHANGE_ITEMS', '교환 품목 정보가 없습니다.');
+    let reshipRestock = [];
+    if (received) {
+      const before = new Map();
+      for (const it of items) {
+        if (!before.has(it.from_sku_id)) {
+          const row = await env.DB.prepare('SELECT stock_quantity FROM product_skus WHERE id = ?').bind(it.from_sku_id).first();
+          before.set(it.from_sku_id, Number(row?.stock_quantity) || 0);
+        }
+      }
+      const addQty = new Map();
+      for (const it of items) addQty.set(it.from_sku_id, (addQty.get(it.from_sku_id) || 0) + it.quantity);
+      reshipRestock = [...addQty].map(([skuId, qty]) => ({ skuId, before: before.get(skuId) || 0, after: (before.get(skuId) || 0) + qty }));
+    }
     const st = [];
     for (const it of items) {
       // stock >= 0 is enforced by trg_sku_stock_nonnegative: an out-of-stock replacement aborts the whole batch.
@@ -1212,6 +1245,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       if (m.includes('STOCK')) throw conflict('EXCHANGE_OUT_OF_STOCK', '교환할 옵션의 재고가 부족합니다. 반품(환불)으로 전환해 주세요.');
       if (m.includes('BATCH_ASSERTION') || m.includes('UNIQUE')) throw conflict('NOT_AWAITING_RESHIPMENT', '이미 재출고된 교환 건입니다.');
       throw e;
+    }
+    if (reshipRestock.length) {
+      try {
+        await notifyRestockedSkus(env, reshipRestock);
+      } catch { /* restock notify must never fail the re-shipment */ }
     }
     try {
       const ord = await env.DB.prepare(
@@ -1484,7 +1522,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     return json(corsHeaders, { success: true, ...createdItem, data: createdItem }, 201);
   }
 
-  // 2-9: payout requests over the 2-4 engine (amount/account/inflight guarded).
+  // 2-9: payout requests over the 2-4 engine (5-2: full amount only; account/inflight guarded).
   if (p === '/api/v1/partner/payout-requests' && request.method === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM payout_requests WHERE partner_id = ? ORDER BY created_at DESC').bind(partnerId).all();
     const data = { requests: results, available_amount: await withdrawableAmount(env, partnerId), account_verified: Number(partner.payout_account_verified) === 1 };
@@ -1492,7 +1530,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
   }
   if (p === '/api/v1/partner/payout-requests' && request.method === 'POST') {
     const b = await readJson(request);
-    const row = await requestPayout(env, { partnerId, amount: Number(b.amount), idemKey: request.headers.get('X-Idempotency-Key') ?? b.idempotency_key ?? null });
+    const row = await requestPayout(env, { partnerId, amount: b.amount ?? undefined, idemKey: request.headers.get('X-Idempotency-Key') ?? b.idempotency_key ?? null });
     return json(corsHeaders, { success: true, ...row, data: row }, row.idempotent_replay ? 200 : 201);
   }
   const pwrCancelM = p.match(/^\/api\/v1\/partner\/payout-requests\/([^/]+)\/cancel$/);

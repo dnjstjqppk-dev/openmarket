@@ -44,12 +44,12 @@ async function load() {
   }
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 
-function openEdit(key: string, current = '') {
+function openEdit(key: string, current = '', from = '') {
   editKey.value = key
   editValue.value = current
-  editFrom.value = today()
+  editFrom.value = /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : today()
   editOpen.value = true
 }
 
@@ -74,7 +74,11 @@ async function submitEdit() {
   void load()
 }
 
-const policyOf = (key: string) => policies.value.find((p: any) => p.key === key)
+// 5-8: one key may hold several scheduled rows; the cards show the latest
+// already-effective value (future rows are listed below, not applied yet).
+const policyOf = (key: string) => policies.value
+  .filter((p: any) => p.key === key && String(p.effective_from || '') <= today())
+  .sort((a: any, b: any) => String(a.effective_from) < String(b.effective_from) ? 1 : -1)[0]
 
 onMounted(() => void load())
 </script>
@@ -137,11 +141,11 @@ onMounted(() => void load())
           <table class="w-full min-w-[520px] text-xs">
             <thead class="text-ink-muted"><tr><th class="p-1 text-left">키</th><th class="p-1 text-left">값</th><th class="p-1 text-left">적용일</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="p in policies" :key="p.key" class="border-t border-line-divider">
+              <tr v-for="p in policies" :key="`${p.key}@${p.effective_from}`" class="border-t border-line-divider">
                 <td class="p-1 font-mono font-bold text-ink">{{ p.key }}</td>
                 <td class="om-num p-1 text-ink">{{ p.value }}</td>
                 <td class="om-num p-1 text-ink-muted">{{ p.effective_from }}</td>
-                <td class="p-1 text-right"><button type="button" class="rounded-lg border border-line px-2.5 py-1.5 font-bold text-ink hover:bg-surface-2" @click="openEdit(p.key, p.value)">변경</button></td>
+                <td class="p-1 text-right"><button type="button" class="rounded-lg border border-line px-2.5 py-1.5 font-bold text-ink hover:bg-surface-2" @click="openEdit(p.key, p.value, p.effective_from)">변경</button></td>
               </tr>
             </tbody>
           </table>

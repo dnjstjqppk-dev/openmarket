@@ -301,7 +301,7 @@ await t.test('B16. quotes itemize coupons, shipping and credit', async () => {
     .run(st, `C_${st}`, pid);
   const su = `uc_${Math.random().toString(36).slice(2, 10)}`;
   g.db.prepare('INSERT INTO user_coupons (id, user_id, coupon_id, is_used) VALUES (?, ?, ?, 0)').run(su, 'u_customer_001', st);
-  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('credit.earn_bps', '100', date('now'))").run();
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('credit.earn_bps', '100', date('now', '+9 hours'))").run();
   const q = await g.call('/api/v1/orders/quote', {
     method: 'POST', token: cust,
     body: { ...addr('06236'), items: [{ sku_id: s.id, quantity: 1 }], user_coupon_id: 'uc_002', store_coupon_ids: [su] }

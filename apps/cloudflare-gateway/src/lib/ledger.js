@@ -83,10 +83,29 @@ export async function getActiveOperator(env) {
   ).first();
 }
 
+// Today as a KST YYYY-MM-DD calendar day. POLICY_TEST_TODAY_KST pins the clock
+// in tests (unset in production), following the TODAY_SHIP_TEST_NOW_KST and
+// LEGAL_TEST_TODAY_KST patterns.
+export function policyTodayKst(env) {
+  const pinned = String(env?.POLICY_TEST_TODAY_KST || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(pinned)) return pinned;
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 /** Read an effective platform policy value, or null when absent or not yet effective. */
 export async function getPolicy(env, key) {
+  // 5-8: effective days are KST days; among the already-effective rows of a
+  // key the latest one wins. The pinned test clock binds its day directly;
+  // production compares against the KST day in SQL.
+  const pinned = String(env?.POLICY_TEST_TODAY_KST || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(pinned)) {
+    const prow = await env.DB.prepare(
+      'SELECT value FROM platform_policies WHERE key = ? AND effective_from <= ? ORDER BY effective_from DESC LIMIT 1'
+    ).bind(key, pinned).first();
+    return prow ? prow.value : null;
+  }
   const row = await env.DB.prepare(
-    "SELECT value FROM platform_policies WHERE key = ? AND effective_from <= date('now')"
+    "SELECT value FROM platform_policies WHERE key = ? AND effective_from <= date('now', '+9 hours') ORDER BY effective_from DESC LIMIT 1"
   ).bind(key).first();
   return row ? row.value : null;
 }

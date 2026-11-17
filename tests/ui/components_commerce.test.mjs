@@ -97,4 +97,8 @@ await t.test('C09 barrel exports every new component', async () => {
     'OmSearchFilterBar', 'OmAddressSearch', 'OmImage']) assert.ok(idx.includes(n), `index.ts must export ${n}`)
 })
 
+await t.test('C10 image accepts srcset with origin fallback (5-9/K-15)', async () => {
+  has('components/OmImage.vue', 'srcset?: string', ':srcset="srcset || undefined"', ':sizes="sizes || undefined"')
+})
+
 t.finish()

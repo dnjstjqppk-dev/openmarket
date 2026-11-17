@@ -1,32 +1,86 @@
 <script setup lang="ts">
 // Operator identity and escrow facts come from /business-info (never hardcoded:
 // the operator entity is configurable). Final wording requires legal review.
-import { ref, onMounted } from 'vue'
+// 5-6: versioned bodies come from GET /api/v1/legal/terms (current + history +
+// revision notice); {{OPERATOR}} is filled from business-info.
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL } from '../config'
+import { parseLegalBody, formatEffectiveDate } from '../lib/legal'
+import type { LegalPayload } from '../lib/legal'
 
-const EFFECTIVE_DATE = '2026년 1월 1일'
-const VERSION = 'v1.0'
-const TOC = [
-  { id: 'a1', label: '제1조 (목적)' },
-  { id: 'a2', label: '제2조 (정의)' },
-  { id: 'a3', label: '제3조 (약관의 명시와 개정)' },
-  { id: 'a4', label: '제4조 (계약의 성립 및 결제)' },
-  { id: 'a5', label: '제5조 (최저가 보장제 및 적립)' },
-  { id: 'versions', label: '이전 버전' }
-]
+const VERSION_QUERY_KEY = 'version'
+
+const payload = ref<LegalPayload | null>(null)
+const loading = ref(true)
+const loadError = ref('')
+const selectedVersion = ref('')
+
+const route = useRoute()
+const router = useRouter()
 
 const companyName = ref('올모아')
 const escrowRef = ref<string | null>(null)
+
+async function load() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/legal/terms`)
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.success || !data.data?.current) throw new Error(data.error || '약관을 불러오지 못했습니다.')
+    payload.value = data.data as LegalPayload
+    fetch(`${API_BASE_URL}/api/v1/business-info`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.configured && j.data) {
+          companyName.value = j.data.legal_name || '올모아'
+          escrowRef.value = j.data.escrow_service_ref || null
+        }
+      })
+      .catch(() => {})
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : '약관을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const allDocs = computed(() => {
+  const p = payload.value
+  if (!p) return []
+  return [...(p.current ? [p.current] : []), ...p.upcoming, ...p.history]
+})
+
+const shown = computed(() => {
+  const docs = allDocs.value
+  return docs.find((d) => d.version === selectedVersion.value) || payload.value?.current || null
+})
+
+const isCurrent = computed(() => !!shown.value && !!payload.value?.current && shown.value.version === payload.value.current.version)
+
+const sections = computed(() => {
+  if (!shown.value) return []
+  return parseLegalBody(shown.value.body.replaceAll('{{OPERATOR}}', companyName.value))
+})
+
+const TOC = computed(() => [
+  ...sections.value.filter((s) => s.title).map((s) => ({ id: s.id, label: s.title })),
+  { id: 'versions', label: '이전 버전' }
+])
+
+function selectVersion(v: string) {
+  selectedVersion.value = v
+  const q = { ...route.query }
+  if (!v || v === payload.value?.current?.version) delete q[VERSION_QUERY_KEY]
+  else q[VERSION_QUERY_KEY] = v
+  void router.replace({ query: q })
+}
+
 onMounted(() => {
-  fetch(`${API_BASE_URL}/api/v1/business-info`)
-    .then((r) => r.json())
-    .then((j) => {
-      if (j?.configured && j.data) {
-        companyName.value = j.data.legal_name || '올모아'
-        escrowRef.value = j.data.escrow_service_ref || null
-      }
-    })
-    .catch(() => {})
+  const q = route.query[VERSION_QUERY_KEY]
+  if (typeof q === 'string' && q) selectedVersion.value = q
+  void load()
 })
 </script>
 
@@ -36,49 +90,56 @@ onMounted(() => {
     <div class="border-b border-line pb-4">
       <span class="text-xs font-bold uppercase tracking-wider text-primary">OLMOA Terms of Service</span>
       <h1 class="mt-1 text-2xl font-bold text-ink">OLMOA 플랫폼 이용약관</h1>
-      <p class="mt-1 text-xs text-ink-subtle">시행일자: {{ EFFECTIVE_DATE }} (공정거래위원회 전자상거래 표준약관 준수) · 현행 {{ VERSION }}</p>
+      <p v-if="shown" class="mt-1 text-xs text-ink-subtle">시행일자: {{ formatEffectiveDate(shown.effective_date) }} (공정거래위원회 전자상거래 표준약관 준수) · {{ isCurrent ? '현행' : '이전 버전' }} {{ shown.version }}</p>
     </div>
 
-    <nav class="rounded-2xl border border-line bg-surface-2 p-4" aria-label="목차">
-      <p class="mb-2 text-xs font-bold text-ink">목차</p>
-      <ol class="grid gap-1 text-xs sm:grid-cols-2">
-        <li v-for="t in TOC" :key="t.id"><a :href="`#${t.id}`" class="text-ink-muted hover:text-primary hover:underline">{{ t.label }}</a></li>
-      </ol>
-    </nav>
+    <div v-if="loading" class="rounded-2xl border border-line bg-surface-2 p-6 text-xs text-ink-muted">약관을 불러오는 중입니다…</div>
+    <div v-else-if="loadError || !shown" class="rounded-2xl border border-danger bg-danger-soft p-6 text-center text-xs text-danger" role="alert">
+      <p class="font-bold">약관을 불러오지 못했습니다.</p>
+      <p class="mt-1">{{ loadError }}</p>
+      <button type="button" class="mx-auto mt-2 block rounded-full bg-secondary px-4 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover" @click="load">다시 시도</button>
+    </div>
 
-    <section id="a1" class="scroll-mt-24 space-y-2">
-      <h2 class="text-base font-bold text-ink">제1조 (목적)</h2>
-      <p>본 약관은 {{ companyName }}(이하 "회사")가 운영하는 OLMOA 글로벌 전자상거래 플랫폼(이하 "몰")에서 제공하는 전자상거래 관련 서비스(이하 "서비스")를 이용함에 있어 몰과 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
-    </section>
+    <template v-else>
+      <div v-if="payload?.notice && isCurrent" class="rounded-xl border border-warning bg-warning-soft p-3 text-xs text-warning" role="note">
+        <p class="font-bold">개정 예정 안내: {{ payload.notice.version }}이 {{ formatEffectiveDate(payload.notice.effective_date) }}부터 시행됩니다 (D-{{ payload.notice.days_until_effective }}).</p>
+        <button type="button" class="mt-1 font-bold underline underline-offset-2" @click="selectVersion(payload.notice.version)">새 본문 미리보기</button>
+      </div>
+      <div v-if="!isCurrent" class="rounded-xl border border-line bg-surface-2 p-3 text-xs text-ink-muted" role="note">
+        <p>이전 버전을 보고 있습니다. <button type="button" class="font-bold text-primary hover:underline" @click="selectVersion(payload?.current?.version || '')">현행 버전으로 돌아가기</button></p>
+      </div>
 
-    <section id="a2" class="scroll-mt-24 space-y-2">
-      <h2 class="text-base font-bold text-ink">제2조 (정의)</h2>
-      <p>1. "몰"이란 회사가 재화 또는 용역을 이용자에게 제공하기 위하여 컴퓨터 등 정보통신설비를 이용하여 재화 등을 거래할 수 있도록 설정한 가상의 영업장을 말합니다.</p>
-      <p>2. "이용자"란 "몰"에 접속하여 본 약관에 따라 "몰"이 제공하는 서비스를 받는 회원 및 비회원을 말합니다.</p>
-      <p>3. "판매 파트너"란 회사와 입점 계약을 체결하고 몰을 통하여 상품을 판매하는 자를 말합니다.</p>
-    </section>
+      <nav class="rounded-2xl border border-line bg-surface-2 p-4" aria-label="목차">
+        <p class="mb-2 text-xs font-bold text-ink">목차</p>
+        <ol class="grid gap-1 text-xs sm:grid-cols-2">
+          <li v-for="t in TOC" :key="t.id"><a :href="`#${t.id}`" class="text-ink-muted hover:text-primary hover:underline">{{ t.label }}</a></li>
+        </ol>
+      </nav>
 
-    <section id="a3" class="scroll-mt-24 space-y-2">
-      <h2 class="text-base font-bold text-ink">제3조 (약관의 명시와 개정)</h2>
-      <p>"몰"은 본 약관의 내용과 상호, 영업소 소재지, 대표자 성명, 사업자등록번호, 통신판매업신고번호, 고객센터 연락처 등을 이용자가 쉽게 알 수 있도록 초기 서비스 화면에 게시합니다.</p>
-    </section>
+      <section v-for="s in sections" :id="s.id" :key="s.id" class="scroll-mt-24 space-y-2">
+        <h2 v-if="s.title" class="text-base font-bold text-ink">{{ s.title }}</h2>
+        <template v-for="(b, i) in s.blocks" :key="i">
+          <p v-if="b.type === 'p'"><template v-for="(part, j) in b.parts" :key="j"><strong v-if="part.bold">{{ part.text }}</strong><template v-else>{{ part.text }}</template></template></p>
+          <ul v-else class="list-inside list-disc space-y-1 text-ink-muted">
+            <li v-for="(item, k) in b.items" :key="k"><template v-for="(part, j) in item" :key="j"><strong v-if="part.bold">{{ part.text }}</strong><template v-else>{{ part.text }}</template></template></li>
+          </ul>
+        </template>
+      </section>
 
-    <section id="a4" class="scroll-mt-24 space-y-2">
-      <h2 class="text-base font-bold text-ink">제4조 (계약의 성립 및 결제)</h2>
-      <p>이용자가 구매 신청을 완료하고 대금 결제를 이행함으로써 주문 계약이 성립합니다.</p>
-      <p v-if="escrowRef">회사는 {{ escrowRef }} 구매안전서비스에 가입되어 있으며, 자세한 내용은 <router-link to="/policy/escrow" class="font-bold text-primary hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있습니다.</p>
-      <p v-else>구매안전서비스(에스크로) 가입 여부는 <router-link to="/policy/escrow" class="font-bold text-primary hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있으며, 미가입 상태에서는 본 조항의 에스크로 보호가 적용되지 않습니다.</p>
-    </section>
+      <p v-if="isCurrent && escrowRef" class="text-xs text-ink-muted">회사는 {{ escrowRef }} 구매안전서비스에 가입되어 있으며, 자세한 내용은 <router-link to="/policy/escrow" class="font-bold text-primary hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있습니다.</p>
+      <p v-else-if="isCurrent" class="text-xs text-ink-muted">구매안전서비스(에스크로) 가입 여부는 <router-link to="/policy/escrow" class="font-bold text-primary hover:underline">구매안전서비스 안내</router-link>에서 확인할 수 있으며, 미가입 상태에서는 본 조항의 에스크로 보호가 적용되지 않습니다.</p>
 
-    <section id="a5" class="scroll-mt-24 space-y-2">
-      <h2 class="text-base font-bold text-ink">제5조 (최저가 보장제 및 적립)</h2>
-      <p>회사는 구매일로부터 30일 이내에 몰 내 동일 상품의 기준 판매가가 인하된 경우 구매자의 신청에 따라 차액 전액을 적립금으로 보상 환급합니다.</p>
-    </section>
-
-    <section id="versions" class="scroll-mt-24 space-y-2 rounded-2xl border border-line bg-surface-2 p-4">
-      <h2 class="text-sm font-bold text-ink">이전 버전</h2>
-      <p class="text-xs">현행 {{ VERSION }} (시행 {{ EFFECTIVE_DATE }}). 개정 이력이 생기면 이전 버전을 이곳에서 볼 수 있습니다.</p>
-    </section>
+      <section id="versions" class="scroll-mt-24 space-y-2 rounded-2xl border border-line bg-surface-2 p-4">
+        <h2 class="text-sm font-bold text-ink">이전 버전</h2>
+        <ul class="space-y-1 text-xs">
+          <li v-for="d in allDocs" :key="d.version">
+            <button type="button" class="hover:text-primary hover:underline" :class="d.version === shown?.version ? 'font-bold text-ink' : 'text-ink-muted'" @click="selectVersion(d.version)">
+              {{ d.version }} (시행 {{ formatEffectiveDate(d.effective_date) }}){{ d.version === payload?.current?.version ? ' · 현행' : '' }}
+            </button>
+          </li>
+        </ul>
+      </section>
+    </template>
 
     <div class="flex items-center justify-between border-t border-line pt-6 text-xs text-ink-muted">
       <router-link to="/" class="font-bold text-primary hover:underline">&larr; 홈으로 돌아가기</router-link>

@@ -3,17 +3,19 @@
 
 import { requireAdmin } from '../lib/auth.js';
 import { hasPermission } from '../lib/admin-policy.js';
-import { readJson, json, bad, conflict, forbidden, notFound, str, safeUrl, intParam, csvResponse, idempotencyKey } from '../lib/http.js';
+import { readJson, json, bad, conflict, forbidden, notFound, str, safeUrl, intParam, csvResponse, idempotencyKey, HttpError } from '../lib/http.js';
+import { todayKstDate, isCalendarDate, daysBetween } from './legal.js';
 import { hashPassword } from '../utils/crypto-auth.js';
 import { validatePassword } from './auth.js';
 import { newId } from '../lib/ids.js';
-import { auditStatement, grantCreditStatements } from '../lib/ledger.js';
+import { auditStatement, grantCreditStatements, policyTodayKst } from '../lib/ledger.js';
 import { refundOrder, loadOrderBundle, mapDbError } from '../services/orders.js';
 import { pushClaimCreditGranted, pushClaimRejected } from '../services/push.js';
 import { logPiiView, logPiiExport, maskLast4 } from '../services/privacy.js';
 import { isSealedPii, maybeOpenPii, sealPii } from '../lib/pii-crypto.js';
 import { decidePayoutRequest, markRequestTransferred } from '../services/payouts.js';
 import { computeMonthlyGrades } from '../services/grading.js';
+import { findPriceHike } from '../lib/fake-discount.js';
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
@@ -504,26 +506,14 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       const textAll = `${pr.title || ''}\n${String(pr.description_html || '').replace(/<[^>]*>/g, ' ')}`;
       const exagHits = EXAGGERATION.filter((w) => textAll.includes(w));
       const { results: skus } = await env.DB.prepare('SELECT id FROM product_skus WHERE product_id = ?').bind(pr.id).all();
+      // 5-9: the K-13 predicate lives in lib/fake-discount.js, shared with the
+      // K-06 sender so the checker and the sender can never disagree.
       let hike = null;
       for (const s of skus) {
         const { results: hist } = await env.DB.prepare(
-          'SELECT original_price, sale_price, changed_at FROM sku_price_history WHERE sku_id = ? ORDER BY changed_at ASC'
+          'SELECT original_price, sale_price, changed_at FROM sku_price_history WHERE sku_id = ? ORDER BY changed_at ASC, rowid ASC'
         ).bind(s.id).all();
-        for (let i = 1; i < hist.length && !hike; i++) {
-          const prev = hist[i - 1];
-          const cur = hist[i];
-          if (cur.original_price > prev.original_price) {
-            for (let j = i + 1; j < hist.length; j++) {
-              const later = hist[j];
-              const days = (Date.parse(later.changed_at) - Date.parse(cur.changed_at)) / 86400000;
-              if (days > 7) break;
-              if (later.sale_price < cur.sale_price) {
-                hike = { sku_id: s.id, original_before: prev.original_price, original_raised: cur.original_price, sale_after: later.sale_price };
-                break;
-              }
-            }
-          }
-        }
+        hike = findPriceHike(s.id, hist);
         if (hike) break;
       }
       out.push({
@@ -1350,9 +1340,12 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   }
 
   // 2-9: platform policies with trigger-kept history. Backdates are refused
-  // (>= today, matching the d1_56 guard: an effective-today policy is live).
+  // (>= today KST, matching the d1_69 guard: an effective-today policy is
+  // live). 5-8: one key holds a row per effective day; reads serve the
+  // latest already-effective row, so a future registration coexists with
+  // the current value instead of overwriting it.
   if (url.pathname === '/api/v1/admin/platform-policies' && request.method === 'GET') {
-    const { results } = await env.DB.prepare('SELECT * FROM platform_policies ORDER BY key ASC').all();
+    const { results } = await env.DB.prepare('SELECT * FROM platform_policies ORDER BY key ASC, effective_from DESC').all();
     return json(corsHeaders, { success: true, count: results.length, data: results });
   }
   if (url.pathname === '/api/v1/admin/platform-policies' && (request.method === 'PUT' || request.method === 'POST')) {
@@ -1362,14 +1355,14 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const value = String(body.value).slice(0, 2000);
     const eff = str(body.effective_from, { field: '적용일', max: 10, required: true });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(eff)) throw bad('INVALID_DATE', '적용일은 YYYY-MM-DD 형식이어야 합니다.');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = policyTodayKst(env);
     if (eff < today) throw bad('POLICY_NO_BACKDATE', '적용일은 오늘 이후여야 합니다.');
-    const before = await env.DB.prepare('SELECT * FROM platform_policies WHERE key = ?').bind(key).first();
+    const before = await env.DB.prepare('SELECT * FROM platform_policies WHERE key = ? AND effective_from = ?').bind(key, eff).first();
     try {
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO platform_policies (key, value, effective_from, updated_by) VALUES (?, ?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET value = excluded.value, effective_from = excluded.effective_from,
+           ON CONFLICT (key, effective_from) DO UPDATE SET value = excluded.value,
              updated_by = excluded.updated_by, updated_at = CURRENT_TIMESTAMP`
         ).bind(key, value, eff, admin.userId),
         audit('POLICY_UPSERT', 'platform_policy', key, before ? { value: before.value, effective_from: before.effective_from } : null, { value, effective_from: eff })
@@ -1378,7 +1371,7 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       if (String(e && e.message || '').includes('POLICY_NO_BACKDATE')) throw bad('POLICY_NO_BACKDATE', '적용일은 오늘 이후여야 합니다.');
       throw e;
     }
-    const row = await env.DB.prepare('SELECT * FROM platform_policies WHERE key = ?').bind(key).first();
+    const row = await env.DB.prepare('SELECT * FROM platform_policies WHERE key = ? AND effective_from = ?').bind(key, eff).first();
     return json(corsHeaders, { success: true, ...row, data: row });
   }
 
@@ -1772,6 +1765,54 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
        ${whereSql} ORDER BY g.month DESC, p.business_name ASC LIMIT 500`
     ).bind(...args).all();
     return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
+  // 5-6: legal documents (SUPER_ADMIN only — also enforced by admin-policy 'super').
+  const requireSuperAdmin = () => {
+    if (admin.adminRole !== 'SUPER_ADMIN') {
+      throw new HttpError(403, 'ADMIN_PERMISSION_DENIED', '최고관리자만 이용할 수 있습니다.', { required_permission: 'super', admin_role: admin.adminRole || null });
+    }
+  };
+  if (url.pathname === '/api/v1/admin/legal-documents' && request.method === 'GET') {
+    requireSuperAdmin();
+    const kindParam = str(url.searchParams.get('kind') || '', { max: 10 }).toUpperCase();
+    if (kindParam && !['TERMS', 'PRIVACY', 'REFUND'].includes(kindParam)) throw bad('INVALID_LEGAL_KIND', '종류는 TERMS·PRIVACY·REFUND 중 하나여야 합니다.');
+    const today = todayKstDate(env);
+    const { results } = await env.DB.prepare(
+      `SELECT id, kind, version, effective_date, body, author_user_id, created_at FROM legal_documents
+       ${kindParam ? 'WHERE kind = ?' : ''} ORDER BY kind ASC, effective_date DESC, created_at DESC`
+    ).bind(...(kindParam ? [kindParam] : [])).all();
+    const currentByKind = new Set();
+    const data = results.map((d) => {
+      let status = 'SUPERSEDED';
+      if (d.effective_date > today) status = 'UPCOMING';
+      else if (!currentByKind.has(d.kind)) { status = 'CURRENT'; currentByKind.add(d.kind); }
+      return { ...d, status, days_until_effective: status === 'UPCOMING' ? daysBetween(today, d.effective_date) : null };
+    });
+    return json(corsHeaders, { success: true, count: data.length, today, data });
+  }
+  if (url.pathname === '/api/v1/admin/legal-documents' && request.method === 'POST') {
+    requireSuperAdmin();
+    const body = await readJson(request);
+    const kind = str(body.kind, { field: '종류', max: 10, required: true }).toUpperCase();
+    if (!['TERMS', 'PRIVACY', 'REFUND'].includes(kind)) throw bad('INVALID_LEGAL_KIND', '종류는 TERMS·PRIVACY·REFUND 중 하나여야 합니다.');
+    const version = str(body.version, { field: '버전', max: 20, required: true });
+    const eff = str(body.effective_date, { field: '시행일', max: 10, required: true });
+    if (!isCalendarDate(eff)) throw bad('INVALID_DATE', '시행일은 YYYY-MM-DD 형식이어야 합니다.');
+    if (eff < todayKstDate(env)) throw bad('RETROACTIVE_EFFECTIVE_DATE', '시행일은 오늘(KST) 이전으로 등록할 수 없습니다.');
+    const text = typeof body.body === 'string' ? body.body : '';
+    if (!text.trim()) throw bad('BODY_REQUIRED', '본문을 입력해 주세요.');
+    if (text.length > 100000) throw bad('BODY_TOO_LONG', '본문은 10만자 이내여야 합니다.');
+    const dup = await env.DB.prepare('SELECT id FROM legal_documents WHERE kind = ? AND version = ?').bind(kind, version).first();
+    if (dup) throw conflict('VERSION_EXISTS', '이미 등록된 버전입니다.');
+    const id = newId('ld');
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO legal_documents (id, kind, version, effective_date, body, author_user_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(id, kind, version, eff, text, admin.userId),
+      audit('LEGAL_DOCUMENT_CREATE', 'legal_document', id, null, { kind, version, effective_date: eff })
+    ]);
+    const row = await env.DB.prepare('SELECT id, kind, version, effective_date, body, author_user_id, created_at FROM legal_documents WHERE id = ?').bind(id).first();
+    return json(corsHeaders, { success: true, ...row, data: row }, 201);
   }
 
   return null;

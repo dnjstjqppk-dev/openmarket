@@ -372,7 +372,7 @@ paths:
 
   /api/v1/orders/{id}/claims:
     post:
-      summary: Request a return, exchange or price adjustment
+      summary: Request a return or exchange
       tags: [Orders]
       parameters:
         - name: id
@@ -389,8 +389,8 @@ paths:
               properties:
                 claim_type:
                   type: string
-                  enum: [RETURN, EXCHANGE, PRICE_ADJUSTMENT]
-                  description: Alias type; PRICE_MATCH maps to PRICE_ADJUSTMENT. Default RETURN.
+                  enum: [RETURN, EXCHANGE]
+                  description: Default RETURN. PRICE_ADJUSTMENT and PRICE_MATCH are rejected (INVALID_CLAIM_TYPE, 400); the price-guarantee scheme is retired.
                 sub_order_id:
                   type: string
                   description: Required for RETURN/EXCHANGE unless the order has one sub-order.
@@ -423,7 +423,7 @@ paths:
                     type: string
       responses:
         '201':
-          description: Claim accepted as REQUESTED (nothing paid yet; RETURN/EXCHANGE pay out on approval, PRICE_ADJUSTMENT on admin approval with cap)
+          description: Claim accepted as REQUESTED (nothing paid yet; RETURN/EXCHANGE pay out on approval)
           content:
             application/json:
               schema:
@@ -444,10 +444,12 @@ paths:
                     type: integer
                   message:
                     type: string
+        '400':
+          description: INVALID_CLAIM_TYPE (includes the retired PRICE_ADJUSTMENT/PRICE_MATCH), SUB_ORDER_REQUIRED, INVALID_ITEMS or INVALID_REASON_CODE
         '401':
           description: Missing or expired JWT
         '409':
-          description: NOT_RETURNABLE, WINDOW_EXPIRED, CLAIM_ALREADY_OPEN, NO_PRICE_DROP, PRICE_HOLD_PERIOD, PRICE_DROP_SUSPECT or ALREADY_ADJUSTED
+          description: NOT_RETURNABLE, WINDOW_EXPIRED or CLAIM_ALREADY_OPEN
 
   /api/v1/orders/{id}/claims/{claimId}:
     delete:
@@ -525,7 +527,7 @@ paths:
     get:
       summary: Cross-border commercial invoice and packing manifest (draft)
       tags: [Orders]
-      description: Owner customer or ADMIN only; id accepts the order id or order_no. Fail-closed 422 when customs/recipient fields are missing.
+      description: Owner customer or ADMIN only; id accepts the order id or order_no. Fail-closed 422 when customs/recipient fields are missing. The exporter block is the order-time operating business (business_entities via the order's operator_entity_id); 409 EXPORTER_NOT_CONFIGURED when the order carries none. Absent weight/seller/carrier values stay null and summary counts the weightless items.
       parameters:
         - name: id
           in: path
@@ -567,6 +569,18 @@ paths:
                         type: string
                       exporter:
                         type: object
+                        description: Order-time operating business (business_entities row)
+                        properties:
+                          company_name:
+                            type: string
+                          business_number:
+                            type: string
+                          country:
+                            type: string
+                          address:
+                            type: string
+                          contact:
+                            type: string
                       consignee:
                         type: object
                       summary:
@@ -578,6 +592,13 @@ paths:
                             type: number
                           total_customs_value_krw:
                             type: number
+                          missing_weight_count:
+                            type: integer
+                            description: Line items without an entered weight
+                          missing_weight_note:
+                            type: string
+                            nullable: true
+                            description: Korean header notice when the count is above zero
                           declaration_status:
                             type: string
                           customs_submission_verified:
@@ -586,6 +607,18 @@ paths:
                         type: array
                         items:
                           type: object
+                          properties:
+                            net_weight_kg:
+                              type: number
+                              nullable: true
+                              description: Null when the product has no entered weight (never invented)
+                            seller_name:
+                              type: string
+                              nullable: true
+                            carrier_code:
+                              type: string
+                              nullable: true
+                              description: Null until a shipment assigns a carrier
                       customs_declaration_statement:
                         type: string
         '401':
@@ -594,6 +627,8 @@ paths:
           description: Order belongs to another customer
         '404':
           description: Order not found (plain error plus order_id echo)
+        '409':
+          description: EXPORTER_NOT_CONFIGURED with order_id echo when the order carries no operating business
         '422':
           description: INCOMPLETE_CUSTOMS_DATA with missing_fields list
 

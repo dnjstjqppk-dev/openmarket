@@ -1,6 +1,7 @@
 // tests/settlement_policy_test.mjs
 // Work order 2-4: settlement formula policies and payout requests.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createGateway, createRunner } from './lib/harness.mjs';
 
 const t = createRunner('Settlement policy and payouts (2-4)');
@@ -22,7 +23,31 @@ const addr = (postal) => ({
   recipient_name: '홍길동', recipient_phone: '010-1234-5678',
   shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: postal
 });
-const today = () => new Date().toISOString().slice(0, 10);
+// 5-8: policy days are KST calendar days (UTC+9), never UTC days.
+const DAY_MS = 86400000;
+const kstDate = (baseMs, offsetDays = 0) =>
+  new Date(baseMs + 9 * 3600 * 1000 + offsetDays * DAY_MS).toISOString().slice(0, 10);
+const today = () => kstDate(Date.now());
+
+async function newPinnedGateway(kstToday) {
+  return createGateway({
+    seedFiles: ['migrations/dev/seed_local_dev.sql'],
+    env: {
+      JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu',
+      ENVIRONMENT: 'development',
+      CONNECTOR_SIMULATION: 'true',
+      PAYMENT_MODE: 'sandbox',
+      POLICY_TEST_TODAY_KST: kstToday
+    }
+  });
+}
+
+async function ledgerMod() {
+  const { pathToFileURL } = await import('node:url');
+  const { ROOT } = await import('./lib/harness.mjs');
+  const { default: path } = await import('node:path');
+  return import(pathToFileURL(path.join(ROOT, 'apps/cloudflare-gateway/src/lib/ledger.js')).href);
+}
 
 async function login(g, email, role = 'CUSTOMER') {
   const r = await g.call('/api/v1/auth/login', { method: 'POST', body: { email, password: PW, role } });
@@ -52,6 +77,32 @@ async function mkSeller() {
   const pid = g.db.prepare("SELECT id FROM partners WHERE status = 'APPROVED' AND sales_model = 'MARKETPLACE' LIMIT 1").get().id;
   g.db.prepare('UPDATE partners SET payout_account_verified = 1 WHERE id = ?').run(pid);
   return { g, pid };
+}
+
+async function payoutSvc() {
+  const { pathToFileURL } = await import('node:url');
+  const { ROOT } = await import('./lib/harness.mjs');
+  const { default: path } = await import('node:path');
+  return import(pathToFileURL(path.join(ROOT, 'apps/cloudflare-gateway/src/services/payouts.js')).href);
+}
+
+// 5-2 helper: one paid order whose settlement is flipped eligible. idx picks a
+// distinct product so a test can fund twice without draining one sku.
+async function fundOnce(g, pid, cust, idx = 0) {
+  const skus = sellerSkus(g, pid, idx + 1);
+  const s = skus[idx];
+  const o = (await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust, body: { ...addr('06236'), items: [{ sku_id: s.id, quantity: 1 }] }
+  })).json;
+  assert.ok(o.order_id, `checkout ok: ${JSON.stringify(o).slice(0, 200)}`);
+  const pay = await g.call('/api/v1/payments/confirm', { method: 'POST', token: cust, body: { order_id: o.order_id, payment_key: `sandbox_${o.order_id.slice(-8)}xx`, amount: o.total_pay_amount } });
+  assert.equal(pay.status, 200, pay.text);
+  g.db.prepare("UPDATE settlements SET status = 'ELIGIBLE_FOR_PAYOUT' WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").run(o.order_id);
+  return o.order_id;
+}
+
+function adminIdOf(g) {
+  return g.db.prepare('SELECT id FROM users WHERE email = ?').get('admin@openmarket.com').id;
 }
 
 // 2-6 deal layer: an approved flash item in a live campaign replaces the
@@ -264,13 +315,187 @@ await t.test('9. cancel, reject and account changes behave', async () => {
   assert.equal(changed, 'PAYOUT_ACCOUNT_CHANGED', 'changed accounts block approval');
 });
 
+await t.test('11. withdrawal is full-only: wrong amount 400, no amount creates full (5-2)', async () => {
+  const { g, pid } = await mkSeller();
+  const cust = await login(g, 'customer@example.com');
+  await fundOnce(g, pid, cust);
+  const svc = await payoutSvc();
+  const avail = await svc.withdrawableAmount(g.env, pid);
+  assert.ok(avail > 0, `positive withdrawable, got ${avail}`);
+  for (const badAmount of [avail + 1, Math.max(0, avail - 1), '100']) {
+    if (badAmount === avail) continue;
+    const err = await svc.requestPayout(g.env, { partnerId: pid, amount: badAmount, idemKey: `wd52-11-${badAmount}` }).then(() => null, (e) => e);
+    assert.ok(err, `amount ${badAmount} refused`);
+    assert.equal(err && err.code, 'WITHDRAWAL_FULL_AMOUNT_ONLY', `wrong amount code, got ${err && err.code}`);
+    assert.equal(err && err.status, 400, 'wrong amount is 400');
+  }
+  const req = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-11-full' });
+  assert.equal(req.status, 'REQUESTED', 'no-amount request opens');
+  assert.equal(req.amount, avail, 'server fills the full withdrawable amount');
+});
+
+await t.test('12. full request approves into a full payout (5-2)', async () => {
+  const { g, pid } = await mkSeller();
+  const cust = await login(g, 'customer@example.com');
+  const adminId = adminIdOf(g);
+  await fundOnce(g, pid, cust);
+  const svc = await payoutSvc();
+  const avail = await svc.withdrawableAmount(g.env, pid);
+  const req = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-12-req' });
+  assert.equal(req.amount, avail, 'request holds the full amount');
+  const approved = await svc.decidePayoutRequest(g.env, { requestId: req.id, approve: true, adminId, idemKey: 'wd52-12-pay' });
+  assert.equal(approved.status, 'APPROVED', 'request approves');
+  assert.ok(approved.payout_id, 'payout is linked');
+  const payout = g.db.prepare('SELECT * FROM payouts WHERE id = ?').get(approved.payout_id);
+  assert.equal(payout.amount, avail, 'payout pays the full amount');
+});
+
+await t.test('13. drift before approval auto-rejects, then re-apply succeeds (5-2)', async () => {
+  const { g, pid } = await mkSeller();
+  const cust = await login(g, 'customer@example.com');
+  const adminId = adminIdOf(g);
+  await fundOnce(g, pid, cust, 0);
+  const svc = await payoutSvc();
+  const req = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-13a' });
+  await fundOnce(g, pid, cust, 1);
+  const now = (await svc.withdrawableAmount(g.env, pid)) + req.amount;
+  assert.notEqual(now, req.amount, 'fixture really drifted');
+  const err = await svc.decidePayoutRequest(g.env, { requestId: req.id, approve: true, adminId, idemKey: 'wd52-13-pay' }).then(() => null, (e) => e);
+  assert.ok(err, 'drifted approval fails');
+  assert.equal(err && err.code, 'WITHDRAWAL_AMOUNT_CHANGED', `drift code, got ${err && err.code}`);
+  assert.equal(err && err.status, 409, 'drifted approval is 409');
+  const stored = g.db.prepare('SELECT status, reject_reason FROM payout_requests WHERE id = ?').get(req.id);
+  assert.deepEqual([stored.status, stored.reject_reason], ['REJECTED', 'WITHDRAWAL_AMOUNT_CHANGED'], 'auto-rejected with reason');
+  const full = await svc.withdrawableAmount(g.env, pid);
+  assert.ok(full > 0, `re-apply has funds, got ${full}`);
+  const req2 = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-13b' });
+  assert.equal(req2.amount, full, 're-apply takes the new full amount');
+  const approved = await svc.decidePayoutRequest(g.env, { requestId: req2.id, approve: true, adminId, idemKey: 'wd52-13-pay2' });
+  assert.equal(approved.status, 'APPROVED', 're-applied request approves');
+});
+
+await t.test('14. concurrent double-approve leaves exactly one winner (5-2)', async () => {
+  const { g, pid } = await mkSeller();
+  const cust = await login(g, 'customer@example.com');
+  const adminId = adminIdOf(g);
+  await fundOnce(g, pid, cust);
+  const svc = await payoutSvc();
+  const req = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-14-req' });
+  const outcomes = await Promise.all([0, 1].map((i) =>
+    svc.decidePayoutRequest(g.env, { requestId: req.id, approve: true, adminId, idemKey: `wd52-14-pay-${i}` })
+      .then(() => 'ok').catch((e) => e.code || 'ERR')
+  ));
+  assert.equal(outcomes.filter((r) => r === 'ok').length, 1, `one winner, got ${JSON.stringify(outcomes)}`);
+  assert.ok(outcomes.includes('PAYOUT_REQUEST_IMMUTABLE'), `loser sees decided-already, got ${JSON.stringify(outcomes)}`);
+  const stored = g.db.prepare('SELECT status, payout_id FROM payout_requests WHERE id = ?').get(req.id);
+  assert.equal(stored.status, 'APPROVED', 'request approved once');
+  assert.ok(stored.payout_id, 'winner links one payout');
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM payouts WHERE id = ?').get(stored.payout_id).n, 1, 'single payout row exists');
+});
+
+await t.test('15. zero withdrawable refuses with NOTHING_TO_WITHDRAW (5-2)', async () => {
+  const { g, pid } = await mkSeller();
+  const cust = await login(g, 'customer@example.com');
+  const adminId = adminIdOf(g);
+  await fundOnce(g, pid, cust);
+  const svc = await payoutSvc();
+  let guard = 0;
+  while ((await svc.withdrawableAmount(g.env, pid)) > 0 && guard++ < 5) {
+    const r = await svc.requestPayout(g.env, { partnerId: pid, idemKey: `wd52-15d-${guard}` });
+    await svc.decidePayoutRequest(g.env, { requestId: r.id, approve: true, adminId, idemKey: `wd52-15p-${guard}` });
+  }
+  assert.equal(await svc.withdrawableAmount(g.env, pid), 0, 'drained to zero');
+  const err = await svc.requestPayout(g.env, { partnerId: pid, idemKey: 'wd52-15b' }).then(() => null, (e) => e);
+  assert.equal(err && err.code, 'NOTHING_TO_WITHDRAW', `zero code, got ${err && err.code}`);
+  assert.equal(err && err.status, 409, 'zero withdrawable is 409');
+  const err2 = await svc.requestPayout(g.env, { partnerId: pid, amount: 1, idemKey: 'wd52-15c' }).then(() => null, (e) => e);
+  assert.equal(err2 && err2.code, 'NOTHING_TO_WITHDRAW', 'zero beats an amount mismatch');
+});
+
+await t.test('16. KST boundary: today-effective policy applies at KST 00:30 (5-8)', async () => {
+  const g = await newGateway();
+  // The boundary scenario itself: UTC 11-16 15:30 is KST 11-17 00:30, so a
+  // policy effective 11-17 (KST) must already apply at that instant.
+  const kst = g.db.prepare("SELECT date('2026-11-16 15:30:00', '+9 hours') AS d").get().d;
+  assert.equal(kst, '2026-11-17', 'fixed-clock KST date math');
+  // Production read path compares against the KST day and picks the latest
+  // already-effective row.
+  const src = fs.readFileSync('apps/cloudflare-gateway/src/lib/ledger.js', 'utf8');
+  assert.ok(src.includes("date('now', '+9 hours')"), 'getPolicy compares on the KST date');
+  assert.ok(src.includes('ORDER BY effective_from DESC LIMIT 1'), 'getPolicy picks the latest effective row');
+  // A policy effective today (KST) applies on the unpinned production path.
+  const { getPolicy } = await ledgerMod();
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('t58.kst', 'v1', ?)").run(today());
+  assert.equal(await getPolicy(g.env, 't58.kst'), 'v1', 'today-KST row is effective');
+  // Pinned clock: a row effective on the pinned KST day reads back through
+  // the pinned gateway even though it is future on the wall clock.
+  const pin2 = kstDate(Date.now(), 5);
+  const g2 = await newPinnedGateway(pin2);
+  g2.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('t58.pin', 'pv', ?)").run(pin2);
+  assert.equal(await getPolicy(g2.env, 't58.pin'), 'pv', 'pinned KST day drives the read');
+});
+
+await t.test('17. same key with two effective rows serves the latest one (5-8)', async () => {
+  const pin = kstDate(Date.now());
+  const g = await newPinnedGateway(pin);
+  const { getPolicy } = await ledgerMod();
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('t58.multi', 'old', ?)").run(pin);
+  // Simulate the passage of a day: the row above was written "yesterday".
+  // Backdate triggers are dropped and restored around the rewrite so the
+  // seeded history lands exactly as production would have accumulated it.
+  const triggers = g.db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'platform_policies'").all();
+  assert.ok(triggers.length >= 2, 'backdate triggers exist to simulate around');
+  g.db.exec('DROP TRIGGER IF EXISTS trg_policy_no_backdate_insert; DROP TRIGGER IF EXISTS trg_policy_no_backdate_update;');
+  g.db.prepare("DELETE FROM platform_policies WHERE key = 't58.multi'").run();
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('t58.multi', 'old', ?)").run(kstDate(Date.now(), -1));
+  for (const trg of triggers.filter((r) => r.name !== 'trg_policy_history')) g.db.exec(trg.sql);
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const put = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 't58.multi', value: 'new', effective_from: pin }
+  });
+  assert.equal(put.status, 200, put.text);
+  assert.equal(await getPolicy(g.env, 't58.multi'), 'new', 'latest already-effective row wins');
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM platform_policies WHERE key = ?').get('t58.multi').n, 2, 'both rows coexist');
+});
+
+await t.test('18. tomorrow-effective policy is stored but not yet applied (5-8)', async () => {
+  const pin = kstDate(Date.now());
+  const g = await newPinnedGateway(pin);
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const { getPolicy } = await ledgerMod();
+  const put = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 't58.future', value: 'fv', effective_from: kstDate(Date.now(), 1) }
+  });
+  assert.equal(put.status, 200, put.text);
+  assert.equal(await getPolicy(g.env, 't58.future'), null, 'future row not yet effective');
+  assert.equal(g.db.prepare('SELECT value AS v FROM platform_policies WHERE key = ?').get('t58.future').v, 'fv', 'future row stored');
+});
+
+await t.test('19. register backdate ban follows the KST day (5-8)', async () => {
+  const pin = kstDate(Date.now());
+  const g = await newPinnedGateway(pin);
+  const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
+  const back = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 't58.back', value: 'x', effective_from: kstDate(Date.now(), -1) }
+  });
+  assert.equal(back.status, 400, back.text);
+  assert.equal(back.json.code, 'POLICY_NO_BACKDATE');
+  assert.throws(() => {
+    g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('t58.back', 'x', '2001-01-01')").run();
+  }, 'far-past direct writes still refused by the trigger');
+  const ok = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 't58.back', value: 'x', effective_from: pin }
+  });
+  assert.equal(ok.status, 200, ok.text);
+});
+
 await t.test('10. schema version pin tracks the new migration', async () => {
   const { pathToFileURL } = await import('node:url');
   const { ROOT } = await import('./lib/harness.mjs');
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_67_support_sla_pii_reason.sql', 'pin names d1_67');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_70_remind_notifs.sql', 'pin names d1_70');
 });
 
 t.finish();

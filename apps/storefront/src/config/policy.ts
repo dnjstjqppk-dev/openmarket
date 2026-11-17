@@ -4,10 +4,9 @@
 //   WELCOME_CREDIT <- routes/auth.js WELCOME_CREDIT
 //   LATE_COMPENSATION <- routes/temu-ops.js LATE_COMPENSATION_KRW
 //   RETURN_WINDOW_DAYS <- routes/orders.js RETURN_WINDOW_DAYS_DEFAULT
-//   PRICE_ADJUST_WINDOW_DAYS <- routes/orders.js PRICE_ADJUST_WINDOW_DAYS
+// 5-5 (decision-15): the price-match window is retired on both sides.
 export const WELCOME_CREDIT = 10000
 export const LATE_COMPENSATION = 5300
 export const RETURN_WINDOW_DAYS = 7
-export const PRICE_ADJUST_WINDOW_DAYS = 30
 
 export const fmtKRW = (n: number) => `${n.toLocaleString('ko-KR')}원`

@@ -1,9 +1,9 @@
 # PHASE 1 — 화면·API 전수 인벤토리 (자동 생성)
 
-생성: 2026-11-15T10:18:00.537Z · 생성기: `tests/audit/phase1_inventory.mjs`
+생성: 2026-11-17T07:00:55.371Z · 생성기: `tests/audit/phase1_inventory.mjs`
 
 API 판정은 각 화면 역할의 토큰으로 개발 시드 게이트웨이에 실제 요청한 결과입니다. `MISSING_ROUTE` = 화면이 존재하지 않는 API를 호출.
-**합계** 화면 93 · API 호출 268 · 없는 경로 0 · 서버 오류 1 · 핸들러 없는 버튼 11 · 의심 패턴 화면 9
+**합계** 화면 93 · API 호출 268 · 없는 경로 0 · 서버 오류 1 · 핸들러 없는 버튼 11 · 의심 패턴 화면 8
 
 
 ## storefront
@@ -20,13 +20,13 @@ API 판정은 각 화면 역할의 토큰으로 개발 시드 게이트웨이에
 | /checkout | CheckoutView | 544 | 8/0/0 | 0/0 | LE0 | 12 | 0 |  |
 | /my | MyHomeView | 144 | 4/0/0 | 0/0 | LE0 | 1 | 0 |  |
 | /my/reviews | MyReviewsView | 127 | 2/0/0 | 0/0 | LE0 | 0 | 0 |  |
-| /my/qna | MyQnaView | 93 | 1/0/0 | 0/0 | LE0 | 0 | 0 |  |
+| /my/qna | MyQnaView | 94 | 1/0/0 | 0/0 | LE0 | 0 | 0 |  |
 | /my/recent | RecentlyViewedView | 107 | 2/0/0 | 0/2 | LE0 | 0 | 0 |  |
 | /my/credits | CreditsView | 77 | 1/0/0 | 0/0 | LE0 | 0 | 0 |  |
 | /my/stores | FollowedStoresView | 111 | 2/0/0 | 0/2 | LE0 | 0 | 0 |  |
 | /my/settings | ProfileView | 418 | 4/0/0 | 1/8 | LE0 | 2 | 0 | fake default input×1 |
-| /orders | OrdersView | 454 | 3/0/0 | 0/13 | LE0 | 7 | 0 |  |
-| /orders/:id | OrderDetailView | 864 | 15/0/0 | 1/28 | LE0 | 13 | 0 |  |
+| /orders | OrdersView | 456 | 3/0/0 | 0/13 | LE0 | 7 | 0 |  |
+| /orders/:id | OrderDetailView | 859 | 15/0/0 | 1/27 | LE0 | 13 | 0 |  |
 | /search | SearchView | 34 | 0/0/0 | 0/0 | --0 | 2 | 0 |  |
 | /login | LoginView | 205 | 2/0/1 | 0/2 | LE0 | 0 | 0 |  |
 | /forgot-password | ForgotPasswordView | 133 | 2/0/0 | 0/0 | LE0 | 0 | 0 |  |
@@ -39,8 +39,8 @@ API 판정은 각 화면 역할의 토큰으로 개발 시드 게이트웨이에
 | /wishlist | WishlistView | 100 | 1/0/0 | 0/0 | LE0 | 7 | 0 |  |
 | /store/:id | SellerStoreView | 317 | 3/0/0 | 1/1 | LE0 | 20 | 0 |  |
 | /support | SupportView | 183 | 2/0/0 | 0/2 | -E0 | 9 | 0 |  |
-| /policy/:type | PolicyView | 115 | 1/0/0 | 0/0 | LE0 | 3 | 0 | guarantee claim×1 |
-| /legal/terms | LegalTermsView | 92 | 1/0/0 | 0/0 | -E- | 3 | 1 | guarantee claim×2 |
+| /policy/:type | PolicyView | 100 | 1/0/0 | 0/0 | LE0 | 3 | 0 | guarantee claim×1 |
+| /legal/terms | LegalTermsView | 86 | 1/0/0 | 0/0 | -E- | 3 | 1 |  |
 | /legal/privacy | LegalPrivacyView | 84 | 0/0/0 | 0/0 | --- | 3 | 1 |  |
 | /payments/success | PaymentResultView | 251 | 3/0/0 | 0/0 | LE- | 1 | 0 |  |
 | /payments/fail | PaymentResultView | 251 | 3/0/0 | 0/0 | LE- | 1 | 0 |  |
@@ -70,8 +70,8 @@ API 판정은 각 화면 역할의 토큰으로 개발 시드 게이트웨이에
 | /ledger | LedgerAuditView | 191 | 2/0/0 | 0/2 | LE0 | 0 | 16 |  |
 | /orders | OrderListView | 147 | 1/0/0 | 0/3 | LE0 | 0 | 0 |  |
 | /orders/:id | OrderDetailView | 180 | 2/0/0 | 0/3 | LE0 | 2 | 0 |  |
-| /claims | ClaimListView | 241 | 2/0/0 | 0/9 | LE0 | 0 | 0 |  |
-| /users | UsersView | 228 | 2/0/0 | 0/8 | LE0 | 0 | 0 |  |
+| /claims | ClaimListView | 242 | 2/0/0 | 0/9 | LE0 | 0 | 0 |  |
+| /users | UsersView | 230 | 2/0/0 | 0/8 | LE0 | 0 | 0 |  |
 | /reviews | ReviewsView | 162 | 4/0/0 | 0/9 | LE0 | 0 | 0 |  |
 | /coupons | CouponsView | 236 | 4/0/0 | 0/6 | LE0 | 3 | 0 |  |
 | /categories | CategoriesView | 306 | 5/0/0 | 0/10 | LE0 | 5 | 1 |  |

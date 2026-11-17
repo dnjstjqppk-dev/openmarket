@@ -121,12 +121,19 @@ await t.test('A4. platform policies record history, future only', async () => {
     method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '100', effective_from: '2999-01-01' }
   });
   assert.equal(c.status, 200, c.text);
+  // 5-8: same key + same day overwrites (history kept); same key + another
+  // day coexists as a separate scheduled row.
   const u = await g.call('/api/v1/admin/platform-policies', {
-    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '200', effective_from: '2999-06-01' }
+    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '200', effective_from: '2999-01-01' }
   });
   assert.equal(u.status, 200, u.text);
   const hist = g.db.prepare('SELECT old_value, new_value FROM platform_policy_history WHERE policy_key = ? ORDER BY created_at DESC').get('credit.earn_bps');
   assert.deepEqual([hist.old_value, hist.new_value], ['100', '200'], 'history recorded');
+  const f = await g.call('/api/v1/admin/platform-policies', {
+    method: 'PUT', token: adm, body: { key: 'credit.earn_bps', value: '300', effective_from: '2999-06-01' }
+  });
+  assert.equal(f.status, 200, f.text);
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS n FROM platform_policies WHERE key = ?').get('credit.earn_bps').n, 2, 'future row coexists');
   const list = await g.call('/api/v1/admin/platform-policies', { token: adm });
   assert.ok(list.json.data.find((x) => x.key === 'credit.earn_bps'), 'policy listed');
 });
@@ -246,7 +253,7 @@ await t.test('A8. payout requests approve, reject and complete', async () => {
   g.db.prepare('UPDATE partners SET payout_account_verified = 1 WHERE id = ?').run('pt_002');
   const avail = g.db.prepare("SELECT net_payout_amount FROM settlements WHERE sub_order_id = (SELECT id FROM sub_orders WHERE parent_order_id = ?)").get(co.json.order_id).net_payout_amount;
   const req1 = await g.call('/api/v1/partner/payout-requests', {
-    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'a8-req-1' }, body: { amount: 1 }
+    method: 'POST', token: pt2, headers: { 'X-Idempotency-Key': 'a8-req-1' }, body: {}
   });
   assert.equal(req1.status, 201, req1.text);
   const list = await g.call('/api/v1/admin/payout-requests', { token: adm });
@@ -650,7 +657,7 @@ await t.test('A20. order list pages across ten thousand rows', async () => {
 await t.test('A21. policy history lists changes and backdates are refused', async () => {
   const g = await newGateway();
   const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const past = await g.call('/api/v1/admin/platform-policies', {
     method: 'PUT', token: adm, body: { key: 'pg.fee_bps', value: '300', effective_from: '2001-01-01' }
   });

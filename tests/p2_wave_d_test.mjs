@@ -190,8 +190,11 @@ await t.test('SEC-10 legacy plaintext rows stay readable (lazy migration)', asyn
   assert.equal(li.json.data.find((r) => r.id === 'pt_001').bank_account_number, `****${String(rawBank).slice(-4)}`);
   const cust = await g.login('customer@example.com', 'CUSTOMER');
   const custId = g.one("SELECT id FROM users WHERE email = 'customer@example.com'").id;
-  g.db.prepare('INSERT INTO orders (id, order_no, customer_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, pccc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run('ord_d10leg', 'ORD-D10LEG', custId, 10000, 0, 0, 10000, 'READY', 'R', '010-1111-2222', 'A', '', '06236', PCCC);
+  // 5-7: the legacy row keeps plaintext PCCC (the point of this test) but carries
+  // the active operator like every real post-d1_20 order — checkout fails
+  // closed without one, and the invoice reads its exporter from it.
+  g.db.prepare('INSERT INTO orders (id, order_no, customer_id, operator_entity_id, total_goods_amount, total_shipping_amount, total_discount_amount, total_pay_amount, payment_status, recipient_name, recipient_phone, shipping_address_line1, shipping_address_line2, shipping_postal_code, pccc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run('ord_d10leg', 'ORD-D10LEG', custId, 'be_dev_sole', 10000, 0, 0, 10000, 'READY', 'R', '010-1111-2222', 'A', '', '06236', PCCC);
   g.db.prepare('INSERT INTO sub_orders (id, parent_order_id, sub_order_no, partner_id, shipping_fee, goods_amount, discount_amount, total_amount, status) VALUES (?,?,?,?,?,?,?,?,?)')
     .run('sub_d10leg', 'ord_d10leg', 'SUB-D10LEG', 'pt_001', 0, 10000, 0, 10000, 'PAYMENT_CONFIRMED');
   const tr = await g.call('/api/v1/logistics/tracking/sub_d10leg', { token: cust });

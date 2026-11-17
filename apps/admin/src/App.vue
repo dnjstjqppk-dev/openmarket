@@ -92,6 +92,7 @@ const rawMenu: ConsoleMenuItem[] = [
       { to: "/suppliers", label: '공급사' },
       { to: "/supplier-integrations", label: '공급사 연동' },
       { to: "/shipping-zones", label: '도서산간 배송비' },
+      { to: "/legal-documents", label: '약관 문서' },
       { to: "/supplier-integrations", label: '기능 플래그' }
     ]
   },

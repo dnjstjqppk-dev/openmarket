@@ -71,6 +71,7 @@
   --om-highlight: var(--om-amber-400);      /* deal badges, rating stars */
   --om-highlight-soft: var(--om-amber-50);
   --om-highlight-text: var(--om-amber-700);
+  --om-on-highlight: var(--om-stone-900); /* 5-1: fixed dark text on solid highlight (both themes) */
 
   --om-success: var(--om-green-600);  --om-success-soft: var(--om-green-50);
   --om-warning: var(--om-orange-600); --om-warning-soft: var(--om-orange-50);
@@ -80,12 +81,12 @@
   /* ---- commerce (work order 1-2; final price stays near-black, only the rate is accent) ---- */
   --om-price: 23 23 22;
   --om-discount: 214 48 74;
-  --om-urgent: 232 93 4;       --om-urgent-soft: 255 237 222;
+  --om-urgent: 183 73 3;       --om-urgent-soft: 255 237 222;
   --om-ship-fast: 36 99 209;
   --om-ship-free: 22 128 74;
-  --om-rating: 242 169 0;
+  --om-rating: 155 108 0;
   --om-benefit: 9 90 99;
-  --om-soldout: 154 154 146;
+  --om-soldout: 117 117 108;
   --om-direct: 23 23 22;
 
   --om-focus: var(--om-lagoon-400);
@@ -165,6 +166,7 @@
   --om-accent-soft: 64 22 30;
   --om-highlight-soft: 58 44 8;
   --om-highlight-text: 248 204 98;
+  --om-on-highlight: var(--om-stone-900);
   --om-success: 74 196 128;  --om-success-soft: 16 52 33;
   --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
   --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
@@ -176,7 +178,7 @@
   --om-ship-free: 74 196 128;
   --om-rating: 248 204 98;
   --om-benefit: 138 213 221;
-  --om-soldout: 105 108 105;
+  --om-soldout: 128 131 128;
   --om-direct: 255 255 255;
   --om-overlay: 0 0 0;
   color-scheme: dark;
@@ -207,6 +209,7 @@
     --om-accent-soft: 64 22 30;
     --om-highlight-soft: 58 44 8;
     --om-highlight-text: 248 204 98;
+    --om-on-highlight: var(--om-stone-900);
     --om-success: 74 196 128;  --om-success-soft: 16 52 33;
     --om-warning: 236 168 64;  --om-warning-soft: 58 40 10;
     --om-danger: 240 102 116;  --om-danger-soft: 66 20 26;
@@ -218,7 +221,7 @@
     --om-ship-free: 74 196 128;
     --om-rating: 248 204 98;
     --om-benefit: 138 213 221;
-    --om-soldout: 105 108 105;
+    --om-soldout: 128 131 128;
     --om-direct: 255 255 255;
     --om-overlay: 0 0 0;
     color-scheme: dark;

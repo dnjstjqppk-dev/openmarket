@@ -188,6 +188,21 @@ export async function pushSellerNewOrder(env, { orderNo, userId, itemCount = 0 }
   });
 }
 
+export async function pushRestockAvailable(env, { customerId, productTitle = '', productId = null, skuId = null }) {
+  const name = String(productTitle || '상품').slice(0, 80);
+  return notifyUser(env, {
+    userId: customerId,
+    title: '재입고 알림',
+    body: `알림을 신청하신 상품이 재입고되었습니다: ${name}`,
+    data: {
+      type: 'RESTOCK_AVAILABLE',
+      product_id: productId ? String(productId) : null,
+      sku_id: skuId ? String(skuId) : null
+    },
+    templateCode: 'RESTOCK_AVAILABLE'
+  });
+}
+
 export async function pushClaimRejected(env, { orderNo, customerId, note = '' }) {
   const reason = String(note || '').trim().slice(0, 200);
   return notifyUser(env, {

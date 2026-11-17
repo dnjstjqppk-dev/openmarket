@@ -31,3 +31,21 @@ export const SUBORDER_STATUS_LABEL: Record<string, string> = {
 
 export const paymentStatusLabel = (s: string): string => PAYMENT_STATUS_LABEL[s] || s
 export const subOrderStatusLabel = (s: string): string => SUBORDER_STATUS_LABEL[s] || s
+
+// 5-1: OmBadge tones for the status pills (same states as the labels above).
+export type StatusTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'highlight'
+const PAYMENT_STATUS_TONE: Record<string, StatusTone> = {
+  READY: 'warning',
+  PAID: 'success', DELIVERED: 'success', CONFIRMED: 'success', COMPLETED: 'success', PURCHASE_CONFIRMED: 'success',
+  PARTIAL_REFUNDED: 'info', REFUNDED: 'info',
+  FAILED: 'danger',
+  CANCELLED: 'neutral', EXPIRED: 'neutral'
+}
+const SUBORDER_STATUS_TONE: Record<string, StatusTone> = {
+  PAYMENT_PENDING: 'warning', PREPARING: 'warning', CANCEL_REQUESTED: 'warning', RETURN_REQUESTED: 'warning',
+  PAYMENT_CONFIRMED: 'info', SHIPPED: 'info', IN_TRANSIT: 'info',
+  DELIVERED: 'success', PURCHASE_CONFIRMED: 'success',
+  CANCELLED: 'neutral', RETURNED: 'neutral', EXPIRED: 'neutral'
+}
+export const paymentStatusTone = (s: string): StatusTone => PAYMENT_STATUS_TONE[s] || 'neutral'
+export const subOrderStatusTone = (s: string): StatusTone => SUBORDER_STATUS_TONE[s] || 'neutral'

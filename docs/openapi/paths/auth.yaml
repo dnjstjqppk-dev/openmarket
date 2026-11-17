@@ -150,6 +150,11 @@ paths:
                 terms_version:
                   type: string
                   maxLength: 40
+                  description: Agreed terms version; defaults to the current TERMS document (5-6).
+                privacy_version:
+                  type: string
+                  maxLength: 40
+                  description: Agreed privacy version; defaults to terms_version, then the current PRIVACY document (5-6).
       responses:
         '201':
           description: Account created, session issued (also mirrored under data)

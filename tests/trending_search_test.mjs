@@ -75,7 +75,7 @@ await t.test('3. trending ranks the last day with deltas', async () => {
 await t.test('4. below-minimum and banned keywords stay out', async () => {
   const g = await newGateway();
   const { computeTrending } = await trending();
-  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('trending.min_count', '5', date('now'))").run();
+  g.db.prepare("INSERT INTO platform_policies (key, value, effective_from) VALUES ('trending.min_count', '5', date('now', '+9 hours'))").run();
   g.db.prepare("INSERT INTO search_keyword_hourly (keyword, hour, search_count) VALUES ('tiny', datetime('now'), 3)").run();
   g.db.prepare("INSERT INTO search_keyword_hourly (keyword, hour, search_count) VALUES ('blockedword', datetime('now'), 999)").run();
   g.db.prepare('INSERT INTO trending_banned_words (word) VALUES (?)').run('blockedword');
@@ -129,7 +129,7 @@ await t.test('8. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_67_support_sla_pii_reason.sql', 'pin names d1_67');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_70_remind_notifs.sql', 'pin names d1_70');
 });
 
 t.finish();

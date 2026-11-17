@@ -11,10 +11,11 @@ const loading = ref(true)
 const loadError = ref('')
 const inquiries = ref<any[]>([])
 
+// 5-5: PRICE_MATCH retired — legacy rows render as 기타 here; the admin
+// console keeps reading them as a terminated scheme.
 const CATEGORY_LABEL: Record<string, string> = {
   DELIVERY: '배송',
   REFUND_RETURN: '반품·환불',
-  PRICE_MATCH: '가격 보상',
   PAYMENT: '결제',
   PARTNER_JOIN: '입점',
   OTHER: '기타'

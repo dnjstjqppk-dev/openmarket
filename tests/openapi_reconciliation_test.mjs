@@ -368,6 +368,9 @@ const EXPECTED = [
   ['/api/v1/admin/grades/compute', 'POST', 401],
   ['/api/v1/admin/review-reports', 'GET', 401],
   ['/api/v1/admin/reviews/{id}/visibility', 'PUT', 401],
+  ['/api/v1/legal/{kind}', 'GET', 200],
+  ['/api/v1/admin/legal-documents', 'GET', 401],
+  ['/api/v1/admin/legal-documents', 'POST', 401],
 ];
 
 // Retired 2026-11-07: documented paths with no gateway route behind them.
@@ -415,6 +418,7 @@ function probePath(template) {
   if (template === '/api/v1/categories/{slug}') return '/api/v1/categories/womens-clothing';
   if (template === '/api/v1/partners/{id}/store') return '/api/v1/partners/pt_001/store';
   if (template.startsWith('/api/v1/stores/')) return template.replace('{partnerId}', 'pt_001');
+  if (template.startsWith('/api/v1/legal/')) return template.replace('{kind}', 'terms');
   return template.replaceAll('{id}', 'probe-id').replaceAll('{subId}', 'probe-sub')
     .replaceAll('{slug}', 'probe-slug').replaceAll('{platform}', 'probe-id')
     .replaceAll('{key}', 'probe-id').replaceAll('{fileKey}', 'probe-id');

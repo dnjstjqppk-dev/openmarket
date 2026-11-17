@@ -245,6 +245,15 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
 
     if (missingFields.length > 0) throw new HttpError(422, 'INCOMPLETE_CUSTOMS_DATA', 'Customs commercial invoice cannot be generated: required customs/recipient information is missing (Fail-Closed)', { order_id: order.id, order_no: order.order_no, missing_fields: missingFields });
 
+    // 5-7: the exporter is the order-time operating business, never a hardcoded
+    // identity. An order without one (pre-entity legacy rows) fails closed:
+    // printing the current operator there would misattribute the shipment.
+    let exporter = null;
+    if (order.operator_entity_id) {
+      exporter = await env.DB.prepare('SELECT * FROM business_entities WHERE id = ?').bind(order.operator_entity_id).first();
+    }
+    if (!exporter) throw new HttpError(409, 'EXPORTER_NOT_CONFIGURED', '수출자(운영 사업자) 정보가 없어 통관 인보이스를 만들 수 없습니다. 운영 사업자를 먼저 등록·활성화해 주세요.', { order_id: order.id, order_no: order.order_no });
+
     const { results: items } = await env.DB.prepare(
       `SELECT oi.*, so.partner_id, so.carrier_code, so.tracking_number,
               p.title as product_title, COALESCE(pt.business_name, 'OLMOA') as brand, p.hs_code, p.country_origin, p.package_weight_kg,
@@ -286,12 +295,15 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         unit_price_krw: itPriceKrw,
         total_amount_usd: subtotalUsd,
         total_amount_krw: it.total_price || (itPriceKrw * (it.quantity || 1)),
-        net_weight_kg: it.package_weight_kg || 0.5,
-        seller_name: it.seller_name || 'OLMOA Official Partner',
-        carrier_code: it.carrier_code || 'CUSTOMS_EXPRESS',
+        net_weight_kg: it.package_weight_kg ?? null,
+        seller_name: it.seller_name || null,
+        carrier_code: it.carrier_code || null,
         tracking_number: it.tracking_number || null
       };
     });
+
+    // 5-7: absent weights stay empty; the header counts them instead of inventing 0.5kg.
+    const missingWeightCount = manifestItems.filter((it) => it.net_weight_kg == null).length;
 
     const invoiceData = {
       invoice_number: `INV-CB-${order.order_no || order.id}`,
@@ -303,11 +315,11 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
       fx_rate_applied: usdRate,
       fx_rate_source: fxSource,
       exporter: {
-        company_name: 'OLMOA Global Cross-Border Fulfillment Hub',
-        business_number: '120-88-01928',
+        company_name: exporter.legal_name,
+        business_number: exporter.business_reg_number,
         country: 'KR',
-        address: 'Incheon Free Trade Zone B1, Incheon, Republic of Korea',
-        contact: 'customs-ops@olmoa.com'
+        address: exporter.address,
+        contact: exporter.cs_email
       },
       consignee: {
         name: order.recipient_name,
@@ -323,6 +335,8 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
         total_customs_value_krw: totalKrw,
         freight_charge_usd: 0.00,
         insurance_charge_usd: 0.00,
+        missing_weight_count: missingWeightCount,
+        missing_weight_note: missingWeightCount > 0 ? `중량 미입력 품목 ${missingWeightCount}개` : null,
         declaration_status: 'DRAFT_REFERENCE_ONLY',
         customs_submission_verified: false,
         purpose_note: '구매자 보관 및 내부 참조용 전자 상업송장 (관세청 실신고 연동 전 DRAFT 단계)'

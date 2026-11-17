@@ -23,13 +23,13 @@ await t.test('T01 the header button cycles light -> dark -> system -> light', as
 const EXPECTED = {
   price: ['23 23 22', '236 237 235'],
   discount: ['214 48 74', '240 98 118'],
-  urgent: ['232 93 4', '255 140 66'],
+  urgent: ['183 73 3', '255 140 66'],
   'urgent-soft': ['255 237 222', '66 33 10'],
   'ship-fast': ['36 99 209', '110 160 245'],
   'ship-free': ['22 128 74', '74 196 128'],
-  rating: ['242 169 0', '248 204 98'],
+  rating: ['155 108 0', '248 204 98'],
   benefit: ['9 90 99', '138 213 221'],
-  soldout: ['154 154 146', '105 108 105'],
+  soldout: ['117 117 108', '128 131 128'],
   direct: ['23 23 22', '255 255 255']
 }
 function blocks() {
@@ -62,29 +62,16 @@ const ratio = (a, b) => {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 
+// 5-1: Q-1-2 decided (a) — the four deviating pairs now use 4.5-meeting
+// values, so T03 covers every text token and the old T04 pin is removed.
 await t.test('T03 text tokens meet 4.5:1 against their theme surface', async () => {
   const [light, dark] = blocks()
   const surfaces = { light: [255, 255, 255], dark: [22, 25, 26] }
-  for (const name of ['price', 'discount', 'ship-fast', 'ship-free', 'benefit', 'direct']) {
+  for (const name of ['price', 'discount', 'ship-fast', 'ship-free', 'benefit', 'direct', 'urgent', 'rating', 'soldout']) {
     assert.ok(ratio(channels(light, name), surfaces.light) >= 4.5, `light ${name} >= 4.5`)
     assert.ok(ratio(channels(dark, name), surfaces.dark) >= 4.5, `dark ${name} >= 4.5`)
   }
-  assert.ok(ratio(channels(dark, 'urgent'), surfaces.dark) >= 4.5, 'dark urgent >= 4.5')
-  assert.ok(ratio(channels(dark, 'rating'), surfaces.dark) >= 4.5, 'dark rating >= 4.5')
-})
-
-// Four specified pairs sit below the 4.5 criterion (light urgent 3.50,
-// light rating 2.01, light soldout 2.83, dark soldout 3.32). Values are
-// implemented exactly as specified; the conflict is escalated in
-// reports/WORK_ORDER_QUESTIONS.md (Q-1-2). This test pins the measured
-// ratios instead of inventing a bar, so any silent change fails loudly.
-await t.test('T04 deviating pairs pin their measured ratios', async () => {
-  const [light, dark] = blocks()
-  const r = (a, b) => ratio(a, b).toFixed(2)
-  assert.equal(r(channels(light, 'urgent'), [255, 255, 255]), '3.50')
-  assert.equal(r(channels(light, 'rating'), [255, 255, 255]), '2.01')
-  assert.equal(r(channels(light, 'soldout'), [255, 255, 255]), '2.83')
-  assert.equal(r(channels(dark, 'soldout'), [22, 25, 26]), '3.32')
+  assert.ok(ratio(channels(light, 'urgent'), channels(light, 'urgent-soft')) >= 4.5, 'light urgent on urgent-soft >= 4.5')
 })
 
 await t.test('T05 tailwind preset exposes the commerce utilities', async () => {

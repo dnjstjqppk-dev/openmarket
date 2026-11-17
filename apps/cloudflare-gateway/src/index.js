@@ -21,6 +21,7 @@ import { handlePaymentRoutes } from './routes/payments.js';
 import { handleStorageRoutes } from './routes/storage.js';
 import { handleTemuOpsRoutes } from './routes/temu-ops.js';
 import { handleBusinessRoutes } from './routes/business.js';
+import { handleLegalRoutes } from './routes/legal.js';
 import { handleSupplierRoutes } from './routes/suppliers.js';
 import { handleBiddingAndM2cRoutes } from './routes/bidding-m2c.js';
 import { handleProductImportRoutes } from './routes/product-imports.js';
@@ -32,6 +33,7 @@ import { handleOnboardingRoutes } from './routes/onboarding.js';
 import { handleAdminSecurityRoutes } from './routes/admin-security.js';
 import { handleClientErrorRoutes } from './routes/client-errors.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
+import { runPriceDropNotifs, runPurchaseReminds } from './services/reminders.js';
 import { purgeExpiredPii } from './services/privacy.js';
 import { computeMonthlyGrades } from './services/grading.js';
 import { purgeOldSearchHours } from './services/trending.js';
@@ -46,6 +48,7 @@ const ROUTERS = [
   handleSocialAuthRoutes,
   handleOnboardingRoutes, // before partner/admin routers: '/api/v1/partner-applications' shares their prefixes
   handleBusinessRoutes,
+  handleLegalRoutes,
   handlePaymentRoutes,
   handleFinanceRoutes,
   handleSupplierRoutes,
@@ -165,6 +168,17 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       const expired = await expireStaleOrders(env, 200);
+      // 5-9 (K-06, K-09): reminders run before auto-confirm so the confirm
+      // reminder always lands before the automatic confirmation it warns of.
+      let reminders = 'SKIPPED';
+      try {
+        const pd = await runPriceDropNotifs(env);
+        const pr = await runPurchaseReminds(env);
+        reminders = `drops:${pd.bundled}/${pd.users},confirm:${pr.confirm},review:${pr.review}`;
+      } catch (e) {
+        reminders = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'reminders', error: String(e && e.message || e) }));
+      }
       const confirmed = await autoConfirmDelivered(env, 7, 200);
       // O19: hourly reconciliation with persisted result + alert (ALERT_WEBHOOK_URL) on any failed check.
       let reconciliation = 'NOT_DUE';
@@ -208,7 +222,7 @@ export default {
         searchPurged = 'ERROR';
         console.error(JSON.stringify({ level: 'error', job: 'search_purge', error: String(e && e.message || e) }));
       }
-      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, confirmed, reconciliation, purged, grading, searchPurged }));
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, reminders, confirmed, reconciliation, purged, grading, searchPurged }));
     })());
   }
 };

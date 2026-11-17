@@ -92,7 +92,8 @@ class ReturnClaim {
   static const typeLabels = {
     'RETURN': '반품',
     'EXCHANGE': '교환',
-    'PRICE_ADJUSTMENT': '최저가 보상',
+    // 5-5: scheme retired; stored rows stay readable as a terminated scheme.
+    'PRICE_ADJUSTMENT': '가격 보상(종료된 제도)',
   };
 
   static const reasonLabels = {

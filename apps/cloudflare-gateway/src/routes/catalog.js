@@ -3,6 +3,7 @@
 
 import { bad, notFound, HttpError } from '../lib/http.js';
 import { authenticate } from '../lib/auth.js';
+import { getPolicy } from '../lib/ledger.js';
 import { matchScope } from '../services/coupons.js';
 import { newId } from '../lib/ids.js';
 
@@ -65,6 +66,27 @@ export function shortSearchTerms(raw) {
 
 export function escapeLike(term) {
   return String(term).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+// 5-4: decision-10 (오늘출발 최소 당일 출고율) is undecided, so the badge and
+// the filter stay off until this policy exists with a sane bps value.
+export const TODAY_SHIP_POLICY_KEY = 'badge.today_ship_min_rate_bps';
+
+export async function getTodayShipMinRateBps(env) {
+  const raw = await getPolicy(env, TODAY_SHIP_POLICY_KEY);
+  if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+  const n = Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isSafeInteger(n) || n < 0 || n > 10000) return null;
+  return n;
+}
+
+// Current time as KST 'HH:MM' for the today_cutoff comparison.
+// TODAY_SHIP_TEST_NOW_KST pins the clock in tests (unset in production).
+export function currentKstHm(env) {
+  const pinned = String(env?.TODAY_SHIP_TEST_NOW_KST || '');
+  if (/^([01]\d|2[0-3]):[0-5]\d$/.test(pinned)) return pinned;
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  return `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 // Shared by the product list and the facets endpoint (2-9).
@@ -167,8 +189,23 @@ async function buildProductFilters(env, url) {
     binds.push(Math.round(minR * 10));
   }
   if (todayShipParam === 'true' || todayShipParam === '1') {
-    filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
-      WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL)`;
+    // 5-4 (decision-10 pre-state): without an effective policy the param is
+    // ignored. With one, the seller passes only while its cutoff is still
+    // ahead (KST) and its last-30d same-day ship rate — paid vs shipped KST
+    // calendar days over shipped sub-orders — meets the policy.
+    const minRateBps = await getTodayShipMinRateBps(env);
+    if (minRateBps !== null) {
+      filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
+        WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL
+          AND substr('00' || sp.today_cutoff, -5) > ?)
+        AND (SELECT CASE WHEN COUNT(*) = 0 THEN -1
+            ELSE SUM(CASE WHEN date(o.paid_at, '+9 hours') = date(s.shipped_at, '+9 hours') THEN 10000 ELSE 0 END) / COUNT(*)
+          END
+          FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+          WHERE s.partner_id = p.partner_id AND s.shipped_at IS NOT NULL
+            AND o.paid_at IS NOT NULL AND o.paid_at >= datetime('now', '-30 days')) >= ?`;
+      binds.push(currentKstHm(env), minRateBps);
+    }
   }
   if (exhibitionParam) {
     filterSql += ` AND EXISTS (SELECT 1 FROM exhibition_products ep JOIN exhibitions e ON e.id = ep.exhibition_id
@@ -310,7 +347,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
                   WHERE t.coupon_id = cpn.id AND t.target_type = 'CATEGORY' AND t.target_id = p.category_id))
                 OR (cpn.scope = 'PRODUCT' AND EXISTS (SELECT 1 FROM coupon_targets t
                   WHERE t.coupon_id = cpn.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id)))) as has_coupon,
-             (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')) as earn_bps,
+             (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now', '+9 hours') ORDER BY effective_from DESC LIMIT 1) as earn_bps,
              ${periodSelect}`;
     const fromSql = `
       FROM products p
@@ -319,6 +356,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       LEFT JOIN partners pt ON p.partner_id = pt.id`;
     const baseWhere = `WHERE p.status = 'ACTIVE'`;
     const { filterSql, binds } = await buildProductFilters(env, url);
+    // 5-4: the badge flag and the PLP chip follow the same policy switch.
+    const todayShipOn = (await getTodayShipMinRateBps(env)) !== null;
 
     // col prefixes data columns: 'p.' inside the product query, '' in the UNION wrapper.
     const sortOrder = (sort, col) => {
@@ -337,6 +376,11 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       brand: 'OLMOA',
       count: rows.length,
       filters: { category: catParam, partner_id: partnerParam, sort: sortParam, search: searchParam, period: periodParam },
+      available_filters: [
+        'category', 'brand', 'min_price', 'max_price', 'free_shipping', 'coupon_eligible', 'has_discount',
+        ...(todayShipOn ? ['today_shipment'] : []),
+        'exclude_overseas', 'sales_model', 'min_rating'
+      ],
       pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
       data: rows.map((p) => {
         const sales30 = Number(p.sales_30d_raw) || 0;
@@ -345,7 +389,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         if (Number(p.has_deal)) badges.push('DEAL');
         if (p.created_at && p.created_at >= new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ')) badges.push('NEW');
         const { sales_30d_raw, has_deal, ...rest } = p;
-        return { ...rest, sales_30d: sales30 >= 10 ? sales30 : null, badges };
+        return { ...rest, has_today: todayShipOn ? Number(p.has_today) : 0, sales_30d: sales30 >= 10 ? sales30 : null, badges };
       })
     }), { headers: corsHeaders });
 
@@ -650,7 +694,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     }
     // 3-4: earn-rate policy for the projected-reward row (null = no policy, row hidden).
     const earnBps = await env.DB.prepare(
-      "SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now')"
+      "SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now', '+9 hours') ORDER BY effective_from DESC LIMIT 1"
     ).first();
     const gradeRow = await env.DB.prepare(
       'SELECT grade_code FROM partner_grades WHERE partner_id = ? ORDER BY month DESC LIMIT 1'

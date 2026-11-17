@@ -14,5 +14,6 @@ export const EXCHANGE_LABEL: Record<string, string> = {
 export const TYPE_LABEL: Record<string, string> = {
   RETURN: '반품',
   EXCHANGE: '교환',
-  PRICE_ADJUSTMENT: '가격보상'
+  // 5-5: scheme retired; stored rows stay readable as a terminated scheme.
+  PRICE_ADJUSTMENT: '가격 보상(종료된 제도)'
 }

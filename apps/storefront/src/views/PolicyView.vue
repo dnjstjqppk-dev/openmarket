@@ -2,8 +2,7 @@
 // Buyer policy pages (PHASE 2 redesign). Every number here is a server rule, with its source:
 //   배송 지연 보상 5,300원         routes/temu-ops.js LATE_COMPENSATION_KRW (sub-order past estimated_delivery_date)
 //   기본 배송비 3,000 / 30,000원    services/orders.js defaults; each seller sets its own (partners.base_shipping_fee, …)
-//   판매가 인하 차액 30일, 주문당 1회, 인하가 24시간 유지·급락 제외, 관리자 승인 후 지급,
-//     결제액 10%·최대 1만원 상한·판매자 정산 차감  routes/orders.js + admin.js claims PUT
+//   (5-5 retired the price-match page: decision-15, no guarantee scheme.)
 //   구매확정 1% 적립(직접 확정 시)     services/orders.js applyBps(paid, 100), 0 on auto-confirm
 // The previous version promised a 90-day free return with free courier pickup, "100% escrow", and named a
 // corporation ("주식회사 올모아글로벌") although the operator entity is configurable and currently not a
@@ -38,20 +37,6 @@ const POLICIES: Record<string, { title: string; summary: string; sections: Secti
       { heading: '배송 지연 보상', body: [
         '판매자 출고 단위(부분 주문)의 배송 예정일이 지났는데 배송이 완료되지 않았거나, 예정일 이후에 배송이 완료된 경우 주문 상세에서 보상을 신청할 수 있습니다.',
         '해당 부분 주문마다 5,300원이 적립금으로 지급되며, 같은 부분 주문은 한 번만 보상됩니다. 취소·만료되었거나 결제 대기 중인 주문은 대상이 아닙니다.'
-      ] }
-    ]
-  },
-  'price-match': {
-    title: '판매가 인하 차액 보상',
-    summary: '결제 후 30일 이내에 구매한 옵션(SKU)의 판매가가 내려가면, 그 차액을 적립금으로 받을 수 있습니다.',
-    sections: [
-      { heading: '대상', body: [
-        '결제가 완료된 주문(일부 환불된 주문 포함)으로, 결제 시각으로부터 30일 이내에 신청한 경우입니다.',
-        '구매한 것과 같은 옵션의 현재 판매가(수량 할인 적용 후)가 구매 단가보다 낮을 때만 지급되며, 환불된 수량은 제외됩니다.'
-      ] },
-      { heading: '신청과 지급', body: [
-        '주문 상세에서 신청하면 차액이 즉시 계산되어 적립금으로 지급됩니다. 주문당 한 번만 신청할 수 있습니다.',
-        '인하가 확인되지 않으면 지급되지 않으며, 다른 판매자·다른 옵션의 가격과는 비교하지 않습니다.'
       ] }
     ]
   },

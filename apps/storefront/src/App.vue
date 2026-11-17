@@ -163,7 +163,7 @@ const bottomNav = computed<NavItem[]>(() => [
 ])
 const footerColumns: FooterColumn[] = [
   { title: '쇼핑', links: [{ label: '번개특가', to: '/channel/lightning-deals' }, { label: '베스트', to: '/channel/best-sellers' }, { label: '전체 카테고리', to: '/categories' }, { label: '쿠폰·적립금', to: '/coupons' }] },
-  { title: '구매 안내', links: [{ label: '배송 정책', to: '/policy/shipping' }, { label: '취소·반품·환불', to: '/legal/refund' }, { label: '판매가 인하 차액 보상', to: '/policy/price-match' }, { label: '주문·배송 조회', to: '/orders' }] },
+  { title: '구매 안내', links: [{ label: '배송 정책', to: '/policy/shipping' }, { label: '취소·반품·환불', to: '/legal/refund' }, { label: '주문·배송 조회', to: '/orders' }] },
   { title: '고객 지원', links: [{ label: '고객센터·1:1 문의', to: '/support' }, { label: '이용약관', to: '/legal/terms' }, { label: '개인정보처리방침', to: '/legal/privacy' }, { label: '판매자 입점·판매자센터', href: PARTNER_CONSOLE_URL }] }
 ]
 // These pages have their own fixed purchase bar on mobile.

@@ -336,7 +336,7 @@
       {
         "url": "/my/qna",
         "view": "MyQnaView",
-        "lines": 93,
+        "lines": 94,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -508,7 +508,7 @@
       {
         "url": "/orders",
         "view": "OrdersView",
-        "lines": 454,
+        "lines": 456,
         "buttons": 13,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -552,8 +552,8 @@
       {
         "url": "/orders/:id",
         "view": "OrderDetailView",
-        "lines": 864,
-        "buttons": 28,
+        "lines": 859,
+        "buttons": 27,
         "buttons_without_handler": 1,
         "dead_links": 0,
         "has_loading": true,
@@ -561,7 +561,7 @@
         "has_empty": true,
         "responsive_classes": 13,
         "english_text_nodes": 0,
-        "korean_text_nodes": 63,
+        "korean_text_nodes": 62,
         "aria": 11,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -641,14 +641,6 @@
             "method_found": "POST"
           },
           {
-            "raw": "/api/v1/orders/${order.value.id}/claims",
-            "path": "/api/v1/orders/x_probe/claims",
-            "method": "GET",
-            "status": 404,
-            "verdict": "EXISTS",
-            "code": "NOT_FOUND"
-          },
-          {
             "raw": "/api/v1/orders/${order.value.id}/late-delivery-claim",
             "path": "/api/v1/orders/x_probe/late-delivery-claim",
             "method": "GET",
@@ -689,6 +681,14 @@
             "verdict": "EXISTS",
             "code": "NOT_FOUND",
             "method_found": "DELETE"
+          },
+          {
+            "raw": "/api/v1/orders/${order.value.id}/claims",
+            "path": "/api/v1/orders/x_probe/claims",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
           }
         ]
       },
@@ -1076,7 +1076,7 @@
         "has_empty": true,
         "responsive_classes": 9,
         "english_text_nodes": 0,
-        "korean_text_nodes": 11,
+        "korean_text_nodes": 10,
         "aria": 2,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -1100,7 +1100,7 @@
       {
         "url": "/policy/:type",
         "view": "PolicyView",
-        "lines": 115,
+        "lines": 100,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1128,7 +1128,7 @@
       {
         "url": "/legal/terms",
         "view": "LegalTermsView",
-        "lines": 92,
+        "lines": 86,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1137,12 +1137,10 @@
         "has_empty": false,
         "responsive_classes": 3,
         "english_text_nodes": 1,
-        "korean_text_nodes": 22,
+        "korean_text_nodes": 20,
         "aria": 2,
         "inline_hex_colors": 0,
-        "suspicious": [
-          "guarantee claim×2"
-        ],
+        "suspicious": [],
         "api": [
           {
             "raw": "${API_BASE_URL}/api/v1/business-info",
@@ -1477,7 +1475,7 @@
       },
       {
         "file": "components/plp/PlpLayout.vue",
-        "lines": 519,
+        "lines": 535,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -2170,7 +2168,7 @@
       {
         "url": "/claims",
         "view": "ClaimListView",
-        "lines": 241,
+        "lines": 242,
         "buttons": 9,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -2204,7 +2202,7 @@
       {
         "url": "/users",
         "view": "UsersView",
-        "lines": 228,
+        "lines": 230,
         "buttons": 8,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -4450,17 +4448,17 @@
       },
       {
         "file": "components/settlement/PayoutRequestModal.vue",
-        "lines": 69,
+        "lines": 71,
         "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": false,
         "has_error": true,
-        "has_empty": false,
+        "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
         "korean_text_nodes": 4,
-        "aria": 2,
+        "aria": 3,
         "inline_hex_colors": 0,
         "suspicious": [
           "Math.random×1",

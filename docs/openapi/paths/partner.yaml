@@ -1172,6 +1172,7 @@ paths:
       parameters:
         - name: claim_type
           in: query
+          description: PRICE_ADJUSTMENT filters stored rows of the retired price-guarantee scheme only; no new rows of that type are created.
           schema:
             type: string
             enum: [RETURN, EXCHANGE, PRICE_ADJUSTMENT]
@@ -1733,30 +1734,33 @@ paths:
         '401':
           description: Missing or expired partner JWT
     post:
-      summary: Request a payout
+      summary: Request a full-amount payout
       tags: [Partner]
-      description: '2-9: X-Idempotency-Key required; over-available, unverified account and in-flight requests are refused.'
+      description: '5-2: full withdrawal only. The server creates the request for the current withdrawable full amount; no amount input. X-Idempotency-Key required. A supplied amount must equal the full amount.'
       parameters:
         - $ref: '../schemas/common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required: [amount]
               properties:
                 amount:
                   type: integer
+                  description: Optional; must equal the withdrawable full amount or 400 WITHDRAWAL_FULL_AMOUNT_ONLY.
+                idempotency_key:
+                  type: string
+                  description: Alias for X-Idempotency-Key.
       responses:
         '201':
-          description: Request queued
+          description: Request queued for the full amount
         '400':
-          description: Missing key or bad amount
+          description: Missing key (IDEMPOTENCY_KEY_REQUIRED) or non-full amount (WITHDRAWAL_FULL_AMOUNT_ONLY)
         '401':
           description: Missing or expired partner JWT
         '409':
-          description: Unverified account, over-available or in-flight request
+          description: Unverified account (PAYOUT_ACCOUNT_UNVERIFIED), nothing to withdraw (NOTHING_TO_WITHDRAW) or in-flight request (PAYOUT_REQUEST_INFLIGHT)
 
   /api/v1/partner/payout-requests/{id}/cancel:
     post:

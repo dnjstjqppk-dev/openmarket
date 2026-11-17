@@ -10,6 +10,7 @@ import { grantCreditStatements, getActiveOperator } from '../lib/ledger.js';
 import { exportCustomerData, withdrawalBlockers, withdrawCustomer } from '../services/privacy.js';
 import { ipAllowed, clientIp, twoFactorRequired } from '../lib/admin-policy.js';
 import { verifyAdminSecondFactor } from './admin-security.js';
+import { currentLegalVersion } from './legal.js';
 
 const MAX_FAILED = 5;
 const LOCK_MS = 15 * 60 * 1000;
@@ -123,17 +124,24 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     if (exists) throw conflict('EMAIL_TAKEN', '이미 등록된 이메일입니다.');
     const userId = newId('usr');
     const hash = await hashPassword(body.password);
-    const termsVersion = str(body.terms_version, { max: 40 }) || null;
+    // 5-6: each consent row stores the agreed document version. Explicit client
+    // values win (older apps); otherwise the server fills the current versions.
+    const explicitTerms = str(body.terms_version, { max: 40 }) || null;
+    const explicitPrivacy = str(body.privacy_version, { max: 40 }) || null;
+    const termsVersion = explicitTerms || (await currentLegalVersion(env, 'TERMS')) || null;
+    const privacyVersion = explicitPrivacy || explicitTerms || (await currentLegalVersion(env, 'PRIVACY')) || null;
+    const marketingVersion = explicitTerms || explicitPrivacy || termsVersion;
     const st = [
       env.DB.prepare(`INSERT INTO users (id, email, password_hash, full_name, phone, role, is_active) VALUES (?, ?, ?, ?, ?, 'ROLE_CUSTOMER', 1)`)
         .bind(userId, email, hash, fullName, phone),
       // P2R-03: the required consents are history rows, stored atomically with the account.
-      ...['TERMS_OF_SERVICE', 'PRIVACY_POLICY'].map((ct) =>
-        env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, 1, ?)')
-          .bind(newId('cns'), userId, ct, termsVersion)),
+      env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, 1, ?)')
+        .bind(newId('cns'), userId, 'TERMS_OF_SERVICE', termsVersion),
+      env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, 1, ?)')
+        .bind(newId('cns'), userId, 'PRIVACY_POLICY', privacyVersion),
       ...(typeof body.agree_marketing === 'boolean'
         ? [env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, ?, ?)')
-            .bind(newId('cns'), userId, 'MARKETING', body.agree_marketing ? 1 : 0, termsVersion)]
+            .bind(newId('cns'), userId, 'MARKETING', body.agree_marketing ? 1 : 0, marketingVersion)]
         : [])
     ];
     // NEW-P0-02: no credit at signup. The welcome grant moves to email verification

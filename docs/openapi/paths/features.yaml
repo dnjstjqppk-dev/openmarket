@@ -352,8 +352,8 @@ paths:
                   type: string
                 category:
                   type: string
-                  enum: [DELIVERY, REFUND_RETURN, PRICE_MATCH, PAYMENT, PARTNER_JOIN, OTHER]
-                  description: Unknown values fall back to OTHER.
+                  enum: [DELIVERY, REFUND_RETURN, PAYMENT, PARTNER_JOIN, OTHER]
+                  description: Unknown values fall back to OTHER. The retired PRICE_MATCH category is rejected (INVALID_CATEGORY, 400), never remapped.
                 order_id:
                   type: string
                   nullable: true
@@ -382,7 +382,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: Subject and content are both required
+          description: Subject and content are both required (INQUIRY_REQUIRED); the retired PRICE_MATCH category is refused (INVALID_CATEGORY)
         '401':
           description: Missing or expired JWT (UNAUTHENTICATED)
 

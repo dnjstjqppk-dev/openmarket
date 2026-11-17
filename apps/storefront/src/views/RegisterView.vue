@@ -4,7 +4,7 @@
 // Consent is an explicit, unbundled opt-in (개인정보 보호법): nothing is pre-checked; "전체 동의" only ticks the
 // individual boxes, each of which stays visible and can be unticked. The welcome credit is shown only when the
 // server reports it was granted (it is 0 while no operator entity is configured).
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { Check, CircleCheck } from 'lucide-vue-next'
 import { OmButton, OmInput, OmCheckbox, OmAlert } from '@olmoa/ui'
@@ -28,6 +28,21 @@ const welcomeCredit = ref(0)
 const error = ref('')
 const loading = ref(false)
 const touched = ref(false)
+// 5-6: the agreed document versions, shown beside the consent boxes and sent
+// with the signup (the server fills the current versions when these are empty).
+const termsVersion = ref('')
+const privacyVersion = ref('')
+
+onMounted(() => {
+  for (const [kind, set] of [['terms', (v: string) => (termsVersion.value = v)], ['privacy', (v: string) => (privacyVersion.value = v)]] as const) {
+    fetch(`${API_BASE_URL}/api/v1/legal/${kind}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.success && j.data?.current?.version) set(String(j.data.current.version))
+      })
+      .catch(() => {})
+  }
+})
 
 const pwChecks = computed(() => {
   const pw = password.value
@@ -71,7 +86,9 @@ async function handleRegister() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email.value.trim(), password: password.value, full_name: fullName.value.trim(), phone: phone.value.trim(),
-        agree_terms: agreeTerms.value, agree_privacy: agreePrivacy.value
+        agree_terms: agreeTerms.value, agree_privacy: agreePrivacy.value,
+        ...(termsVersion.value ? { terms_version: termsVersion.value } : {}),
+        ...(privacyVersion.value ? { privacy_version: privacyVersion.value } : {})
       })
     })
     const data = await res.json().catch(() => ({}))
@@ -123,8 +140,8 @@ async function handleRegister() {
         <OmCheckbox v-model="allAgreed" :indeterminate="someAgreed" label="필수 항목 전체 동의" />
         <div class="mt-3 space-y-2.5 border-t border-line-divider pt-3 text-sm">
           <OmCheckbox v-model="agreeAge" :error="!!show('consent') && !agreeAge"><span class="text-sm">[필수] 만 14세 이상입니다</span></OmCheckbox>
-          <OmCheckbox v-model="agreeTerms" :error="!!show('consent') && !agreeTerms"><span class="text-sm">[필수] <RouterLink to="/legal/terms" target="_blank" class="underline underline-offset-2">이용약관</RouterLink> 동의</span></OmCheckbox>
-          <OmCheckbox v-model="agreePrivacy" :error="!!show('consent') && !agreePrivacy"><span class="text-sm">[필수] <RouterLink to="/legal/privacy" target="_blank" class="underline underline-offset-2">개인정보 수집·이용</RouterLink> 동의</span></OmCheckbox>
+          <OmCheckbox v-model="agreeTerms" :error="!!show('consent') && !agreeTerms"><span class="text-sm">[필수] <RouterLink to="/legal/terms" target="_blank" class="underline underline-offset-2">이용약관{{ termsVersion ? ` ${termsVersion}` : '' }}</RouterLink> 동의</span></OmCheckbox>
+          <OmCheckbox v-model="agreePrivacy" :error="!!show('consent') && !agreePrivacy"><span class="text-sm">[필수] <RouterLink to="/legal/privacy" target="_blank" class="underline underline-offset-2">개인정보 수집·이용{{ privacyVersion ? ` ${privacyVersion}` : '' }}</RouterLink> 동의</span></OmCheckbox>
         </div>
         <p v-if="show('consent')" class="mt-2 text-xs font-medium text-danger" role="alert">{{ show('consent') }}</p>
       </fieldset>

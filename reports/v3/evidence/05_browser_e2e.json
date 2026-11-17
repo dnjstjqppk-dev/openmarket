@@ -1,22 +1,22 @@
 {
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "at": "2026-11-16T11:59:10.823Z",
+  "at": "2026-11-17T09:41:31.953Z",
   "steps": [
     {
       "name": "B01 storefront home renders with legal business disclosure from API",
       "ok": true,
       "error": null,
-      "ms": 4303,
+      "ms": 5474,
       "console_errors": [],
       "network_errors": [
         {
           "status": "FAILED",
-          "url": "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
+          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
           "error": "net::ERR_BLOCKED_BY_ORB"
         },
         {
           "status": "FAILED",
-          "url": "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "url": "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
           "error": "net::ERR_BLOCKED_BY_ORB"
         }
       ]
@@ -25,7 +25,7 @@
       "name": "B02 protected route redirects anonymous users to login",
       "ok": true,
       "error": null,
-      "ms": 979,
+      "ms": 1343,
       "console_errors": [],
       "network_errors": []
     },
@@ -33,7 +33,7 @@
       "name": "B02b search finds products and a price filter narrows to zero",
       "ok": true,
       "error": null,
-      "ms": 1624,
+      "ms": 1992,
       "console_errors": [],
       "network_errors": []
     },
@@ -41,7 +41,7 @@
       "name": "B03 product detail (marketplace seller) and add to cart",
       "ok": true,
       "error": null,
-      "ms": 3414,
+      "ms": 3534,
       "console_errors": [],
       "network_errors": []
     },
@@ -49,7 +49,7 @@
       "name": "B04 add a direct-sales (MODEL A) product -> mixed cart",
       "ok": true,
       "error": null,
-      "ms": 3960,
+      "ms": 4090,
       "console_errors": [],
       "network_errors": [
         {
@@ -63,7 +63,7 @@
       "name": "B04b quick-add from the home grid grows the cart",
       "ok": true,
       "error": null,
-      "ms": 3405,
+      "ms": 3402,
       "console_errors": [],
       "network_errors": [
         {
@@ -82,7 +82,7 @@
       "name": "B05 checkout requires login; login through the real form",
       "ok": true,
       "error": null,
-      "ms": 2863,
+      "ms": 2922,
       "console_errors": [
         {
           "type": "log",
@@ -101,7 +101,7 @@
       "name": "B05b store follow toggles on and off in the UI",
       "ok": true,
       "error": null,
-      "ms": 3861,
+      "ms": 2453,
       "console_errors": [],
       "network_errors": [
         {
@@ -125,7 +125,7 @@
       "name": "B05c platform and store coupons minted and claimed for checkout",
       "ok": true,
       "error": null,
-      "ms": 403,
+      "ms": 118,
       "console_errors": [],
       "network_errors": []
     },
@@ -133,7 +133,7 @@
       "name": "B06 checkout shows the server quote; pay with the local simulator",
       "ok": true,
       "error": null,
-      "ms": 5725,
+      "ms": 5927,
       "console_errors": [],
       "network_errors": []
     },
@@ -141,7 +141,7 @@
       "name": "B07 seller center: login, see the paid order, ship it",
       "ok": true,
       "error": null,
-      "ms": 6605,
+      "ms": 7063,
       "console_errors": [
         {
           "type": "log",
@@ -169,7 +169,7 @@
       "name": "B08 operator console: login, reconciliation, entities, purchase orders",
       "ok": true,
       "error": null,
-      "ms": 11698,
+      "ms": 12675,
       "console_errors": [],
       "network_errors": []
     },
@@ -177,7 +177,7 @@
       "name": "B09 delivery (dev simulator) -> customer purchase confirmation in the UI",
       "ok": true,
       "error": null,
-      "ms": 88335,
+      "ms": 158448,
       "console_errors": [],
       "network_errors": []
     },
@@ -185,7 +185,7 @@
       "name": "B10 customer cancels the remaining (direct) shipment from the UI",
       "ok": true,
       "error": null,
-      "ms": 402797,
+      "ms": 390194,
       "console_errors": [],
       "network_errors": []
     },
@@ -193,7 +193,7 @@
       "name": "B10b partial return on one seller shipment from the UI",
       "ok": true,
       "error": null,
-      "ms": 60145,
+      "ms": 14675,
       "console_errors": [],
       "network_errors": []
     },
@@ -201,7 +201,7 @@
       "name": "B11 reconciliation still clean after the browser journey",
       "ok": true,
       "error": null,
-      "ms": 2156,
+      "ms": 855,
       "console_errors": [],
       "network_errors": []
     }

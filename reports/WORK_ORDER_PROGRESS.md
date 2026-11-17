@@ -3,7 +3,7 @@
 작업 번호 | 판정 | 커밋 해시 | 테스트 이름 | 메모
 ---|---|---|---|---
 1-1 | 통과 | 81d56cc | tests/ui/docs_notice.test.mjs (2/2) | 3문서 안내문 + 상태 정정, test:ui 연결
-1-2 | 실패 | ab9e468 | tests/ui/theme.test.mjs (5/5) | 토큰·프리셋은 명시값대로 구현, 4쌍이 4.5 미달이라 완료 기준 미충족 → Q-1-2
+1-2 | 통과 | 미커밋 | tests/ui/theme.test.mjs (4/4) | 5-1: Q-1-2 결정(a) 4값 교체, T04 삭제·T03 9토큰+urgent-soft 검사 → Q-1-2 해소
 1-3 | 통과 | f514645 | tests/ui/type_scale.test.mjs (5/5) | 활자·그리드·행높이 CSS + 직접호출 동결(83), 전환은 3~4단계 → Q-1-3
 1-4 | 통과 | 6352022 | tests/ui/components_commerce.test.mjs (9/9) | 25종 신규+표 확장+카드 이동, vue-tsc(ui·스토어) 무결함
 1-5 | 통과 | 240536e | tests/ui/design_lint.test.mjs (1/1) | 상한 고정(스토어265·어드민294·셀러358·ui21), 신규코드 0건
@@ -30,7 +30,7 @@
 3-5 | 통과 | 48781dc | cart 5/5 + plp 7/7 + test:ui + typecheck | 판매자박스·게이지·견적요약·가격표시, 해석 → Q-3-5
 3-6 | 통과 | c86a7be | checkout 4/4 + checkout36 3/3 + test:ui + typecheck | 주문자·쿠폰모달·예약일·금칙어·동의2종, 해석 → Q-3-6
 3-7 | 통과 | fa74513 | payment_result 4/4 + test:ui + typecheck | 영수증·카드마스킹·주소정리·공유없음, 해석 → Q-3-7
-3-8 | 실패(5-1에서 재작업) | 95a8698 | order 8/8 + buyer 20/20 + partner 15/15 + admin 12/12 + e2e 26/26 + test:ui + typecheck | 주문 화면 색상 미전환(번호셰이드 검사기 사각 Q-3-11c), 다크모드 캡처 없음 → Q-3-8
+3-8 | 통과 | 미커밋 | design_lint 4/4 + order 8/8 + test:ui + typecheck + 캡처 8장 | 5-1: 검사기 수정(D04)+주문2화면 285건 토큰·OmBadge 전환(CAPS 유지)+다크캡처 → Q-3-11(c) 해소
 3-9 | 통과 | abc67fb | my 12/12 + buyer 23/23 + openapi 3/3 + test:ui + typecheck + 빌드 | /my 7주소·리다이렉트·메뉴200·바로가기9·얇은읽기3·우편검색장착·주문탭연결, 해석 → Q-3-9
 3-10 | 통과 | c5295b7 | store 9/9 + buyer 25/25 + openapi 3/3 + browser 13/13 + test:ui + typecheck | 헤더·탭4·채우기·PLP고정·리뷰공개·팔로우E2E·B04b/B06 단계수정, 해석 → Q-3-10
 3-11 | 통과 | add8579 | misc 7/7 + flash 9/9 + products 5/5 + buyer 25/25 + openapi 3/3 + test:ui + typecheck + 빌드 | 특가·베스트기간·쿠폰3탭·고객센터·약관3·가입단계·스토어린트0(홀드1)·카카오예외, 해석 → Q-3-11

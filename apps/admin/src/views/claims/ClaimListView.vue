@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Dispute tribunal (4-16): buyer refund, seller-borne returnless refund and
-// split rulings over RETURN claims, capped grants over PRICE_ADJUSTMENT.
+// split rulings over RETURN claims, capped grants over legacy
+// PRICE_ADJUSTMENT rows (5-5: scheme retired, stored rows stay readable).
 import { ref, onMounted, watch } from 'vue'
 import { adminApi } from '../../config'
 import { userErrorMessage, useConfirm, useToast, formatNumber, OmDataTable, OmStatusTabs, OmModal, OmSkeleton } from '@olmoa/ui'
@@ -9,7 +10,7 @@ const { confirm: askConfirm } = useConfirm()
 const toastApi = useToast()
 const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
 const PER_PAGE = 50
-const TYPE_LABEL: Record<string, string> = { RETURN: '반품', EXCHANGE: '교환', PRICE_ADJUSTMENT: '차액보상' }
+const TYPE_LABEL: Record<string, string> = { RETURN: '반품', EXCHANGE: '교환', PRICE_ADJUSTMENT: '가격 보상(종료된 제도)' }
 
 const tab = ref('REQUESTED')
 const claimType = ref('')
@@ -159,7 +160,7 @@ onMounted(() => void load())
         <option value="">전체 유형</option>
         <option value="RETURN">반품</option>
         <option value="EXCHANGE">교환</option>
-        <option value="PRICE_ADJUSTMENT">차액보상</option>
+        <option value="PRICE_ADJUSTMENT">가격 보상(종료된 제도)</option>
       </select>
     </div>
 

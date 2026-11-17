@@ -1024,7 +1024,7 @@ paths:
                   type: boolean
       responses:
         '200':
-          description: Claim ruled (REJECTED; RETURN yields REFUNDED with refund object; PRICE_ADJUSTMENT yields REFUNDED with granted credit capped at 10% of paid max 10000원, charged to seller settlements)
+          description: Claim ruled (REJECTED; RETURN yields REFUNDED with refund object; legacy PRICE_ADJUSTMENT rows of the retired scheme yield REFUNDED with granted credit capped at 10% of paid max 10000원, charged to seller settlements)
           content:
             application/json:
               schema:
@@ -1844,7 +1844,7 @@ paths:
     put:
       summary: Upsert a platform policy
       tags: [Admin]
-      description: '2-9: effective_from must be today or later; edits are trigger-recorded into platform_policy_history.'
+      description: '2-9/5-8: effective_from is a KST day, today or later; one key may hold a row per day and reads serve the latest already-effective row. Same-day edits are trigger-recorded into platform_policy_history.'
       requestBody:
         required: true
         content:
@@ -1859,7 +1859,7 @@ paths:
                   type: string
                 effective_from:
                   type: string
-                  description: YYYY-MM-DD, today or later.
+                  description: YYYY-MM-DD (KST), today or later.
       responses:
         '200':
           description: Stored policy
@@ -2429,3 +2429,62 @@ paths:
           description: Missing or expired JWT
         '404':
           description: Unknown review (NOT_FOUND)
+  /api/v1/admin/legal-documents:
+    get:
+      summary: List legal documents with per-kind status (SUPER_ADMIN only)
+      tags: [Admin]
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [TERMS, PRIVACY, REFUND]
+          description: Filter to one kind.
+      responses:
+        '200':
+          description: Documents with status CURRENT/UPCOMING/SUPERSEDED and full bodies for preview
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Non-SUPER_ADMIN role (ADMIN_PERMISSION_DENIED)
+    post:
+      summary: Register a new legal document version (SUPER_ADMIN only)
+      tags: [Admin]
+      description: >
+        The effective date is a KST calendar day and cannot be before today
+        (RETROACTIVE_EFFECTIVE_DATE). Versions are unique per kind and immutable
+        once registered; the write is audited as LEGAL_DOCUMENT_CREATE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, version, effective_date, body]
+              properties:
+                kind:
+                  type: string
+                  enum: [TERMS, PRIVACY, REFUND]
+                version:
+                  type: string
+                  maxLength: 20
+                  example: v1.2
+                effective_date:
+                  type: string
+                  description: KST day YYYY-MM-DD, today or later.
+                body:
+                  type: string
+                  maxLength: 100000
+                  description: Sections ('# '), bullets ('- '), paragraphs; **bold** inline.
+      responses:
+        '201':
+          description: Registered document row
+        '400':
+          description: Bad kind/date/body or retroactive date (INVALID_LEGAL_KIND/INVALID_DATE/BODY_REQUIRED/RETROACTIVE_EFFECTIVE_DATE)
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Non-SUPER_ADMIN role (ADMIN_PERMISSION_DENIED)
+        '409':
+          description: Version already registered for the kind (VERSION_EXISTS)

@@ -37,6 +37,7 @@ const RULES = [
   R(null, /^\/api\/v1\/admin\/(orders|claims|disputes|inquiries)(\/|$)/, 'orders.read', 'orders.manage'),
   R(null, /^\/api\/v1\/admin\/users(\/|$)/, 'users.read'),
   R(null, /^\/api\/v1\/admin\/(dashboard|metrics|control-tower|fds)(\/|$)/, 'dashboard'),
+  R(null, /^\/api\/v1\/admin\/legal-documents(\/|$)/, 'super'),       // 5-6: SUPER_ADMIN only (read + register)
   R(null, /^\/api\/v1\/admin(\/|$)/, 'super'),                             // fail closed
   // Operator actions on shared (non-/admin) routes added with the sourcing / finance modules
   R(null, /^\/api\/v1\/finance\//, 'finance.read', 'finance.payout'),

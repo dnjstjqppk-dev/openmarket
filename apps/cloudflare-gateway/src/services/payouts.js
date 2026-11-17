@@ -141,25 +141,34 @@ export async function createPayout(env, { partnerId, adminId, idemKey, adminRole
   return { replay: false, payout: created };
 }
 
-/** Seller withdrawal request. Key required; one in-flight request per seller. */
-export async function requestPayout(env, { partnerId, amount, idemKey }) {
+/**
+ * Seller withdrawal request (5-2, decision-16: full amount only). Key required;
+ * one in-flight request per seller. The server creates the request for the
+ * current withdrawable full amount; a supplied amount must equal it.
+ */
+export async function requestPayout(env, { partnerId, amount = undefined, idemKey }) {
   const key = idempotencyKey(idemKey ?? null);
   if (!key) throw bad('IDEMPOTENCY_KEY_REQUIRED', 'X-Idempotency-Key 헤더가 필요합니다.');
-  if (!Number.isSafeInteger(amount) || amount <= 0) throw bad('INVALID_AMOUNT', '출금 금액이 올바르지 않습니다.');
   const prior = await env.DB.prepare('SELECT * FROM payout_requests WHERE idempotency_key = ?').bind(key).first();
   if (prior) return { ...prior, idempotent_replay: true };
   const partner = await env.DB.prepare('SELECT * FROM partners WHERE id = ?').bind(String(partnerId || '')).first();
   if (!partner) throw notFound('입점사를 찾을 수 없습니다.');
   if (!Number(partner.payout_account_verified)) throw conflict('PAYOUT_ACCOUNT_UNVERIFIED', '정산 계좌 실명 확인이 완료되지 않았습니다.');
   const avail = await withdrawableAmount(env, partner.id);
-  if (amount > avail) throw conflict('WITHDRAWAL_EXCEEDS_AVAILABLE', `출금 가능액(${avail}원)을 초과했습니다.`);
+  if (avail <= 0) throw conflict('NOTHING_TO_WITHDRAW', '출금 가능한 금액이 없습니다.');
+  if (amount !== undefined && amount !== null) {
+    const n = Number(amount);
+    if (!Number.isSafeInteger(n) || n !== avail) {
+      throw bad('WITHDRAWAL_FULL_AMOUNT_ONLY', `출금은 전액(${avail}원)으로만 신청할 수 있습니다.`, { withdrawable_amount: avail });
+    }
+  }
   const id = newId('pwr');
   const hash = await accountHash(partner.bank_code, partner.bank_account_number);
   try {
     await env.DB.prepare(
       `INSERT INTO payout_requests (id, partner_id, amount, status, account_hash, idempotency_key)
        VALUES (?, ?, ?, 'REQUESTED', ?, ?)`
-    ).bind(id, partner.id, amount, hash, key).run();
+    ).bind(id, partner.id, avail, hash, key).run();
   } catch (e) {
     const msg = String(e && e.message || '');
     if (msg.includes('payout_requests.partner_id') || msg.includes('uq_payout_requests_inflight')) {
@@ -185,6 +194,9 @@ export async function cancelPayoutRequest(env, { requestId, partnerId }) {
 /**
  * Admin decision. Approval requires the requested amount to still equal the
  * withdrawable amount, then pays it through the existing payout creation.
+ * 5-2: every state change is guarded by `status = 'REQUESTED'` (0 rows = 409),
+ * a drifted approval auto-rejects so the seller can re-apply, and approval
+ * claims the request before paying so concurrent approvers yield one winner.
  */
 export async function decidePayoutRequest(env, { requestId, approve, reason = null, adminId, adminRole = null, idemKey }) {
   const row = await env.DB.prepare('SELECT * FROM payout_requests WHERE id = ?').bind(requestId).first();
@@ -194,9 +206,10 @@ export async function decidePayoutRequest(env, { requestId, approve, reason = nu
   if (!approve) {
     const why = String(reason || '').trim();
     if (!why) throw bad('REJECT_REASON_REQUIRED', '반려 사유가 필요합니다.');
-    await env.DB.prepare(
-      "UPDATE payout_requests SET status = 'REJECTED', reject_reason = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    const r = await env.DB.prepare(
+      "UPDATE payout_requests SET status = 'REJECTED', reject_reason = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'"
     ).bind(why.slice(0, 500), adminId, requestId).run();
+    if (r.meta.changes !== 1) throw conflict('PAYOUT_REQUEST_IMMUTABLE', '대기 중인 신청만 처리할 수 있습니다.');
     await auditStatement(env, admin, { action: 'PAYOUT_REQUEST_REJECT', targetType: 'payout_request', targetId: requestId,
       before: { status: 'REQUESTED' }, after: { status: 'REJECTED', reason: why.slice(0, 500) } }).run();
     return env.DB.prepare('SELECT * FROM payout_requests WHERE id = ?').bind(requestId).first();
@@ -206,11 +219,32 @@ export async function decidePayoutRequest(env, { requestId, approve, reason = nu
     throw conflict('PAYOUT_ACCOUNT_CHANGED', '신청 후 정산 계좌가 바뀌었습니다. 다시 신청해 주세요.');
   }
   const avail = (await withdrawableAmount(env, row.partner_id)) + row.amount;
-  if (row.amount !== avail) throw conflict('WITHDRAWAL_AMOUNT_CHANGED', `출금 가능액이 바뀌었습니다(신청 ${row.amount}원, 현재 ${avail}원). 다시 신청해 주세요.`);
-  const made = await createPayout(env, { partnerId: row.partner_id, adminId, adminRole, idemKey });
+  if (row.amount !== avail) {
+    const r = await env.DB.prepare(
+      "UPDATE payout_requests SET status = 'REJECTED', reject_reason = 'WITHDRAWAL_AMOUNT_CHANGED', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'"
+    ).bind(adminId, requestId).run();
+    if (r.meta.changes !== 1) throw conflict('PAYOUT_REQUEST_IMMUTABLE', '대기 중인 신청만 처리할 수 있습니다.');
+    await auditStatement(env, admin, { action: 'PAYOUT_REQUEST_REJECT', targetType: 'payout_request', targetId: requestId,
+      before: { status: 'REQUESTED' }, after: { status: 'REJECTED', reason: 'WITHDRAWAL_AMOUNT_CHANGED' } }).run();
+    throw conflict('WITHDRAWAL_AMOUNT_CHANGED', `출금 가능액이 바뀌었습니다(신청 ${row.amount}원, 현재 ${avail}원). 다시 신청해 주세요.`);
+  }
+  const claim = await env.DB.prepare(
+    "UPDATE payout_requests SET status = 'APPROVED', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'REQUESTED'"
+  ).bind(adminId, requestId).run();
+  if (claim.meta.changes !== 1) throw conflict('PAYOUT_REQUEST_IMMUTABLE', '대기 중인 신청만 처리할 수 있습니다.');
+  let made;
+  try {
+    made = await createPayout(env, { partnerId: row.partner_id, adminId, adminRole, idemKey });
+  } catch (e) {
+    // Payment failed after the claim: release it so the request stays actionable.
+    await env.DB.prepare(
+      "UPDATE payout_requests SET status = 'REQUESTED', decided_by = NULL, decided_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'APPROVED' AND payout_id IS NULL"
+    ).bind(requestId).run();
+    throw e;
+  }
   await env.DB.prepare(
-    "UPDATE payout_requests SET status = 'APPROVED', payout_id = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-  ).bind(made.payout.id, adminId, requestId).run();
+    "UPDATE payout_requests SET payout_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).bind(made.payout.id, requestId).run();
   await auditStatement(env, admin, { action: 'PAYOUT_REQUEST_APPROVE', targetType: 'payout_request', targetId: requestId,
     before: { status: 'REQUESTED' }, after: { status: 'APPROVED', payout_id: made.payout.id } }).run();
   return env.DB.prepare('SELECT * FROM payout_requests WHERE id = ?').bind(requestId).first();

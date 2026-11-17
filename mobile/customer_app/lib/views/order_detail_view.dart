@@ -271,16 +271,7 @@ class _OrderDetailViewState extends State<OrderDetailView> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: Text('구매확정 (${confirmables.length}건)'),
               ),
-            if (d.paymentStatus == 'PAID' || d.paymentStatus == 'PARTIAL_REFUNDED')
-              OutlinedButton(
-                onPressed: _busy
-                    ? null
-                    : () => _runAction(
-                        () => ApiService.fileClaim(
-                            orderId: d.id, claimType: 'PRICE_ADJUSTMENT', reason: '최저가 보상 신청'),
-                        '차액 보상 신청이 접수되었습니다.'),
-                child: const Text('차액 보상 신청'),
-              ),
+            // 5-5 (decision-15): the price-adjustment claim is retired.
           ],
         ),
         const SizedBox(height: 16),

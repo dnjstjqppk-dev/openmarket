@@ -11,6 +11,7 @@ import { evaluateCheckoutFds } from './fds.js';
 import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } from './coupons.js';
 import { sealPii } from '../lib/pii-crypto.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
+import { notifyRestockedSkus } from './restock.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
 import { findForbiddenMemo } from '../lib/memo-guard.js';
 
@@ -73,7 +74,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_67_support_sla_pii_reason.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_70_remind_notifs.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -762,12 +763,14 @@ export async function releaseUnpaidOrder(env, orderRef, target) {
   if (!b) throw notFound('주문을 찾을 수 없습니다.');
   if (b.order.payment_status !== 'READY') throw conflict('ORDER_NOT_UNPAID', '결제 대기 상태의 주문이 아닙니다.');
   const subStatus = target === 'EXPIRED' ? 'EXPIRED' : 'CANCELLED';
+  const releaseLines = b.items.map((it) => ({ it, qty: it.quantity }));
+  const releaseRestock = await restockTransitions(env, releaseLines);
   const st = [
     env.DB.prepare('UPDATE orders SET payment_status = ?, cancelled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(target, b.order.id),
     env.DB.prepare('UPDATE sub_orders SET status = ?, cancelled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE parent_order_id = ?').bind(subStatus, b.order.id),
     env.DB.prepare("UPDATE settlements SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE sub_order_id IN (SELECT id FROM sub_orders WHERE parent_order_id = ?)").bind(b.order.id)
   ];
-  st.push(...restockStatements(env, b.order.id, b.items.map((it) => ({ it, qty: it.quantity })), 'ORDER_CANCEL', `release:${b.order.id}`));
+  st.push(...restockStatements(env, b.order.id, releaseLines, 'ORDER_CANCEL', `release:${b.order.id}`));
   if (b.order.applied_user_coupon_id) {
     st.push(env.DB.prepare('UPDATE user_coupons SET is_used = 0, used_at = NULL, used_order_id = NULL WHERE id = ? AND used_order_id = ?').bind(b.order.applied_user_coupon_id, b.order.id));
   }
@@ -775,6 +778,25 @@ export async function releaseUnpaidOrder(env, orderRef, target) {
     st.push(creditStatement(env, { userId: b.order.customer_id, amount: b.order.credit_used_amount, reason: target === 'EXPIRED' ? '결제 시간 만료 적립금 복원' : '결제 전 취소 적립금 복원', referenceId: `restore:${b.order.id}` }));
   }
   await runBatch(env, st);
+  try {
+    await notifyRestockedSkus(env, releaseRestock);
+  } catch { /* restock notify must never fail the release */ }
+}
+
+/** K-05: per-SKU 0 -> positive transitions for an upcoming restock (qty aggregated per SKU). */
+async function restockTransitions(env, lines) {
+  const qtyBySku = new Map();
+  for (const { it, qty } of lines) {
+    if (!it || qty <= 0) continue;
+    qtyBySku.set(it.sku_id, (qtyBySku.get(it.sku_id) || 0) + qty);
+  }
+  const out = [];
+  for (const [skuId, qty] of qtyBySku) {
+    const row = await env.DB.prepare('SELECT stock_quantity FROM product_skus WHERE id = ?').bind(skuId).first();
+    const before = Number(row?.stock_quantity) || 0;
+    out.push({ skuId, before, after: before + qty });
+  }
+  return out;
 }
 
 function restockStatements(env, orderId, lines, changeType, keyPrefix, { restoreDeals = false } = {}) {
@@ -928,7 +950,9 @@ export async function refundOrder(env, actor, orderRef, request) {
     `UPDATE tax_invoices SET issue_status = 'CANCEL_REQUIRED', memo = ?
      WHERE order_id = ? AND invoice_type = 'CASH_RECEIPT' AND issue_status = 'ISSUED'`).bind(`환불 ${refundId} 확정 — PG 콘솔 취소 후 cancel-record로 기록`, o.id));
   if (credit > 0) fin.push(creditStatement(env, { userId: o.customer_id, amount: credit, reason: '환불 적립금 복원', referenceId: refundId }));
-  if (request.restock) fin.push(...restockStatements(env, o.id, plan.map((p) => ({ it: p.it, qty: p.qty })), request.reasonCode === 'RETURN' ? 'RETURN_RESTOCK' : 'ORDER_CANCEL', `restock:${refundId}`, { restoreDeals: true }));
+  const refundLines = plan.map((p) => ({ it: p.it, qty: p.qty }));
+  const refundRestock = request.restock ? await restockTransitions(env, refundLines) : [];
+  if (request.restock) fin.push(...restockStatements(env, o.id, refundLines, request.reasonCode === 'RETURN' ? 'RETURN_RESTOCK' : 'ORDER_CANCEL', `restock:${refundId}`, { restoreDeals: true }));
 
   const journal = [
     { account: ACCOUNTS.PG_CLEARING, credit: pg },
@@ -997,6 +1021,9 @@ export async function refundOrder(env, actor, orderRef, request) {
     fin.push(env.DB.prepare("UPDATE returns SET status = 'REFUNDED', refund_amount = ?, refund_id = ?, processed_by = ?, processed_at = CURRENT_TIMESTAMP WHERE id = ?").bind(pg + credit, refundId, actor.userId, request.claimId));
   }
   await runBatch(env, fin);
+  try {
+    if (refundRestock.length) await notifyRestockedSkus(env, refundRestock);
+  } catch { /* restock notify must never fail the refund */ }
   const refund = await env.DB.prepare('SELECT * FROM refunds WHERE id = ?').bind(refundId).first();
   try {
     await pushRefundCompleted(env, {
