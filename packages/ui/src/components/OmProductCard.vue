@@ -6,6 +6,7 @@
 //  - rating: only when there are reviews
 //  - "무료배송": only when ONE unit already ships free under the server rule
 //  - "오늘출발": policy with a cutoff exists and the buyer-local clock is before it
+//  - "내일출발": tomorrow enabled and the buyer-local clock is past the cutoff
 //  - "쿠폰"/"적립": server has_coupon / earn_bps flags
 // Actions emit to the app wrapper (wishlist store, cart store, quick sheet);
 // this component never calls APIs itself.
@@ -47,6 +48,14 @@ const todayDispatch = computed(() => {
   if (!m) return true
   const now = new Date()
   return now.getHours() * 60 + now.getMinutes() < Number(m[1]) * 60 + Number(m[2])
+})
+const tomorrowDispatch = computed(() => {
+  if (!props.product.has_tomorrow) return false
+  const cut = String(props.product.today_cutoff || '')
+  const m = /^(\d{1,2}):(\d{2})/.exec(cut)
+  if (!m) return false
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes() >= Number(m[1]) * 60 + Number(m[2])
 })
 const hasCoupon = computed(() => Number(props.product.has_coupon ?? 0) === 1)
 const hasEarn = computed(() => {
@@ -127,6 +136,7 @@ function onWish() {
       <div class="flex min-h-[1.25rem] flex-wrap items-center gap-1">
         <OmCommerceBadge v-if="freeShipping" kind="free-ship" />
         <OmCommerceBadge v-if="todayDispatch" kind="today" />
+        <OmCommerceBadge v-else-if="tomorrowDispatch" kind="tomorrow" />
         <OmCommerceBadge v-if="hasCoupon" kind="coupon" />
         <OmCommerceBadge v-if="hasEarn" kind="point" />
       </div>

@@ -654,6 +654,69 @@ paths:
         '404':
           description: Unknown partner id
 
+  /api/v1/admin/ship-badges/sellers:
+    get:
+      summary: Per-seller dispatch-badge board (cutoff, 30d rate, current badge)
+      tags: [Admin]
+      description: 'Ship badges: badge_now mirrors the catalog today/tomorrow filters (same KST clock, same 30d rate, same policies). partners.read.'
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Business-name or partner-id substring.
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Sellers with today_cutoff, shipped_30d, same_day_rate_bps, badge_now (TODAY/TOMORROW/NONE) and badge_reason
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Lacks partners.read
+
+  /api/v1/admin/partners/{id}/shipping-cutoff:
+    put:
+      summary: Set a seller today-shipment cutoff on its default ACTIVE template (audited)
+      tags: [Admin]
+      description: 'Ship badges: POST accepted as an alias of PUT. Null clears. Never invents a template: sellers without an ACTIVE template 404. partners.manage.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                today_cutoff:
+                  type: string
+                  nullable: true
+                  description: HH:MM KST, or null to clear
+      responses:
+        '200':
+          description: Updated cutoff echoed with partner and template ids
+        '400':
+          description: Malformed cutoff (INVALID_CUTOFF)
+        '401':
+          description: Missing or expired JWT, or not an ADMIN session
+        '403':
+          description: Lacks partners.manage
+        '404':
+          description: Unknown partner (PARTNER_NOT_FOUND) or no ACTIVE template (NO_ACTIVE_TEMPLATE)
+
   /api/v1/admin/products:
     get:
       summary: List all products with partner, category, SKU and stock rollups (paged)

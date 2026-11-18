@@ -39,7 +39,8 @@ const rawMenu: ConsoleMenuItem[] = [
     children: [
       { to: "/partner-applications", label: '입점 심사' },
       { to: "/partners", label: '셀러 관리' },
-      { to: "/partners/penalties-grades", label: '페널티·등급' }
+      { to: "/partners/penalties-grades", label: '페널티·등급' },
+      { to: "/shipping/badges", label: '출고 뱃지 정책' }
     ]
   },
   {

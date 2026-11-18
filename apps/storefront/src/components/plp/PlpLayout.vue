@@ -47,6 +47,7 @@ const facets = ref<any>({ categories: [], brands: [], price: null, badges: {} })
 // advertises the filter (policy-gated server-side). Starts off like the
 // empty facets above — the first response fills it in.
 const todayShipAvailable = ref(false)
+const tomorrowShipAvailable = ref(false)
 const sheetOpen = ref(false)
 const popular = ref<any[]>([])
 const suggestions = ref<string[]>([])
@@ -75,6 +76,7 @@ function syncFromRoute() {
     coupon_eligible: route.query.coupon_eligible === '1',
     has_discount: route.query.has_discount === '1',
     today_shipment: route.query.today_shipment === '1',
+    tomorrow_shipment: route.query.tomorrow_shipment === '1',
     exclude_overseas: route.query.exclude_overseas === '1',
     rating4: route.query.min_rating === '4'
   }
@@ -105,6 +107,7 @@ function filterParams(): URLSearchParams {
   if (fFlags.value.coupon_eligible) params.set('coupon_eligible', '1')
   if (fFlags.value.has_discount) params.set('has_discount', '1')
   if (fFlags.value.today_shipment && todayShipAvailable.value) params.set('today_shipment', '1')
+  if (fFlags.value.tomorrow_shipment && tomorrowShipAvailable.value) params.set('tomorrow_shipment', '1')
   if (fFlags.value.exclude_overseas) params.set('exclude_overseas', '1')
   if (fSellers.value.length === 1) params.set('sales_model', fSellers.value[0])
   if (fFlags.value.rating4) params.set('min_rating', '4')
@@ -124,6 +127,7 @@ function pushUrl(resetPage: boolean) {
     coupon_eligible: fFlags.value.coupon_eligible ? '1' : undefined,
     has_discount: fFlags.value.has_discount ? '1' : undefined,
     today_shipment: fFlags.value.today_shipment ? '1' : undefined,
+    tomorrow_shipment: fFlags.value.tomorrow_shipment ? '1' : undefined,
     exclude_overseas: fFlags.value.exclude_overseas ? '1' : undefined,
     seller: fSellers.value.length ? fSellers.value.join(',') : undefined,
     min_rating: fFlags.value.rating4 ? '4' : undefined,
@@ -145,6 +149,11 @@ async function fetchPage(p: number) {
     todayShipAvailable.value = avail.includes('today_shipment')
     if (!todayShipAvailable.value && fFlags.value.today_shipment) {
       fFlags.value = { ...fFlags.value, today_shipment: false }
+      pushUrl(true)
+    }
+    tomorrowShipAvailable.value = avail.includes('tomorrow_shipment')
+    if (!tomorrowShipAvailable.value && fFlags.value.tomorrow_shipment) {
+      fFlags.value = { ...fFlags.value, tomorrow_shipment: false }
       pushUrl(true)
     }
   }
@@ -305,12 +314,13 @@ const toggles = computed(() => [
   { key: 'coupon_eligible', label: '쿠폰' },
   { key: 'has_discount', label: '할인' },
   ...(todayShipAvailable.value ? [{ key: 'today_shipment', label: '오늘출발' }] : []),
+  ...(tomorrowShipAvailable.value ? [{ key: 'tomorrow_shipment', label: '내일출발' }] : []),
   { key: 'exclude_overseas', label: '해외직구 제외' },
   { key: 'rating4', label: '평점 4점 이상' }
 ])
 const TOGGLE_LABEL: Record<string, string> = {
   free_shipping: '무료배송', coupon_eligible: '쿠폰', has_discount: '할인',
-  today_shipment: '오늘출발', exclude_overseas: '해외직구 제외', rating4: '평점 4점 이상'
+  today_shipment: '오늘출발', tomorrow_shipment: '내일출발', exclude_overseas: '해외직구 제외', rating4: '평점 4점 이상'
 }
 const chips = computed(() => {
   const out: { key: string; label: string }[] = []
@@ -325,6 +335,7 @@ const chips = computed(() => {
   for (const [k, on] of Object.entries(fFlags.value)) {
     if (!on || !TOGGLE_LABEL[k]) continue
     if (k === 'today_shipment' && !todayShipAvailable.value) continue
+    if (k === 'tomorrow_shipment' && !tomorrowShipAvailable.value) continue
     out.push({ key: `flag:${k}`, label: TOGGLE_LABEL[k] })
   }
   for (const s of fSellers.value) out.push({ key: `seller:${s}`, label: s === 'DIRECT' ? '직영' : '입점' })

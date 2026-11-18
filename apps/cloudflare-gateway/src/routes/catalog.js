@@ -80,6 +80,16 @@ export async function getTodayShipMinRateBps(env) {
   return n;
 }
 
+// Ship badges: tomorrow-shipment shares today's honesty bar (rate policy +
+// cutoff commitment + 30d same-day rate) with the cutoff already passed, and
+// needs this extra enable flag. Anything but an explicit on-value = off.
+export const TOMORROW_SHIP_POLICY_KEY = 'badge.tomorrow_ship_enabled';
+
+export async function isTomorrowShipEnabled(env) {
+  const raw = await getPolicy(env, TOMORROW_SHIP_POLICY_KEY);
+  return ['1', 'true', 'yes', 'on'].includes(String(raw ?? '').trim().toLowerCase());
+}
+
 // Current time as KST 'HH:MM' for the today_cutoff comparison.
 // TODAY_SHIP_TEST_NOW_KST pins the clock in tests (unset in production).
 export function currentKstHm(env) {
@@ -101,6 +111,7 @@ async function buildProductFilters(env, url) {
   const salesModelParam = url.searchParams.get('sales_model');
   const minRatingParam = url.searchParams.get('min_rating');
   const todayShipParam = url.searchParams.get('today_shipment');
+  const tomorrowShipParam = url.searchParams.get('tomorrow_shipment');
   const exhibitionParam = url.searchParams.get('exhibition_id') || url.searchParams.get('exhibition');
   const saleParam = url.searchParams.get('has_discount');
   const domesticParam = url.searchParams.get('exclude_overseas');
@@ -198,6 +209,23 @@ async function buildProductFilters(env, url) {
       filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
         WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL
           AND substr('00' || sp.today_cutoff, -5) > ?)
+        AND (SELECT CASE WHEN COUNT(*) = 0 THEN -1
+            ELSE SUM(CASE WHEN date(o.paid_at, '+9 hours') = date(s.shipped_at, '+9 hours') THEN 10000 ELSE 0 END) / COUNT(*)
+          END
+          FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+          WHERE s.partner_id = p.partner_id AND s.shipped_at IS NOT NULL
+            AND o.paid_at IS NOT NULL AND o.paid_at >= datetime('now', '-30 days')) >= ?`;
+      binds.push(currentKstHm(env), minRateBps);
+    }
+  }
+  if (tomorrowShipParam === 'true' || tomorrowShipParam === '1') {
+    // Ship badges: same bar as today, but the cutoff has already passed, and
+    // the enable flag must be on too. Otherwise the param is ignored.
+    const minRateBps = await getTodayShipMinRateBps(env);
+    if (minRateBps !== null && await isTomorrowShipEnabled(env)) {
+      filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
+        WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.today_cutoff IS NOT NULL
+          AND substr('00' || sp.today_cutoff, -5) <= ?)
         AND (SELECT CASE WHEN COUNT(*) = 0 THEN -1
             ELSE SUM(CASE WHEN date(o.paid_at, '+9 hours') = date(s.shipped_at, '+9 hours') THEN 10000 ELSE 0 END) / COUNT(*)
           END
@@ -358,6 +386,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const { filterSql, binds } = await buildProductFilters(env, url);
     // 5-4: the badge flag and the PLP chip follow the same policy switch.
     const todayShipOn = (await getTodayShipMinRateBps(env)) !== null;
+    const tomorrowShipOn = todayShipOn && (await isTomorrowShipEnabled(env));
 
     // col prefixes data columns: 'p.' inside the product query, '' in the UNION wrapper.
     const sortOrder = (sort, col) => {
@@ -379,6 +408,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       available_filters: [
         'category', 'brand', 'min_price', 'max_price', 'free_shipping', 'coupon_eligible', 'has_discount',
         ...(todayShipOn ? ['today_shipment'] : []),
+        ...(tomorrowShipOn ? ['tomorrow_shipment'] : []),
         'exclude_overseas', 'sales_model', 'min_rating'
       ],
       pagination: { page, per_page: perPage, total: Number(total) || 0, total_pages: Math.max(1, Math.ceil((Number(total) || 0) / perPage)) },
@@ -389,7 +419,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         if (Number(p.has_deal)) badges.push('DEAL');
         if (p.created_at && p.created_at >= new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ')) badges.push('NEW');
         const { sales_30d_raw, has_deal, ...rest } = p;
-        return { ...rest, has_today: todayShipOn ? Number(p.has_today) : 0, sales_30d: sales30 >= 10 ? sales30 : null, badges };
+        return { ...rest, has_today: todayShipOn ? Number(p.has_today) : 0, has_tomorrow: tomorrowShipOn ? Number(p.has_today) : 0, sales_30d: sales30 >= 10 ? sales30 : null, badges };
       })
     }), { headers: corsHeaders });
 

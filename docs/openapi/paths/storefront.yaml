@@ -77,7 +77,12 @@ paths:
           in: query
           schema:
             type: string
-          description: '2-9: true/1 keeps only sellers with an ACTIVE template carrying today_cutoff.'
+          description: '2-9: true/1 keeps only sellers with an ACTIVE template carrying today_cutoff. 5-4: ignored without badge.today_ship_min_rate_bps; with it, cutoff still ahead (KST) and 30d same-day rate >= policy.'
+        - name: tomorrow_shipment
+          in: query
+          schema:
+            type: string
+          description: 'Ship badges: true/1 with the same bar as today_shipment but the cutoff already passed. Ignored unless badge.today_ship_min_rate_bps and badge.tomorrow_ship_enabled are both on. Mutually exclusive with today_shipment.'
         - name: exhibition_id
           in: query
           schema:

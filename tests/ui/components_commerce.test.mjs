@@ -70,7 +70,7 @@ await t.test('C07 filter, toggle, cards and number/badge markers', async () => {
   has('components/OmProductCard.vue', 'formatPrice')
   has('components/OmSellerCard.vue', '응답률', '스토어 홈', '문의')
   has('components/OmNumber.vue', 'om-num', '▲', '▼')
-  has('components/OmCommerceBadge.vue', 'h-5', '무료배송', '오늘출발', '쿠폰', '적립', '직영', '특가', '품절', '신상품')
+  has('components/OmCommerceBadge.vue', 'h-5', '무료배송', '오늘출발', '내일출발', '쿠폰', '적립', '직영', '특가', '품절', '신상품')
 })
 
 await t.test('C08 confirm dialog, shell, kpi and console markers', async () => {

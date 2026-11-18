@@ -30,6 +30,7 @@ const RULES = [
   R('POST', /^\/api\/v1\/admin\/orders\/[^/]+\/refund$/, 'orders.refund'),
   R(null, /^\/api\/v1\/admin\/sub-orders\//, 'orders.manage'),
   R(null, /^\/api\/v1\/admin\/(partners|partner-applications)(\/|$)/, 'partners.read', 'partners.manage'),
+  R(null, /^\/api\/v1\/admin\/ship-badges(\/|$)/, 'partners.read', 'partners.manage'),
   R(null, /^\/api\/v1\/admin\/(suppliers|supplier-mappings|purchase-orders)(\/|$)/, 'sourcing'),
   R(null, /^\/api\/v1\/admin\/(products|categories|reviews|review-reports|notice-templates|ipr-reports|sample-qc)(\/|$)/, 'catalog.read', 'catalog.manage'),
   R(null, /^\/api\/v1\/admin\/(coupons|banners|notifications|flash-sales|exhibitions)(\/|$)/, 'marketing'),

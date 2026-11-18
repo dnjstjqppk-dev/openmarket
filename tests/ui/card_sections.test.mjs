@@ -50,6 +50,8 @@ await t.test('C35 badges follow the 3-3 conditions', async () => {
   const v = card();
   assert.ok(v.includes('sale.value >= Number(threshold)'), 'free means free for a single unit');
   assert.ok(v.includes('today_cutoff') && v.includes('getHours'), 'today checks the cutoff clock');
+  assert.ok(v.includes('has_tomorrow') && v.includes('tomorrowDispatch'), 'tomorrow needs the server flag');
+  assert.ok(v.includes('v-else-if="tomorrowDispatch"') && v.includes('kind="tomorrow"'), 'tomorrow badge exclusive with today');
   assert.ok(v.includes('has_coupon'), 'coupon needs a claimable offer');
   assert.ok(v.includes('earn_bps'), 'earn needs the policy rate');
 });

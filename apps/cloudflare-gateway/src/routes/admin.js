@@ -14,6 +14,7 @@ import { pushClaimCreditGranted, pushClaimRejected } from '../services/push.js';
 import { logPiiView, logPiiExport, maskLast4 } from '../services/privacy.js';
 import { isSealedPii, maybeOpenPii, sealPii } from '../lib/pii-crypto.js';
 import { decidePayoutRequest, markRequestTransferred } from '../services/payouts.js';
+import { getTodayShipMinRateBps, isTomorrowShipEnabled, currentKstHm } from './catalog.js';
 import { computeMonthlyGrades } from '../services/grading.js';
 import { findPriceHike } from '../lib/fake-discount.js';
 
@@ -1383,6 +1384,111 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
       `SELECT * FROM platform_policy_history ${key ? 'WHERE policy_key = ?' : ''} ORDER BY created_at DESC LIMIT ?`
     ).bind(...(key ? [key] : []), limit).all();
     return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
+  // Ship badges: per-seller dispatch-badge console. badge_now mirrors the
+  // catalog today/tomorrow filters exactly (same KST clock, same 30d rate
+  // window, same policies); the display cutoff is the default-first ACTIVE
+  // template's, same ordering as the product list row.
+  if (url.pathname === '/api/v1/admin/ship-badges/sellers' && request.method === 'GET') {
+    const q = str(url.searchParams.get('q') || '', { max: 100 });
+    const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || '50', 10) || 50));
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const minRate = await getTodayShipMinRateBps(env);
+    const tomorrowOn = minRate !== null && await isTomorrowShipEnabled(env);
+    const nowHm = currentKstHm(env);
+    const args = [];
+    let whereSql = '';
+    if (q) {
+      const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      whereSql = `WHERE (p.business_name LIKE ? ESCAPE '\\' OR p.id LIKE ? ESCAPE '\\')`;
+      args.push(like, like);
+    }
+    const total = (await env.DB.prepare(`SELECT COUNT(*) AS c FROM partners p ${whereSql}`).bind(...args).first()).c;
+    const { results: sellers } = await env.DB.prepare(
+      `SELECT p.id, p.business_name, p.status, p.sales_model,
+        (SELECT COUNT(*) FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+         WHERE s.partner_id = p.id AND s.shipped_at IS NOT NULL AND o.paid_at IS NOT NULL
+           AND o.paid_at >= datetime('now', '-30 days')) AS shipped_30d,
+        (SELECT COALESCE(SUM(CASE WHEN date(o.paid_at, '+9 hours') = date(s.shipped_at, '+9 hours') THEN 1 ELSE 0 END), 0)
+         FROM sub_orders s JOIN orders o ON o.id = s.parent_order_id
+         WHERE s.partner_id = p.id AND s.shipped_at IS NOT NULL AND o.paid_at IS NOT NULL
+           AND o.paid_at >= datetime('now', '-30 days')) AS hits_30d
+       FROM partners p ${whereSql} ORDER BY p.business_name ASC LIMIT ? OFFSET ?`
+    ).bind(...args, perPage, (page - 1) * perPage).all();
+    const tplByPartner = new Map();
+    if (sellers.length) {
+      const { results: tpls } = await env.DB.prepare(
+        `SELECT partner_id, today_cutoff, processing_days, is_default FROM shipping_policies
+         WHERE status = 'ACTIVE' AND partner_id IN (${sellers.map(() => '?').join(', ')})`
+      ).bind(...sellers.map((s) => s.id)).all();
+      for (const row of tpls) {
+        if (!tplByPartner.has(row.partner_id)) tplByPartner.set(row.partner_id, []);
+        tplByPartner.get(row.partner_id).push(row);
+      }
+    }
+    const pad = (c) => `00${c}`.slice(-5);
+    const data = sellers.map((s) => {
+      const tpls = tplByPartner.get(s.id) || [];
+      const display = [...tpls].sort((a, b) => (Number(b.is_default) - Number(a.is_default))
+        || String(a.today_cutoff || '').localeCompare(String(b.today_cutoff || '')))[0] || null;
+      let badgeNow = 'NONE';
+      let badgeReason = 'POLICY_OFF';
+      if (minRate !== null) {
+        if (!tpls.length) badgeReason = 'NO_TEMPLATE';
+        else if (!tpls.some((x) => x.today_cutoff)) badgeReason = 'NO_CUTOFF';
+        else if (Number(s.shipped_30d) === 0) badgeReason = 'NO_HISTORY';
+        else if ((Number(s.hits_30d) * 10000) / Number(s.shipped_30d) < minRate) badgeReason = 'RATE_BELOW';
+        else {
+          const pre = tpls.some((x) => x.today_cutoff && pad(x.today_cutoff) > nowHm);
+          const post = tpls.some((x) => x.today_cutoff && pad(x.today_cutoff) <= nowHm);
+          if (pre) { badgeNow = 'TODAY'; badgeReason = 'ELIGIBLE'; }
+          else if (post && tomorrowOn) { badgeNow = 'TOMORROW'; badgeReason = 'ELIGIBLE'; }
+          else if (post) badgeReason = 'TOMORROW_DISABLED';
+        }
+      }
+      return {
+        partner_id: s.id,
+        business_name: s.business_name,
+        status: s.status,
+        sales_model: s.sales_model,
+        today_cutoff: display ? display.today_cutoff : null,
+        processing_days: display ? display.processing_days : null,
+        shipped_30d: Number(s.shipped_30d),
+        same_day_rate_bps: Number(s.shipped_30d) === 0 ? null : Math.round((Number(s.hits_30d) * 10000) / Number(s.shipped_30d)),
+        badge_now: badgeNow,
+        badge_reason: badgeReason
+      };
+    });
+    return json(corsHeaders, {
+      success: true, count: data.length,
+      pagination: { page, per_page: perPage, total, total_pages: Math.max(1, Math.ceil(total / perPage)) },
+      policies: { today_ship_min_rate_bps: minRate === null ? null : String(minRate), tomorrow_ship_enabled: tomorrowOn },
+      now_kst: nowHm, data
+    });
+  }
+
+  // Ship badges: operator edits a seller's cutoff on its default-first ACTIVE
+  // template. Never invents a template — sellers without one 404.
+  const shipCutoffM = url.pathname.match(/^\/api\/v1\/admin\/partners\/([^/]+)\/shipping-cutoff$/);
+  if (shipCutoffM && (request.method === 'PUT' || request.method === 'POST')) {
+    const body = await readJson(request);
+    const partnerId = decodeURIComponent(shipCutoffM[1]);
+    const partner = await env.DB.prepare('SELECT id FROM partners WHERE id = ?').bind(partnerId).first();
+    if (!partner) throw new HttpError(404, 'PARTNER_NOT_FOUND', '입점사를 찾을 수 없습니다.');
+    const raw = body.today_cutoff === undefined ? '' : body.today_cutoff;
+    const cutoff = raw === null ? null : String(raw).trim();
+    if (cutoff !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff)) throw bad('INVALID_CUTOFF', '마감시각은 HH:MM 형식이어야 합니다.');
+    const tpl = await env.DB.prepare(
+      `SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE'
+       ORDER BY is_default DESC, updated_at DESC, id ASC LIMIT 1`
+    ).bind(partnerId).first();
+    if (!tpl) throw new HttpError(404, 'NO_ACTIVE_TEMPLATE', '활성 배송 템플릿이 없는 판매자입니다. 판매자가 템플릿을 먼저 등록해야 합니다.');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE shipping_policies SET today_cutoff = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(cutoff, tpl.id),
+      audit('SHIP_CUTOFF_UPSERT', 'partner', partnerId, { template_id: tpl.id, today_cutoff: tpl.today_cutoff }, { template_id: tpl.id, today_cutoff: cutoff })
+    ]);
+    return json(corsHeaders, { success: true, partner_id: partnerId, template_id: tpl.id, today_cutoff: cutoff });
   }
 
   // 2-9: flash-sale campaigns, direct picks, application review.

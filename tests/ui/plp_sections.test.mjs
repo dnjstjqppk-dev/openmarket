@@ -33,7 +33,7 @@ await t.test('P33 filters cover tree, price, brand, benefits, shipping, seller a
   assert.ok(v.includes('treeNodes'), 'category tree fed');
   assert.ok(v.includes('priceBounds'), 'price bounds fed');
   assert.ok(v.includes('brandGroup'), 'brand group fed');
-  for (const k of ['free_shipping', 'coupon_eligible', 'has_discount', 'today_shipment', 'exclude_overseas', 'rating4']) {
+  for (const k of ['free_shipping', 'coupon_eligible', 'has_discount', 'today_shipment', 'tomorrow_shipment', 'exclude_overseas', 'rating4']) {
     assert.ok(v.includes(k), `toggle ${k} wired`);
   }
   assert.ok(v.includes('DIRECT') && v.includes('MARKETPLACE'), 'seller types wired');
@@ -64,6 +64,15 @@ await t.test('P36 zero state stays honest with suggestions and popular fill', as
   const s = read('apps/storefront/src/views/SearchView.vue');
   assert.ok(s.includes('<OmEmptyState'), 'search keeps the shared empty state');
   assert.ok(!s.split('<OmEmptyState')[1].split('</OmEmptyState>')[0].includes('등록'), 'no registration prompt');
+});
+
+await t.test('P37 tomorrow chip follows the server switch and roundtrips the URL', async () => {
+  const v = plp();
+  assert.ok(v.includes("avail.includes('tomorrow_shipment')"), 'chip gated on available_filters');
+  assert.ok(v.includes('tomorrowShipAvailable'), 'availability tracked');
+  assert.ok(v.includes("params.set('tomorrow_shipment', '1')"), 'param sent when on');
+  assert.ok(v.includes('tomorrow_shipment:'), 'URL carries the flag');
+  assert.ok(v.includes("label: '내일출발'") && v.includes("tomorrow_shipment: '내일출발'"), 'chip and label shown');
 });
 
 t.finish();
