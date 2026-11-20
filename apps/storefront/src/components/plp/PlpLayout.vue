@@ -6,10 +6,11 @@
 // restores the exact list and scroll position.
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { userErrorMessage, OmSkeleton, OmEmptyState, OmErrorState, OmSelect, OmFilterPanel, OmFilterChips, OmViewToggle, OmBreadcrumb, OmPrice, OmRating, OmButton, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmSkeleton, OmEmptyState, OmErrorState, OmSelect, OmFilterPanel, OmFilterChips, OmViewToggle, OmBreadcrumb, OmPrice, OmRating, OmButton, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
 import ProductCard from '../ProductCard.vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { API_BASE_URL } from '../../config'
+import { plpJsonLdOf } from '../../lib/productSeo'
 
 const props = withDefaults(defineProps<{
   lockedCategory?: string | null
@@ -177,6 +178,7 @@ async function load(reset: boolean) {
     total.value = Number(json.pagination?.total) || 0
     totalPages.value = Number(json.pagination?.total_pages) || 1
     products.value = reset ? rows : [...products.value, ...rows]
+    if (reset) updatePlpHead()
     if (total.value === 0) void loadZeroExtras()
   } catch (e: any) {
     if (my === seq) { products.value = reset ? [] : products.value; loadError.value = reset ? userErrorMessage(e, '상품을 불러오지 못했습니다') : loadError.value }
@@ -279,6 +281,13 @@ const pageTitle = computed(() => {
   if (q.value) return `‘${q.value}’ 검색 결과`
   return lockedNode.value?.name || '전체 상품'
 })
+
+// ---- SEO: per-list head + CollectionPage/ItemList JSON-LD (live rows only) --------------------------------
+function updatePlpHead() {
+  const origin = window.location.origin
+  applyRouteHead({ path: route.path, base: origin, title: `${pageTitle.value} | OLMOA` })
+  injectJsonLd('olmoa-jsonld-plp', plpJsonLdOf(pageTitle.value, `${origin}${route.path}`, products.value, origin))
+}
 const facetCounts = computed(() => {
   const m = new Map<string, number>()
   for (const c of facets.value.categories || []) m.set(c.id, Number(c.count) || 0)

@@ -6,7 +6,8 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { Heart } from 'lucide-vue-next'
-import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, userErrorMessage, formatNumber } from '@olmoa/ui'
+import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, userErrorMessage, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
+import { productHeadOf, productJsonLdOf } from '../lib/productSeo'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
 import ReviewHighlights from '../components/product/ReviewHighlights.vue'
@@ -57,10 +58,11 @@ async function load() {
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(String(route.params.slug))}`)
     const json = await res.json().catch(() => null)
     if (my !== seq) return
-    if (res.status === 404) { notFound.value = true; product.value = null; return }
+    if (res.status === 404) { notFound.value = true; product.value = null; document.getElementById('olmoa-jsonld-product')?.remove(); return }
     if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     product.value = json.data
     recordRecentVisit(json.data)
+    applyProductHead(json.data)
     if (route.hash === '#reviews') {
       await nextTick()
       gotoReviews()
@@ -71,10 +73,17 @@ async function load() {
     loadPhotos(json.data.id)
     loadRelated(json.data.id)
   } catch (e: any) {
-    if (my === seq) loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다')
+    if (my === seq) { loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다'); document.getElementById('olmoa-jsonld-product')?.remove() }
   } finally {
     if (my === seq) loading.value = false
   }
+}
+
+// ---- SEO: per-product head + Product/Offer/Breadcrumb JSON-LD (live rows only) ---------------------------
+function applyProductHead(p: any) {
+  const origin = window.location.origin
+  applyRouteHead(productHeadOf(p, route.path, origin))
+  injectJsonLd('olmoa-jsonld-product', productJsonLdOf(p, `${origin}${route.path}`))
 }
 
 async function loadPhotos(id: string) {

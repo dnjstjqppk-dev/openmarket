@@ -49,7 +49,7 @@ export async function upsertChannelOrder(env, channel, raw) {
   return { id: prev.id, created: false };
 }
 
-/** Mirror a captured storefront order into the unified intake (PG webhook). */
+/** Mirror a captured storefront order into the unified intake (webhook + customer confirm). */
 export async function recordStorefrontPayment(env, order) {
   return upsertChannelOrder(env, 'storefront', {
     externalOrderId: order.order_no, totalKrw: order.total_pay_amount, paid: true

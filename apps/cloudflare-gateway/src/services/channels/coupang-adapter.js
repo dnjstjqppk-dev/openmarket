@@ -1,17 +1,12 @@
 // apps/cloudflare-gateway/src/services/channels/coupang-adapter.js
-// Coupang Wing (Marketplace OpenAPI) outbound adapter skeleton. Every call is
-// a live HMAC-signed platform call requiring COUPANG_ACCESS_KEY +
-// COUPANG_SECRET_KEY + COUPANG_VENDOR_ID — absent keys fail closed.
-//
-// Spec map (verify against the issued Wing OpenAPI docs before go-live):
-// - Auth: CEA HMAC-SHA256 header (signed-date + method + path + query).
-// - POST /v2/providers/seller_api/apis/api/v1/marketplace/seller-products
-// - PUT  .../seller-products/{id}/stock   stock sync (delta worker)
-// - DELETE .../seller-products/{id}       retire a rotated-out listing
-// - Phase 3: GET .../marketplace/orders poll + POST .../orders/{id}/tracking push-back.
-// - Vendor id is path/query-scoped per call; 429 backs the worker off.
+// Coupang Wing listing side: publish, stock sync, retire (live HMAC-signed
+// calls; COUPANG_ACCESS_KEY + COUPANG_SECRET_KEY + COUPANG_VENDOR_ID
+// required, fail closed). Order side lives in ./coupang-orders.js.
+// Spec map: CEA HMAC-SHA256; seller-products POST/PUT/DELETE; sibling
+// polls marketplace/orders + pushes .../{id}/tracking.
 
 import { requireChannelEnv, registerChannel, channelFetch } from './channel.js';
+import { fetchPaidOrders, pushTracking } from './coupang-orders.js';
 
 const API_BASE = 'https://api-gateway.coupang.com';
 const ENV_KEYS = ['COUPANG_ACCESS_KEY', 'COUPANG_SECRET_KEY', 'COUPANG_VENDOR_ID'];
@@ -29,7 +24,8 @@ export async function ceaHeader(secretKey, accessKey, method, path, query = '') 
   return `CEA algorithm=HmacSHA256, access-key=${accessKey}, signed-date=${datetime}, signature=${hex}`;
 }
 
-async function api(env, path, { method = 'GET', query = '', body } = {}) {
+/** HMAC-signed transport (exported for the sibling order module). */
+export async function api(env, path, { method = 'GET', query = '', body } = {}) {
   const { COUPANG_ACCESS_KEY: ak, COUPANG_SECRET_KEY: sk } = requireChannelEnv(env, 'coupang', ENV_KEYS);
   const auth = await ceaHeader(sk, ak, method, path, query);
   const res = await channelFetch(`${API_BASE}${path}${query ? `?${query}` : ''}`, {
@@ -55,24 +51,6 @@ async function updateStock(env, externalId, qty) {
 
 async function retire(env, externalId) {
   await api(env, `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${encodeURIComponent(externalId)}`, { method: 'DELETE' });
-  return { ok: true };
-}
-
-async function fetchPaidOrders(env, { since } = {}) {
-  const query = `vendorId=${encodeURIComponent(String(env.COUPANG_VENDOR_ID || ''))}&status=PAID${since ? `&since=${encodeURIComponent(since)}` : ''}`;
-  const data = await api(env, '/v2/providers/seller_api/apis/api/v1/marketplace/orders', { query });
-  const list = Array.isArray(data?.data) ? data.data : [];
-  return list.map((o) => ({
-    externalOrderId: String(o?.orderId ?? ''), totalKrw: Number(o?.totalAmount ?? NaN),
-    paidAt: o?.paidAt || null, items: Array.isArray(o?.items) ? o.items : []
-  })).filter((o) => o.externalOrderId);
-}
-
-async function pushTracking(env, externalOrderId, { carrier, trackingNo } = {}) {
-  if (!String(trackingNo || '').trim()) throw new Error('INVALID_TRACKING: tracking number required');
-  await api(env, `/v2/providers/seller_api/apis/api/v1/marketplace/orders/${encodeURIComponent(externalOrderId)}/tracking`, {
-    method: 'POST', body: { carrier_code: carrier || null, tracking_number: trackingNo }
-  });
   return { ok: true };
 }
 

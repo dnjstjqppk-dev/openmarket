@@ -191,4 +191,38 @@ await t.test('sandbox PG webhook mirrors the paid order into the unified intake'
   assert.equal(mirror.total_krw, total);
 });
 
+await t.test('customer confirm joins the same idempotent unified mirror', async () => {
+  const g = await newGateway();
+  const cust = await login(g, 'customer@example.com');
+  const sku = g.db.prepare(
+    `SELECT s.id FROM product_skus s JOIN products p ON p.id = s.product_id
+     WHERE p.status = 'ACTIVE' AND s.stock_quantity > 0 LIMIT 1`).get().id;
+  const chk = await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    body: {
+      recipient_name: '홍길동', recipient_phone: '010-1234-5678',
+      shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236',
+      items: [{ sku_id: sku, quantity: 1 }]
+    }
+  });
+  assert.equal(chk.status, 201, chk.text);
+  const key = `sandbox_${String(chk.json.order_id).slice(-8)}xx`;
+  const pay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: chk.json.order_id, payment_key: key, amount: chk.json.total_pay_amount }
+  });
+  assert.equal(pay.status, 200, pay.text);
+  const mirror = g.db.prepare("SELECT status, total_krw FROM unified_orders WHERE channel = 'storefront' AND external_order_id = ?").get(chk.json.order_no);
+  assert.ok(mirror, 'confirm mirrored into unified_orders');
+  assert.equal(mirror.status, 'PAID');
+  assert.equal(mirror.total_krw, chk.json.total_pay_amount);
+  const replay = await g.call('/api/v1/payments/confirm', {
+    method: 'POST', token: cust,
+    body: { order_id: chk.json.order_id, payment_key: key, amount: chk.json.total_pay_amount }
+  });
+  assert.equal(replay.status, 200, replay.text);
+  const again = g.db.prepare("SELECT COUNT(*) AS c FROM unified_orders WHERE channel = 'storefront' AND external_order_id = ?").get(chk.json.order_no);
+  assert.equal(again.c, 1, 'confirm replay stays idempotent');
+});
+
 t.finish();

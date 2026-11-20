@@ -1,17 +1,12 @@
 // apps/cloudflare-gateway/src/services/channels/smartstore-adapter.js
-// Naver SmartStore (Commerce API) outbound adapter skeleton. Every call is a
-// live platform call and requires SMARTSTORE_CLIENT_ID + SMARTSTORE_CLIENT_SECRET.
-// Absent keys fail closed — no simulated listings, no dummy external ids.
-//
-// Spec map (verify against the issued Naver Commerce API docs before go-live):
-// - Auth: OAuth2 client-credentials grant, then Bearer access token per call.
-// - POST /external/v1/products        create a channel listing
-// - PUT  /external/v1/products/{id}/stock  stock sync (delta worker)
-// - DELETE /external/v1/products/{id} retire a rotated-out listing
-// - Phase 3: GET /external/v1/orders/paid poll + POST .../orders/{id}/tracking push-back.
-// - 429 means the daily quota is spent — the delta worker backs off, no retry storm.
+// Naver SmartStore listing side: publish, stock sync, retire (live calls,
+// SMARTSTORE_CLIENT_ID + SMARTSTORE_CLIENT_SECRET required, fail closed).
+// Order side lives in ./smartstore-orders.js. Spec map: OAuth2
+// client-credentials; POST /external/v1/products; PUT .../{id}/stock;
+// DELETE .../{id}; sibling polls .../orders/paid + pushes .../tracking.
 
 import { requireChannelEnv, registerChannel, channelFetch } from './channel.js';
+import { fetchPaidOrders, pushTracking } from './smartstore-orders.js';
 
 const API_BASE = 'https://api.commerce.naver.com';
 const ENV_KEYS = ['SMARTSTORE_CLIENT_ID', 'SMARTSTORE_CLIENT_SECRET'];
@@ -29,7 +24,8 @@ async function accessToken(env) {
   return data.access_token;
 }
 
-async function api(env, path, { method = 'GET', body } = {}) {
+/** Authenticated transport (exported for the sibling order module). */
+export async function api(env, path, { method = 'GET', body } = {}) {
   const token = await accessToken(env);
   const res = await channelFetch(`${API_BASE}${path}`, {
     method,
@@ -55,23 +51,6 @@ async function updateStock(env, externalId, qty) {
 
 async function retire(env, externalId) {
   await api(env, `/external/v1/products/${encodeURIComponent(externalId)}`, { method: 'DELETE' });
-  return { ok: true };
-}
-
-async function fetchPaidOrders(env, { since } = {}) {
-  const data = await api(env, `/external/v1/orders/paid${since ? `?since=${encodeURIComponent(since)}` : ''}`);
-  const list = Array.isArray(data?.orders) ? data.orders : [];
-  return list.map((o) => ({
-    externalOrderId: String(o?.orderId ?? ''), totalKrw: Number(o?.totalAmount ?? NaN),
-    paidAt: o?.paidAt || null, items: Array.isArray(o?.items) ? o.items : []
-  })).filter((o) => o.externalOrderId);
-}
-
-async function pushTracking(env, externalOrderId, { carrier, trackingNo } = {}) {
-  if (!String(trackingNo || '').trim()) throw new Error('INVALID_TRACKING: tracking number required');
-  await api(env, `/external/v1/orders/${encodeURIComponent(externalOrderId)}/tracking`, {
-    method: 'POST', body: { carrier_code: carrier || null, tracking_number: trackingNo }
-  });
   return { ok: true };
 }
 
