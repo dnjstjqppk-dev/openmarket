@@ -676,3 +676,112 @@ paths:
       responses:
         '501':
           description: WEBHOOK_NOT_INTEGRATED with the platform echoed back
+
+  /api/v1/admin/channels:
+    get:
+      summary: Outbound channel adapter inventory with key status
+      tags: [Channels]
+      description: 'Phase 2: smartstore/coupang publish adapters with configured/missing key status (values never leak).'
+      responses:
+        '200':
+          description: Channel inventory
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/channels/elite:
+    get:
+      summary: Elite shortlist for one channel (margin >= 15%, best first)
+      tags: [Channels]
+      description: 'Phase 2: APPROVED sourcing offers quoted at 1500+bps for the channel, ordered by linked-product sales with notice_ok flags.'
+      parameters:
+        - name: channel
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [smartstore, coupang]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Elite candidates
+        '400':
+          description: CHANNEL_UNKNOWN
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/channels/publish:
+    post:
+      summary: Publish an elite offer to a channel (live platform call)
+      tags: [Channels]
+      description: 'Phase 2: requires APPROVED offer, margin >= 15%, ACTIVE product with a notice template, and a live adapter publish. Fails closed (503) without channel keys.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [offer_id, product_id, channel]
+              properties:
+                offer_id:
+                  type: string
+                product_id:
+                  type: string
+                channel:
+                  type: string
+                  enum: [smartstore, coupang]
+      responses:
+        '200':
+          description: Listing is LIVE with the platform external id
+        '400':
+          description: CHANNEL_UNKNOWN, OFFER_NOT_APPROVED, PRODUCT_NOT_ACTIVE, NOTICE_MISSING, QUOTES_MISSING or MARGIN_BELOW_ELITE
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+        '404':
+          description: Sourcing offer not found
+        '503':
+          description: CHANNEL_NOT_CONFIGURED or UPSTREAM_ERROR
+
+  /api/v1/admin/channels/rotation/run:
+    post:
+      summary: Run the 30-day idle rotation batch
+      tags: [Channels]
+      description: 'Phase 2: LIVE listings with no sale for 30 days move to ROTATED_OUT. dry_run reports without writing; idempotent.'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dry_run:
+                  type: boolean
+      responses:
+        '200':
+          description: Rotation counts with the cutoff
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/channels/delta/run:
+    post:
+      summary: Run the 15-minute delta stock sync
+      tags: [Channels]
+      description: 'Phase 2: LIVE listings synced over 15 minutes ago get a live stock push. Per-listing failures are reported; nothing is marked synced on failure.'
+      responses:
+        '200':
+          description: Sync counts with per-listing failures
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required

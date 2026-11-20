@@ -6,6 +6,7 @@ import { json, readJson, HttpError } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { paymentMode, pgGetPayment } from '../lib/pg.js';
 import { confirmPayment, captureFromVerifiedPg } from '../services/orders.js';
+import { recordStorefrontPayment } from '../services/fulfillment/intake.js';
 
 export async function handlePaymentRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/payments')) return null;
@@ -69,7 +70,14 @@ export async function handlePaymentRoutes(request, url, env, corsHeaders) {
       const order = await env.DB.prepare('SELECT * FROM orders WHERE order_no = ?').bind(verified.orderId).first();
       orderId = order ? order.id : null;
       if (!order) outcome = 'ORDER_NOT_FOUND';
-      else if (verified.status === 'DONE') outcome = await captureFromVerifiedPg(env, order, verified, { sandbox });
+      else if (verified.status === 'DONE') {
+        outcome = await captureFromVerifiedPg(env, order, verified, { sandbox });
+        // Phase 3: mirror the paid storefront order into the unified intake.
+        // Idempotent on (storefront, order_no), so webhook retries stay safe.
+        if (outcome === 'CAPTURED_FROM_WEBHOOK' || outcome === 'ALREADY_CAPTURED') {
+          await recordStorefrontPayment(env, order);
+        }
+      }
       else if (['CANCELED', 'PARTIAL_CANCELED', 'ABORTED', 'EXPIRED'].includes(verified.status)) outcome = 'PG_SIDE_STATUS_RECORDED_FOR_RECONCILIATION';
     } else if (!verified) {
       outcome = 'VERIFICATION_FAILED';

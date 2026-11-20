@@ -220,7 +220,7 @@ await t.test('9. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_70_remind_notifs.sql', 'pin names d1_70');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_74_seo_crawl.sql', 'pin names d1_74');
 });
 
 t.finish();

@@ -23,6 +23,15 @@ import { handleTemuOpsRoutes } from './routes/temu-ops.js';
 import { handleBusinessRoutes } from './routes/business.js';
 import { handleLegalRoutes } from './routes/legal.js';
 import { handleSupplierRoutes } from './routes/suppliers.js';
+import { handleSourcingRoutes } from './routes/sourcing.js';
+import { handleSourcingOpsRoutes } from './routes/sourcing-ops.js';
+import { handleCatalogFullRoutes } from './routes/catalog-full.js';
+import { handleChannelPublishRoutes } from './routes/channel-publish.js';
+import { handleChannelsOpsRoutes } from './routes/channels-ops.js';
+import { handleChannelOrderRoutes } from './routes/channel-orders.js';
+import { handleFulfillmentOpsRoutes } from './routes/fulfillment-ops.js';
+import { handleSeoRoutes } from './routes/seo.js';
+import { handleSeoOpsRoutes } from './routes/seo-ops.js';
 import { handleBiddingAndM2cRoutes } from './routes/bidding-m2c.js';
 import { handleProductImportRoutes } from './routes/product-imports.js';
 import { handleSupplier3plRoutes } from './routes/supplier-3pl.js';
@@ -37,6 +46,12 @@ import { runPriceDropNotifs, runPurchaseReminds } from './services/reminders.js'
 import { purgeExpiredPii } from './services/privacy.js';
 import { computeMonthlyGrades } from './services/grading.js';
 import { purgeOldSearchHours } from './services/trending.js';
+import { runDeltaSync } from './services/channels/delta.js';
+import { runRotation } from './services/channels/rotation.js';
+import { runChannelPoll } from './services/fulfillment/poll.js';
+import { runAutoOrder } from './services/fulfillment/order.js';
+import { runInvoiceSync } from './services/fulfillment/invoice.js';
+import { drainNotifyOutbox } from './services/fulfillment/notify.js';
 import { enforceRateLimit, classify } from './lib/ratelimit.js';
 import { authenticate } from './lib/auth.js';
 
@@ -52,10 +67,17 @@ const ROUTERS = [
   handlePaymentRoutes,
   handleFinanceRoutes,
   handleSupplierRoutes,
+  handleSourcingRoutes,
+  handleSourcingOpsRoutes,
   handleSupplier3plRoutes,
   handleProductImportRoutes,
   handleFeatureFlagRoutes,
   handleMultiChannelRoutes,
+  handleChannelPublishRoutes,
+  handleChannelsOpsRoutes,
+  handleChannelOrderRoutes,
+  handleFulfillmentOpsRoutes,
+  handleSeoOpsRoutes,
   handleBiddingAndM2cRoutes,
   handleGlobalCustomsAndFxRoutes,
   handleGlobalLogisticsRoutes,
@@ -66,6 +88,7 @@ const ROUTERS = [
   handlePushRoutes,
   handleRecommendRoutes,
   handleShippingRoutes,
+  handleCatalogFullRoutes,
   handleCatalogRoutes,
   handleOrderRoutes,
   handlePartnerRoutes,
@@ -135,14 +158,11 @@ export default {
       if (url.pathname === '/api/version' || url.pathname === '/version') {
         return json(corsHeaders, { service: 'olmoa-api', version: SERVICE_VERSION, commit: env.GIT_COMMIT || 'unset', environment: env.ENVIRONMENT || 'unset' });
       }
-      if (url.pathname === '/sitemap.xml') {
-        const base = env.PUBLIC_STOREFRONT_URL || 'https://olmoa.com';
-        const { results: cats } = await env.DB.prepare('SELECT slug FROM categories WHERE is_active = 1').all();
-        const { results: prods } = await env.DB.prepare("SELECT id FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED'").all();
-        const urls = ['/', '/categories', '/channel/lightning-deals', '/channel/best-sellers', '/coupons', '/support',
-          ...cats.map((c) => `/category/${encodeURIComponent(c.slug)}`), ...prods.map((p) => `/product/${encodeURIComponent(p.id)}`)];
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${base}${u}</loc></url>`).join('\n')}\n</urlset>`;
-        return new Response(xml, { headers: { ...corsHeaders, 'Content-Type': 'application/xml; charset=utf-8' } });
+      // Phase 4-6: public crawl surface (sitemaps/robots/llms.txt) served
+      // pre-ratelimit like /health — crawlers must not eat the API budget.
+      if (request.method === 'GET') {
+        const seo = await handleSeoRoutes(request, url, env, corsHeaders);
+        if (seo) return seo;
       }
       if (!env.DB) return json(corsHeaders, { success: false, error: 'Database binding missing', code: 'DB_NOT_BOUND' }, 503);
       // O12: rate limits before any work. Writes are keyed by the verified user (shared mobile-carrier IPs stay usable).
@@ -222,7 +242,44 @@ export default {
         searchPurged = 'ERROR';
         console.error(JSON.stringify({ level: 'error', job: 'search_purge', error: String(e && e.message || e) }));
       }
-      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, reminders, confirmed, reconciliation, purged, grading, searchPurged }));
+      // Phase 2: 15-minute channel delta sync (every :00/:15/:30/:45 tick).
+      let delta = 'NOT_DUE';
+      try {
+        const nowM = new Date(event.scheduledTime || Date.now());
+        if (nowM.getUTCMinutes() % 15 < 5) {
+          const r = await runDeltaSync(env, {});
+          delta = `checked:${r.checked},synced:${r.synced},failed:${r.failed.length}`;
+        }
+      } catch (e) {
+        delta = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'delta_sync', error: String(e && e.message || e) }));
+      }
+      // Phase 2: 30-day idle rotation batch (first tick of 04:00 UTC).
+      let rotation = 'NOT_DUE';
+      try {
+        const nowR = new Date(event.scheduledTime || Date.now());
+        if (nowR.getUTCHours() === 4 && nowR.getUTCMinutes() < 5) {
+          const r = await runRotation(env, {});
+          rotation = `scanned:${r.scanned},rotated:${r.rotated}`;
+        }
+      } catch (e) {
+        rotation = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'rotation', error: String(e && e.message || e) }));
+      }
+      // Phase 3: unmanned fulfillment wave — channel poll, auto-PO dispatch,
+      // invoice collection with channel push-back, notify drain (every tick).
+      let fulfill = 'NOT_DUE';
+      try {
+        const poll = await runChannelPoll(env, {});
+        const auto = await runAutoOrder(env, {});
+        const inv = await runInvoiceSync(env, {});
+        const out = await drainNotifyOutbox(env, {});
+        fulfill = `poll:${poll.created}/${poll.checked},po:${auto.sent}/${auto.checked},inv:${inv.shipped}/${inv.checked},ntf:${out.sent}`;
+      } catch (e) {
+        fulfill = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'fulfillment', error: String(e && e.message || e) }));
+      }
+      console.log(JSON.stringify({ level: 'info', job: 'scheduled', cron: event.cron, expired, reminders, confirmed, reconciliation, purged, grading, searchPurged, delta, rotation, fulfill }));
     })());
   }
 };

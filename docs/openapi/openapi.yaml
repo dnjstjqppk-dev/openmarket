@@ -6,7 +6,10 @@ info:
     the Vue 3 storefront/admin/partner apps, and the Flutter mobile apps.
     Reconciled against the implementation 2026-11-07, extended 2026-11-09
     (auth / payments / orders / channels / partner wave 1) and 2026-11-10
-    (full-gateway wave 2, 201 paths); every path below is
+    (full-gateway wave 2, 201 paths) and 2026-11-20
+    (sourcing/distribution, 209 paths) and 2026-11-20
+    (fulfillment orchestration, 215 paths) and 2026-11-20
+    (SEO crawl ops, 219 paths); every path below is
     covered by tests/openapi_reconciliation_test.mjs.
 servers:
   - url: https://olmoa-api.dnjstjqppk.workers.dev
@@ -119,6 +122,28 @@ paths:
     $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1orders~1{id}~1fulfill'
   /api/v1/channels/webhooks/{platform}:
     $ref: './paths/channels.yaml#/paths/~1api~1v1~1channels~1webhooks~1{platform}'
+  /api/v1/admin/channels:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1admin~1channels'
+  /api/v1/admin/channels/elite:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1admin~1channels~1elite'
+  /api/v1/admin/channels/publish:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1admin~1channels~1publish'
+  /api/v1/admin/channels/rotation/run:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1admin~1channels~1rotation~1run'
+  /api/v1/admin/channels/delta/run:
+    $ref: './paths/channels.yaml#/paths/~1api~1v1~1admin~1channels~1delta~1run'
+  /api/v1/admin/channel-orders:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1channel-orders'
+  /api/v1/admin/channel-orders/poll:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1channel-orders~1poll'
+  /api/v1/admin/fulfillment/auto-order/run:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1fulfillment~1auto-order~1run'
+  /api/v1/admin/fulfillment/invoices/sync:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1fulfillment~1invoices~1sync'
+  /api/v1/admin/fulfillment/outbox:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1fulfillment~1outbox'
+  /api/v1/admin/fulfillment/outbox/drain:
+    $ref: './paths/fulfillment.yaml#/paths/~1api~1v1~1admin~1fulfillment~1outbox~1drain'
 
   /api/v1/products:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products'
@@ -433,6 +458,10 @@ paths:
     $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1ipr~1report'
   /api/v1/admin/ipr-reports:
     $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1ipr-reports'
+  /api/v1/admin/sourcing/providers:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1sourcing~1providers'
+  /api/v1/admin/sourcing/offers/pull:
+    $ref: './paths/sourcing.yaml#/paths/~1api~1v1~1admin~1sourcing~1offers~1pull'
 
   /api/v1/bidding/campaigns:
     $ref: './paths/bidding.yaml#/paths/~1api~1v1~1bidding~1campaigns'
@@ -545,6 +574,8 @@ paths:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1exhibitions'
   /api/v1/exhibitions/{id}:
     $ref: './paths/storefront.yaml#/paths/~1api~1v1~1exhibitions~1{id}'
+  /api/v1/catalog/full:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1catalog~1full'
   /api/v1/search/trending:
     $ref: './paths/search.yaml#/paths/~1api~1v1~1search~1trending'
   /api/v1/partner/dashboard/pipeline:
@@ -639,6 +670,14 @@ paths:
     $ref: './paths/legal.yaml#/paths/~1api~1v1~1legal~1{kind}'
   /api/v1/admin/legal-documents:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1legal-documents'
+  /api/v1/admin/seo/indexnow/enqueue:
+    $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1enqueue'
+  /api/v1/admin/seo/indexnow/status:
+    $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1status'
+  /api/v1/admin/seo/indexnow/queue:
+    $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1queue'
+  /api/v1/admin/seo/indexnow/drain:
+    $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1drain'
 
 components:
   securitySchemes:

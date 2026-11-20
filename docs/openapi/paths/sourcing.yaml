@@ -581,3 +581,45 @@ paths:
           description: Missing or expired JWT
         '403':
           description: Admin role required
+
+  /api/v1/admin/sourcing/providers:
+    get:
+      summary: B2B sourcing provider inventory with key status
+      tags: [Sourcing]
+      description: 'Phase 1: domeme/ownerclan/onchannel/cj-dropshipping adapters with configured/missing key status (values never leak).'
+      responses:
+        '200':
+          description: Provider inventory
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/sourcing/offers/pull:
+    post:
+      summary: Pull a live offer from a B2B provider
+      tags: [Sourcing]
+      description: 'Phase 1: live provider fetch normalized into a PENDING sourcing offer (upsert on provider + external_id). Fails closed (503) without provider keys.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, external_id]
+              properties:
+                provider:
+                  type: string
+                external_id:
+                  type: string
+      responses:
+        '200':
+          description: Offer stored as PENDING
+        '400':
+          description: PROVIDER_UNKNOWN
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+        '503':
+          description: PROVIDER_NOT_CONFIGURED or UPSTREAM_ERROR

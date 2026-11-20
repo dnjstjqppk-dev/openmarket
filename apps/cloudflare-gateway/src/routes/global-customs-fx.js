@@ -3,6 +3,7 @@ import { krwPerUnit, krwPerUnitMap } from '../lib/fx.js';
 import { logPiiView } from '../services/privacy.js';
 import { forbidden, notFound, HttpError, readJson } from '../lib/http.js';
 import { maybeOpenPii } from '../lib/pii-crypto.js';
+import { validatePccc, queryUnipass } from '../lib/pccc.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
 
@@ -13,27 +14,17 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     // only signed-in buyers may ask, and RL_WRITE bounds the cadence per account.
     await requireCustomer(request, env);
     const body = await readJson(request);
-    const rawPccc = String(body.pccc || '').trim().toUpperCase();
+    const verdict = validatePccc(body.pccc);
+    const rawPccc = verdict.normalized;
     const recipientName = String(body.name || body.recipient_name || '').trim();
     const recipientPhone = String(body.phone || body.recipient_phone || '').trim();
 
-    if (!rawPccc) {
+    if (!verdict.ok) {
       return new Response(JSON.stringify({
         success: false,
         verified: false,
-        error: '개인통관고유부호를 입력해주세요.',
-        code: 'MISSING_PCCC'
-      }), { status: 400, headers: corsHeaders });
-    }
-
-    // Korea Customs Service PCCC Standard Format: 'P' followed by 12 digits (Length: 13)
-    const pcccRegex = /^P\d{12}$/;
-    if (!pcccRegex.test(rawPccc)) {
-      return new Response(JSON.stringify({
-        success: false,
-        verified: false,
-        error: "개인통관고유부호 형식이 올바르지 않습니다. 'P'로 시작하는 13자리 번호여야 합니다 (예: P123456789012).",
-        code: 'INVALID_PCCC_FORMAT'
+        error: verdict.message,
+        code: verdict.code
       }), { status: 400, headers: corsHeaders });
     }
 
@@ -54,31 +45,14 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     let verificationMode = 'FORMAT_ONLY';
     let message = '형식이 올바른 개인통관고유부호입니다. 관세청 조회는 연동되어 있지 않아 명의 일치 여부는 확인하지 않았습니다.';
     if (env && env.UNIPASS_API_KEY) {
-      try {
-        const queryParams = new URLSearchParams({
-          crkyCn: env.UNIPASS_API_KEY,
-          persEcm: rawPccc,
-          pltxNm: recipientName || '',
-          cralTelno: recipientPhone ? recipientPhone.replace(/[^0-9]/g, '') : ''
-        });
-        const unipassUrl = `https://unipass.customs.go.kr:38010/ext/rest/persEcmQry/retrievePersEcm?${queryParams.toString()}`;
-        const uRes = await fetch(unipassUrl);
-        const xmlText = uRes.ok ? await uRes.text() : '';
-        // tCo = number of matching records in the Uni-Pass response.
-        const count = Number((xmlText.match(/<tCo>(\d+)<\/tCo>/) || [])[1] || 0);
-        if (count > 0) {
-          verified = true;
-          verificationMode = 'UNIPASS_MATCH';
-          message = '관세청 조회 결과 성명·연락처와 일치합니다.';
-        } else if (uRes.ok) {
-          verificationMode = 'UNIPASS_NO_MATCH';
-          message = '관세청 조회 결과 일치하는 정보가 없습니다. 성명·연락처·부호를 확인해 주세요.';
-        } else {
-          verificationMode = 'UNIPASS_UNAVAILABLE';
-          message = '관세청 조회에 실패했습니다. 형식만 확인되었습니다.';
-        }
-      } catch (_) {
-        verificationMode = 'UNIPASS_UNAVAILABLE';
+      const live = await queryUnipass(env, rawPccc, { name: recipientName, phone: recipientPhone });
+      verificationMode = live.mode;
+      if (live.mode === 'UNIPASS_MATCH') {
+        verified = true;
+        message = '관세청 조회 결과 성명·연락처와 일치합니다.';
+      } else if (live.mode === 'UNIPASS_NO_MATCH') {
+        message = '관세청 조회 결과 일치하는 정보가 없습니다. 성명·연락처·부호를 확인해 주세요.';
+      } else {
         message = '관세청 조회에 실패했습니다. 형식만 확인되었습니다.';
       }
     }

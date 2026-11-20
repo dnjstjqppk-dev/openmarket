@@ -1,0 +1,98 @@
+# Phase 4-6 SEO/GEO/AEO + crawl architecture (IndexNow queue ops). Verified
+# against apps/cloudflare-gateway/src/routes/seo-ops.js. All endpoints are
+# admin-only. Public crawl assets (/sitemap*.xml, /robots.txt, /llms*.txt)
+# are plain GET files, not versioned APIs, so they stay out of this contract.
+paths:
+  /api/v1/admin/seo/indexnow/enqueue:
+    post:
+      summary: Enqueue URLs for IndexNow submission
+      tags: [SEO]
+      description: 'Phase 4-6: validates same-site https URLs and inserts PENDING rows into indexnow_queue (idempotent per URL).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  maxItems: 1000
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Enqueue count
+        '400':
+          description: URLS_REQUIRED, INVALID_URL or URL_NOT_INDEXABLE
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/seo/indexnow/status:
+    get:
+      summary: IndexNow queue status summary
+      tags: [SEO]
+      description: 'Phase 4-6: key_configured flag plus PENDING/SENT/FAILED counts for the admin console.'
+      responses:
+        '200':
+          description: Status counts
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/seo/indexnow/queue:
+    get:
+      summary: IndexNow queue status log
+      tags: [SEO]
+      description: 'Phase 4-6: newest-first indexnow_queue rows with per-URL status, attempts and last error. The admin status log.'
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, SENT, FAILED]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        '200':
+          description: Queue rows
+        '400':
+          description: INVALID_STATUS
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/seo/indexnow/drain:
+    post:
+      summary: Submit one pending batch to IndexNow
+      tags: [SEO]
+      description: 'Phase 4-6: POSTs up to 100 PENDING URLs to the IndexNow endpoint and marks them SENT/FAILED. Without INDEXNOW_KEY it reports degraded and leaves rows PENDING.'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        '200':
+          description: Drain counts with degraded flag
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required

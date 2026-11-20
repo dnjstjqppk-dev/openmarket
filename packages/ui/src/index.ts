@@ -61,6 +61,9 @@ import OmSearchFilterBar from './components/OmSearchFilterBar.vue'
 import OmAddressSearch from './components/OmAddressSearch.vue'
 import OmImage from './components/OmImage.vue'
 import OmBulkActionBar from './components/OmBulkActionBar.vue'
+import OmKeyTakeaways from './components/OmKeyTakeaways.vue'
+import OmSpecTable from './components/OmSpecTable.vue'
+import OmFaq from './components/OmFaq.vue'
 
 export {
   OmButton, OmIconButton, OmInput, OmTextarea, OmSelect, OmCheckbox, OmRadio, OmSwitch, OmModal, OmDrawer,
@@ -70,7 +73,8 @@ export {
   OmPrice, OmNumber, OmRating, OmCommerceBadge, OmCountdown, OmProgress, OmQuantityStepper, OmCarousel,
   OmImageGallery, OmBottomSheet, OmStickyTabs, OmFoldable, OmFilterPanel, OmFilterChips, OmViewToggle,
   OmProductCard, OmSellerCard, OmConfirmDialog, OmConsoleShell, OmKpiCard, OmStatusTabs, OmDateRangePicker,
-  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar
+  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar,
+  OmKeyTakeaways, OmSpecTable, OmFaq
 }
 
 /** The 31 components required by the PHASE 2 directive (OmField / OmSpinner are internal helpers). */
@@ -96,6 +100,10 @@ export { useTheme, nextThemeMode } from './composables/useTheme'
 export type { ThemeMode } from './composables/useTheme'
 export { useBreakpoint, BREAKPOINTS, BREAKPOINT_ORDER, breakpointOf, deviceOf, matches, matchesDevice } from './composables/useBreakpoint'
 export type { BreakpointKey, DeviceClass, BreakpointState } from './composables/useBreakpoint'
+export { isNoindexPath, canonicalOf, routeHeadOf, applyRouteHead, injectJsonLd } from './composables/useSeoHead'
+export type { RouteHeadInput } from './composables/useSeoHead'
+export type { SpecRow } from './components/OmSpecTable.vue'
+export type { FaqItem } from './components/OmFaq.vue'
 export { formatKrw, formatNumber, formatDate, formatDateTime, discountRate, userErrorMessage } from './format'
 export { priceDisplayLines, clampQuantity, countdownParts, ratingVisible, tablePages, soldoutPct } from './commerce'
 export type { PriceLines, Countdown } from './commerce'
@@ -108,7 +116,8 @@ const all: Record<string, any> = {
   OmPrice, OmNumber, OmRating, OmCommerceBadge, OmCountdown, OmProgress, OmQuantityStepper, OmCarousel,
   OmImageGallery, OmBottomSheet, OmStickyTabs, OmFoldable, OmFilterPanel, OmFilterChips, OmViewToggle,
   OmProductCard, OmSellerCard, OmConfirmDialog, OmConsoleShell, OmKpiCard, OmStatusTabs, OmDateRangePicker,
-  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar
+  OmSearchFilterBar, OmAddressSearch, OmImage, OmBulkActionBar,
+  OmKeyTakeaways, OmSpecTable, OmFaq
 }
 export default {
   install(app: App) {

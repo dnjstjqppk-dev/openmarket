@@ -371,6 +371,27 @@ const EXPECTED = [
   ['/api/v1/legal/{kind}', 'GET', 200],
   ['/api/v1/admin/legal-documents', 'GET', 401],
   ['/api/v1/admin/legal-documents', 'POST', 401],
+  // Phase 1 sourcing + Phase 2 distribution
+  ['/api/v1/admin/sourcing/providers', 'GET', 401],
+  ['/api/v1/admin/sourcing/offers/pull', 'POST', 401],
+  ['/api/v1/admin/channels', 'GET', 401],
+  ['/api/v1/admin/channels/elite', 'GET', 401],
+  ['/api/v1/admin/channels/publish', 'POST', 401],
+  ['/api/v1/admin/channels/rotation/run', 'POST', 401],
+  ['/api/v1/admin/channels/delta/run', 'POST', 401],
+  ['/api/v1/catalog/full', 'GET', 200],
+  // Phase 3 fulfillment orchestration
+  ['/api/v1/admin/channel-orders', 'GET', 401],
+  ['/api/v1/admin/channel-orders/poll', 'POST', 401],
+  ['/api/v1/admin/fulfillment/auto-order/run', 'POST', 401],
+  ['/api/v1/admin/fulfillment/invoices/sync', 'POST', 401],
+  ['/api/v1/admin/fulfillment/outbox', 'GET', 401],
+  ['/api/v1/admin/fulfillment/outbox/drain', 'POST', 401],
+  // Phase 4-6 SEO crawl ops
+  ['/api/v1/admin/seo/indexnow/enqueue', 'POST', 401],
+  ['/api/v1/admin/seo/indexnow/status', 'GET', 401],
+  ['/api/v1/admin/seo/indexnow/queue', 'GET', 401],
+  ['/api/v1/admin/seo/indexnow/drain', 'POST', 401],
 ];
 
 // Retired 2026-11-07: documented paths with no gateway route behind them.

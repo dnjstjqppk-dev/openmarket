@@ -7,7 +7,7 @@ import App from './App.vue';
 import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
 import { i18n } from './i18n';
-import { useTheme } from '@olmoa/ui';
+import { useTheme, applyRouteHead } from '@olmoa/ui';
 
 useTheme().init();
 
@@ -87,6 +87,14 @@ router.beforeEach((to) => {
     return { path: '/login', query: { redirect: to.fullPath } };
   }
   return true;
+});
+
+// Phase 4-6: per-route head policy (canonical + robots + OG/Twitter) on every
+// navigation. Entity views overwrite the title with their own meta afterwards.
+router.afterEach((to) => {
+  try {
+    applyRouteHead({ path: to.path, base: window.location.origin, title: document.title });
+  } catch { /* head policy must never break navigation */ }
 });
 
 // Client error telemetry (POST /api/v1/client-errors): throttled to one report per 10s,

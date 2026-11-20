@@ -1,0 +1,110 @@
+# Phase 3 unmanned fulfillment orchestration (unified intake, auto-PO,
+// invoice collection with channel push-back, notify outbox). Verified
+// against apps/cloudflare-gateway/src/routes/channel-orders.js and
+// fulfillment-ops.js. All endpoints are admin-only and idempotent.
+paths:
+  /api/v1/admin/channel-orders:
+    get:
+      summary: List unified channel orders
+      tags: [Fulfillment]
+      description: 'Phase 3: paginated unified_orders rows (storefront PG-webhook mirror plus smartstore/coupang polls), newest first.'
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [NEW, PAID, ORDERED, SHIPPED, CANCELLED]
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Unified intake rows
+        '400':
+          description: INVALID_STATUS
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/channel-orders/poll:
+    post:
+      summary: Poll channels for paid orders
+      tags: [Fulfillment]
+      description: 'Phase 3: live fetchPaidOrders per channel, upserted into the unified intake. Per-channel failures are reported; nothing is invented.'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  enum: [smartstore, coupang]
+      responses:
+        '200':
+          description: Poll counts with per-channel failures
+        '400':
+          description: CHANNEL_UNKNOWN
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/fulfillment/auto-order/run:
+    post:
+      summary: Dispatch purchase orders to vendors
+      tags: [Fulfillment]
+      description: 'Phase 3: PAID intake rows become one supplier PO each via live vendor placeOrder. Without vendor keys the PO stays DRAFT with PROVIDER_NOT_CONFIGURED.'
+      responses:
+        '200':
+          description: Dispatch counts with skips and failures
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/fulfillment/invoices/sync:
+    post:
+      summary: Collect invoices and push tracking to channels
+      tags: [Fulfillment]
+      description: 'Phase 3: live vendor fetchTracking per sent PO, stored in shipment_trackings, pushed back to the origin channel, intake moves to SHIPPED.'
+      responses:
+        '200':
+          description: Collection counts with per-PO failures
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/fulfillment/outbox:
+    get:
+      summary: List pending fulfillment notifications
+      tags: [Fulfillment]
+      description: 'Phase 3: durable notify_outbox rows (PO_SENT / PO_FAILED / SHIPPED / POLL_DEGRADED), newest first.'
+      responses:
+        '200':
+          description: Outbox rows
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
+
+  /api/v1/admin/fulfillment/outbox/drain:
+    post:
+      summary: Deliver pending fulfillment notifications
+      tags: [Fulfillment]
+      description: 'Phase 3: POST pending rows to ALERT_WEBHOOK_URL. Without a channel rows stay PENDING and channel:false is reported.'
+      responses:
+        '200':
+          description: Delivery counts
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Admin role required
