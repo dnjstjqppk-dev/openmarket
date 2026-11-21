@@ -99,7 +99,7 @@ await t.test('1. stock 0->5 notifies two subscribers once each', async () => {
 
   assert.equal(notifCount(g, 'u_customer_001'), n1 + 1, 'subscriber 1 gets exactly one');
   assert.equal(notifCount(g, 'cust_demo_001'), n2 + 1, 'subscriber 2 gets exactly one');
-  const row = g.db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get('u_customer_001');
+  const row = g.db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get('u_customer_001');
   assert.equal(row.type, 'SYSTEM');
   assert.equal(row.action_url, `/product/${productId}`);
   assert.ok(String(row.title).includes('재입고'), `title names restock: ${row.title}`);
