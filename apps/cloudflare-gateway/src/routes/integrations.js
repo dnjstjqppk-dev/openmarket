@@ -3,6 +3,10 @@
 import { timingSafeEqual } from '../utils/crypto-auth.js';
 import { unauthorized } from '../lib/http.js';
 
+// Cutover-safe: feed links follow the canonical storefront base (worker secret
+// PUBLIC_STOREFRONT_URL, default https://olmoa.com), never a baked host.
+const storefrontBase = (env) => String(env.PUBLIC_STOREFRONT_URL || 'https://olmoa.com').replace(/\/+$/, '');
+
 export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
   // 1. PriceScanner Authenticated Product Feed
   if (url.pathname === '/api/v1/integrations/pricescanner/feed' && request.method === 'GET') {
@@ -67,7 +71,7 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
         stock_quantity: row.stock_quantity,
         shipping_fee: row.base_shipping_fee || 3000,
         free_shipping_threshold: row.free_shipping_threshold || 30000,
-        product_url: `https://openmarket.dnjstjqppk.workers.dev/product/${row.product_id}`,
+        product_url: `${storefrontBase(env)}/product/${row.product_id}`,
         last_updated: row.updated_at
       };
     });

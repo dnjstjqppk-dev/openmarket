@@ -187,6 +187,11 @@ await t.test('P05 pricescanner doc matches the implementation', async () => {
   assert.deepEqual(inc.json.data.items, []);
   const unauth = await g.call('/api/v1/integrations/pricescanner/feed');
   assertEnvelope(unauth, 401, 'UNAUTHENTICATED');
+  assert.ok(item.product_url.startsWith('https://olmoa.com/product/'), `feed links follow the storefront base: ${item.product_url}`);
+  const g2 = await createGateway({ seedFiles: ['migrations/dev/seed_local_dev.sql'], env: { ...ENV, PUBLIC_STOREFRONT_URL: 'https://shop.example/' } });
+  const r2 = await g2.call('/api/v1/integrations/pricescanner/feed?limit=1', { headers: key });
+  assert.equal(r2.status, 200, r2.text);
+  assert.ok(r2.json.data.items[0].product_url.startsWith('https://shop.example/product/'), `feed honors PUBLIC_STOREFRONT_URL: ${r2.json.data.items[0].product_url}`);
 });
 
 // ---------------- P1-P06: OffsetPageMeta pagination ----------------
