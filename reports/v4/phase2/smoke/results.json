@@ -1,7 +1,7 @@
 {
   "api": "http://127.0.0.1:8787",
   "logged_in": true,
-  "generated": "2026-11-17T09:29:13.733Z",
+  "generated": "2026-11-21T04:04:39.255Z",
   "results": [
     {
       "app": "storefront",
@@ -18,7 +18,7 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_desktop.png"
       },
@@ -32,6 +32,8 @@
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1200&q=80",
           "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/storefront/HomeView_mobile.png"
@@ -50,7 +52,9 @@
         "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
         "screenshot": "reports/v4/phase2/smoke/storefront/CategoriesView_desktop.png"
       },
       "mobile": {
@@ -439,8 +443,8 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500",
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_desktop.png"
       },
@@ -453,7 +457,8 @@
         "console_errors": [],
         "http_errors": [
           "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
-          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
+          "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/storefront/SearchView_mobile.png"
       },
@@ -472,7 +477,7 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+          "FAILED https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/storefront/LoginView_desktop.png"
       },
@@ -716,7 +721,9 @@
         "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
         "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_desktop.png"
       },
       "mobile": {
@@ -726,7 +733,9 @@
         "width": 390,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [],
+        "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
+        ],
         "screenshot": "reports/v4/phase2/smoke/storefront/SellerStoreView_mobile.png"
       },
       "verdict": "PASS"
@@ -1987,8 +1996,8 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/partner/ProductListView_desktop.png"
       },
@@ -2016,10 +2025,7 @@
         "width": 1440,
         "horizontal_overflow": false,
         "console_errors": [],
-        "http_errors": [
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
-        ],
+        "http_errors": [],
         "screenshot": "reports/v4/phase2/smoke/partner/ProductEditView_desktop.png"
       },
       "mobile": {
@@ -2514,9 +2520,9 @@
         "horizontal_overflow": false,
         "console_errors": [],
         "http_errors": [
+          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500",
           "FAILED https://images.unsplash.com/photo-1556742049-0a67e5574f73?w=500",
-          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500",
-          "FAILED https://images.unsplash.com/photo-1533090161767-e6ffed986b88?w=500"
+          "FAILED https://images.unsplash.com/photo-1608248597359-59754f243026?w=500"
         ],
         "screenshot": "reports/v4/phase2/smoke/partner/StoreProfileView_desktop.png"
       },
