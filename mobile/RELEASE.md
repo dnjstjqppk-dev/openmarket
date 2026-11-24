@@ -89,5 +89,5 @@ keytool -genkeypair -v -storetype JKS -keystore olmoa-upload.keystore \
 - ~~고객: 소셜 로그인 앱 연동~~ 완료
 - ~~푸시 FCM (NEW-21)~~ 코드 완료 — Firebase 콘솔 + 워커 시크릿은 위 순서 참조
 - ~~모바일 크래시 리포팅~~ 순수 Dart Sentry 배선 완료 — DSN 주입 시 동작
-- 파트너앱 FCM (토큰 등록 API는 준비됨, 앱 플러그인 미배선)
-- 푸시 탭 딥링크 (현재 탭하면 앱만 열림)
+- ~~파트너앱 FCM~~ 배선 완료 (Wave J-2: `partner_push_service.dart` + `firebase_messaging 16.7.1`)
+- ~~푸시 탭 딥링크~~ 완료 (GAP-02: 고객 주문/상품 상세, 파트너 발송 목록 필터 연결)

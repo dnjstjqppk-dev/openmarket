@@ -27,8 +27,8 @@ const classes = computed(() => [
     secondary: 'bg-secondary text-secondary-on hover:bg-secondary-hover disabled:bg-surface-3 disabled:text-ink-subtle',
     outline: 'border border-line-strong bg-surface text-ink hover:bg-surface-2 active:bg-surface-3 disabled:text-ink-subtle',
     ghost: 'text-ink hover:bg-surface-2 active:bg-surface-3 disabled:text-ink-subtle',
-    danger: 'bg-danger text-white hover:opacity-90 active:opacity-80 disabled:bg-surface-3 disabled:text-ink-subtle',
-    accent: 'bg-accent text-white hover:opacity-90 active:opacity-80 disabled:bg-surface-3 disabled:text-ink-subtle',
+    danger: 'bg-danger text-primary-on hover:opacity-90 active:opacity-80 disabled:bg-surface-3 disabled:text-ink-subtle',
+    accent: 'bg-accent text-primary-on hover:opacity-90 active:opacity-80 disabled:bg-surface-3 disabled:text-ink-subtle',
     soft: 'bg-primary-soft text-primary-soft-ink hover:bg-lagoon-100 disabled:text-ink-subtle'
   }[props.variant]
 ])

@@ -38,4 +38,44 @@ void main() {
     });
     expect(m.isOrderEvent, isFalse);
   });
+
+  test('restock payloads keep the product id', () {
+    final m = OlmoaPushMessage.fromMap({
+      'title': 't',
+      'body': 'b',
+      'data': {'type': 'RESTOCK_AVAILABLE', 'product_id': 'prod_001'},
+    });
+    expect(m.productId, 'prod_001');
+    expect(OlmoaPushMessage.fromMap({'data': {'type': 'BROADCAST'}}).productId, '');
+  });
+
+  test('order events with an order number route to the order detail', () {
+    for (final type in [
+      'ORDER_SHIPPED',
+      'ORDER_DELIVERED',
+      'REFUND_COMPLETED',
+      'CLAIM_CREDIT_GRANTED',
+      'CLAIM_REJECTED'
+    ]) {
+      final r = OlmoaPushRoute.fromData({'type': type, 'order_no': 'O-9'});
+      expect(r.kind, 'order', reason: type);
+      expect(r.orderNo, 'O-9');
+    }
+  });
+
+  test('restock with a product id routes to the product detail', () {
+    final r = OlmoaPushRoute.fromData(
+        {'type': 'RESTOCK_AVAILABLE', 'product_id': 'prod_001'});
+    expect(r.kind, 'product');
+    expect(r.productId, 'prod_001');
+  });
+
+  test('broadcast, unknown, and empty payloads fall back to the inbox', () {
+    expect(OlmoaPushRoute.fromData({'type': 'BROADCAST'}).kind, 'inbox');
+    expect(OlmoaPushRoute.fromData({'type': 'NOPE', 'order_no': 'O-1'}).kind, 'inbox');
+    expect(OlmoaPushRoute.fromData({'type': 'ORDER_SHIPPED'}).kind, 'inbox');
+    expect(OlmoaPushRoute.fromData({'type': 'RESTOCK_AVAILABLE'}).kind, 'inbox');
+    expect(OlmoaPushRoute.fromData({}).kind, 'inbox');
+    expect(OlmoaPushRoute.inbox.kind, 'inbox');
+  });
 }

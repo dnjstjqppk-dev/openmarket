@@ -283,7 +283,8 @@
     "dday",
     "repurchasable",
     "unticked",
-    "normalised"
+    "normalised",
+    "econn"
   ],
   "ignorePaths": [
     "**/node_modules/**",

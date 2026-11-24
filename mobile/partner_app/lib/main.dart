@@ -17,6 +17,7 @@ import 'views/account_view.dart';
 import 'widgets/responsive.dart';
 
 /// Wave J-2: new-order notification taps land on dispatch.
+/// GAP-02: taps carrying an order number pre-filter the shipment list.
 final GlobalKey<NavigatorState> partnerNavigatorKey =
     GlobalKey<NavigatorState>();
 
@@ -24,11 +25,13 @@ Future<void> _boot() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Wave J-2: dormant without Firebase console files (human step).
   await PartnerPushService.init();
-  PartnerPushService.onNotificationTap = () {
+  PartnerPushService.onNotificationTap = (route) {
     partnerNavigatorKey.currentState?.push(MaterialPageRoute(
       builder: (_) => Scaffold(
         appBar: AppBar(title: const Text('출고·배송')),
-        body: const PartnerShipmentView(),
+        body: PartnerShipmentView(
+          initialQuery: route.kind == 'shipment' ? route.orderNo : '',
+        ),
       ),
     ));
   };

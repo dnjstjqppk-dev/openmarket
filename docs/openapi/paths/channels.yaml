@@ -252,7 +252,7 @@ paths:
     post:
       summary: Verify a stored credential against the live platform API
       tags: [Channels]
-      description: Only a live connector may mark a credential VERIFIED; otherwise verified:false is returned without a real call.
+      description: Only a live connector may mark a credential VERIFIED; otherwise verified:false is returned without a real call. Naver SmartStore and Coupang Wing verify live with production (non-sandbox) credentials.
       parameters:
         - name: id
           in: path
@@ -261,7 +261,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Verification outcome (verified:false until a real integration exists)
+          description: Verification outcome (verified:false until a real integration exists; live for naver_smartstore/coupang_wing with production credentials)
           content:
             application/json:
               schema:
@@ -284,6 +284,8 @@ paths:
           description: Partner not approved
         '404':
           description: Credential not found for this seller
+        '502':
+          description: UPSTREAM_ERROR when the live probe is inconclusive (retryable, keys not marked)
 
   /api/v1/channels/pricing/calculate:
     post:
@@ -387,7 +389,7 @@ paths:
     post:
       summary: Publish an ACTIVE own product to an external channel
       tags: [Channels]
-      description: Requires feature marketplace_listing_publish. Real stock only; a simulated publish stays DRAFT and writes no external id.
+      description: Requires feature marketplace_listing_publish. Real stock only; a simulated publish stays DRAFT and writes no external id. With production credentials on naver_smartstore/coupang_wing, posts live via the channel adapter.
       requestBody:
         required: true
         content:
@@ -439,8 +441,14 @@ paths:
           description: Partner not approved, or FEATURE_DISABLED in this environment
         '404':
           description: Product or sales channel not found
+        '400':
+          description: VALIDATION_ERROR naming the missing live listing fields (nothing persisted)
         '409':
-          description: PRODUCT_NOT_ACTIVE, or CREDENTIAL_REQUIRED when no credential exists
+          description: PRODUCT_NOT_ACTIVE, CREDENTIAL_REQUIRED when no credential exists, CREDENTIAL_INVALID when the platform rejects the keys, CREDENTIAL_INCOMPLETE when key fields are blank
+        '502':
+          description: UPSTREAM_ERROR or UPSTREAM_BAD_SHAPE from the live platform call
+        '503':
+          description: UPSTREAM_THROTTLED when the platform rate-limits the call
         '501':
           description: CONNECTOR_NOT_INTEGRATED in production without simulation
 
@@ -474,7 +482,7 @@ paths:
     post:
       summary: Collect external orders from a channel into channel_orders
       tags: [Channels]
-      description: Requires feature marketplace_order_sync. Commission is computed half-up from commission_bps; simulated imports are prefixed SIM-.
+      description: Requires feature marketplace_order_sync. Commission is computed half-up from commission_bps; simulated imports are prefixed SIM-. With production credentials on naver_smartstore/coupang_wing, polls live and skips incomplete platform rows (counted in the message).
       requestBody:
         required: true
         content:
@@ -511,6 +519,12 @@ paths:
           description: Partner not approved, or FEATURE_DISABLED in this environment
         '404':
           description: Sales channel not found
+        '409':
+          description: CREDENTIAL_INVALID when the platform rejects the keys, CREDENTIAL_INCOMPLETE when key fields are blank
+        '502':
+          description: UPSTREAM_ERROR or UPSTREAM_BAD_SHAPE from the live platform call
+        '503':
+          description: UPSTREAM_THROTTLED when the platform rate-limits the call
         '501':
           description: CONNECTOR_NOT_INTEGRATED in production without simulation
 
@@ -658,7 +672,11 @@ paths:
         '404':
           description: External channel order not found
         '409':
-          description: NOT_SHIPPABLE when the order is already shipped or closed
+          description: NOT_SHIPPABLE when the order is already shipped or closed, CREDENTIAL_INVALID when the platform rejects the keys, CREDENTIAL_INCOMPLETE when key fields are blank
+        '502':
+          description: UPSTREAM_ERROR or UPSTREAM_BAD_SHAPE from the live platform call
+        '503':
+          description: UPSTREAM_THROTTLED when the platform rate-limits the call
         '501':
           description: CONNECTOR_NOT_INTEGRATED in production without simulation
 

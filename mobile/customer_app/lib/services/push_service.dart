@@ -6,6 +6,7 @@
 // terminated messages are displayed by the OS from the FCM notification block.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -29,11 +30,32 @@ class PushService {
   static StreamSubscription<String>? _refreshSub;
   static FlutterLocalNotificationsPlugin? _local;
 
-  /// Wave J-2: assigned by main() — tapping a notification opens the inbox.
-  /// Null in tests and before boot, where taps are impossible.
-  static void Function()? onNotificationTap;
+  /// GAP-02: assigned by main() — tapping a notification navigates to the
+  /// parsed route (order/product detail, inbox fallback). Null in tests and
+  /// before boot, where taps are impossible.
+  static Future<void> Function(OlmoaPushRoute)? onNotificationTap;
 
   static bool get isReady => _ready;
+
+  static void _fireTap(OlmoaPushRoute route) {
+    final cb = onNotificationTap;
+    if (cb == null) return;
+    try {
+      unawaited(cb(route));
+    } catch (_) {}
+  }
+
+  static OlmoaPushRoute _routeFromPayload(String? raw) {
+    try {
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          return OlmoaPushRoute.fromData(decoded);
+        }
+      }
+    } catch (_) {}
+    return OlmoaPushRoute.inbox;
+  }
 
   static String get _platform => Platform.isIOS ? 'IOS' : 'ANDROID';
 
@@ -47,10 +69,8 @@ class PushService {
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
           iOS: DarwinInitializationSettings(),
         ),
-        onDidReceiveNotificationResponse: (_) {
-          try {
-            onNotificationTap?.call();
-          } catch (_) {}
+        onDidReceiveNotificationResponse: (response) {
+          _fireTap(_routeFromPayload(response.payload));
         },
       );
       const channel = AndroidNotificationChannel(
@@ -69,15 +89,15 @@ class PushService {
       FirebaseMessaging.onBackgroundMessage(
           firebaseMessagingBackgroundHandler);
       FirebaseMessaging.onMessage.listen(_showForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
         try {
-          onNotificationTap?.call();
+          _fireTap(OlmoaPushRoute.fromData(message.data));
         } catch (_) {}
       }, onError: (_) {});
       FirebaseMessaging.instance.getInitialMessage().then((message) {
         if (message != null) {
           try {
-            onNotificationTap?.call();
+            _fireTap(OlmoaPushRoute.fromData(message.data));
           } catch (_) {}
         }
       }).catchError((_) => null);
@@ -98,6 +118,11 @@ class PushService {
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: parsed.title,
         body: parsed.body,
+        payload: jsonEncode({
+          'type': parsed.type,
+          'order_no': parsed.orderNo,
+          'product_id': parsed.productId,
+        }),
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'olmoa_orders',

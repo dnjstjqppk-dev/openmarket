@@ -26,6 +26,6 @@ const icon = computed(() => ({
       <div :class="title ? 'mt-1 text-ink-muted' : ''"><slot /></div>
       <div v-if="$slots.actions" class="mt-3 flex flex-wrap gap-2"><slot name="actions" /></div>
     </div>
-    <button v-if="dismissible" type="button" class="-m-1 h-7 w-7 shrink-0 rounded text-ink-muted hover:bg-black/5" aria-label="알림 닫기" @click="emit('dismiss')">×</button>
+    <button v-if="dismissible" type="button" class="-m-1 h-7 w-7 shrink-0 rounded text-ink-muted hover:bg-overlay/5" aria-label="알림 닫기" @click="emit('dismiss')">×</button>
   </div>
 </template>

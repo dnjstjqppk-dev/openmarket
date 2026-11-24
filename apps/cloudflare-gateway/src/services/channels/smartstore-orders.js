@@ -40,10 +40,14 @@ function trackingBody({ carrier, trackingNo } = {}) {
  * @returns {Promise<Array>} normalized paid-order rows
  */
 export async function fetchPaidOrders(env, { since } = {}) {
+  return mapPaidOrders(await fetchRawPaidOrders(env, { since }));
+}
+
+/** Raw paid-order rows for callers that map platform fields themselves. */
+export async function fetchRawPaidOrders(env, { since } = {}) {
   const qs = since ? `?since=${encodeURIComponent(since)}` : '';
   const data = await api(env, `${ORDERS_PAID_PATH}${qs}`);
-  const list = Array.isArray(data?.orders) ? data.orders : [];
-  return mapPaidOrders(list);
+  return Array.isArray(data?.orders) ? data.orders : [];
 }
 
 /**

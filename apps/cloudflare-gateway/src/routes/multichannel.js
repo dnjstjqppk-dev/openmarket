@@ -15,6 +15,7 @@ import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 import { sealSecret, openSecret } from '../lib/totp.js';
 import { assertFeatureEnabled } from '../services/feature-flags.js';
+import { isLiveCredential, isLiveDelegated, verifyLiveCredential, publishLive, syncLiveOrders, fulfillLiveOrder } from '../services/channels/partner-live.js';
 import { registry } from '../services/connectors/connector-registry.js';
 import { DomesticB2BSupplierConnector } from '../services/connectors/domestic-b2b-connector.js';
 import { assertConnectorUsable } from '../services/connectors/simulation.js';
@@ -66,7 +67,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
       SELECT p.*, (SELECT COUNT(*) FROM sales_channels sc WHERE sc.platform_id = p.id) AS channel_count
       FROM commerce_platforms p ORDER BY p.platform_type ASC, p.name ASC
     `).all();
-    const data = platforms.map((pl) => ({ ...pl, api_integrated: registry.get(pl.id).isLive === true }));
+    const data = platforms.map((pl) => ({ ...pl, api_integrated: registry.get(pl.id).isLive === true || isLiveDelegated(pl.id) }));
     return json(corsHeaders, { success: true, count: data.length, data });
   }
 
@@ -146,13 +147,18 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     const cred = await env.DB.prepare('SELECT * FROM platform_credentials WHERE id = ? AND partner_id = ?').bind(verifyM[1], caller.partner.id).first();
     if (!cred) throw notFound('자격증명을 찾을 수 없습니다.');
     const connector = registry.get(cred.platform_id);
-    if (connector.isLive !== true) {
+    // GAP-01: real (non-sandbox) credentials on a delegated platform verify
+    // against the live platform; everything else keeps the legacy behavior.
+    const liveRow = isLiveDelegated(cred.platform_id) && isLiveCredential(cred);
+    if (!liveRow && connector.isLive !== true) {
       return json(corsHeaders, {
         success: true, verified: false, status: cred.status, simulated: false,
         message: `[${connector.platformName}] 실제 API 연동이 구현되지 않아 인증정보를 검증하지 않았습니다.`
       });
     }
-    const result = await connector.verifyConnection(await connectorCredentials(env, cred));
+    const result = liveRow
+      ? await verifyLiveCredential(env, cred.platform_id, await connectorCredentials(env, cred), connector.platformName)
+      : await connector.verifyConnection(await connectorCredentials(env, cred));
     const newStatus = result.verified ? 'VERIFIED' : 'BLOCKED_INVALID';
     await env.DB.prepare('UPDATE platform_credentials SET status = ?, last_verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(newStatus, cred.id).run();
@@ -195,12 +201,21 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     if (!channel) throw notFound('판매 채널을 찾을 수 없습니다.');
 
     const connector = registry.get(channel.platform_id);
-    const { simulated } = assertConnectorUsable(env, connector, '외부 상품 등록');
     const cred = await env.DB.prepare('SELECT * FROM platform_credentials WHERE partner_id = ? AND platform_id = ?').bind(caller.partner.id, channel.platform_id).first();
-    if (!cred) throw conflict('CREDENTIAL_REQUIRED', `[${channel.platform_name}] API 인증정보를 먼저 등록해 주세요.`);
+    // GAP-01: real credentials on a delegated platform take the live bridge;
+    // otherwise the legacy simulation/501 gate below applies unchanged (gate
+    // stays ahead of body validation, preserving prod 501 precedence).
+    const liveRow = cred && isLiveDelegated(channel.platform_id) && isLiveCredential(cred);
+    let simulated = false;
+    if (!liveRow) {
+      ({ simulated } = assertConnectorUsable(env, connector, '외부 상품 등록'));
+      if (!cred) throw conflict('CREDENTIAL_REQUIRED', `[${channel.platform_name}] API 인증정보를 먼저 등록해 주세요.`);
+    }
 
     // Real stock only — an external channel must never be offered more than OLMOA holds.
-    const stock = Number(await env.DB.prepare('SELECT COALESCE(SUM(stock_quantity),0) AS s FROM product_skus WHERE product_id = ?').bind(prod.id).first('s')) || 0;
+    const skuAgg = await env.DB.prepare('SELECT COALESCE(SUM(stock_quantity),0) AS s, COUNT(*) AS n FROM product_skus WHERE product_id = ?').bind(prod.id).first();
+    const stock = Number(skuAgg.s) || 0;
+    const skuCount = Number(skuAgg.n) || 0;
     const salePrice = body.sale_price !== undefined ? posInt(body.sale_price, '채널 판매가') : prod.lowest_sale_price;
     const origPrice = body.original_price !== undefined ? posInt(body.original_price, '채널 정가') : prod.lowest_original_price;
 
@@ -215,7 +230,7 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     const feeTypeOverride = String(body.delivery_fee_type || '').trim().toUpperCase();
     const deliveryFeeType = feeTypeOverride || (baseFee <= 0 ? 'FREE' : (freeThresholdCfg > 0 ? 'CONDITIONAL_FREE' : 'CHARGE'));
 
-    const listingRes = await connector.createListing({
+    const listingInput = {
       title: prod.title, description_html: prod.description_html, channel_sale_price: salePrice, channel_original_price: origPrice, stock_quantity: stock,
       brand: str(body.brand, { max: 100 }),
       business_name: caller.partner.business_name,
@@ -225,7 +240,16 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
       delivery_fee_type: deliveryFeeType,
       delivery_fee: body.delivery_fee !== undefined ? Number(body.delivery_fee) : baseFee,
       free_shipping_threshold: body.free_shipping_threshold !== undefined ? Number(body.free_shipping_threshold) : freeThresholdCfg
-    }, await connectorCredentials(env, cred));
+    };
+    let listingRes;
+    if (liveRow) {
+      listingRes = await publishLive({
+        env, platformId: channel.platform_id, platformName: channel.platform_name,
+        creds: await connectorCredentials(env, cred), input: { ...listingInput, product_id: prod.id }, skuCount
+      });
+    } else {
+      listingRes = await connector.createListing(listingInput, await connectorCredentials(env, cred));
+    }
 
     // A simulated publish never claims the product is live on the channel.
     const listingStatus = simulated ? 'DRAFT' : (listingRes.success ? (listingRes.status || 'PENDING_REVIEW') : 'SYNC_FAILED');
@@ -275,10 +299,21 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     if (!channel) throw notFound('판매 채널을 찾을 수 없습니다.');
 
     const connector = registry.get(channel.platform_id);
-    const { simulated } = assertConnectorUsable(env, connector, '주문 수집');
     const cred = await env.DB.prepare('SELECT * FROM platform_credentials WHERE partner_id = ? AND platform_id = ?').bind(caller.partner.id, channel.platform_id).first();
-    const creds = cred ? await connectorCredentials(env, cred) : {};
-    const orderRes = await connector.getOrders({}, simulated ? { ...creds, isSandbox: true } : creds);
+    // GAP-01: live bridge for real credentials (see publish); legacy gate otherwise.
+    const liveRow = cred && isLiveDelegated(channel.platform_id) && isLiveCredential(cred);
+    let orderRes;
+    let simulated = false;
+    let skipped = [];
+    if (liveRow) {
+      const live = await syncLiveOrders(env, channel.platform_id, channel.platform_name, await connectorCredentials(env, cred));
+      orderRes = { success: true, orders: live.orders };
+      skipped = live.skipped;
+    } else {
+      ({ simulated } = assertConnectorUsable(env, connector, '주문 수집'));
+      const creds = cred ? await connectorCredentials(env, cred) : {};
+      orderRes = await connector.getOrders({}, simulated ? { ...creds, isSandbox: true } : creds);
+    }
 
     let importedCount = 0;
     if (orderRes.success && Array.isArray(orderRes.orders)) {
@@ -308,9 +343,10 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
         if (r[0].meta.changes === 1) importedCount++;
       }
     }
+    const skipNote = !simulated && skipped.length > 0 ? `, 불완전 행 ${skipped.length}건 제외` : '';
     return json(corsHeaders, {
       success: true, simulated, channel_name: channel.channel_name, imported_orders_count: importedCount,
-      message: simulated ? `[시뮬레이션] 가상 주문 ${importedCount}건이 생성되었습니다. 실제 채널 주문이 아닙니다.` : `[${channel.channel_name}] 신규 주문 ${importedCount}건 수집`
+      message: simulated ? `[시뮬레이션] 가상 주문 ${importedCount}건이 생성되었습니다. 실제 채널 주문이 아닙니다.` : `[${channel.channel_name}] 신규 주문 ${importedCount}건 수집${skipNote}`
     });
   }
 
@@ -376,9 +412,19 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
     if (!TRACKING_RE.test(trackingNumber)) throw bad('TRACKING_REQUIRED', '택배사에서 발급받은 운송장 번호를 입력해 주세요.');
 
     const marketConnector = registry.get(chOrder.platform_id);
-    const { simulated } = assertConnectorUsable(env, marketConnector, '판매채널 송장 전송');
-    const pushRes = await marketConnector.updateShipment({ external_order_id: chOrder.external_order_id, tracking_number: trackingNumber, carrier_code: carrier.code },
-      { isSandbox: simulated });
+    const cred = await env.DB.prepare('SELECT * FROM platform_credentials WHERE partner_id = ? AND platform_id = ?').bind(caller.partner.id, chOrder.platform_id).first();
+    // GAP-01: live bridge for real credentials (see publish); legacy gate otherwise.
+    const liveRow = cred && isLiveDelegated(chOrder.platform_id) && isLiveCredential(cred);
+    let pushRes;
+    let simulated = false;
+    if (liveRow) {
+      pushRes = await fulfillLiveOrder(env, chOrder.platform_id, marketConnector.platformName, await connectorCredentials(env, cred),
+        { external_order_id: chOrder.external_order_id, tracking_number: trackingNumber, carrier_code: carrier.code });
+    } else {
+      ({ simulated } = assertConnectorUsable(env, marketConnector, '판매채널 송장 전송'));
+      pushRes = await marketConnector.updateShipment({ external_order_id: chOrder.external_order_id, tracking_number: trackingNumber, carrier_code: carrier.code },
+        { isSandbox: simulated });
+    }
     if (!simulated && !pushRes.success) throw bad('SHIPMENT_PUSH_FAILED', pushRes.message || '판매채널 송장 전송에 실패했습니다.');
 
     const r = await env.DB.prepare(`

@@ -26,7 +26,10 @@ const shipmentCarrierOptions = [
 ];
 
 class PartnerShipmentView extends StatefulWidget {
-  const PartnerShipmentView({super.key});
+  /// GAP-02: push deep-links pass the tapped order number to pre-filter.
+  const PartnerShipmentView({super.key, this.initialQuery = ''});
+
+  final String initialQuery;
 
   @override
   State<PartnerShipmentView> createState() => _PartnerShipmentViewState();
@@ -40,6 +43,7 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
   String? _error;
   String _filter = 'ALL';
   String _query = '';
+  late final TextEditingController _searchController;
 
   List<SubOrder> get _filtered {
     final q = _query.trim().toLowerCase();
@@ -55,7 +59,15 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
   @override
   void initState() {
     super.initState();
+    _query = widget.initialQuery;
+    _searchController = TextEditingController(text: widget.initialQuery);
     _init();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -232,6 +244,7 @@ class _PartnerShipmentViewState extends State<PartnerShipmentView> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: TextField(
+            controller: _searchController,
             decoration: const InputDecoration(
               hintText: '주문번호·상품·송장 검색',
               prefixIcon: Icon(Icons.search),

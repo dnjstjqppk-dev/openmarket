@@ -87,12 +87,14 @@ const HEX_EXCEPTIONS = {
 const CAPS = {
   // 4-22: admin zeroed (all console views converted to tokens).
   // 4-11: partner zeroed (all seller-center views converted to tokens).
-  'packages/ui/src/components/OmAlert.vue': 1,
-  'packages/ui/src/components/OmBadge.vue': 5,
-  'packages/ui/src/components/OmButton.vue': 2,
+  // GAP-04: OmAlert/OmBadge/OmButton/OmFooter/OmSidebar zeroed (solid fills
+  // take text-primary-on / text-secondary-on per the zeroed-app precedent).
+  // Residual 4 cannot tokenize without a behavior change: OmFileUploader's
+  // hover:bg-white/20 lightens a theme-stable dark scrim bar over photos
+  // (any flipping token breaks dark mode), and the OmSwitch knob must stay
+  // light on both track tones. Both need a design-system scrim/knob token
+  // (design follow-up); the caps below pin the known residual, never raise.
   'packages/ui/src/components/OmFileUploader.vue': 3,
-  'packages/ui/src/components/OmFooter.vue': 7,
-  'packages/ui/src/components/OmSidebar.vue': 2,
   'packages/ui/src/components/OmSwitch.vue': 1
 }
 

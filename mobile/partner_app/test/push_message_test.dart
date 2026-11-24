@@ -20,4 +20,18 @@ void main() {
     expect(m.body, '새로운 알림이 도착했습니다.');
     expect(m.orderNo, '');
   });
+
+  test('new-order taps route to the filtered shipment list', () {
+    final r = PartnerPushRoute.fromData(
+        {'type': 'SELLER_NEW_ORDER', 'order_no': 'O-9'});
+    expect(r.kind, 'shipment');
+    expect(r.orderNo, 'O-9');
+  });
+
+  test('unknown and empty payloads fall back to dispatch', () {
+    expect(PartnerPushRoute.fromData({'type': 'BROADCAST'}).kind, 'dispatch');
+    expect(PartnerPushRoute.fromData({'type': 'SELLER_NEW_ORDER'}).kind, 'dispatch');
+    expect(PartnerPushRoute.fromData({}).kind, 'dispatch');
+    expect(PartnerPushRoute.dispatch.kind, 'dispatch');
+  });
 }

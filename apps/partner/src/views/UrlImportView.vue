@@ -144,7 +144,7 @@ const samples = [
     html: `<!DOCTYPE html><html><head>
       <meta property="og:title" content="코어 씸리스 하이웨이스트 레깅스" />
       <meta property="og:description" content="신축성과 통기성이 탁월한 프로 스포츠웨어 레깅스" />
-      <meta property="og:image" content="https://images.unsplash.com/photo-1506629082955-511b1aa562c8" />
+      <meta property="og:image" content="https://example.com/sample/leggings.jpg" />
       <script>var meta = {"product":{"id":78921,"variants":[{"id":101,"title":"Black / S","price":39000,"compare_at_price":49000,"sku":"LEG-BLK-S","available":true},{"id":102,"title":"Black / M","price":39000,"compare_at_price":49000,"sku":"LEG-BLK-M","available":true},{"id":103,"title":"Navy / S","price":39000,"compare_at_price":49000,"sku":"LEG-NVY-S","available":true},{"id":104,"title":"Navy / M","price":39000,"compare_at_price":49000,"sku":"LEG-NVY-M","available":true}]}};</` + `script>
     </head></html>`
   },
@@ -157,7 +157,7 @@ const samples = [
         "@context": "https://schema.org/",
         "@type": "Product",
         "name": "하이브리드 액티브 노이즈 캔슬링 무선 헤드폰 H3",
-        "image": ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e"],
+        "image": ["https://example.com/sample/headphones.jpg"],
         "description": "최대 45시간 연속 재생 및 초고음질 무손실 코덱 지원 헤드셋",
         "brand": { "@type": "Brand", "name": "SONIX" },
         "offers": {
@@ -176,7 +176,7 @@ const samples = [
     html: `<!DOCTYPE html><html><head>
       <meta property="og:title" content="스마트 저소음 무선 진공 청소기 Pro" />
       <meta property="og:description" content="BLDC 모터 탑재 25000Pa 강력 흡입 청소기" />
-      <meta property="og:image" content="https://images.unsplash.com/photo-1558317374-067fb5f30001" />
+      <meta property="og:image" content="https://example.com/sample/vacuum.jpg" />
       <meta property="product:price:amount" content="40000" />
       <meta property="product:price:currency" content="KRW" />
     </head></html>`

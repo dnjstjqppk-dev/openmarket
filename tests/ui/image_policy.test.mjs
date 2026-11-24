@@ -62,6 +62,21 @@ await t.test('I02 every storefront img lives in a sized box', async () => {
   }
 })
 
+// GAP-04: partner sample/template strings use documentation URLs, never a
+// stock-photo host (runtime fallbacks were already removed in 4d907d0).
+await t.test('I04 partner samples use documentation image URLs', async () => {
+  for (const f of ['apps/partner/src/views/BulkUploadView.vue', 'apps/partner/src/views/UrlImportView.vue']) {
+    const v = readFileSync(join(ROOT, f), 'utf8')
+    for (const host of ['unsplash', 'picsum', 'placeholder.com', 'placehold.co', 'loremflickr']) {
+      assert.ok(!v.includes(host), `${f} sample must not use ${host}`)
+    }
+  }
+  const csv = readFileSync(join(ROOT, 'apps/partner/src/views/BulkUploadView.vue'), 'utf8')
+  assert.ok(csv.includes('thumbnail_url'), 'template keeps the thumbnail column')
+  const httpsCount = (csv.match(/https:\/\//g) || []).length
+  assert.ok(httpsCount >= 3, 'template keeps absolute https sample thumbnails')
+})
+
 // Work order 1-11: missing product images fall back to a neutral icon, never a stock photo.
 await t.test('I03 order thumbnails use the neutral image fallback', async () => {
   const v = readFileSync(join(ROOT, 'apps/storefront/src/views/OrdersView.vue'), 'utf8')

@@ -9,31 +9,100 @@ import 'package:sentry/sentry.dart';
 import 'l10n/app_localizations.dart';
 import 'models/cart_line.dart';
 import 'models/product.dart';
+import 'models/push_message.dart';
 import 'models/sentry_options.dart';
+import 'services/api_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'views/notifications_view.dart';
 import 'views/home_view.dart';
 import 'views/cart_view.dart';
 import 'views/orders_view.dart';
+import 'views/order_detail_view.dart';
+import 'views/product_detail_view.dart';
 import 'views/account_view.dart';
 import 'views/search_view.dart';
 import 'widgets/responsive.dart';
 
 /// Wave J-2: notification taps land on the inbox, even from terminated state.
+/// GAP-02: order/product taps deep-link to the detail views instead.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+final _mainScreenKey = GlobalKey<_OlmoaMainScreenState>();
+
+void _openInbox(NavigatorState nav) {
+  nav.push(MaterialPageRoute(
+    builder: (_) => Scaffold(
+      appBar: AppBar(title: const Text('알림함')),
+      body: const NotificationsView(),
+    ),
+  ));
+}
+
+void _showTapNotice(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+  );
+}
+
+/// Push taps carry the human order number; detail views need the row id.
+/// First page only — older or missing orders fall back to the inbox.
+Future<String?> _resolveOrderId(String orderNo) async {
+  try {
+    final orders = await ApiService.fetchOrders();
+    for (final o in orders) {
+      if ((o['order_no'] ?? '').toString() == orderNo) {
+        final id = (o['id'] ?? '').toString();
+        return id.isNotEmpty ? id : null;
+      }
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Product deep-links reuse the main screen's real cart (same library, so the
+/// private member is reachable); without a mounted main screen we say so.
+void _tapAddToCart(Product p) {
+  final st = _mainScreenKey.currentState;
+  if (st == null) {
+    final ctx = appNavigatorKey.currentContext;
+    if (ctx != null) _showTapNotice(ctx, '앱을 실행한 뒤 이용해 주세요.');
+    return;
+  }
+  st._addToCart(p);
+}
 
 Future<void> _boot() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Wave H-2: dormant without Firebase console files (human step).
   await PushService.init();
-  PushService.onNotificationTap = () {
-    appNavigatorKey.currentState?.push(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('알림함')),
-        body: const NotificationsView(),
-      ),
-    ));
+  PushService.onNotificationTap = (OlmoaPushRoute route) async {
+    final nav = appNavigatorKey.currentState;
+    if (nav == null) return;
+    try {
+      if (route.kind == 'order' && route.orderNo.isNotEmpty) {
+        final id = await _resolveOrderId(route.orderNo);
+        if (!nav.mounted) return;
+        if (id != null) {
+          nav.push(MaterialPageRoute(
+              builder: (_) => OrderDetailView(orderId: id)));
+          return;
+        }
+        _showTapNotice(nav.context, '주문을 찾을 수 없어 알림함으로 이동합니다.');
+      } else if (route.kind == 'product' && route.productId.isNotEmpty) {
+        nav.push(MaterialPageRoute(
+          builder: (_) => ProductDetailView(
+              productId: route.productId, onAddToCart: _tapAddToCart),
+        ));
+        return;
+      }
+      _openInbox(nav);
+    } catch (_) {
+      try {
+        _openInbox(nav);
+      } catch (_) {}
+    }
   };
   runApp(const OlmoaCustomerApp());
 }
@@ -81,7 +150,7 @@ class OlmoaCustomerApp extends StatelessWidget {
       supportedLocales: const [Locale('ko'), Locale('en')],
       theme: buildOlmoaLightTheme(),
       darkTheme: buildOlmoaDarkTheme(),
-      home: const OlmoaMainScreen(),
+      home: OlmoaMainScreen(key: _mainScreenKey),
     );
   }
 }

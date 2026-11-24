@@ -68,4 +68,13 @@ await t.test('E5 coupon console covers platform issue and seller oversight', asy
   assert.ok(v.includes('platform_seller_share'), 'split performance shown');
 });
 
+await t.test('GAP-03 policy console registers new policy keys', async () => {
+  const v = read('apps/admin/src/views/finance/PolicyView.vue');
+  assert.ok(v.includes('신규 정책 키 등록'), 'registration entry point present');
+  assert.ok(v.includes('openCreate'), 'create mode wired');
+  assert.ok(v.includes('v-model="editKey"'), 'key input bound in create mode');
+  assert.ok(v.includes('editIsNew'), 'edit/create modes distinguished');
+  assert.ok(v.includes('openEdit(p.key'), 'existing edit flow preserved');
+});
+
 t.finish();

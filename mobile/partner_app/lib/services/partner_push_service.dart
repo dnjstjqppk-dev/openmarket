@@ -6,6 +6,7 @@
 // displayed by the OS from the FCM notification block.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -26,10 +27,29 @@ class PartnerPushService {
   static StreamSubscription<String>? _refreshSub;
   static FlutterLocalNotificationsPlugin? _local;
 
-  /// Assigned by main() — tapping a new-order notification opens dispatch.
-  static void Function()? onNotificationTap;
+  /// GAP-02: assigned by main() — tapping a new-order notification opens the
+  /// shipment list pre-filtered to that order (plain dispatch fallback).
+  static void Function(PartnerPushRoute)? onNotificationTap;
 
   static bool get isReady => _ready;
+
+  static void _fireTap(PartnerPushRoute route) {
+    try {
+      onNotificationTap?.call(route);
+    } catch (_) {}
+  }
+
+  static PartnerPushRoute _routeFromPayload(String? raw) {
+    try {
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          return PartnerPushRoute.fromData(decoded);
+        }
+      }
+    } catch (_) {}
+    return PartnerPushRoute.dispatch;
+  }
 
   static String get _platform => Platform.isIOS ? 'IOS' : 'ANDROID';
 
@@ -43,10 +63,8 @@ class PartnerPushService {
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
           iOS: DarwinInitializationSettings(),
         ),
-        onDidReceiveNotificationResponse: (_) {
-          try {
-            onNotificationTap?.call();
-          } catch (_) {}
+        onDidReceiveNotificationResponse: (response) {
+          _fireTap(_routeFromPayload(response.payload));
         },
       );
       const channel = AndroidNotificationChannel(
@@ -65,15 +83,15 @@ class PartnerPushService {
       FirebaseMessaging.onBackgroundMessage(
           partnerMessagingBackgroundHandler);
       FirebaseMessaging.onMessage.listen(_showForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
         try {
-          onNotificationTap?.call();
+          _fireTap(PartnerPushRoute.fromData(message.data));
         } catch (_) {}
       }, onError: (_) {});
       FirebaseMessaging.instance.getInitialMessage().then((message) {
         if (message != null) {
           try {
-            onNotificationTap?.call();
+            _fireTap(PartnerPushRoute.fromData(message.data));
           } catch (_) {}
         }
       }).catchError((_) => null);
@@ -94,6 +112,7 @@ class PartnerPushService {
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: parsed.title,
         body: parsed.body,
+        payload: jsonEncode({'type': parsed.type, 'order_no': parsed.orderNo}),
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'olmoa_seller_orders',

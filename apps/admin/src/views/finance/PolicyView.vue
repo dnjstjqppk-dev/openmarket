@@ -21,6 +21,8 @@ const editKey = ref('')
 const editValue = ref('')
 const editFrom = ref('')
 const saving = ref(false)
+// GAP-03: create mode registers a new policy key; edit mode changes a value.
+const editIsNew = ref(false)
 
 async function load() {
   loading.value = true
@@ -47,21 +49,36 @@ async function load() {
 const today = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 
 function openEdit(key: string, current = '', from = '') {
+  editIsNew.value = false
   editKey.value = key
   editValue.value = current
   editFrom.value = /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : today()
   editOpen.value = true
 }
 
+function openCreate() {
+  editIsNew.value = true
+  editKey.value = ''
+  editValue.value = ''
+  editFrom.value = today()
+  editOpen.value = true
+}
+
 async function submitEdit() {
+  if (editIsNew.value && !editKey.value.trim()) { toastApi.error('정책 키를 입력해 주세요.'); return }
   if (!editValue.value.trim() || !editFrom.value) { toastApi.error('값과 적용일을 입력해 주세요.'); return }
   if (editFrom.value < today()) { toastApi.error('적용일은 오늘 이후여야 합니다.'); return }
-  const ok = await askConfirm({ title: '정책 변경', body: `[${editKey.value}] 값을 변경합니다. ${editFrom.value}부터 신규 주문에만 적용되며 소급되지 않습니다.` })
+  const key = editKey.value.trim()
+  const title = editIsNew.value ? '신규 정책 키 등록' : '정책 변경'
+  const body = editIsNew.value
+    ? `신규 정책 키 [${key}]를 등록합니다. ${editFrom.value}부터 적용되며 소급되지 않습니다.`
+    : `[${key}] 값을 변경합니다. ${editFrom.value}부터 신규 주문에만 적용되며 소급되지 않습니다.`
+  const ok = await askConfirm({ title, body })
   if (!ok) return
   saving.value = true
   try {
     const r = await adminApi('/api/v1/admin/platform-policies', {
-      method: 'PUT', json: { key: editKey.value, value: editValue.value.trim(), effective_from: editFrom.value }
+      method: 'PUT', json: { key, value: editValue.value.trim(), effective_from: editFrom.value }
     })
     if (!r.ok) throw new Error(r.data.error || '저장에 실패했습니다.')
     toastApi.success('정책이 저장되었습니다.')
@@ -136,7 +153,10 @@ onMounted(() => void load())
       </section>
 
       <section class="space-y-2 rounded-2xl border border-line bg-surface p-5">
-        <h2 class="text-sm font-bold text-ink">플랫폼 정책 목록</h2>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-sm font-bold text-ink">플랫폼 정책 목록</h2>
+          <button type="button" class="rounded-lg bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-on hover:bg-secondary-hover" @click="openCreate">신규 정책 키 등록</button>
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full min-w-[520px] text-xs">
             <thead class="text-ink-muted"><tr><th class="p-1 text-left">키</th><th class="p-1 text-left">값</th><th class="p-1 text-left">적용일</th><th></th></tr></thead>
@@ -172,15 +192,17 @@ onMounted(() => void load())
       </section>
     </div>
 
-    <OmModal v-model:open="editOpen" :title="`정책 변경 · ${editKey}`">
+    <OmModal v-model:open="editOpen" :title="editIsNew ? '신규 정책 키 등록' : `정책 변경 · ${editKey}`">
       <div class="space-y-3 text-xs">
+        <label v-if="editIsNew" class="block space-y-1 font-bold text-ink-muted">키<input v-model="editKey" placeholder="예: badge.today_ship_min_rate_bps" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-normal text-ink" /></label>
+        <p v-if="editIsNew && editKey.trim() && policies.some((p: any) => p.key === editKey.trim())" class="text-2xs font-bold text-warning">이미 존재하는 키입니다. 저장하면 해당 키의 신규 적용일 행이 추가됩니다.</p>
         <label class="block space-y-1 font-bold text-ink-muted">값<input v-model="editValue" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-normal text-ink" /></label>
         <label class="block space-y-1 font-bold text-ink-muted">적용일 (오늘 이후)<input v-model="editFrom" type="date" :min="today()" class="h-10 w-full rounded-lg border border-line bg-surface px-2 font-normal text-ink" /></label>
         <p class="text-2xs text-ink-subtle">소급 적용되지 않습니다. 변경 이력에 기록됩니다.</p>
       </div>
       <template #footer>
         <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="editOpen = false">취소</button>
-        <button type="button" :disabled="saving || !editValue.trim() || !editFrom" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitEdit">{{ saving ? '저장 중…' : '저장' }}</button>
+        <button type="button" :disabled="saving || !editValue.trim() || !editFrom || (editIsNew && !editKey.trim())" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="submitEdit">{{ saving ? '저장 중…' : '저장' }}</button>
       </template>
     </OmModal>
   </div>

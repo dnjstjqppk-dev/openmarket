@@ -30,3 +30,23 @@ class PartnerPushMessage {
     );
   }
 }
+
+/// GAP-02: notification-tap destination. A new-order tap opens the shipment
+/// list pre-filtered to that order; anything else opens plain dispatch.
+class PartnerPushRoute {
+  final String kind; // 'shipment' | 'dispatch'
+  final String orderNo;
+
+  const PartnerPushRoute._({required this.kind, this.orderNo = ''});
+
+  static const dispatch = PartnerPushRoute._(kind: 'dispatch');
+
+  factory PartnerPushRoute.fromData(Map<String, dynamic> data) {
+    final type = (data['type'] ?? '').toString();
+    final orderNo = (data['order_no'] ?? '').toString();
+    if (type == 'SELLER_NEW_ORDER' && orderNo.isNotEmpty) {
+      return PartnerPushRoute._(kind: 'shipment', orderNo: orderNo);
+    }
+    return dispatch;
+  }
+}
