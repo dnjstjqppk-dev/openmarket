@@ -197,7 +197,7 @@ export async function crawlAndExtractProduct({ url, htmlOverride = null, pricing
       brand: extracted.brand || 'GLB SUPPLIER',
       model_name: extracted.model || '',
       origin_language: rawCurrency === 'KRW' ? 'ko' : 'en',
-      thumbnail_url: extracted.images[0] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e',
+      thumbnail_url: extracted.images[0] || '',
       gallery_images: extracted.images,
       // NEW-03: never invent a "verified genuine" description; the seller writes it.
       description_html: sanitizedDesc || '',

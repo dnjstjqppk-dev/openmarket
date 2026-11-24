@@ -18,7 +18,7 @@ import { createGateway, createRunner } from './lib/harness.mjs';
 
 const t = createRunner('OpenAPI Reconciliation');
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (p) => readFileSync(join(ROOT, p), 'utf8');
+const read = (p) => readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 
 // The documented contract surface. Any docs edit that adds/removes a path must
 // update this allowlist in the same commit.
