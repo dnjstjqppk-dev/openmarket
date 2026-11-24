@@ -46,12 +46,14 @@ jobs:
       - name: Analyze and test customer app
         run: |
           cd mobile/customer_app
+          flutter pub get
           flutter analyze
           flutter test
 
       - name: Analyze and test partner app
         run: |
           cd mobile/partner_app
+          flutter pub get
           flutter analyze
           flutter test
 
@@ -71,6 +73,9 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      - name: Generate dev seed (git-ignored, test:e2e input)
+        run: node scripts/gen-dev-seed.mjs
 
       - name: Run In-Memory D1 E2E Verification
         run: npm run test:e2e
@@ -109,6 +114,9 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      - name: Generate dev seed (git-ignored, local API input)
+        run: node scripts/gen-dev-seed.mjs
 
       - name: Build previews against the local API
         run: |
