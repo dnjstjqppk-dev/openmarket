@@ -5,10 +5,11 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 // CI runs on Linux while goldens were captured on Windows: identical layouts
-// differ by ~0.1-0.25% of pixels (font anti-aliasing noise; observed 0.09% /
-// 717px and 0.23% / 770px on ubuntu-latest). A 0.5% tolerance absorbs that
-// noise while still catching real layout regressions (which shift >>1%).
-const double kGoldenTolerance = 0.005;
+// differ by font/emoji rasterization noise (observed on ubuntu-latest:
+// 0.09%/717px, 0.23%/770px, 0.57%/1886px on the text-heavy login screen).
+// A 1.0% tolerance absorbs that noise while still catching real layout
+// regressions (missing/misplaced widgets shift several percent or more).
+const double kGoldenTolerance = 0.01;
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // `flutter test` runs with CWD = package root; golden keys are relative
