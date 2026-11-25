@@ -24,7 +24,7 @@
 **아직 남은 것**
 1. **Always Use HTTPS 켜기** (대시보드: olmoa.com → SSL/TLS → Edge Certificates). 지금 `http://olmoa.com`은 301 없이 200.
 2. ~~구 계정 정리~~ **완료(2026-11-25, 운영자 지시)**: 구 계정의 OLMOA 워커 5개(`openmarket`, `olmoa-storefront`, `olmoa-admin`, `olmoa-partner`, `olmoa-api`), D1 `openmarket-db`(`6935e21b…`), R2 `olmoa-media` 삭제. 옛 `*.dnjstjqppk.workers.dev` 주소는 더 이상 응답하지 않는다. 같은 계정의 다른 프로젝트(luno·checkin·Pages 6개)는 이 저장소와 무관해 별도 판단.
-3. CI: `deploy.yml`은 이제 도메인 계정으로 배포된다(설정에 `account_id`). `CLOUDFLARE_API_TOKEN`은 도메인 계정 권한으로 발급. 단, **main의 게이트웨이에는 미감사 48360ae가 포함**되어 있어 토큰을 넣으면 그 코드가 배포된다 → 먼저 감사.
+3. CI: `CLOUDFLARE_API_TOKEN`(도메인 계정, Workers·D1·R2 권한 확인) 2026-11-25 등록. push마다 콘솔 3개 자동 배포, **API는 6-0 감사 전까지 수동 실행 + `deploy_api` 체크일 때만**(main 게이트웨이에 미감사 48360ae 포함).
 4. ~~구 계정 `openmarket` Git 자동 빌드~~ 워커 삭제로 함께 사라짐. 새 계정 워커에는 Git 연결이 없다(CI `deploy.yml`만 사용).
 5. 롤백: 구 계정 자원이 삭제되어 **계정 롤백은 불가**. 새 계정 안에서의 복구는 D1 Time Travel(`wrangler d1 time-travel`) 또는 `.ops-backups/` export + `scripts/ops/build_d1_restore.py`로 새 DB를 만들어 바인딩 교체.
 

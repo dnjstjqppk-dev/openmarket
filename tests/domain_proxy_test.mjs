@@ -62,6 +62,8 @@ await t.test('D05 frontends and apps point at the custom domains, consoles send 
   for (const v of ['VITE_API_BASE_URL: https://api.olmoa.com', 'VITE_STOREFRONT_URL: https://olmoa.com',
     'VITE_PARTNER_URL: https://partner.olmoa.com', 'VITE_ADMIN_URL: https://admin.olmoa.com']) assert.ok(deploy.includes(v), v);
   assert.doesNotMatch(deploy, /dnjstjqppk\.workers\.dev|Dedicated Storefront/);
+  // Until work-order 6-0 clears 48360ae, a push must never deploy the API gateway.
+  assert.match(deploy, /- name: Deploy Edge API Gateway \(olmoa-api\)\r?\n\s+if: github\.event_name == 'workflow_dispatch' && inputs\.deploy_api\r?\n/);
   for (const f of ['../mobile/customer_app/lib/services/api_service.dart', '../mobile/partner_app/lib/services/partner_api_service.dart']) {
     assert.match(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), /defaultValue: 'https:\/\/api\.olmoa\.com'/, f);
   }

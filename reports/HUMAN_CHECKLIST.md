@@ -47,8 +47,8 @@
    (지금 `http://olmoa.com`은 301 없이 200).
 2. `.ops-backups/olmoa-api-secrets-2026-11-25.json`(새 운영 시크릿 사본)을 비밀번호 관리자로 옮긴 뒤 파일 삭제.
    Cloudflare는 시크릿 값을 다시 보여 주지 않는다.
-3. GitHub `CLOUDFLARE_API_TOKEN`은 **도메인 계정** 권한으로 발급. 단 넣기 전에 48360ae 감사 필요
-   (`OPENMARKET_WORK_ORDER_PHASE6.md` 작업 6-0).
+3. ~~GitHub `CLOUDFLARE_API_TOKEN` 등록~~ 완료(2026-11-25). API 자동 배포는 6-0 감사 뒤 `deploy.yml`의 API 단계 `if:`를 지워서 켠다.
+   토큰 값은 채팅에 노출됐으므로, 원하면 Cloudflare에서 재발급(Roll) 후 GitHub 시크릿만 교체한다.
 4. Google Search Console·네이버 서치어드바이저에 `olmoa.com` 소유 확인(DNS TXT) 후 `https://olmoa.com/sitemap-index.xml` 제출.
 5. Cloudflare 대시보드 → `olmoa.com` → **AI Crawl Control**(또는 Security → Bots)에서 AI 크롤러 차단이 꺼져 있는지 확인.
    결정-18(학습용 포함 AI 크롤러 전부 허용)과 맞아야 한다. 새로 추가한 도메인은 차단이 기본으로 켜져 있을 수 있다.

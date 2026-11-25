@@ -23,7 +23,7 @@
 | 운영 콘솔 코드 | `main`(`b58c62f`)에서 VITE 값 `https://api.olmoa.com` 등으로 빌드·배포됨 |
 | 시크릿 | `JWT_SECRET`·`PII_ENCRYPTION_KEY`·`TOTP_ENCRYPTION_KEY` 새로 생성(전원 재로그인, 2FA 관리자 1명 재등록), `ALLOWED_ORIGINS`=custom 4종, `PUBLIC_STOREFRONT_URL=https://olmoa.com`. 결제·메일·카카오 키 없음 |
 | 테스트 | `npm test` 1,029 PASS / 0 FAIL (2026-11-25) |
-| CI 배포 | `deploy.yml`은 `CLOUDFLARE_API_TOKEN`이 없어 첫 단계에서 실패한다(의도). 토큰은 6-0 통과 후 운영자가 넣는다 |
+| CI 배포 | `CLOUDFLARE_API_TOKEN` 등록됨(2026-11-25, 도메인 계정). `main` push마다 콘솔 3개(`openmarket`·`olmoa-admin`·`olmoa-partner`)가 **자동 배포**된다. API(`olmoa-api`) 단계는 6-0 전까지 **수동 실행 + `deploy_api` 체크일 때만** 돈다(`deploy.yml`, 테스트 `domain_proxy_test` D05가 고정) |
 | 백업 | `wrangler d1 export`는 FTS5 테이블 때문에 실패한다. 표 단위 export + `scripts/ops/build_d1_restore.py`를 쓴다(`DEPLOY_RUNBOOK.md` 상단) |
 
 ### 0.1 검색 관련 실측 (이번 지시서의 출발점)
@@ -97,6 +97,8 @@
   3. 키가 없을 때 `SANDBOX_STUB`·가짜 성공이 아니라 `501 CONNECTOR_NOT_INTEGRATED`가 나오는지 확인한다(이전 감사 `audit-other-tool-commits` 사례).
   4. 결함은 고치고 실패 테스트를 먼저 커밋한다.
 - 완료 기준: `reports/WORK_ORDER_PHASE6/6-0-audit.md`(표 + 결함 목록 + 수정 커밋), `npm test` 0 FAIL. 보고서에 "운영 배포 가능 / 불가"를 쓴다.
+  "가능"이면 `deploy.yml`의 API 단계 `if:` 제거안과 D05 테스트 수정안을 만들어 운영자 승인을 받는다(직접 배포하지 않는다, 규칙 14).
+- 주의: 콘솔 코드는 push 즉시 운영에 나간다. 6단계 작업 중 콘솔 변경을 `main`에 push하는 것은 운영 반영과 같다 → 작업 브랜치(`work-order/phase6`)에서 하고, `main` 병합은 운영자가 한다.
 
 ## 작업 6-1. 검색 기준선 측정 도구
 

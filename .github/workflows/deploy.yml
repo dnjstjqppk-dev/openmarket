@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy_api:
+        description: 'Also deploy the API gateway (olmoa-api). Only after the 48360ae audit (work order 6-0) passed.'
+        type: boolean
+        default: false
 
 jobs:
   deploy-cloudflare:
@@ -36,7 +41,11 @@ jobs:
           npm ci
           npm run build
 
+      # Manual only until OPENMARKET_WORK_ORDER_PHASE6 task 6-0 clears 48360ae: production runs
+      # the fe4e11f gateway, and main's gateway carries that unaudited commit. A push must not ship it.
+      # After the audit, drop this `if:` so the API deploys on push again.
       - name: Deploy Edge API Gateway (olmoa-api)
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_api
         run: cd apps/cloudflare-gateway && npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
