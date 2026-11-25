@@ -7,7 +7,8 @@
 - 목표: ① 운영에 올라가지 않은 코드(48360ae)를 감사해 배포 가능한 상태로 만들고, ② 검색엔진(SEO)과
   답변 엔진(AEO)·생성형 AI 검색(GEO)·대형 언어모델(LLMO)·AI 요약(AIO, 구글 AI 개요 등)이 **JavaScript를 실행하지 않고도**
   OLMOA의 실제 상품·카테고리·정책 정보를 정확히 읽고 인용할 수 있게 한다.
-- 순서: 6-0 → 6-1 → … → 6-10 → 6단계 관문. 앞 작업의 완료 기준을 통과한 뒤 다음으로 넘어간다.
+- 순서: 6-0 → 6-11 → 6-12 → 6-1 → 6-2 → … → 6-10 → 6단계 관문. 6-11·6-12는 구조화 데이터(6-3)가 쓸 원천 데이터라 먼저 한다.
+  앞 작업의 완료 기준을 통과한 뒤 다음으로 넘어간다.
 
 ---
 
@@ -39,7 +40,8 @@
 - 존재하지 않는 상품 주소도 SPA 폴백 때문에 **200**을 준다(소프트 404).
 - `robots.txt`는 `User-agent: *` 한 묶음뿐이다. AI 크롤러별 정책·Content-Signal이 없다.
 - `llms.txt`는 카테고리 링크와 진입 주소만 있다. 상품 단위 문서(마크다운)가 없다.
-- `apps/storefront/index.html` 기본 설명에 "가장 합리적인 가격과 무료배송"이 있다. 사실 근거가 없는 표시광고 문구다(결정-19).
+- `apps/storefront/index.html` 기본 설명에 "가장 합리적인 가격과 무료배송"이 있다. 사실 근거가 없는 표시광고 문구다(결정-19 → 6-8에서 제거).
+- 상품 64개 모두 배송정책 미연결 → 주문 계산이 코드 기본값(3,000원 / 30,000원 이상 무료)을 쓴다(결정-19 → 6-11).
 - 데이터: 상품 64(`brand`, `country_origin`, `avg_rating_x10`, `updated_at` 있음, **GTIN/MPN 필드 없음**), `product_reviews`,
   `product_qna` 4, `shipping_policies`, `business_entities` **0행**(운영 사업자 미등록 → 법인 정보를 구조화 데이터에 쓸 수 없다).
 
@@ -62,14 +64,20 @@
 
 ---
 
-## 2. 운영자 결정 필요 (결정 전 동작은 괄호 안 기본값)
+## 2. 운영자 결정 (2026-11-25)
 
-| 번호 | 질문 | 결정 전 기본값 |
+| 번호 | 결정 | 반영 작업 |
 |---|---|---|
-| 결정-18 | AI 크롤러 정책: 검색·답변용 수집(OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User)과 **학습용 수집**(GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, CCBot, Bytespider, meta-externalagent)을 각각 허용할지 | 검색·답변 허용, 학습 허용(현행 `User-agent: *` 전체 허용 유지). 6-6에서 결정값 하나로 전환 가능하게 구현 |
-| 결정-19 | `index.html` 기본 설명의 "가장 합리적인 가격과 무료배송" 문구 유지 여부 | 6-8에서 사실 문구로 교체 제안만, 교체는 승인 후 |
-| 결정-20 | GTIN(바코드)·MPN(모델번호)을 상품 등록 항목(선택)으로 추가할지 | 추가하지 않음. 6-3에서 필드 없음으로 처리 |
-| 결정-21 | 카테고리 소개문·자주 묻는 질문을 운영자가 직접 쓰는 항목으로 둘지 | 없음. 소개문·FAQ 구조화 데이터는 데이터가 생길 때만 출력 |
+| 결정-18 **확정** | AI 크롤러는 검색·답변용과 **학습용 모두 허용**한다 | 6-6 (`Content-Signal: search=yes, ai-input=yes, ai-train=yes`) |
+| 결정-19 **확정** | 사이트 공통의 "무료배송" 일괄 문구는 쓰지 않는다. 배송비는 **판매자가 상품 등록 때 고른 배송정책**(무료 / 유료 금액 / 조건부 무료 / 수량별) 그대로 상품 화면·검색 문서·구조화 데이터에 나와야 한다 | 6-11, 6-3, 6-4, 6-8 |
+| 결정-20 **확정** | 상품 식별정보는 **국내 오픈마켓 관행을 따른다**: 쿠팡처럼 브랜드 + 상품 식별번호(바코드 GTIN, 없으면 "바코드 없음"과 사유) + 옵션, 네이버 스마트스토어처럼 상품 주요정보(브랜드·제조사·모델명) | 6-12, 6-3 |
+| 결정-21 대기 | 카테고리 소개문과 FAQ를 운영자가 관리자 화면에서 직접 쓰고 고칠 수 있게 할지 (현재 FAQ 4개는 `routes/features.js:594` 코드에 직접 적혀 있고, 카테고리 표에는 소개문 칸이 없다) | 결정 전: 현행 FAQ 유지, 카테고리 소개문 없음. 6-3·6-4는 데이터가 있을 때만 출력 |
+
+참고 자료(결정-20 근거, 2026-11-25 조사): 쿠팡은 브랜드·상품 식별번호(GTIN 또는 품번·모델번호)·구매옵션을 필수 속성으로 지정했고,
+바코드가 없는 상품은 WING 필수 속성 화면의 "바코드가 없는 상품인가요?"에서 예외 신청(증빙 제출)한다
+(셀러 대행사 정리: windly.cc/blog/coupang-gtin-wing-guide, newneek.co/@windly/article/40778). 스마트스토어는 "상품 주요정보"에
+브랜드·제조사·모델명을 넣고, 브랜드는 네이버 브랜드 사전 기준으로 조회된다(letter.wepick.kr/post/3895, inside.ampm.co.kr/insight/1943).
+이 출처들은 2차 자료다. 구현 전에 쿠팡 WING·스마트스토어센터 공식 도움말로 필드 이름과 필수 여부를 다시 확인해 보고서에 적는다.
 
 ---
 
@@ -119,7 +127,7 @@
      `seller`(판매자 상호, `partners.business_name`), `shippingDetails`(`OfferShippingDetails`: 배송비·`handlingTime`=`processing_days`, 지역 KR),
      `hasMerchantReturnPolicy`(`MerchantReturnPolicy`: 반품 기간 `RETURN_WINDOW_DAYS`, 반품 배송비 `return_fee`, 국가 KR),
      `aggregateRating`·`review`(승인된 실제 리뷰만, 0건이면 생략), `dateModified`=`products.updated_at`.
-     GTIN·MPN은 결정-20 전까지 넣지 않는다.
+     GTIN·MPN·제조사는 6-12에서 만든 필드에서 가져온다(값 없으면 생략). 배송비는 6-11의 공통 함수 결과를 쓴다.
   2. **BreadcrumbList**: 상품·카테고리·판매자 페이지.
   3. **ItemList**: 카테고리·기획 채널 첫 페이지 상품(최대 20, 실제 순서).
   4. **Organization**: 활성 `business_entities` 행이 있으면 `legalName`·`address`·`telephone`·`email`·통신판매업 신고번호(`identifier`)까지,
@@ -158,12 +166,13 @@
 
 - 지시:
   1. `services/seo/crawl-text.js`의 `robotsTxt`를 정책 표 기반으로 바꾼다: 검색 크롤러(Googlebot, Bingbot, Yeti, Daum 등) · 답변용 AI 크롤러 · 학습용 AI 크롤러를
-     각각 `User-agent` 묶음으로 쓰고, 결정-18 값 하나(`AI_TRAINING_ALLOWED` 같은 env 또는 정책 테이블)로 학습용 묶음만 Allow/Disallow 전환한다.
+     각각 `User-agent` 묶음으로 쓴다. 결정-18에 따라 **세 묶음 모두 허용**(비공개 경로만 Disallow). 묶음을 나눠 두는 이유는 나중에 정책이 바뀌면 한 곳만 고치기 위해서다.
   2. 비공개 경로 Disallow는 모든 묶음에 똑같이 넣는다(`/api/`, `/cart`, `/checkout`, `/my`, `/orders`, `/login` 등 현행 목록).
-  3. Cloudflare Content Signals 줄(`Content-Signal: search=yes, ai-input=yes, ai-train=<결정-18>`)을 추가한다.
+  3. Cloudflare Content Signals 줄 `Content-Signal: search=yes, ai-input=yes, ai-train=yes`를 추가한다.
   4. 사이트맵 줄 유지(`/sitemap-index.xml`, `/sitemap.xml`).
-  5. 운영자에게 알릴 것: Cloudflare 대시보드의 AI 크롤러 차단 설정(AI Crawl Control 등)이 robots 정책과 어긋나지 않게 맞춰야 한다(대시보드 작업, 보고서에 적기).
-- 완료 기준: robots 테스트 — 결정값 두 경우 각각 기대 출력, 모든 묶음에 비공개 경로 포함, 사이트맵 줄이 `PUBLIC_STOREFRONT_URL` 기준.
+  5. 운영자에게 알릴 것: Cloudflare 대시보드의 AI 크롤러 차단 설정(AI Crawl Control·Bot Fight 계열)이 켜져 있으면 robots에서 허용해도 AI 크롤러가 막힌다.
+     결정-18(전부 허용)에 맞게 꺼져 있는지 운영자가 확인한다(`HUMAN_CHECKLIST.md` §5).
+- 완료 기준: robots 테스트 — GPTBot·ClaudeBot·Google-Extended·CCBot 등 학습용 UA가 공개 경로에서 허용, 모든 묶음에 비공개 경로 포함, Content-Signal 줄 존재, 사이트맵 줄이 `PUBLIC_STOREFRONT_URL` 기준.
 
 ## 작업 6-7. 색인 알림과 검색엔진 등록 준비
 
@@ -180,7 +189,8 @@
   2. 목록 페이지의 정렬·필터 쿼리(`?sort=`, `?page=` 등): canonical은 쿼리 없는 주소, 2페이지 이후 처리 방침을 정하고 테스트한다. 검색 결과(`/search`)는 `noindex,follow`.
   3. 제목 규칙: 상품 `상품명 | 브랜드 | OLMOA`, 카테고리 `카테고리명 상품 | OLMOA`(길이 상한), 설명은 상품 설명에서 추출(마케팅 문구 생성 금지).
   4. 이미지 `alt`(상품명 + 옵션), 깨진 이미지 0.
-  5. 결정-19 대비: `index.html` 기본 설명을 사실 문구로 바꾼 안을 보고서에 제시(교체는 승인 후).
+  5. 결정-19: `apps/storefront/index.html`의 `description`·`og:description`·`twitter:description`에서 "무료배송"·"가장 합리적인 가격" 같은 근거 없는 일괄 문구를 뺀다.
+     사이트 소개는 사실만(예: 종합 오픈마켓, 직영·입점 판매자, 원화 결제). 6-5의 사이트 한 줄 설명과 같은 문자열을 쓴다.
 - 완료 기준: `tests/seo_head_policy_test.mjs` 확장, design_lint 0, LCP 예산 CI(`lcp-budget`) 유지.
 
 ## 작업 6-9. 운영 반영 리허설 (원격 없음)
@@ -196,11 +206,45 @@
 
 ---
 
+## 작업 6-11. 배송비: 판매자가 고른 값 그대로 (결정-19)
+
+- 현재 문제(2026-11-25 실측):
+  - 판매자 배송정책 화면은 무료(`FREE`)·유료(`PAID`, 금액)·조건부 무료(`CONDITIONAL`, 기준금액)·수량별(`PER_QTY`)을 이미 고를 수 있다(`apps/partner/src/views/ShippingPolicyView.vue`).
+  - 그러나 **운영 상품 64개 모두 `products.shipping_policy_id`가 비어 있다.** 이때 주문 계산은 판매자 기본값, 그것도 없으면
+    **배송비 3,000원·30,000원 이상 무료라는 코드 기본값**을 쓴다(`services/orders.js:253` `?? 3000`, `?? 30000`). 판매자가 고르지 않은 값이 화면과 결제에 나온다.
+- 지시:
+  1. 상품 등록·수정(`ProductEditView.vue`, 일괄 등록, URL 가져오기, 공급처 가져오기 경로 전부)에서 배송정책 선택을 **필수**로 한다.
+     판매자에게 배송정책이 하나도 없으면 등록 화면에서 먼저 만들게 안내한다. API도 같은 검사를 한다(화면만 막지 않는다).
+  2. 판매자가 "기본 배송정책"을 지정할 수 있게 하고, 새 상품의 선택값 기본으로만 쓴다(자동 연결 아님, 판매자가 확인 후 저장).
+  3. `services/orders.js`의 `?? 3000`·`?? 30000` 같은 코드 기본값을 없앤다. 배송정책이 없는 상품은 **판매·노출 불가 상태로 표시**하고 주문 시 `SHIPPING_POLICY_REQUIRED`로 거절한다(fail-closed).
+  4. 기존 64개 상품: DB를 직접 고치지 않는다. 판매자 화면 "배송정책 미지정 상품" 목록 + 일괄 지정 기능, 관리자 화면에서 미지정 현황을 보게 한다(쿠팡 "누락된 필수 속성 일괄 입력"과 같은 방식).
+  5. 표시: 상품 상세·목록 카드·장바구니·주문서·6-4 핵심 정보 표·6-5 `.md`·6-3 `shippingDetails`가 **같은 함수 하나**로 문구를 만든다:
+     무료 → "무료배송", 유료 → "배송비 N원", 조건부 → "N원 이상 구매 시 무료 (미만 M원)", 수량별 → "N개당 M원". 도서산간 추가 배송비가 있으면 함께 표시.
+  6. 구조화 데이터: 무료는 `shippingRate` 0원, 유료는 금액, 조건부는 기본 배송비를 `shippingRate`로 쓰고 무료 기준은 본문·`.md`에 적는다.
+- 완료 기준: 테스트 — 정책 없는 상품 등록 API 거절, 정책 없는 상품 주문 거절, 코드 기본값 문자열(`?? 3000`, `?? 30000`) 0건 검사,
+  네 유형 각각의 표시 문구와 JSON-LD 값, 장바구니 금액이 표시 문구와 일치. 기존 상품은 판매자 일괄 지정 E2E.
+
+## 작업 6-12. 상품 식별정보: 브랜드·제조사·모델명·바코드 (결정-20)
+
+- 지시:
+  1. 마이그레이션 `d1_75_product_identifiers.sql`(이름은 순번에 맞게): `products.manufacturer`(제조사), `products.model_name`(모델명),
+     `product_skus.gtin`(바코드, 옵션마다 다름), `product_skus.gtin_exempt_reason`(바코드 없음 사유). 기존 행은 NULL로 둔다.
+  2. 등록 화면 "상품 주요정보" 묶음: 브랜드(필수. 브랜드가 없는 상품은 "노브랜드/자체제작" 선택), 제조사·모델명(선택),
+     옵션별 바코드 입력 또는 "바코드가 없는 상품" 체크 + 사유 선택(자체제작·수공예·노브랜드 수입·해외구매대행·기타 직접 입력).
+     바코드는 8·12·13·14자리 숫자와 GS1 체크디지트를 검사한다. 같은 바코드를 다른 상품에 쓰면 경고하고 관리자 검수 목록에 올린다.
+  3. 새 등록부터 필수로 적용한다. 기존 상품은 막지 않고 판매자·관리자 화면에 "식별정보 누락" 목록과 일괄 입력(엑셀 포함)을 둔다.
+  4. 구조화 데이터(6-3): 바코드 자릿수에 맞는 `gtin8`/`gtin12`/`gtin13`/`gtin14`, 모델명은 `mpn`, 브랜드는 `brand`, 제조사는 `manufacturer`. 값 없으면 생략.
+  5. 외부 마켓 연동(멀티채널): 쿠팡·스마트스토어로 보낼 때 이 필드를 각 마켓 필드에 매핑한다(6-0 감사 결과 위에서).
+  6. §2에 적은 2차 자료가 맞는지 쿠팡 WING·스마트스토어센터 공식 도움말로 확인하고, 다르면 공식 기준을 따른다(보고서에 근거 링크).
+- 완료 기준: 마이그레이션 테스트(`test:migrations`), 바코드 검사 단위 테스트(정상·체크디지트 오류·자릿수 오류), 등록 API 필수 검사,
+  기존 상품 수정이 막히지 않음, JSON-LD gtin 유형 선택 테스트, design_lint 0.
+
 ## 6단계 관문
 
 - `npm test` 0 FAIL, `npm run typecheck` 0, `npm run lint` 0, cspell 0, design_lint 상한 증가 없음.
 - 6-1 스크립트 전후 비교: 상품·카테고리·판매자·정책 페이지가 JS 없이 고유 제목·설명·canonical·JSON-LD·요약 본문을 가짐, 없는 상품 404.
 - 구조화 데이터·`.md`·`llms.txt`의 모든 값이 DB와 일치(테스트), 지어낸 값 0.
 - 같은 URL에 UA만 바꾼 응답 HTML이 동일(클로킹 0).
+- 6-11: 배송정책 없는 상품의 등록·주문이 API에서 거절되고, 코드 속 배송비 기본값이 0건. 6-12: 새 등록에 브랜드·바코드(또는 사유) 필수, 기존 상품 수정은 막히지 않음.
 - 6-0 보고서 결론과 배포 계획서 존재. 운영 반영 0건(규칙 14).
 - 완료 보고는 PASS / FAIL / BLOCKED / NOT_RUN 네 가지로만 쓴다. 결정 대기 항목은 BLOCKED.

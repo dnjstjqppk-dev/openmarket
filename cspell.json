@@ -299,7 +299,11 @@
     "LLMO",
     "externalagent",
     "lastmod",
-    "llmstxt"
+    "llmstxt",
+    "ampm",
+    "newneek",
+    "wepick",
+    "windly"
   ],
   "ignorePaths": [
     "**/node_modules/**",
