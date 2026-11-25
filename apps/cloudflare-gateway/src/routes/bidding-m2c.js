@@ -6,6 +6,7 @@ import { json, readJson, bad, notFound, conflict, forbidden, str, intParam } fro
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
 import { priceHistoryStatements } from '../lib/price-history.js';
+import { notifyProductChanged } from '../services/seo/indexnow.js';
 
 export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
@@ -277,6 +278,7 @@ export async function handleBiddingAndM2cRoutes(request, url, env, corsHeaders) 
     }
 
     await env.DB.batch(batch);
+    if (accept) await notifyProductChanged(env, nego.product_id); // 6-7: IndexNow queue.
     await auditStatement(env, partner, { action: 'NEGOTIATION_RESPOND', targetType: 'price_negotiation', targetId: negoId, before: { status: 'PROPOSED', sale_price: nego.current_sale_price }, after: { status: newStatus, target_price: nego.suggested_target_price }, request }).run();
     return json(corsHeaders, {
       success: true,

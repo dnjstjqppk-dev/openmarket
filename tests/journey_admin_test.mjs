@@ -42,8 +42,8 @@ async function setupOrder(g) {
     method: 'POST', token: pt,
     body: {
       title: 'Journey Chair', description_html: '<p>oak chair</p>', category_id: 'cat_e_audio',
-      thumbnail_url: 'https://example.com/c.png', shipping_policy_id: tpl.id,
-      sale_price: 40000, original_price: 50000, stock_quantity: 10
+      thumbnail_url: 'https://example.com/c.png', shipping_policy_id: tpl.id, brand: 'AJ',
+      sale_price: 40000, original_price: 50000, stock_quantity: 10, gtin: '5901234123457'
     }
   });
   assert.equal(reg.status, 201, reg.text);

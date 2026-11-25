@@ -2,7 +2,9 @@
 // SKU table editor (4-3): one row per option combination with per-row prices,
 // stock and code, plus fill-all. Server caps prices at 100~100,000,000 and
 // stock at 0~1,000,000; the form mirrors those bounds before submit.
+// 6-12: per-row barcode (GS1 check) or an explicit no-barcode reason.
 import { ref } from 'vue'
+import { GTIN_EXEMPT_OPTIONS, isValidGtin } from '../../utils/gtin'
 
 export interface SkuRow {
   key: string
@@ -13,6 +15,11 @@ export interface SkuRow {
   sale_price: number | null
   stock_quantity: number | null
   safety_stock: number | null
+  sku_id?: string
+  gtin: string
+  gtin_exempt: boolean
+  gtin_exempt_reason: string
+  gtin_exempt_other: string
 }
 const rows = defineModel<SkuRow[]>({ default: () => [] })
 const fillSale = ref('')
@@ -41,7 +48,7 @@ function fillAll() {
       <button type="button" class="h-8 rounded-lg bg-secondary px-3 font-bold text-secondary-on hover:bg-secondary-hover" @click="fillAll">일괄 채우기</button>
     </div>
     <div class="overflow-x-auto rounded-xl border border-line">
-      <table class="w-full min-w-[640px] text-xs">
+      <table class="w-full min-w-[880px] text-xs">
         <thead>
           <tr class="border-b border-line bg-surface-2 text-left text-ink-muted">
             <th class="px-3 py-2 font-bold">옵션 조합</th>
@@ -50,6 +57,8 @@ function fillAll() {
             <th class="px-3 py-2 text-right font-bold">판매가</th>
             <th class="px-3 py-2 text-right font-bold">재고</th>
             <th class="px-3 py-2 text-right font-bold">안전재고</th>
+            <th class="px-3 py-2 font-bold">바코드(GTIN)</th>
+            <th class="px-3 py-2 font-bold">바코드 없음</th>
           </tr>
         </thead>
         <tbody>
@@ -70,6 +79,26 @@ function fillAll() {
             <td class="px-3 py-1.5"><input :value="r.safety_stock ?? ''" type="number" min="0" max="1000000" aria-label="안전재고"
               class="h-8 w-full rounded-lg border border-line bg-surface px-2 text-right text-ink"
               @input="rows = rows.map((x, n) => (n === i ? { ...x, safety_stock: ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value) } : x))" /></td>
+            <td class="px-3 py-1.5"><input :value="r.gtin" :disabled="r.gtin_exempt" inputmode="numeric" maxlength="18" placeholder="8·12·13·14자리" aria-label="바코드"
+              class="h-8 w-full rounded-lg border px-2 font-mono text-ink disabled:opacity-50"
+              :class="r.gtin.trim() && !isValidGtin(r.gtin) ? 'border-danger bg-danger-soft' : 'border-line bg-surface'"
+              @input="rows = rows.map((x, n) => (n === i ? { ...x, gtin: ($event.target as HTMLInputElement).value } : x))" /></td>
+            <td class="px-3 py-1.5">
+              <div class="flex items-center gap-1.5">
+                <input :checked="r.gtin_exempt" type="checkbox" aria-label="바코드 없음"
+                  class="h-4 w-4 accent-[var(--om-primary)]"
+                  @change="rows = rows.map((x, n) => (n === i ? { ...x, gtin_exempt: ($event.target as HTMLInputElement).checked, gtin: ($event.target as HTMLInputElement).checked ? '' : x.gtin } : x))" />
+                <select v-if="r.gtin_exempt" :value="r.gtin_exempt_reason" aria-label="바코드 없음 사유"
+                  class="h-8 rounded-lg border border-line bg-surface px-1 text-ink"
+                  @change="rows = rows.map((x, n) => (n === i ? { ...x, gtin_exempt_reason: ($event.target as HTMLSelectElement).value } : x))">
+                  <option value="" disabled>사유 선택</option>
+                  <option v-for="o in GTIN_EXEMPT_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </select>
+                <input v-if="r.gtin_exempt && r.gtin_exempt_reason === 'OTHER'" :value="r.gtin_exempt_other" maxlength="100" placeholder="사유 직접 입력" aria-label="기타 사유"
+                  class="h-8 w-28 rounded-lg border border-line bg-surface px-2 text-ink"
+                  @input="rows = rows.map((x, n) => (n === i ? { ...x, gtin_exempt_other: ($event.target as HTMLInputElement).value } : x))" />
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>

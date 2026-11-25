@@ -89,6 +89,8 @@ await t.test('1. shipping tables and columns exist', async () => {
 await t.test('2. one default template per seller', async () => {
   const g = await newGateway();
   const pid = g.db.prepare('SELECT id FROM partners LIMIT 1').get().id;
+  // 6-11: the seed owns the default; clear it so the uniqueness rule itself is tested.
+  g.db.prepare('UPDATE shipping_policies SET is_default = 0 WHERE partner_id = ?').run(pid);
   mkPolicy(g, pid, { is_default: 1 });
   assert.throws(() => mkPolicy(g, pid, { is_default: 1 }), 'second default is rejected');
   mkPolicy(g, pid, { is_default: 0 });
@@ -157,20 +159,25 @@ await t.test('5. bundle keys ship as one group', async () => {
   assert.equal(q.json.data.sub_orders[0].shipping_fee, 2500, 'bundled lines share one fee');
 });
 
-await t.test('6. template-free orders keep the legacy amounts', async () => {
+// 6-11: the legacy fallback is retired — a policy-less product fails closed.
+await t.test('6. policy-less orders are refused with SHIPPING_POLICY_REQUIRED', async () => {
   const g = await newGateway();
   const cust = await login(g, 'customer@example.com');
   const pid = g.db.prepare("SELECT id FROM partners WHERE status = 'APPROVED' LIMIT 1").get().id;
   const [s1] = pickSellerSkus(g, pid, 1);
-  const pt = g.db.prepare('SELECT base_shipping_fee, free_shipping_threshold FROM partners WHERE id = ?').get(pid);
-  const base = pt.base_shipping_fee ?? 3000;
-  const threshold = pt.free_shipping_threshold ?? 30000;
-  const price = g.db.prepare('SELECT sale_price FROM product_skus WHERE id = ?').get(s1).sale_price;
+  g.db.prepare('UPDATE products SET shipping_policy_id = NULL WHERE id = (SELECT product_id FROM product_skus WHERE id = ?)').run(s1);
   const q = await g.call('/api/v1/orders/quote', {
     method: 'POST', token: cust, body: { ...addr('06236'), items: [{ sku_id: s1, quantity: 1 }] }
   });
-  const expect = threshold > 0 && price >= threshold ? 0 : base;
-  assert.equal(q.json.data.sub_orders[0].shipping_fee, expect, 'legacy seller formula unchanged');
+  assert.equal(q.status, 409);
+  assert.equal(q.json.code, 'SHIPPING_POLICY_REQUIRED');
+  const c = await g.call('/api/v1/orders/checkout', {
+    method: 'POST', token: cust,
+    headers: { 'X-Idempotency-Key': `ship611-${Date.now()}` },
+    body: { ...addr('06236'), items: [{ sku_id: s1, quantity: 1 }] }
+  });
+  assert.equal(c.status, 409);
+  assert.equal(c.json.code, 'SHIPPING_POLICY_REQUIRED');
 });
 
 await t.test('7. remote surcharge applies once per group with template override', async () => {
@@ -220,7 +227,7 @@ await t.test('9. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_74_seo_crawl.sql', 'pin names d1_74');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_77_user_locale.sql', 'pin names d1_77');
 });
 
 t.finish();

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // OmFaq — semantic FAQ accordion on native <details>: keyboard support and
 // crawlable Q/A text for free, no JS state to hydrate. Pairs with faqGraph().
+// 6-13: `html` renders server-sanitized answers (allowlist tags only);
+// plain text otherwise. Never pass raw untrusted HTML.
 export interface FaqItem { q: string; a: string }
-defineProps<{ items: FaqItem[]; heading?: string }>()
+defineProps<{ items: FaqItem[]; heading?: string; html?: boolean }>()
 </script>
 
 <template>
@@ -15,7 +17,9 @@ defineProps<{ items: FaqItem[]; heading?: string }>()
         <summary class="cursor-pointer text-sm font-medium text-ink">
           {{ f.q }}
         </summary>
-        <p class="mt-1 text-sm text-ink-muted">{{ f.a }}</p>
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-if="html" class="mt-1 text-sm text-ink-muted" v-html="f.a"></div>
+        <p v-else class="mt-1 text-sm text-ink-muted">{{ f.a }}</p>
       </details>
     </div>
   </section>

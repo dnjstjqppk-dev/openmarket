@@ -1,12 +1,10 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 
-const router = createRouter({
-  history: createWebHistory((import.meta as any).env?.BASE_URL || '/'),
-  scrollBehavior() {
-    return { top: 0 }
-  },
-  routes: [
+// 6-2: locale mirrors. Every localizable route exists bare (ko, no prefix)
+// and under /en + /ja with the same component, catalog and prices.
+// Product names stay KO (data untouched); only the chrome translates.
+const appRoutes: RouteRecordRaw[] = [
     { path: '/', name: 'home', component: HomeView },
     { path: '/categories', name: 'categories', component: () => import('../views/CategoriesView.vue') },
     { path: '/category/:slug', name: 'category', component: () => import('../views/CategoryView.vue') },
@@ -40,9 +38,33 @@ const router = createRouter({
     { path: '/legal/privacy', name: 'legal-privacy', component: () => import('../views/LegalPrivacyView.vue') },
     { path: '/payments/success', name: 'payment-success', component: () => import('../views/PaymentResultView.vue'), meta: { requiresAuth: true } },
     { path: '/payments/fail', name: 'payment-fail', component: () => import('../views/PaymentResultView.vue'), meta: { requiresAuth: true } },
-    { path: '/legal/refund', name: 'legal-refund', component: () => import('../views/LegalRefundView.vue') },
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') }
-  ]
+    { path: '/legal/refund', name: 'legal-refund', component: () => import('../views/LegalRefundView.vue') }
+]
+
+const notFoundRoute: RouteRecordRaw =
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') }
+
+const localeRoutes: RouteRecordRaw[] = []
+for (const prefix of ['en', 'ja']) {
+  for (const r of appRoutes) {
+    const base = String(r.path)
+    const mirrored = {
+      ...r,
+      path: base === '/' ? `/${prefix}` : `/${prefix}${base}`,
+      name: r.name ? `${String(r.name)}-${prefix}` : undefined,
+      // '/profile' redirects to a fixed path; keep it bare (ko) under mirrors too.
+      ...(base === '/profile' ? { redirect: '/my/settings' } : {})
+    } as RouteRecordRaw
+    localeRoutes.push(mirrored)
+  }
+}
+
+const router = createRouter({
+  history: createWebHistory((import.meta as any).env?.BASE_URL || '/'),
+  scrollBehavior() {
+    return { top: 0 }
+  },
+  routes: [...appRoutes, ...localeRoutes, notFoundRoute]
 })
 
 export default router

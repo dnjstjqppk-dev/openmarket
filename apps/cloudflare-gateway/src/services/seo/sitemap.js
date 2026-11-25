@@ -3,12 +3,14 @@
 // categories + first 1000 approved products, e2e-02 contract), while
 // /sitemap-index.xml shards the full catalog into categories + product pages.
 
+import { sellableSql } from '../../lib/shipping-policy.js';
+
 export const STATIC_URLS = ['/', '/categories', '/channel/lightning-deals',
   '/channel/best-sellers', '/support', '/legal/terms', '/legal/privacy', '/legal/refund'];
 export const PRODUCTS_PER_SITEMAP = 5000;
 export const LEGACY_PRODUCT_CAP = 1000;
 
-const APPROVED = "p.status = 'ACTIVE' AND p.review_status = 'APPROVED'";
+const APPROVED = `p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND ${sellableSql('p')}`;
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 export async function categoryUrls(env) {

@@ -208,11 +208,12 @@ await t.test('J-3.1 default SKU is the cheapest in-stock variant, never OOS', as
   const g = await newGateway();
   const pt = g.db.prepare("SELECT id FROM partners WHERE status = 'APPROVED' LIMIT 1").get();
   const cat = g.db.prepare('SELECT id FROM categories LIMIT 1').get();
+  const h3pol = g.db.prepare("SELECT id FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' ORDER BY is_default DESC LIMIT 1").get(pt.id);
   g.db.prepare(
     `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html,
-      lowest_original_price, lowest_sale_price, total_sold_count, status)
-     VALUES ('h3sku', ?, ?, '재고확인 상품', 'https://img.test/x.jpg', '<p>x</p>', 20000, 5000, 0, 'ACTIVE')`
-  ).run(pt.id, cat.id);
+      lowest_original_price, lowest_sale_price, total_sold_count, status, shipping_policy_id)
+     VALUES ('h3sku', ?, ?, '재고확인 상품', 'https://img.test/x.jpg', '<p>x</p>', 20000, 5000, 0, 'ACTIVE', ?)`
+  ).run(pt.id, cat.id, h3pol.id);
   g.db.prepare(
     `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
      VALUES ('h3sku-cheap', 'h3sku', 'H3-CHEAP', '{"옵션":"저가"}', 5000, 5000, 0, 'OUT_OF_STOCK'),

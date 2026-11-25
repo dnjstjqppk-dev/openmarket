@@ -30,8 +30,10 @@ await t.test('F2. domestic filter drops overseas sellers', async () => {
   const g = await newGateway();
   g.db.prepare("INSERT INTO users (id, email, password_hash, full_name, phone, role) VALUES ('u_us1', 'us1@example.com', 'x', 'U', '010', 'ROLE_PARTNER')").run();
   g.db.prepare("INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, bank_code, bank_account_number, bank_account_holder, status, country_code, sales_model) VALUES ('pt_us1', 'u_us1', 'US Goods', '999-99-99999', '004', '1', 'H', 'APPROVED', 'US', 'MARKETPLACE')").run();
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_us1', 'pt_us1', 'cat_e_audio', 'US thing', 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, base_fee, is_default, status)
+    VALUES ('sp_us1', 'pt_us1', 'std', 'PARCEL', 'PAID', 3000, 1, 'ACTIVE')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_us1', 'pt_us1', 'cat_e_audio', 'US thing', 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED', 'sp_us1')`).run();
   const all = await g.call('/api/v1/products?per_page=100');
   assert.ok(all.json.data.find((p) => p.id === 'prod_us1'), 'overseas row present unfiltered');
   const dom = await g.call('/api/v1/products?exclude_overseas=1&per_page=100');
@@ -131,14 +133,13 @@ function seedTodayShip(g, { policyBps = null } = {}) {
     g.db.prepare(`INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, bank_code, bank_account_number, bank_account_holder, status, country_code, sales_model)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(`pt_ts_${s}`, `u_ts_${s}`, `TS ${s}`, `900-90-9000${s}`, '004', '1', 'H', 'APPROVED', 'KR', 'MARKETPLACE');
-    g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(`prod_ts_${s}`, `pt_ts_${s}`, 'cat_e_audio', `TS thing ${s}`, 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED');
-    if (cutoff) {
-      g.db.prepare(`INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, today_cutoff, is_default)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(`sp_ts_${s}`, `pt_ts_${s}`, 'std', 'PARCEL', 'PAID', cutoff, 1);
-    }
+    // 6-11: every listed product names its policy (seller d keeps a cutoff-less one).
+    g.db.prepare(`INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, today_cutoff, is_default)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(`sp_ts_${s}`, `pt_ts_${s}`, 'std', 'PARCEL', 'PAID', cutoff, 1);
+    g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(`prod_ts_${s}`, `pt_ts_${s}`, 'cat_e_audio', `TS thing ${s}`, 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED', `sp_ts_${s}`);
     const total = hits + misses;
     for (let i = 0; i < total; i++) {
       const hit = i < hits;

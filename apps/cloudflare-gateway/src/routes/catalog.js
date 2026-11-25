@@ -6,6 +6,8 @@ import { authenticate } from '../lib/auth.js';
 import { getPolicy } from '../lib/ledger.js';
 import { matchScope } from '../services/coupons.js';
 import { newId } from '../lib/ids.js';
+import { sellableSql, shippingText } from '../lib/shipping-policy.js';
+import { buildPdpBrief, renderPdpText, renderKeyFactsHtml } from '../services/seo/pdp-brief.js';
 
 export function computeServerQualityScore(product) {
   if (!product) return 0;
@@ -160,9 +162,10 @@ async function buildProductFilters(env, url) {
       binds.push(...brands);
     }
   }
+  // 6-11: free shipping is the product's own chosen policy, never a seller default.
   if (freeShipParam === 'true' || freeShipParam === '1') {
-    filterSql += ` AND (pt.base_shipping_fee = 0 OR EXISTS (SELECT 1 FROM shipping_policies sp
-      WHERE sp.partner_id = p.partner_id AND sp.status = 'ACTIVE' AND sp.fee_type = 'FREE'))`;
+    filterSql += ` AND EXISTS (SELECT 1 FROM shipping_policies sp
+      WHERE sp.id = p.shipping_policy_id AND sp.status = 'ACTIVE' AND sp.fee_type = 'FREE')`;
   }
   if (couponParam === 'true' || couponParam === '1') {
     filterSql += ` AND EXISTS (SELECT 1 FROM coupons c WHERE c.is_active = 1 AND c.expires_at > CURRENT_TIMESTAMP
@@ -249,7 +252,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
   if (url.pathname === '/api/v1/categories' && request.method === 'GET') {
     const { results } = await env.DB.prepare(
       `SELECT c.id, c.parent_id, c.name, c.slug, c.depth, c.sort_order, c.icon_key,
-              (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'ACTIVE') as direct_count
+              (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.status = 'ACTIVE' AND ${sellableSql('p')}) as direct_count
        FROM categories c
        WHERE c.is_active = 1
        ORDER BY c.depth DESC, c.sort_order ASC`
@@ -347,7 +350,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const selectList = `
       SELECT p.*,
              p.id as slug,
-             COALESCE(pt.business_name, 'OLMOA DIRECT') as brand,
+             COALESCE(pt.business_name, 'OLMOA DIRECT') as seller_brand,
              COALESCE(pt.business_name, 'Olmoa Official Flagship') as partner_name,
              c.name as category_name, c.slug as category_slug,
              pc.slug as parent_category_slug,
@@ -376,13 +379,18 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
                 OR (cpn.scope = 'PRODUCT' AND EXISTS (SELECT 1 FROM coupon_targets t
                   WHERE t.coupon_id = cpn.id AND t.target_type = 'PRODUCT' AND t.target_id = p.id)))) as has_coupon,
              (SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now', '+9 hours') ORDER BY effective_from DESC LIMIT 1) as earn_bps,
+             sp.id AS ship_id, sp.fee_type AS ship_fee_type, sp.base_fee AS ship_base_fee,
+             sp.free_threshold AS ship_free_threshold, sp.qty_unit AS ship_qty_unit,
+             sp.remote_surcharge AS ship_remote_surcharge,
              ${periodSelect}`;
     const fromSql = `
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
-      LEFT JOIN partners pt ON p.partner_id = pt.id`;
-    const baseWhere = `WHERE p.status = 'ACTIVE'`;
+      LEFT JOIN partners pt ON p.partner_id = pt.id
+      LEFT JOIN shipping_policies sp ON sp.id = p.shipping_policy_id AND sp.status = 'ACTIVE'`;
+    // 6-11: buyer surfaces expose only products with the seller-chosen live policy.
+    const baseWhere = `WHERE p.status = 'ACTIVE' AND ${sellableSql('p')}`;
     const { filterSql, binds } = await buildProductFilters(env, url);
     // 5-4: the badge flag and the PLP chip follow the same policy switch.
     const todayShipOn = (await getTodayShipMinRateBps(env)) !== null;
@@ -418,8 +426,12 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         if (p.lowest_original_price > p.lowest_sale_price) badges.push('SALE');
         if (Number(p.has_deal)) badges.push('DEAL');
         if (p.created_at && p.created_at >= new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ')) badges.push('NEW');
-        const { sales_30d_raw, has_deal, ...rest } = p;
-        return { ...rest, has_today: todayShipOn ? Number(p.has_today) : 0, has_tomorrow: tomorrowShipOn ? Number(p.has_today) : 0, sales_30d: sales30 >= 10 ? sales30 : null, badges };
+        const ship = p.ship_id ? {
+          id: p.ship_id, fee_type: p.ship_fee_type, base_fee: p.ship_base_fee,
+          free_threshold: p.ship_free_threshold, qty_unit: p.ship_qty_unit, remote_surcharge: p.ship_remote_surcharge
+        } : null;
+        const { sales_30d_raw, has_deal, ship_id, ship_fee_type, ship_base_fee, ship_free_threshold, ship_qty_unit, ship_remote_surcharge, ...rest } = p;
+        return { ...rest, shipping_policy: ship, shipping_text: shippingText(ship), has_today: todayShipOn ? Number(p.has_today) : 0, has_tomorrow: tomorrowShipOn ? Number(p.has_today) : 0, sales_30d: sales30 >= 10 ? sales30 : null, badges };
       })
     }), { headers: corsHeaders });
 
@@ -547,7 +559,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN categories pc ON c.parent_id = pc.id
       LEFT JOIN partners pt ON p.partner_id = pt.id`;
-    const baseWhere = `WHERE p.status = 'ACTIVE'`;
+    const baseWhere = `WHERE p.status = 'ACTIVE' AND ${sellableSql('p')}`;
     const q = async (sql) => (await env.DB.prepare(sql).bind(...binds).all()).results;
     const categories = await q(`SELECT c.id, c.name, COUNT(*) AS count ${fromSql} ${baseWhere} ${filterSql} GROUP BY c.id, c.name ORDER BY count DESC`);
     const brands = await q(`SELECT p.brand AS brand, COUNT(*) AS count ${fromSql} ${baseWhere} ${filterSql} AND p.brand IS NOT NULL AND p.brand != '' GROUP BY p.brand ORDER BY count DESC LIMIT 20`);
@@ -597,7 +609,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     for (const ex of results) {
       ex.products = (await env.DB.prepare(
         `SELECT p.* FROM exhibition_products ep JOIN products p ON p.id = ep.product_id
-         WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' ORDER BY ep.sort_order ASC LIMIT 8`
+         WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' AND ${sellableSql('p')} ORDER BY ep.sort_order ASC LIMIT 8`
       ).bind(ex.id).all()).results;
     }
     return new Response(JSON.stringify({ success: true, count: results.length, data: results }), { headers: corsHeaders });
@@ -610,7 +622,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     if (!ex) throw notFound('기획전을 찾을 수 없습니다.');
     const { results: products } = await env.DB.prepare(
       `SELECT p.* FROM exhibition_products ep JOIN products p ON p.id = ep.product_id
-       WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' ORDER BY ep.sort_order ASC`
+       WHERE ep.exhibition_id = ? AND p.status = 'ACTIVE' AND ${sellableSql('p')} ORDER BY ep.sort_order ASC`
     ).bind(ex.id).all();
     return new Response(JSON.stringify({ success: true, data: { ...ex, products } }), { headers: corsHeaders });
   }
@@ -634,7 +646,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     const product = await env.DB.prepare(
       `SELECT p.*,
               p.id as slug,
-              COALESCE(pt.business_name, 'OLMOA DIRECT') as brand,
+              COALESCE(pt.business_name, 'OLMOA DIRECT') as seller_brand,
               COALESCE(pt.business_name, 'Olmoa Official Flagship') as partner_name,
               c.name as category_name, c.slug as category_slug, c.notice_template_id as category_notice_template_id,
               pt.business_name, pt.business_reg_number, pt.base_shipping_fee, pt.free_shipping_threshold,
@@ -648,6 +660,8 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
     ).bind(prodId).first();
 
     if (!product) throw notFound('Product not found');
+    // 6-11: policy-less products are not exposed (same 404 as a missing page).
+    if (!product.shipping_policy_id) throw notFound('Product not found');
 
     const { results: skus } = await env.DB.prepare(
       'SELECT * FROM product_skus WHERE product_id = ? ORDER BY sale_price ASC'
@@ -711,17 +725,26 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
 
     const qualityScore = computeServerQualityScore(product);
 
-    // 2-9: effective shipping template, seller summary, max claimable discount.
-    let shippingPolicy = null;
-    if (product.shipping_policy_id) {
-      shippingPolicy = await env.DB.prepare("SELECT * FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'")
-        .bind(product.shipping_policy_id).first() || null;
-    }
-    if (!shippingPolicy) {
-      shippingPolicy = await env.DB.prepare(
-        "SELECT * FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' AND is_default = 1"
-      ).bind(product.partner_id).first() || null;
-    }
+    // 2-9: the product's own seller-chosen template (6-11: no default fallback —
+    // the default only pre-fills new products, it never stands in for one).
+    const shippingPolicy = await env.DB.prepare("SELECT * FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'")
+      .bind(product.shipping_policy_id).first() || null;
+    if (!shippingPolicy) throw notFound('Product not found');
+    // 6-1: shared PDP brief — the detail section and the crawl endpoint render it.
+    const brief = await buildPdpBrief(env, product.id);
+    const briefText = renderPdpText(brief);
+    // 6-4: answer-table markup shared with the future Edge summary_html.
+    const keyFactsHtml = renderKeyFactsHtml(brief ? brief.key_facts : []);
+    // 6-3: newest visible reviews for the Review nodes (cap 5, no PII beyond the stored nickname).
+    const { results: reviewsPreview } = await env.DB.prepare(
+      `SELECT reviewer_name AS author, rating, content AS body, created_at AS date FROM product_reviews
+       WHERE product_id = ? AND visibility = 'VISIBLE' ORDER BY created_at DESC LIMIT 5`
+    ).bind(product.id).all();
+    // 6-3: product-level GTIN only when every SKU with a barcode agrees (else omit).
+    const gtinRows = await env.DB.prepare(
+      'SELECT DISTINCT gtin FROM product_skus WHERE product_id = ? AND gtin IS NOT NULL'
+    ).bind(product.id).all();
+    const primaryGtin = gtinRows.results && gtinRows.results.length === 1 ? gtinRows.results[0].gtin : null;
     // 3-4: earn-rate policy for the projected-reward row (null = no policy, row hidden).
     const earnBps = await env.DB.prepare(
       "SELECT value FROM platform_policies WHERE key = 'credit.earn_bps' AND effective_from <= date('now', '+9 hours') ORDER BY effective_from DESC LIMIT 1"
@@ -793,6 +816,12 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
         notice_template: noticeTemplate,
         notice_values: noticeValues,
         shipping_policy: shippingPolicy,
+        shipping_text: shippingText(shippingPolicy),
+        brief,
+        brief_text: briefText,
+        key_facts_html: keyFactsHtml,
+        reviews_preview: reviewsPreview || [],
+        primary_gtin: primaryGtin,
         seller: sellerSummary,
         max_coupon_discount: maxCouponDiscount,
         earn_bps: earnBps ? Number(earnBps.value) : null
@@ -821,18 +850,30 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
       }
     } catch { /* guests and expired tokens read the public store anyway */ }
 
-    const { results: products } = await env.DB.prepare(
+    const { results: storeRows } = await env.DB.prepare(
       `SELECT p.*,
               p.id as slug,
-              COALESCE(?, 'OLMOA DIRECT') as brand,
+              COALESCE(?, 'OLMOA DIRECT') as seller_brand,
               c.name as category_name, c.slug as category_slug,
               (SELECT ROUND(AVG(r.rating), 1) FROM product_reviews r WHERE r.product_id = p.id) as avg_rating,
-              COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count
+              COALESCE((SELECT COUNT(*) FROM product_reviews r WHERE r.product_id = p.id), 0) as review_count,
+              sp.id AS ship_id, sp.fee_type AS ship_fee_type, sp.base_fee AS ship_base_fee,
+              sp.free_threshold AS ship_free_threshold, sp.qty_unit AS ship_qty_unit,
+              sp.remote_surcharge AS ship_remote_surcharge
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.partner_id = ? AND p.status = 'ACTIVE'
+       LEFT JOIN shipping_policies sp ON sp.id = p.shipping_policy_id AND sp.status = 'ACTIVE'
+       WHERE p.partner_id = ? AND p.status = 'ACTIVE' AND ${sellableSql('p')}
        ORDER BY p.total_sold_count DESC`
     ).bind(partner.business_name, partnerId).all();
+    const products = (storeRows || []).map((p) => {
+      const ship = p.ship_id ? {
+        id: p.ship_id, fee_type: p.ship_fee_type, base_fee: p.ship_base_fee,
+        free_threshold: p.ship_free_threshold, qty_unit: p.ship_qty_unit, remote_surcharge: p.ship_remote_surcharge
+      } : null;
+      const { ship_id, ship_fee_type, ship_base_fee, ship_free_threshold, ship_qty_unit, ship_remote_surcharge, ...rest } = p;
+      return { ...rest, shipping_policy: ship, shipping_text: shippingText(ship) };
+    });
 
     const totalSold = products.reduce((acc, p) => acc + (p.total_sold_count || 0), 0);
     // Store rating = average of the reviews actually written on this partner's products; null when there are none.
@@ -859,10 +900,7 @@ export async function handleCatalogRoutes(request, url, env, corsHeaders) {
           company_name: partner.business_name,
           business_number: partner.business_reg_number
         },
-        shipping_policy: defaultTpl || {
-          base_fee: partner.base_shipping_fee,
-          free_shipping_threshold: partner.free_shipping_threshold
-        },
+        shipping_policy: defaultTpl || null,
         profile,
         following,
         stats: {

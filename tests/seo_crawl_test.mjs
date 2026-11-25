@@ -45,19 +45,24 @@ await t.test('migration exposes the indexnow queue and ledger row', async () => 
 });
 
 await t.test('product meta derives title/desc/H1 from the entity', async () => {
-  const m = productMeta({ id: 'p1', title: '무선 이어폰 프로', lowest_sale_price: 29900 }, '전자기기');
-  assert.ok(m.title.includes('무선 이어폰 프로') && m.title.includes('전자기기'));
+  const m = productMeta({ id: 'p1', title: '무선 이어폰 프로', description_html: '<p>노이즈캔슬링 이어폰</p>' }, 'Acme');
+  assert.equal(m.title, '무선 이어폰 프로 | Acme | OLMOA');
   assert.ok(m.title.length <= 60 && m.description.length <= 160);
   assert.equal(m.h1, '무선 이어폰 프로');
-  assert.ok(m.description.includes('29,900'));
+  assert.ok(m.description.includes('노이즈캔슬링') && !m.description.includes('<p>'));
+  assert.ok(!m.description.includes('무료배송') && !m.description.includes('만나보세요'), 'facts only');
   const bare = productMeta({ id: 'p2', title: '  ' });
   assert.ok(bare.title.includes('OLMOA') && bare.h1.length > 0, 'blank titles fall back, never empty');
 });
 
 await t.test('category meta carries the live product count', async () => {
-  const m = categoryMeta({ name: '뷰티', slug: 'beauty' }, 42);
-  assert.ok(m.title.includes('뷰티') && m.description.includes('42'));
-  assert.equal(m.h1, '뷰티');
+  const m = categoryMeta({ name: '원피스', slug: 'dress' }, 120, '여성의류', ['원피스', '블라우스', '니트'], 6);
+  assert.equal(m.title, '원피스 - 여성의류 | OLMOA');
+  assert.ok(m.description.includes('6') && m.description.includes('120'));
+  assert.equal(m.h1, '원피스');
+  const top = categoryMeta({ name: '뷰티', slug: 'beauty' }, 42);
+  assert.equal(top.title, '뷰티 | OLMOA');
+  assert.ok(top.description.includes('42'));
 });
 
 await t.test('json-ld graphs type every required schema', async () => {
@@ -71,7 +76,7 @@ await t.test('json-ld graphs type every required schema', async () => {
   assert.equal(faqGraph([{ q: '배송?', a: '2일' }])['@type'], 'FAQPage');
 });
 
-await t.test('route head policy indexes PDP and noindexes private routes', async () => {
+await t.test('route head policy indexes PDP and blocks private routes', async () => {
   const pdp = routeHead({ route: 'product', path: '/product/p1', base: 'https://olmoa.com', title: '이어폰 | OLMOA' });
   assert.equal(pdp.robots, 'index,follow');
   assert.equal(pdp.canonical, 'https://olmoa.com/product/p1');
@@ -113,7 +118,8 @@ await t.test('robots and llms files are served from live data', async () => {
   assert.ok(llms.text.includes('# OLMOA') && llms.text.includes('/category/'));
   const full = await g.call('/llms-full.txt');
   assert.ok(full.text.includes('# OLMOA') && full.text.includes('/product/'));
-  assert.ok(full.text.includes('## Stats') && full.text.includes('- Products: '));
+  assert.ok(full.text.includes('## 분류별 상품 요약') && full.text.includes('/category/'));
+  assert.ok(full.text.includes('### 이용약관') && full.text.includes('### 개인정보처리방침') && full.text.includes('### 반품·환불 규정'));
 });
 
 await t.test('indexnow enqueue and status log are admin-only', async () => {
@@ -140,7 +146,7 @@ await t.test('indexnow drain fails closed without a key', async () => {
   assert.equal(d.json.sent, 0);
   assert.equal(d.json.degraded, 'INDEXNOW_NOT_CONFIGURED');
   const log = await g.call('/api/v1/admin/seo/indexnow/queue?status=PENDING', { token: adm });
-  assert.ok(log.json.data.length >= 1, 'undrained rows stay PENDING');
+  assert.ok(log.json.data.length >= 1, 'unsent rows stay PENDING');
 });
 
 await t.test('indexnow drain submits to a live endpoint', async () => {

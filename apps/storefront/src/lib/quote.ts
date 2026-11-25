@@ -14,6 +14,17 @@ export interface QuoteLine {
   volume_discount_pct: number
   requires_pccc: boolean
 }
+export interface QuoteShippingGroup {
+  group_key: string
+  template_id: string | null
+  fee_type: string
+  shipping_text?: string | null
+  goods: number
+  quantity: number
+  base_fee: number
+  remote_surcharge: number
+  shipping: number
+}
 export interface QuoteSubOrder {
   partner_id: string
   sales_model: string
@@ -21,6 +32,7 @@ export interface QuoteSubOrder {
   shipping_fee: number
   remote_surcharge?: number
   remote_zone?: string | null
+  shipping_groups?: QuoteShippingGroup[]
   items: QuoteLine[]
 }
 export interface Quote {

@@ -57,9 +57,11 @@ async function checkoutPaid(g, cust, skuId, qty = 1) {
 }
 
 function mkProduct(g, { productId, skuId, title, partnerId = 'pt_001', status = 'ACTIVE', stock = 0 }) {
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES (?, ?, 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', 20000, 15000, ?, 'APPROVED')`)
-    .run(productId, partnerId, title, status);
+  // 6-11: edits require an effective policy.
+  const pol = g.db.prepare("SELECT id FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' ORDER BY is_default DESC LIMIT 1").get(partnerId);
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES (?, ?, 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', 20000, 15000, ?, 'APPROVED', ?)`)
+    .run(productId, partnerId, title, status, pol.id);
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES (?, ?, ?, '{}', 20000, 15000, ?, ?)`)
     .run(skuId, productId, `C-${productId}`, stock, stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK');

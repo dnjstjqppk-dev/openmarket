@@ -6,8 +6,8 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { Heart } from 'lucide-vue-next'
-import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, userErrorMessage, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
-import { productHeadOf, productJsonLdOf } from '../lib/productSeo'
+import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, OmKeyTakeaways, OmSpecTable, OmFaq, userErrorMessage, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
+import { productHeadOf, productJsonLdOf, qaPageJsonLdOf, galleryAltOf } from '../lib/productSeo'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
 import ReviewHighlights from '../components/product/ReviewHighlights.vue'
@@ -58,7 +58,7 @@ async function load() {
     const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(String(route.params.slug))}`)
     const json = await res.json().catch(() => null)
     if (my !== seq) return
-    if (res.status === 404) { notFound.value = true; product.value = null; document.getElementById('olmoa-jsonld-product')?.remove(); return }
+    if (res.status === 404) { notFound.value = true; product.value = null; document.getElementById('olmoa-jsonld-product')?.remove(); document.getElementById('olmoa-jsonld-qa')?.remove(); return }
     if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     product.value = json.data
     recordRecentVisit(json.data)
@@ -73,17 +73,20 @@ async function load() {
     loadPhotos(json.data.id)
     loadRelated(json.data.id)
   } catch (e: any) {
-    if (my === seq) { loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다'); document.getElementById('olmoa-jsonld-product')?.remove() }
+    if (my === seq) { loadError.value = userErrorMessage(e, '상품을 불러오지 못했습니다'); document.getElementById('olmoa-jsonld-product')?.remove(); document.getElementById('olmoa-jsonld-qa')?.remove() }
   } finally {
     if (my === seq) loading.value = false
   }
 }
 
-// ---- SEO: per-product head + Product/Offer/Breadcrumb JSON-LD (live rows only) ---------------------------
+// ---- SEO: per-product head + Product/Offer/Breadcrumb/QAPage JSON-LD (live rows only) ----------------
 function applyProductHead(p: any) {
   const origin = window.location.origin
   applyRouteHead(productHeadOf(p, route.path, origin))
-  injectJsonLd('olmoa-jsonld-product', productJsonLdOf(p, `${origin}${route.path}`))
+  injectJsonLd('olmoa-jsonld-product', productJsonLdOf(p, `${origin}${route.path}`, { windowDays: RETURN_WINDOW_DAYS }))
+  const qa = qaPageJsonLdOf(`${origin}${route.path}`, p?.brief?.qna)
+  if (qa) injectJsonLd('olmoa-jsonld-qa', qa)
+  else document.getElementById('olmoa-jsonld-qa')?.remove()
 }
 
 async function loadPhotos(id: string) {
@@ -149,8 +152,12 @@ const noticeRows = computed<[string, string][]>(() => {
 
 const galleryImages = computed(() => {
   const rows = Array.isArray(product.value?.images) ? product.value.images : []
-  if (rows.length) return rows.map((im: any) => ({ src: im.image_url, alt: im.alt_text || product.value.title }))
-  if (product.value?.thumbnail_url) return [{ src: product.value.thumbnail_url, alt: product.value.title }]
+  const skus = Array.isArray(product.value?.skus) ? product.value.skus : []
+  // 6-8: stored seller alt wins; otherwise product name + live options + position.
+  if (rows.length) return rows.map((im: any, i: number) => ({
+    src: im.image_url, alt: String(im.alt_text || '').trim() || galleryAltOf(product.value?.title, skus, i, rows.length)
+  }))
+  if (product.value?.thumbnail_url) return [{ src: product.value.thumbnail_url, alt: galleryAltOf(product.value?.title, skus, 0, 1) }]
   return []
 })
 
@@ -211,6 +218,18 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
           </div>
 
           <OmStickyTabs v-model="activeSection" :tabs="sectionTabs" offset-top="64px" />
+
+          <section v-if="product.key_facts_html" aria-label="핵심 정보" class="mt-6 rounded-2xl border border-line bg-surface p-5">
+            <h2 class="mb-3 text-base font-bold text-ink">핵심 정보</h2>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="key-facts text-sm" v-html="product.key_facts_html"></div>
+          </section>
+
+          <section v-if="product.brief" aria-label="상품 요약" class="mt-6 space-y-4">
+            <OmKeyTakeaways :items="(product.brief.facts || []).map((f: any) => `${f.label}: ${f.value}`)" heading="핵심 정보" />
+            <OmSpecTable v-if="(product.brief.specs || []).length" :rows="product.brief.specs" caption="스펙" />
+            <OmFaq v-if="(product.brief.qna || []).length" :items="product.brief.qna" heading="Q&A 요약" />
+          </section>
 
           <section id="sec-info" class="scroll-mt-32 pt-6" aria-label="상품정보">
             <div v-if="noticeRows.length" class="mb-8 overflow-x-auto">
@@ -321,3 +340,31 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
     </template>
   </div>
 </template>
+
+<style scoped>
+/* 6-4: server-rendered key-facts <dl> (same markup the Edge summary_html reuses). */
+.key-facts :deep(dl) {
+  display: grid;
+  gap: 0.5rem 1rem;
+}
+.key-facts :deep(dl > div) {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgb(var(--om-divider));
+}
+.key-facts :deep(dl > div:last-child) {
+  border-bottom: 0;
+}
+.key-facts :deep(dt) {
+  color: rgb(var(--om-text-muted));
+  flex-shrink: 0;
+}
+.key-facts :deep(dd) {
+  margin: 0;
+  text-align: right;
+  color: rgb(var(--om-text));
+  font-weight: 600;
+}
+</style>

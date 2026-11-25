@@ -14,6 +14,7 @@ import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { notifyRestockedSkus } from './restock.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
 import { findForbiddenMemo } from '../lib/memo-guard.js';
+import { shippingText } from '../lib/shipping-policy.js';
 
 export const PAYMENT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_LINES = 50;
@@ -74,7 +75,7 @@ export async function loadOrderBundle(env, orderIdOrNo) {
 // P2-R1: the schema level this code was written against. /health reports the
 // applied level (NEW-16); K-1.4 pins this constant to the newest migration file
 // so the two cannot drift apart silently.
-export const REQUIRED_SCHEMA_VERSION = 'd1_74_seo_crawl.sql';
+export const REQUIRED_SCHEMA_VERSION = 'd1_77_user_locale.sql';
 
 // P2-R1: refuse order writes when D1 lags (or otherwise differs from) the
 // code's schema level. Deploys are forward-only, so a code-first deploy must
@@ -200,7 +201,7 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       `SELECT s.id, s.product_id, s.sku_code, s.option_combination_json, s.sale_price, s.stock_quantity,
               p.partner_id, p.title AS prod_title, p.status AS prod_status, p.review_status, p.requires_pccc, p.hs_code,
               p.shipping_policy_id, p.bundle_group_key, p.category_id,
-              pt.status AS partner_status, pt.sales_model, pt.base_shipping_fee, pt.free_shipping_threshold,
+              pt.status AS partner_status, pt.sales_model,
               pt.commission_rate_bps, pt.commission_rate,
               m.unit_cost, m.supplier_id, m.resale_authorized, m.valid_until, sup.status AS supplier_status
        FROM product_skus s
@@ -250,7 +251,6 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
       volumeDiscount: (ticketPrice - unitPrice) * l.quantity,
       unitCost: s.sales_model === 'DIRECT' ? s.unit_cost : null,
       shippingPolicyId: s.shipping_policy_id || null, bundleKey: s.bundle_group_key || null, shippingGroupKey: null,
-      shippingFee: s.base_shipping_fee ?? 3000, freeThreshold: s.free_shipping_threshold ?? 30000,
       bps: s.commission_rate_bps ?? Math.round(Number(s.commission_rate || 10) * 100)
     });
   }
@@ -259,14 +259,11 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
   const orderRequiresPccc = resolved.some((it) => it.requiresPccc);
   if (orderRequiresPccc && !rawPccc && !dryRun) throw bad('PCCC_REQUIRED', '해외직구 상품이 포함되어 개인통관고유부호(PCCC)가 필요합니다.');
 
-  // 2. Split by seller, then by shipping group (bundle key -> template -> seller default).
-  // A fully template-free seller collapses to one 'default' group priced exactly the legacy way.
-  function groupShipFee(tpl, goods, qty, fallbackFee, fallbackThreshold, zoneRemote) {
-    const remote = tpl && tpl.remote_surcharge != null ? tpl.remote_surcharge : zoneRemote;
-    if (!tpl) {
-      const base = fallbackThreshold > 0 && goods >= fallbackThreshold ? 0 : fallbackFee;
-      return { base, remote };
-    }
+  // 2. Split by seller, then by shipping group (bundle key -> seller-chosen template).
+  // 6-11: no template, no sale — every line must resolve to the seller's own
+  // ACTIVE policy (SHIPPING_POLICY_REQUIRED), never to code defaults.
+  function groupShipFee(tpl, goods, qty, zoneRemote) {
+    const remote = tpl.remote_surcharge != null ? tpl.remote_surcharge : zoneRemote;
     switch (tpl.fee_type) {
       case 'FREE': return { base: 0, remote };
       case 'CONDITIONAL': {
@@ -317,17 +314,22 @@ export async function createOrder(env, principal, body, idemHeader, { dryRun = f
     for (const [key, lines] of bundles) {
       const gGoods = lines.reduce((a, it) => a + it.lineTotal, 0);
       const gQty = lines.reduce((a, it) => a + it.quantity, 0);
-      const tpl = lines[0].shippingPolicyId ? templates.get(lines[0].shippingPolicyId) || null : null;
-      if (tpl) {
-        hasTemplate = true;
-        if (tpl.processing_days > maxProcessing) maxProcessing = tpl.processing_days;
+      let tpl = null;
+      for (const ln of lines) {
+        const t = ln.shippingPolicyId ? templates.get(ln.shippingPolicyId) || null : null;
+        if (!t) throw conflict('SHIPPING_POLICY_REQUIRED', `배송정책이 지정되지 않아 주문할 수 없는 상품입니다: ${ln.title}`);
+        if (!tpl) tpl = t;
       }
-      const { base, remote } = groupShipFee(tpl, gGoods, gQty, lines[0].shippingFee, lines[0].freeThreshold, remoteSurcharge);
+      hasTemplate = true;
+      if (tpl.processing_days > maxProcessing) maxProcessing = tpl.processing_days;
+      const { base, remote } = groupShipFee(tpl, gGoods, gQty, remoteSurcharge);
       // NEW-20: the island surcharge rides on top even when base shipping is free, once per group.
       const fee = base + remote;
       shipTotal += fee;
-      breakdown.push({ group_key: key, template_id: tpl ? tpl.id : null, fee_type: tpl ? tpl.fee_type : 'LEGACY',
-        goods: gGoods, quantity: gQty, base_fee: base, remote_surcharge: remote, shipping: assertWon(fee, 'shipping') });
+      breakdown.push({
+        group_key: key, template_id: tpl.id, fee_type: tpl.fee_type, shipping_text: shippingText(tpl),
+        goods: gGoods, quantity: gQty, base_fee: base, remote_surcharge: remote, shipping: assertWon(fee, 'shipping')
+      });
     }
     const goods = its.reduce((a, it) => a + it.lineTotal, 0);
     const commission = its[0].salesModel === 'MARKETPLACE' ? applyBps(goods, its[0].bps) : 0;

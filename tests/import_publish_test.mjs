@@ -50,7 +50,10 @@ const GOOD_BODY = {
   category_slug: 'womens-clothing',
   thumbnail_url: 'https://cdn.example/t.png',
   sale_price: 19900,
-  original_price: 29900
+  original_price: 29900,
+  shipping_policy_id: 'sp_dev_pt_001',
+  brand: 'TEST',
+  gtin: '5901234123457'
 };
 
 await t.test('1. publish lands DRAFT/PENDING for operator review', async () => {

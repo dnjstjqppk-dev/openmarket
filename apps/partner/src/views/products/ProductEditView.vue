@@ -10,6 +10,7 @@ import ProductImageUploader, { type GalleryImage } from '../../components/produc
 import OptionMatrixEditor, { type OptionKind } from '../../components/product-form/OptionMatrixEditor.vue'
 import SkuTableEditor, { type SkuRow } from '../../components/product-form/SkuTableEditor.vue'
 import CategoryPicker from '../../components/product-form/CategoryPicker.vue'
+import { NOBRAND_VALUE, isValidGtin } from '../../utils/gtin'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,7 +25,7 @@ const formError = ref('')
 const categories = ref<any[]>([])
 
 const form = ref({
-  title: '', brand: '', category_id: '', country_origin: 'KR', hs_code: '',
+  title: '', brand: '', manufacturer: '', model_name: '', category_id: '', country_origin: 'KR', hs_code: '',
   custody_type: 'SEMI_MANAGED', supply_price: null as number | null, warehouse_location: '',
   package_length_cm: null as number | null, package_width_cm: null as number | null,
   package_height_cm: null as number | null, package_weight_kg: null as number | null,
@@ -69,7 +70,7 @@ function rebuildRows() {
     const key = comboKey(m)
     const old = prev.get(key)
     const label = names.map((n) => m[n]).filter(Boolean).join(' / ') || '기본'
-    return old ? { ...old, key, label, combination: m } : { key, label, combination: m, sku_code: '', original_price: null, sale_price: null, stock_quantity: null, safety_stock: null }
+    return old ? { ...old, key, label, combination: m } : { key, label, combination: m, sku_code: '', original_price: null, sale_price: null, stock_quantity: null, safety_stock: null, gtin: '', gtin_exempt: false, gtin_exempt_reason: '', gtin_exempt_other: '' }
   })
 }
 function onKindsChange(v: OptionKind[]) { kinds.value = v; rebuildRows() }
@@ -135,7 +136,7 @@ async function loadProduct() {
     if (!res.ok || !json?.success) throw new Error(json?.error || '상품을 불러오지 못했습니다.')
     const p = json.data
     form.value = {
-      title: (p.title || '').slice(0, 200), brand: p.brand || '', category_id: p.category_id || '', country_origin: p.country_origin || 'KR',
+      title: (p.title || '').slice(0, 200), brand: p.brand || '', manufacturer: p.manufacturer || '', model_name: p.model_name || '', category_id: p.category_id || '', country_origin: p.country_origin || 'KR',
       hs_code: p.hs_code || '', custody_type: p.custody_type || 'SEMI_MANAGED', supply_price: p.supply_price ?? null,
       warehouse_location: p.warehouse_location || '', package_length_cm: p.package_length_cm ?? null,
       package_width_cm: p.package_width_cm ?? null, package_height_cm: p.package_height_cm ?? null,
@@ -160,11 +161,19 @@ async function loadProduct() {
       const m = parseCombo(s.option_combination_json)
       const row = skuRows.value.find((r) => r.key === comboKey(isDefault ? {} : m))
       if (row) {
+        row.sku_id = s.id
         row.sku_code = s.sku_code || ''
         row.original_price = s.original_price ?? null
         row.sale_price = s.sale_price ?? null
         row.stock_quantity = s.stock_quantity ?? null
         row.safety_stock = s.safety_stock ?? null
+        row.gtin = s.gtin || ''
+        if (s.gtin_exempt_reason) {
+          const [code, ...rest] = String(s.gtin_exempt_reason).split(':')
+          row.gtin_exempt = true
+          row.gtin_exempt_reason = code
+          row.gtin_exempt_other = rest.join(':')
+        }
       }
     }
   } catch (e: any) {
@@ -181,17 +190,36 @@ async function submit() {
   if (!form.value.category_id) { formError.value = '카테고리를 선택해 주세요.'; return }
   if (!images.value.length) { formError.value = '상품 이미지를 1장 이상 등록해 주세요.'; return }
   if (form.value.kc_certified && !form.value.kc_cert_number.trim()) { formError.value = 'KC 인증 대상 상품은 인증번호를 입력해야 합니다.'; return }
+  if (!form.value.shipping_policy_id) { formError.value = '배송정책을 선택해 주세요. 배송정책이 없으면 먼저 등록해 주세요.'; return }
+  if (!form.value.brand.trim()) { formError.value = '브랜드를 입력해 주세요. 브랜드가 없으면 "노브랜드/자체제작"을 선택해 주세요.'; return }
   if (!skuRows.value.length || skuRows.value.length > 200) { formError.value = 'SKU는 1~200개여야 합니다.'; return }
   for (const r of skuRows.value) {
     if (r.sale_price === null || r.sale_price < 100 || r.sale_price > 100000000) { formError.value = `판매가를 확인해 주세요 (${r.label}).`; return }
     if (r.stock_quantity === null || r.stock_quantity < 0 || r.stock_quantity > 1000000) { formError.value = `재고를 확인해 주세요 (${r.label}).`; return }
+  }
+  // 6-12: new products need every barcode-or-reason; edits only validate rows the seller touched.
+  const needsIds = (r: SkuRow) => isNew.value || r.gtin.trim() !== '' || r.gtin_exempt
+  for (const r of skuRows.value) {
+    if (!needsIds(r)) continue
+    if (r.gtin_exempt) {
+      if (!r.gtin_exempt_reason) { formError.value = `바코드 없음 사유를 선택해 주세요 (${r.label}).`; return }
+      if (r.gtin_exempt_reason === 'OTHER' && !r.gtin_exempt_other.trim()) { formError.value = `기타 사유를 직접 입력해 주세요 (${r.label}).`; return }
+    } else if (!isValidGtin(r.gtin)) { formError.value = `바코드 형식을 확인해 주세요 (${r.label}). 8·12·13·14자리 숫자와 체크디지트가 맞아야 합니다.`; return }
+  }
+  const skuIds = (r: SkuRow) => {
+    if (!needsIds(r)) return {}
+    if (r.gtin_exempt) {
+      return { gtin_exempt_reason: r.gtin_exempt_reason === 'OTHER' ? `OTHER:${r.gtin_exempt_other.trim()}` : r.gtin_exempt_reason }
+    }
+    return { gtin: r.gtin.replace(/[\s-]/g, '') }
   }
   saving.value = true
   try {
     const simple = !kinds.value.length
     const first = skuRows.value[0]
     const body: any = {
-      title: form.value.title.trim(), brand: form.value.brand.trim() || undefined, category_id: form.value.category_id,
+      title: form.value.title.trim(), brand: form.value.brand.trim(), category_id: form.value.category_id,
+      manufacturer: form.value.manufacturer.trim() || undefined, model_name: form.value.model_name.trim() || undefined,
       thumbnail_url: images.value[0].image_url, images: images.value.map((im) => ({ image_url: im.image_url, alt_text: im.alt_text || '' })),
       description_html: form.value.description_html, notice_info_json: noticeJson(),
       kc_certified: form.value.kc_certified, kc_cert_number: form.value.kc_cert_number.trim() || null,
@@ -206,12 +234,14 @@ async function submit() {
       body.sale_price = first.sale_price
       body.original_price = first.original_price ?? first.sale_price
       body.stock_quantity = first.stock_quantity
+      Object.assign(body, skuIds(first))
     } else {
       body.options = kinds.value.map((k) => ({ name: k.name.trim(), values: k.values }))
       body.skus = skuRows.value.map((r) => ({
+        ...(r.sku_id ? { id: r.sku_id } : {}),
         option_combination: r.combination, sku_code: r.sku_code.trim() || undefined,
         original_price: r.original_price ?? r.sale_price, sale_price: r.sale_price, stock_quantity: r.stock_quantity,
-        safety_stock: r.safety_stock ?? undefined
+        safety_stock: r.safety_stock ?? undefined, ...skuIds(r)
       }))
     }
     const res = await fetch(
@@ -221,6 +251,9 @@ async function submit() {
     const json = await res.json().catch(() => ({}))
     if (!res.ok || !json.success) throw new Error(json.error || '저장에 실패했습니다.')
     toastApi.success(isNew.value ? '심사 대기 상태로 등록되었습니다. (DRAFT + PENDING)' : '저장되었습니다. 내용 변경 시 재심사로 전환됩니다.')
+    for (const w of (Array.isArray(json.warnings) ? json.warnings : [])) {
+      toastApi.warning(w.message || '바코드 중복이 의심됩니다.', { title: '식별정보 확인 필요', timeout: 8000 })
+    }
     router.push('/products')
   } catch (e: any) {
     formError.value = userErrorMessage(e, '저장에 실패했습니다.')
@@ -231,7 +264,13 @@ async function submit() {
 
 onMounted(async () => {
   await loadCategories()
-  if (isNew.value) { loading.value = false; rebuildRows() }
+  if (isNew.value) {
+    // 6-11: the seller default only pre-fills the choice (never auto-links).
+    const def = policies.value.find((p: any) => Number(p.is_default) === 1) || policies.value[0]
+    if (def) form.value.shipping_policy_id = def.id
+    loading.value = false
+    rebuildRows()
+  }
   else await loadProduct()
 })
 </script>
@@ -269,7 +308,6 @@ onMounted(async () => {
         <h2 class="text-sm font-bold text-ink">기본 정보</h2>
         <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
           <label class="space-y-1 sm:col-span-2">상품명(최대 200자) *<input v-model="form.title" maxlength="200" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus" /></label>
-          <label class="space-y-1">브랜드<input v-model="form.brand" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
           <label class="space-y-1">원산지(2자리 국가코드)<input v-model="form.country_origin" maxlength="2" placeholder="KR" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
           <label class="space-y-1">HS 코드<input v-model="form.hs_code" maxlength="12" placeholder="예: 6109.10" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-ink" /></label>
           <label class="space-y-1">운영 모델<select v-model="form.custody_type" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
@@ -285,6 +323,19 @@ onMounted(async () => {
             <label class="space-y-1">무게kg<input v-model.number="form.package_weight_kg" type="number" min="0" step="0.01" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink" /></label>
           </div>
         </div>
+      </section>
+
+      <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="상품 주요정보">
+        <h2 class="text-sm font-bold text-ink">상품 주요정보</h2>
+        <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+          <div class="space-y-1">
+            <label class="block space-y-1">브랜드 *<input v-model="form.brand" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
+            <button type="button" class="text-2xs font-bold text-primary hover:underline" @click="form.brand = NOBRAND_VALUE">브랜드 없음 (노브랜드/자체제작으로 입력)</button>
+          </div>
+          <label class="space-y-1">제조사<input v-model="form.manufacturer" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
+          <label class="space-y-1 sm:col-span-2">모델명<input v-model="form.model_name" maxlength="100" placeholder="예: ABC-1234" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
+        </div>
+        <p class="text-2xs text-ink-subtle">바코드는 옵션별 SKU 표에서 입력합니다. 바코드가 없으면 해당 행에서 사유를 선택해 주세요.</p>
       </section>
 
       <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="상품 이미지">
@@ -333,12 +384,13 @@ onMounted(async () => {
       <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="배송">
         <h2 class="text-sm font-bold text-ink">배송</h2>
         <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-          <label class="space-y-1">배송비 템플릿<select v-model="form.shipping_policy_id" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
-            <option value="">기본 정책 사용</option>
-            <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <label class="space-y-1">배송정책 (필수)<select v-model="form.shipping_policy_id" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
+            <option value="" disabled>배송정책 선택</option>
+            <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}{{ Number(p.is_default) === 1 ? ' (기본)' : '' }}</option>
           </select></label>
           <label class="space-y-1">묶음배송 그룹<input v-model="form.bundle_group_key" maxlength="60" placeholder="예: BUNDLE-A" class="h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink" /></label>
         </div>
+        <p v-if="!policies.length" class="text-xs text-warning">등록된 배송정책이 없습니다. <button type="button" class="font-bold underline" @click="router.push('/store/shipping-policies')">배송정책 먼저 만들기</button></p>
       </section>
 
       <p v-if="formError" role="alert" class="rounded-xl border border-danger bg-danger-soft px-3 py-2 text-xs font-bold text-danger">{{ formError }}</p>

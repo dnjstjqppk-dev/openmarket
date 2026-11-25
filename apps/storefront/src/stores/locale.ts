@@ -57,6 +57,21 @@ export const useLocaleStore = defineStore('locale', () => {
     try { localStorage.setItem('olmoa_locale', newLoc); } catch (_) {}
   }
 
+  /** 6-2: display-only locale from the URL prefix (never persisted — no silent-setting). */
+  function applyUrlLocale(newLoc: SupportedLocale) {
+    if (locale.value === newLoc && i18n.global.locale.value === newLoc) return;
+    locale.value = newLoc;
+    i18n.global.locale.value = newLoc;
+  }
+
+  const NUDGE_KEY = 'olmoa_locale_nudge';
+  function nudgeDismissed(): boolean {
+    try { return sessionStorage.getItem(NUDGE_KEY) === '1'; } catch { return true; }
+  }
+  function dismissNudge() {
+    try { sessionStorage.setItem(NUDGE_KEY, '1'); } catch { /* once per session best-effort */ }
+  }
+
   function setCurrency(newCur: SupportedCurrency) {
     currency.value = newCur;
     try { localStorage.setItem('olmoa_currency', newCur); } catch (_) {}
@@ -91,6 +106,9 @@ export const useLocaleStore = defineStore('locale', () => {
     fxNote,
     availableCurrencies,
     setLocale,
+    applyUrlLocale,
+    nudgeDismissed,
+    dismissNudge,
     setCurrency,
     fetchFxRates,
     t,

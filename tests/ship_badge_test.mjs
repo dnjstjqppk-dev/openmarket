@@ -42,9 +42,10 @@ const SELLERS = [
   ['a', '15:00', 9, 1], // pre-cutoff, rate 9000
   ['b', '09:00', 9, 1], // post-cutoff, rate 9000
   ['c', '15:00', 1, 9], // pre-cutoff, rate 1000
-  ['d', null, 10, 0], // no cutoff template at all
+  ['d', null, 10, 0], // cutoff-less template (listed, never badged)
   ['e', '15:00', 0, 0], // cutoff but zero shipment history
-  ['f', '09:00', 4, 1] // post-cutoff, rate exactly 8000 (boundary)
+  ['f', '09:00', 4, 1], // post-cutoff, rate exactly 8000 (boundary)
+  ['g', 'NONE', 10, 0] // no template at all (admin console only)
 ];
 
 function seedSellers(g, { rateBps = null, tomorrowOn = null } = {}) {
@@ -56,13 +57,14 @@ function seedSellers(g, { rateBps = null, tomorrowOn = null } = {}) {
     g.db.prepare(`INSERT INTO partners (id, owner_user_id, business_name, business_reg_number, bank_code, bank_account_number, bank_account_holder, status, country_code, sales_model)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(`pt_sb_${s}`, `u_sb_${s}`, `SB ${s}`, `800-80-8000${s}`, '004', '1', 'H', 'APPROVED', 'KR', 'MARKETPLACE');
-    g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(`prod_sb_${s}`, `pt_sb_${s}`, 'cat_e_audio', `SB thing ${s}`, 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED');
-    if (cutoff) {
+    // 6-11: every listed product names its policy (seller d keeps a cutoff-less one).
+    if (cutoff !== 'NONE') {
       g.db.prepare(`INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, today_cutoff, processing_days, is_default)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(`sp_sb_${s}`, `pt_sb_${s}`, 'std', 'PARCEL', 'PAID', cutoff, 1, 1);
+      g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(`prod_sb_${s}`, `pt_sb_${s}`, 'cat_e_audio', `SB thing ${s}`, 'https://x/y.png', '<p>t</p>', 10000, 9000, 'ACTIVE', 'APPROVED', `sp_sb_${s}`);
     }
     const total = hits + misses;
     for (let i = 0; i < total; i++) {
@@ -208,7 +210,8 @@ await t.test('B2. sellers status rows carry badge facts and reasons', async () =
   assert.equal(byPid('pt_sb_f').badge_now, 'TOMORROW', 'boundary 8000 = TOMORROW');
   assert.equal(byPid('pt_sb_c').badge_now, 'NONE', 'low rate = NONE');
   assert.equal(byPid('pt_sb_c').badge_reason, 'RATE_BELOW', 'reason rate');
-  assert.equal(byPid('pt_sb_d').badge_reason, 'NO_TEMPLATE', 'reason no template');
+  assert.equal(byPid('pt_sb_d').badge_reason, 'NO_CUTOFF', 'reason cutoff-less template');
+  assert.equal(byPid('pt_sb_g').badge_reason, 'NO_TEMPLATE', 'reason no template');
   assert.equal(byPid('pt_sb_e').badge_reason, 'NO_HISTORY', 'reason no history');
   assert.equal(byPid('pt_sb_e').same_day_rate_bps, null, 'no rate without history');
 });
@@ -221,7 +224,7 @@ await t.test('B3. sellers status search and pagination', async () => {
   assert.equal(one.json.data[0].partner_id, 'pt_sb_b', 'right seller');
   const p1 = await g.call('/api/v1/admin/ship-badges/sellers?q=SB&per_page=2&page=1', { token: adm });
   const p2 = await g.call('/api/v1/admin/ship-badges/sellers?q=SB&per_page=2&page=2', { token: adm });
-  assert.equal(p1.json.pagination.total, 6, 'six seeded sellers');
+  assert.equal(p1.json.pagination.total, 7, 'seven seeded sellers');
   assert.equal(p1.json.data.length, 2, 'page size honored');
   assert.ok(!p2.json.data.find((s) => s.partner_id === p1.json.data[0].partner_id), 'pages do not overlap');
 });
@@ -241,7 +244,7 @@ await t.test('B4. cutoff edit validates, applies, clears, and 404s cleanly', asy
     method: 'PUT', token: adm, body: { today_cutoff: '17:00' }
   });
   assert.equal(miss.status, 404, 'unknown partner 404');
-  const noTpl = await g.call('/api/v1/admin/partners/pt_sb_d/shipping-cutoff', {
+  const noTpl = await g.call('/api/v1/admin/partners/pt_sb_g/shipping-cutoff', {
     method: 'PUT', token: adm, body: { today_cutoff: '17:00' }
   });
   assert.equal(noTpl.status, 404, 'template-less seller 404, never invented');

@@ -746,6 +746,18 @@ paths:
           schema:
             type: string
             description: csv returns a text/csv download.
+        - name: shipping
+          in: query
+          schema:
+            type: string
+            enum: [assigned, unassigned]
+            description: '6-11: filter by seller-policy assignment.'
+        - name: identifiers
+          in: query
+          schema:
+            type: string
+            enum: [missing, complete, conflict]
+            description: '6-12: filter by identifier completion or barcode conflicts.'
       responses:
         '200':
           description: Product rows with business_name, category_name, sku_count and total_stock
@@ -822,7 +834,7 @@ paths:
     post:
       summary: Approve or reject a product listing review (audited)
       tags: [Admin]
-      description: PUT is accepted as an alias of this route. Clients use POST. APPROVE sets review_status APPROVED and status ACTIVE; REJECT sets REJECTED and DRAFT.
+      description: PUT is accepted as an alias of this route. Clients use POST. APPROVE sets review_status APPROVED and status ACTIVE; REJECT sets REJECTED and DRAFT. 6-11: APPROVE requires a usable seller shipping policy (409 SHIPPING_POLICY_REQUIRED otherwise).
       parameters:
         - name: id
           in: path
@@ -867,6 +879,8 @@ paths:
           description: Missing or expired JWT, or not an ADMIN session
         '404':
           description: Product not found
+        '409':
+          description: SHIPPING_POLICY_REQUIRED when approving a policy-less product
 
   /api/v1/admin/products/review-queue:
     get:
@@ -1715,6 +1729,145 @@ paths:
           description: Operator account not found
         '409':
           description: SELF_LOCKOUT or LAST_SUPER_ADMIN
+
+  /api/v1/admin/faqs:
+    get:
+      summary: 6-13. List FAQ rows including unpublished
+      tags: [Admin]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: FAQ rows in fixed category order with the categories list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, count, data]
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.read permission
+    post:
+      summary: 6-13. Create an FAQ row (answer sanitized, audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, question, answer]
+              properties:
+                category:
+                  type: string
+                question:
+                  type: string
+                  maxLength: 500
+                answer:
+                  type: string
+                  maxLength: 20000
+                sort_order:
+                  type: integer
+                is_published:
+                  type: boolean
+      responses:
+        '201':
+          description: Created row id plus policy-number warnings
+        '400':
+          description: INVALID_FAQ_CATEGORY or ANSWER_REQUIRED
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.manage permission
+
+  /api/v1/admin/faqs/reorder:
+    put:
+      summary: 6-13. Rewrite FAQ sort orders in one batch (audited)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orders]
+              properties:
+                orders:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [id, sort_order]
+                    properties:
+                      id:
+                        type: string
+                      sort_order:
+                        type: integer
+      responses:
+        '200':
+          description: Updated row count
+        '404':
+          description: Unknown FAQ id
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.manage permission
+
+  /api/v1/admin/faqs/{id}:
+    put:
+      summary: 6-13. Edit an FAQ row (answer sanitized, audited)
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                question:
+                  type: string
+                  maxLength: 500
+                answer:
+                  type: string
+                  maxLength: 20000
+                sort_order:
+                  type: integer
+                is_published:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated row id plus policy-number warnings
+        '404':
+          description: FAQ not found
+        '401':
+          description: Missing or expired JWT
+        '403':
+          description: Requires the orders.manage permission
 
   /api/v1/admin/inquiries:
     get:

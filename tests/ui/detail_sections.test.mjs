@@ -70,4 +70,41 @@ await t.test('D46 mobile bar opens the shared-state buy sheet', async () => {
   assert.ok(m.includes('SelectedOptionList'), 'shared lines reused');
 });
 
+await t.test('D47 6-11 buy panel and PLP render the server shipping text', async () => {
+  const b = read('apps/storefront/src/components/product/BuyPanel.vue');
+  assert.ok(b.includes('product?.shipping_text'), 'detail shows the server string');
+  assert.ok(!b.includes('base_shipping_fee'), 'no seller-fee fallback');
+  const p = read('apps/storefront/src/components/plp/PlpLayout.vue');
+  assert.ok(p.includes('p.shipping_text'), 'cards show the server string');
+  const c = read('apps/storefront/src/views/CheckoutView.vue');
+  assert.ok(c.includes('shipping_groups'), 'order sheet shows quote group texts');
+});
+
+await t.test('D48 6-1 detail renders the shared brief blocks', async () => {
+  const v = view();
+  assert.ok(v.includes('product.brief'), 'brief bound from the detail API');
+  assert.ok(v.includes('OmKeyTakeaways') && v.includes('핵심 정보'), 'key facts block');
+  assert.ok(v.includes('OmSpecTable') && v.includes('product.brief.specs'), 'spec table block');
+  assert.ok(v.includes('<OmFaq') && v.includes('product.brief.qna'), 'Q&A summary block');
+});
+
+await t.test('D49 6-3 detail injects product and QAPage graphs from live rows', async () => {
+  const v = view();
+  assert.ok(v.includes('olmoa-jsonld-qa') && v.includes('qaPageJsonLdOf'), 'QAPage injected from brief Q&A');
+  assert.ok(v.includes('RETURN_WINDOW_DAYS'), 'return window from the pinned policy module');
+  const lib = read('apps/storefront/src/lib/productSeo.ts');
+  assert.ok(lib.includes('hasMerchantReturnPolicy') && lib.includes('returnPolicyNodeOf'), 'Offer carries the return policy');
+  assert.ok(lib.includes('primary_gtin'), 'GTIN from the agreed SKU value');
+  assert.ok(lib.includes('reviews_preview'), 'Review nodes from live previews');
+  assert.ok(lib.includes('storeJsonLdOf'), 'store graph builder present');
+  const s = read('apps/storefront/src/views/SellerStoreView.vue');
+  assert.ok(s.includes('olmoa-jsonld-store') && s.includes('storeJsonLdOf'), 'store page injects its graph');
+});
+
+await t.test('D50 6-4 detail renders the server key-facts table', async () => {
+  const v = view();
+  assert.ok(v.includes('product.key_facts_html'), 'shared markup injected verbatim');
+  assert.ok(v.includes('핵심 정보'), 'answer table headed');
+});
+
 t.finish();

@@ -136,7 +136,7 @@ await t.test('12 sellers ship, delivery, purchase confirmation, operator payout'
   assert.ok(pos.json.data.some((x) => x.order_no === order.order_no));
 });
 await t.test('13 seller bulk upload goes to review; operator approves', async () => {
-  const b = await g.call('/api/v1/partner/products/bulk', { method: 'POST', token: pt2, body: { items: [{ title: 'E2E 대량등록 상품 A', sale_price: 12900, stock_quantity: 5, category_slug: 'electronics' }] } });
+  const b = await g.call('/api/v1/partner/products/bulk', { method: 'POST', token: pt2, body: { shipping_policy_id: 'sp_dev_pt_002', items: [{ title: 'E2E 대량등록 상품 A', sale_price: 12900, stock_quantity: 5, category_slug: 'electronics', brand: 'E2E', gtin: '5901234123457' }] } });
   assert.equal(b.status, 201, b.text);
   const pid = b.json.products[0].product_id;
   assert.equal(one('SELECT review_status FROM products WHERE id = ?', pid).review_status, 'PENDING');

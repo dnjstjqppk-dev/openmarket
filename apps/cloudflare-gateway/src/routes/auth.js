@@ -24,7 +24,15 @@ export function validatePassword(pw) {
 }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, full_name: u.full_name, name: u.full_name, phone: u.phone, role: u.role, email_verified: u.email_verified };
+  return { id: u.id, email: u.email, full_name: u.full_name, name: u.full_name, phone: u.phone, role: u.role, email_verified: u.email_verified, locale: u.locale || 'ko-KR' };
+}
+
+/** 6-2: storefront locale tags (sub-path mirrors /en /ja). */
+export const STORE_LOCALES = ['ko-KR', 'en-US', 'ja-JP'];
+export function requireLocale(raw) {
+  const v = String(raw || '').trim();
+  if (!STORE_LOCALES.includes(v)) throw bad('INVALID_LOCALE', '지원하지 않는 언어입니다.');
+  return v;
 }
 
 export async function handleAuthRoutes(request, url, env, corsHeaders) {
@@ -180,6 +188,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     const fullName = body.full_name !== undefined ? str(body.full_name, { field: '성명', max: 50, required: true }) : user.full_name;
     const phone = body.phone !== undefined ? str(body.phone, { field: '휴대폰 번호', max: 20, required: true }) : user.phone;
+    const locale = body.locale !== undefined ? requireLocale(body.locale) : (user.locale || 'ko-KR');
     let hash = user.password_hash;
     let tokenVersion = Number(user.token_version || 0);
     if (body.new_password !== undefined) {
@@ -188,8 +197,8 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       hash = await hashPassword(body.new_password);
       tokenVersion += 1; // revoke all other sessions
     }
-    await env.DB.prepare('UPDATE users SET full_name = ?, phone = ?, password_hash = ?, token_version = ?, password_changed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE password_changed_at END, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(fullName, phone, hash, tokenVersion, body.new_password !== undefined ? 1 : 0, me.userId).run();
+    await env.DB.prepare('UPDATE users SET full_name = ?, phone = ?, password_hash = ?, token_version = ?, password_changed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE password_changed_at END, locale = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(fullName, phone, hash, tokenVersion, body.new_password !== undefined ? 1 : 0, locale, me.userId).run();
     // P2R-03: marketing opt-in/out appends a history row; latest row per type is current.
     if (typeof body.agree_marketing === 'boolean') {
       await env.DB.prepare('INSERT INTO user_consents (id, user_id, consent_type, consented, terms_version) VALUES (?, ?, ?, ?, ?)')

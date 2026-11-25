@@ -3,6 +3,7 @@ import { ArrowUpRight, Bot, Check, CircleAlert, CircleCheck, CloudDownload, Laye
 import { ref, onMounted, computed } from 'vue';
 import { API_BASE, getPartnerHeaders } from '../config';
 import { stripToSafeHtml } from '../utils/stripHtml';
+import { GTIN_EXEMPT_OPTIONS, isValidGtin } from '../utils/gtin';
 import { userErrorMessage } from '@olmoa/ui';
 
 // Quick-fill presets are a development aid and hidden in production builds.
@@ -114,6 +115,20 @@ const loadCategories = async () => {
 };
 const htmlOverride = ref('');
 const isCustomHtml = ref(false);
+// 6-11: publish requires the seller-chosen policy (default pre-fills).
+const policies = ref<any[]>([]);
+const selectedPolicy = ref('');
+const loadPolicies = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/partner/shipping-policies`, { headers: getPartnerHeaders() });
+    const json = await res.json().catch(() => null);
+    if (res.ok && json?.success && Array.isArray(json.data)) {
+      policies.value = json.data;
+      const def = policies.value.find((p: any) => Number(p.is_default) === 1) || policies.value[0];
+      if (def && !selectedPolicy.value) selectedPolicy.value = def.id;
+    }
+  } catch { /* publish validates */ }
+};
 
 // Execution state
 const isLoading = ref(false);
@@ -132,6 +147,14 @@ const result = ref<CrawlResult | null>(null);
 const safeDescriptionHtml = computed(() => stripToSafeHtml(result.value?.product.description_html || ''));
 const editedTitle = ref('');
 const editedSalePrice = ref<number | null>(null);
+// 6-12: identifiers for publish (brand required, barcode-or-reason per variant set).
+const editedBrand = ref('');
+const editedManufacturer = ref('');
+const editedModel = ref('');
+const editedGtin = ref('');
+const editedGtinExempt = ref(false);
+const editedExemptReason = ref('');
+const editedExemptOther = ref('');
 const aiInfo = ref<AiEnhancement | null>(null);
 const bulkResult = ref<BulkResponse | null>(null);
 const jobsHistory = ref<ImportJob[]>([]);
@@ -227,6 +250,7 @@ async function loadJobIntoEditor(jobId: string) {
     result.value = { job_id: jobId, ...preview } as CrawlResult;
     editedTitle.value = preview?.product?.title || '';
     editedSalePrice.value = preview?.pricing?.calculated_sale_price || null;
+    editedBrand.value = preview?.product?.brand || '';
     aiInfo.value = null;
     successMsg.value = `✓ 이전 수집 결과 불러옴 (품질 점수: ${preview?.quality_score ?? '-'}점) — 검수 후 상품 등록을 진행하세요.`;
   } catch (err: any) {
@@ -274,6 +298,7 @@ async function handleCrawl() {
     result.value = data.data;
     editedTitle.value = data.data.product?.title || '';
     editedSalePrice.value = data.data.pricing?.calculated_sale_price || null;
+    editedBrand.value = data.data.product?.brand || '';
     successMsg.value = `✓ 상품 정보 추출 완료! (품질 점수: ${data.data.quality_score}점)`;
     loadHistory();
   } catch (err: any) {
@@ -371,20 +396,46 @@ async function handlePublish() {
     errorMsg.value = '카테고리를 먼저 불러와 선택해 주세요.';
     return;
   }
+  if (!selectedPolicy.value) {
+    errorMsg.value = '배송정책을 선택해 주세요. 배송정책이 없으면 먼저 등록해 주세요.';
+    return;
+  }
+  if (!editedBrand.value.trim()) {
+    errorMsg.value = '브랜드를 입력해 주세요. 브랜드가 없으면 "노브랜드/자체제작"을 입력해 주세요.';
+    return;
+  }
+  if (!editedGtinExempt.value && !isValidGtin(editedGtin.value)) {
+    errorMsg.value = '바코드 형식을 확인해 주세요. 8·12·13·14자리 숫자와 체크디지트가 맞아야 합니다.';
+    return;
+  }
+  if (editedGtinExempt.value && !editedExemptReason.value) {
+    errorMsg.value = '바코드 없음 사유를 선택해 주세요.';
+    return;
+  }
+  if (editedGtinExempt.value && editedExemptReason.value === 'OTHER' && !editedExemptOther.value.trim()) {
+    errorMsg.value = '기타 사유를 직접 입력해 주세요.';
+    return;
+  }
   isPublishing.value = true;
   errorMsg.value = '';
   successMsg.value = '';
 
   try {
-    const publishPayload = {
+    const publishPayload: any = {
       title: editedTitle.value || result.value.product.title,
       sale_price: editedSalePrice.value || result.value.pricing.calculated_sale_price,
       original_price: result.value.pricing.calculated_original_price,
       wholesale_cost: result.value.pricing.wholesale_cost_krw,
       category_id: selectedCategory.value,
+      shipping_policy_id: selectedPolicy.value,
+      brand: editedBrand.value.trim(),
+      manufacturer: editedManufacturer.value.trim() || undefined,
+      model_name: editedModel.value.trim() || undefined,
+      ...(editedGtinExempt.value
+        ? { gtin_exempt_reason: editedExemptReason.value === 'OTHER' ? `OTHER:${editedExemptOther.value.trim()}` : editedExemptReason.value }
+        : { gtin: editedGtin.value.replace(/[\s-]/g, '') }),
       thumbnail_url: result.value.product.thumbnail_url,
       description_html: result.value.product.description_html,
-      brand: result.value.product.brand,
       variants: result.value.variants
     };
 
@@ -411,6 +462,7 @@ async function handlePublish() {
 onMounted(() => {
   loadHistory();
   loadCategories();
+  loadPolicies();
 });
 </script>
 
@@ -709,6 +761,34 @@ onMounted(() => {
               </div>
             </div>
 
+            <!-- Identifiers (6-12) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-line bg-surface-2 p-4">
+              <label class="space-y-1 text-xs font-bold text-ink">브랜드 *
+                <input v-model="editedBrand" type="text" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-normal text-ink" />
+              </label>
+              <label class="space-y-1 text-xs font-bold text-ink">제조사
+                <input v-model="editedManufacturer" type="text" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-normal text-ink" />
+              </label>
+              <label class="space-y-1 text-xs font-bold text-ink">모델명
+                <input v-model="editedModel" type="text" maxlength="100" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-normal text-ink" />
+              </label>
+              <div class="space-y-1 text-xs font-bold text-ink">
+                <label class="block space-y-1">바코드(GTIN) *
+                  <input v-model="editedGtin" :disabled="editedGtinExempt" type="text" inputmode="numeric" maxlength="18" placeholder="8·12·13·14자리" class="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-normal text-ink disabled:opacity-50" />
+                </label>
+                <label class="flex items-center gap-1.5 font-normal text-ink-muted">
+                  <input v-model="editedGtinExempt" type="checkbox" class="h-4 w-4" /> 바코드가 없는 상품
+                </label>
+                <div v-if="editedGtinExempt" class="flex gap-2">
+                  <select v-model="editedExemptReason" class="h-10 rounded-lg border border-line bg-surface px-2 font-normal text-ink">
+                    <option value="" disabled>사유 선택</option>
+                    <option v-for="o in GTIN_EXEMPT_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+                  </select>
+                  <input v-if="editedExemptReason === 'OTHER'" v-model="editedExemptOther" type="text" maxlength="100" placeholder="사유 직접 입력" class="h-10 flex-1 rounded-lg border border-line bg-surface px-3 font-normal text-ink" />
+                </div>
+              </div>
+            </div>
+
             <!-- Description Preview -->
             <div class="space-y-1">
               <label class="block text-xs font-bold text-ink-muted">상세 설명 요약 (XSS 소독 완료)</label>
@@ -769,6 +849,12 @@ onMounted(() => {
 
         <!-- Action Footer -->
         <div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-line-divider">
+          <label class="flex w-full sm:w-auto items-center gap-2 text-xs font-bold text-ink">배송정책 (필수)
+            <select v-model="selectedPolicy" class="h-10 rounded-lg border border-line bg-surface px-2 text-ink">
+              <option value="" disabled>배송정책 선택</option>
+              <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}{{ Number(p.is_default) === 1 ? ' (기본)' : '' }}</option>
+            </select>
+          </label>
           <button
             @click="result = null; aiInfo = null"
             class="w-full sm:w-auto px-4 py-2.5 text-ink-muted hover:text-ink text-xs font-bold transition cursor-pointer"

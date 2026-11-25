@@ -88,7 +88,7 @@ await t.test('P1-C02 product create/update stores sanitized HTML only', async ()
   const payload = '<p>안전 설명</p><img/src=x/onerror=alert(1)><script>alert(2)</script><a href="javascript:alert(3)">x</a>';
   const c = await g.call('/api/v1/partner/products', { method: 'POST', token: pt, body: {
     title: 'XSS 저장 테스트', sale_price: 10000, original_price: 12000, category_id: 'cat_e_audio',
-    thumbnail_url: 'https://cdn.example/t.png', stock_quantity: 5, description_html: payload } });
+    thumbnail_url: 'https://cdn.example/t.png', stock_quantity: 5, description_html: payload, shipping_policy_id: 'sp_dev_pt_001', brand: 'XS', gtin: '5901234123457' } });
   assert.equal(c.status, 201, c.text);
   let stored = g.one('SELECT description_html d FROM products WHERE id = ?', c.json.product_id).d;
   assert.ok(!/onerror|<script|javascript:/i.test(stored), `stored must be clean: ${stored.slice(0, 120)}`);

@@ -7,8 +7,9 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Zap } from 'lucide-vue-next'
-import { userErrorMessage, OmButton, OmSkeleton, OmEmptyState, OmErrorState, OmCarousel, OmCountdown, OmProgress, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmSkeleton, OmEmptyState, OmErrorState, OmCarousel, OmCountdown, OmProgress, formatNumber, injectJsonLd } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
+import { organizationGraph } from '../../../cloudflare-gateway/src/lib/site-entity.js'
 import { useCatalogStore } from '../stores/catalog'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
@@ -110,8 +111,8 @@ function watchSentinel() {
 }
 watch([() => products.value.length, () => loading.value], async () => { await nextTick(); watchSentinel() })
 
-onMounted(() => { load() })
-onUnmounted(() => { if (observer) observer.disconnect() })
+onMounted(() => { load(); injectJsonLd('olmoa-jsonld-org', organizationGraph(window.location.origin)) })
+onUnmounted(() => { if (observer) observer.disconnect(); document.getElementById('olmoa-jsonld-org')?.remove() })
 watch(() => banners.value.length, () => { if (bannerIdx.value >= banners.value.length) bannerIdx.value = 0 })
 
 // ---- sections (all derived from server data; nothing invented) ----------------------------------

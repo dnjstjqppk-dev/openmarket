@@ -28,6 +28,8 @@ const fMin = ref('')
 const fMax = ref('')
 const fFrom = ref('')
 const fTo = ref('')
+const fShipping = ref('')
+const fIdentifiers = ref('')
 
 const columns = [
   { key: 'product', label: '상품', primary: true },
@@ -54,6 +56,8 @@ function query(csv = false) {
   if (fMax.value !== '') params.set('max_price', fMax.value)
   if (fFrom.value) params.set('from', fFrom.value)
   if (fTo.value) params.set('to', fTo.value)
+  if (fShipping.value) params.set('shipping', fShipping.value)
+  if (fIdentifiers.value) params.set('identifiers', fIdentifiers.value)
   if (csv) params.set('format', 'csv')
   return params.toString()
 }
@@ -160,6 +164,17 @@ onMounted(() => { void load(); void loadRefs() })
         <option value="APPROVED">승인</option>
         <option value="REJECTED">반려</option>
       </select>
+      <select v-model="fShipping" aria-label="배송정책 지정 여부" class="h-9 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @change="page = 1; load()">
+        <option value="">배송정책 전체</option>
+        <option value="unassigned">배송정책 미지정</option>
+        <option value="assigned">배송정책 지정됨</option>
+      </select>
+      <select v-model="fIdentifiers" aria-label="식별정보 상태" class="h-9 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @change="page = 1; load()">
+        <option value="">식별정보 전체</option>
+        <option value="missing">식별정보 누락</option>
+        <option value="conflict">바코드 중복</option>
+        <option value="complete">식별정보 완성</option>
+      </select>
       <input v-model="fMin" type="number" min="0" placeholder="최저가" aria-label="최저 판매가" class="h-9 w-28 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @keyup.enter="page = 1; load()" />
       <span class="text-xs text-ink-subtle">~</span>
       <input v-model="fMax" type="number" min="0" placeholder="최고가" aria-label="최고 판매가" class="h-9 w-28 rounded-lg border border-line bg-surface px-2 text-xs text-ink" @keyup.enter="page = 1; load()" />
@@ -204,6 +219,9 @@ onMounted(() => { void load(); void loadRefs() })
           <span v-if="row.review_status === 'PENDING'" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">심사 대기</span>
           <span v-else-if="row.review_status === 'REJECTED'" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">반려</span>
           <span v-else class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
+          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">식별정보 누락</span>
+          <span v-if="Number(row.gtin_conflict) === 1" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">바코드 중복</span>
         </template>
         <template #actions="{ row }">
           <RouterLink v-if="row.review_status === 'PENDING'" to="/products/review-queue" class="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-on hover:bg-primary-hover">심사</RouterLink>

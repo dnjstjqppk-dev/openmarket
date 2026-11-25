@@ -31,15 +31,16 @@ const prodBody = (over = {}) => ({
   category_id: 'cat_e_audio',
   brand: 'JBrand',
   thumbnail_url: 'https://example.com/jb.png',
+  shipping_policy_id: 'sp_dev_pt_001',
   options: [
     { name: '색상', values: ['블랙', '네이비'] },
     { name: '사이즈', values: ['M', 'L'] }
   ],
   skus: [
-    { option_combination: { 색상: '블랙', 사이즈: 'M' }, original_price: 50000, sale_price: 39000, stock_quantity: 10 },
-    { option_combination: { 색상: '블랙', 사이즈: 'L' }, original_price: 50000, sale_price: 39000, stock_quantity: 5 },
-    { option_combination: { 색상: '네이비', 사이즈: 'M' }, original_price: 52000, sale_price: 41000, stock_quantity: 8 },
-    { option_combination: { 색상: '네이비', 사이즈: 'L' }, original_price: 52000, sale_price: 41000, stock_quantity: 0 }
+    { option_combination: { 색상: '블랙', 사이즈: 'M' }, original_price: 50000, sale_price: 39000, stock_quantity: 10, gtin: '5901234123457' },
+    { option_combination: { 색상: '블랙', 사이즈: 'L' }, original_price: 50000, sale_price: 39000, stock_quantity: 5, gtin_exempt_reason: 'SELF_MADE' },
+    { option_combination: { 색상: '네이비', 사이즈: 'M' }, original_price: 52000, sale_price: 41000, stock_quantity: 8, gtin: '96385074' },
+    { option_combination: { 색상: '네이비', 사이즈: 'L' }, original_price: 52000, sale_price: 41000, stock_quantity: 0, gtin_exempt_reason: 'HANDMADE' }
   ],
   ...over
 });
@@ -110,7 +111,7 @@ await t.test('PJ3. single-SKU legacy shape still registers', async () => {
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const r = await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: { title: 'Simple Mug', description_html: '<p>white mug</p>', category_id: 'cat_e_audio', thumbnail_url: 'https://example.com/m.png', sale_price: 9000, original_price: 12000, stock_quantity: 3 }
+    body: { title: 'Simple Mug', description_html: '<p>white mug</p>', category_id: 'cat_e_audio', thumbnail_url: 'https://example.com/m.png', sale_price: 9000, original_price: 12000, stock_quantity: 3, shipping_policy_id: 'sp_dev_pt_001', brand: 'Mug', gtin: '5901234123457' }
   });
   assert.equal(r.status, 201, r.text);
   const skus = g.db.prepare('SELECT * FROM product_skus WHERE product_id = ?').all(r.json.product_id);
@@ -244,8 +245,8 @@ await t.test('PJ8. registration rejects bad option shapes', async () => {
   await badReg(g, pt, { skus: [{ option_combination: { 색상: '레드', 사이즈: 'M' }, sale_price: 10000, stock_quantity: 1 }] }, 'INVALID_OPTIONS', 'undeclared combo');
   await badReg(g, pt, {
     skus: [
-      { option_combination: { 색상: '블랙', 사이즈: 'M' }, sale_price: 10000, stock_quantity: 1 },
-      { option_combination: { 사이즈: 'M', 색상: '블랙' }, sale_price: 10000, stock_quantity: 1 }
+      { option_combination: { 색상: '블랙', 사이즈: 'M' }, sale_price: 10000, stock_quantity: 1, gtin: '5901234123457' },
+      { option_combination: { 사이즈: 'M', 색상: '블랙' }, sale_price: 10000, stock_quantity: 1, gtin: '96385074' }
     ]
   }, 'DUPLICATE_COMBINATION', 'dup combo regardless of key order');
 });
@@ -266,7 +267,7 @@ await t.test('PJ10. registration rejects oversize SKU lists and foreign keys', a
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const pt2 = await login(g, 'partner2@olmoa-tech.com', 'PARTNER');
   const many = Array.from({ length: 201 }, (_, i) => ({ option_combination: { 색상: `c${i}` }, sale_price: 1000 + i, stock_quantity: 1 }));
-  const over = await g.call('/api/v1/partner/products', { method: 'POST', token: pt, body: { title: 'Too Many', description_html: '<p>x</p>', category_id: 'cat_e_audio', thumbnail_url: 'https://example.com/t.png', skus: many } });
+  const over = await g.call('/api/v1/partner/products', { method: 'POST', token: pt, body: { title: 'Too Many', description_html: '<p>x</p>', category_id: 'cat_e_audio', thumbnail_url: 'https://example.com/t.png', brand: 'PJ10', skus: many } });
   assert.equal(over.status, 400, 'over-200 rejected');
   assert.equal(over.json.code, 'TOO_MANY_SKUS', 'code');
   const foreign = await makeTemplate(g, pt2, { name: 'theirs' });
@@ -279,12 +280,12 @@ await t.test('PJ11. duplicate SKU codes conflict across products', async () => {
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const one = await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: prodBody({ skus: [{ option_combination: { 색상: '블랙', 사이즈: 'M' }, sku_code: 'DUP-001', sale_price: 10000, stock_quantity: 1 }] })
+    body: prodBody({ skus: [{ option_combination: { 색상: '블랙', 사이즈: 'M' }, sku_code: 'DUP-001', sale_price: 10000, stock_quantity: 1, gtin: '5901234123457' }] })
   });
   assert.equal(one.status, 201, one.text);
   const two = await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: prodBody({ title: 'Second', skus: [{ option_combination: { 색상: '블랙', 사이즈: 'M' }, sku_code: 'DUP-001', sale_price: 10000, stock_quantity: 1 }] })
+    body: prodBody({ title: 'Second', skus: [{ option_combination: { 색상: '블랙', 사이즈: 'M' }, sku_code: 'DUP-001', sale_price: 10000, stock_quantity: 1, gtin: '96385074' }] })
   });
   assert.equal(two.status, 409, 'dup code conflicts');
   assert.equal(two.json.code, 'SKU_CODE_TAKEN', 'code');

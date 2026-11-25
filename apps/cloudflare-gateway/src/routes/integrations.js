@@ -2,6 +2,7 @@
 // OLMOA External Integrations: PriceScanner Product Feed & Selbym Partner Boundary
 import { timingSafeEqual } from '../utils/crypto-auth.js';
 import { unauthorized } from '../lib/http.js';
+import { sellableSql } from '../lib/shipping-policy.js';
 
 // Cutover-safe: feed links follow the canonical storefront base (worker secret
 // PUBLIC_STOREFRONT_URL, default https://olmoa.com), never a baked host.
@@ -31,7 +32,7 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
       JOIN product_skus s ON s.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN partners pt ON p.partner_id = pt.id
-      WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED'
+      WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED' AND ${sellableSql('p')}
     `;
     const binds = [];
 
@@ -46,7 +47,7 @@ export async function handleIntegrationRoutes(request, url, env, corsHeaders) {
     const stmt = env.DB.prepare(query).bind(...binds);
     const { results } = await stmt.all();
 
-    const countSql = `SELECT COUNT(*) as cnt FROM products p JOIN partners pt ON p.partner_id = pt.id WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED'` + (updatedAfter ? ` AND p.updated_at >= ?` : '');
+    const countSql = `SELECT COUNT(*) as cnt FROM products p JOIN partners pt ON p.partner_id = pt.id WHERE p.status = 'ACTIVE' AND pt.status = 'APPROVED' AND ${sellableSql('p')}` + (updatedAfter ? ` AND p.updated_at >= ?` : '');
     const countStmt = updatedAfter ? env.DB.prepare(countSql).bind(updatedAfter) : env.DB.prepare(countSql);
     const countRes = await countStmt.first();
     const totalCount = countRes ? countRes.cnt : results.length;

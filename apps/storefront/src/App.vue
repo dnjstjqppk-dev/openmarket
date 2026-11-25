@@ -12,12 +12,30 @@ import { useLocaleStore } from './stores/locale'
 import { useBusinessStore } from './stores/business'
 import { API_BASE_URL, PARTNER_CONSOLE_URL, authHeader } from './config'
 import MegaMenu from './components/MegaMenu.vue'
+import LocaleNudge from './components/LocaleNudge.vue'
+import { SITE_NAME, SITE_TAGLINE } from '../../cloudflare-gateway/src/lib/site-entity.js'
+import { barePathOf } from '@olmoa/ui'
+import type { SupportedLocale } from './stores/locale'
 
 const cart = useCartStore()
 const auth = useAuthStore()
 const locale = useLocaleStore()
 const router = useRouter()
 const route = useRoute()
+
+// 6-2: explicit language choice — persist it, save it server-side when
+// logged in, and move to that locale's URL (the URL stays the source of truth).
+async function switchLocale(v: SupportedLocale) {
+  locale.setLocale(v)
+  locale.dismissNudge()
+  if (auth.isAuthenticated) void auth.saveLocale(v)
+  const prefix = v === 'en-US' ? '/en' : v === 'ja-JP' ? '/ja' : ''
+  const bare = barePathOf(route.path)
+  const to = `${prefix}${bare === '/' ? '' : bare}` || '/'
+  if (to !== route.path) {
+    await router.push({ path: to, query: route.query, hash: route.hash }).catch(() => {})
+  }
+}
 
 // ---- categories live in MegaMenu (own store load) ------------------------------------------------------
 
@@ -217,7 +235,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
             <div class="flex items-center gap-3">
               <label class="flex items-center gap-1">
                 <span class="sr-only">언어</span>
-                <select :value="locale.locale" class="cursor-pointer bg-transparent font-medium text-ink-muted hover:text-ink focus:outline-none" @change="locale.setLocale(($event.target as HTMLSelectElement).value as any)">
+                <select :value="locale.locale" class="cursor-pointer bg-transparent font-medium text-ink-muted hover:text-ink focus:outline-none" @change="switchLocale(($event.target as HTMLSelectElement).value as SupportedLocale)">
                   <option value="ko-KR">한국어</option><option value="en-US">English</option><option value="ja-JP">日本語</option>
                 </select>
               </label>
@@ -241,7 +259,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
             <circle cx="16" cy="16" r="7.5" fill="none" stroke="white" stroke-width="3" />
             <circle cx="22.5" cy="9.5" r="2.5" class="fill-highlight" />
           </svg>
-          <span class="hidden text-xl font-bold tracking-tight sm:inline">olmoa</span>
+          <span class="hidden text-xl font-bold tracking-tight sm:inline">{{ SITE_NAME }}</span>
         </RouterLink>
         <MegaMenu />
       </template>
@@ -394,9 +412,9 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
       <template #brand>
         <p class="flex items-center gap-2 text-lg font-bold tracking-tight">
           <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" class="fill-primary" /><circle cx="16" cy="16" r="7.5" fill="none" stroke="white" stroke-width="3" /><circle cx="22.5" cy="9.5" r="2.5" class="fill-highlight" /></svg>
-          olmoa
+          {{ SITE_NAME }}
         </p>
-        <p class="max-w-xs text-sm text-ink-muted">국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다.</p>
+        <p class="max-w-xs text-sm text-ink-muted">{{ SITE_TAGLINE }}</p>
       </template>
       <template #legal>
         <div v-if="biz" data-testid="business-info" class="space-y-1">
@@ -418,5 +436,6 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
     </OmFooter>
     <OmToast />
     <OmConfirmDialog />
+    <LocaleNudge />
   </div>
 </template>

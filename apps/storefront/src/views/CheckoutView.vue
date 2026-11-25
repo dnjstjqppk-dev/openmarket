@@ -36,6 +36,7 @@ const won = (n: number | undefined | null) => locale.formatPrice(Number(n || 0),
 const lines = ref(cart.selectedItems.map((i) => ({ ...i })))
 const sellerName = (pid: string) => lines.value.find((l) => l.partner_id === pid)?.business_name || '판매자'
 const thumbOf = (sku: string) => lines.value.find((l) => l.sku_id === sku)?.thumbnail_url
+const groupTexts = (s: any) => [...new Set((s.shipping_groups || []).map((g: any) => g.shipping_text).filter(Boolean))].join(' / ')
 
 // ---- orderer (read-only, from the signed-in account) ----------------------------------------------------------------
 const orderer = ref<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' })
@@ -412,7 +413,7 @@ function pickedStoreLabel(pid: string): string | null {
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><Store class="h-4 w-4 text-ink-muted" aria-hidden="true" />{{ sellerName(s.partner_id) }}</p>
                 <div class="flex items-center gap-2">
-                  <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}<template v-if="s.remote_surcharge"> ({{ s.remote_zone }} 추가배송비 {{ won(s.remote_surcharge) }} 포함)</template></p>
+                  <p class="text-xs text-ink-muted">배송비 {{ s.shipping_fee ? won(s.shipping_fee) : '무료' }}<template v-if="s.remote_surcharge"> ({{ s.remote_zone }} 추가배송비 {{ won(s.remote_surcharge) }} 포함)</template><template v-if="groupTexts(s)"> · {{ groupTexts(s) }}</template></p>
                   <OmButton
                     size="sm"
                     variant="outline"

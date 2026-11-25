@@ -33,7 +33,10 @@ const BASE = {
   original_price: 30000,
   stock_quantity: 10,
   category_slug: 'womens-clothing',
-  thumbnail_url: 'https://cdn.example/f.png'
+  thumbnail_url: 'https://cdn.example/f.png',
+  shipping_policy_id: 'sp_dev_pt_001',
+  brand: 'FF',
+  gtin: '5901234123457'
 };
 
 await t.test('1. create stores custody, supply price and brand', async () => {

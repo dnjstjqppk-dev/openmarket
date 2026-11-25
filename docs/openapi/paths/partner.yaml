@@ -58,7 +58,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, sale_price, category_slug, thumbnail_url]
+              required: [title, sale_price, category_slug, thumbnail_url, shipping_policy_id, brand]
               properties:
                 title:
                   type: string
@@ -122,6 +122,21 @@ paths:
                 brand:
                   type: string
                   maxLength: 100
+                  description: '6-12: required; "노브랜드/자체제작" when the goods carry no brand.'
+                manufacturer:
+                  type: string
+                  maxLength: 100
+                  description: '6-12: optional maker name.'
+                model_name:
+                  type: string
+                  maxLength: 100
+                  description: '6-12: optional model number (MPN).'
+                gtin:
+                  type: string
+                  description: '6-12: legacy single-SKU barcode (8/12/13/14 digits + GS1 check); or gtin_exempt_reason.'
+                gtin_exempt_reason:
+                  type: string
+                  description: '6-12: SELF_MADE, HANDMADE, NOBRAND_IMPORT, OVERSEAS_AGENT, or OTHER:<text>.'
                 images:
                   type: array
                   maxItems: 10
@@ -137,9 +152,14 @@ paths:
                 skus:
                   type: array
                   maxItems: 200
-                  description: '2-9: full SKU set (unique combos, sale <= original); omitted = legacy single SKU from the top-level price/stock.'
+                  description: '2-9: full SKU set (unique combos, sale <= original); omitted = legacy single SKU from the top-level price/stock. 6-12: each entry needs gtin or gtin_exempt_reason.'
                   items:
                     type: object
+                    properties:
+                      gtin:
+                        type: string
+                      gtin_exempt_reason:
+                        type: string
                 notice_template_id:
                   type: string
                   description: '2-9: required notice items must be present in the notice values.'
@@ -148,7 +168,7 @@ paths:
                   description: '2-9: notice inputs (aliases notice_info, notice_info_json).'
                 shipping_policy_id:
                   type: string
-                  description: '2-9: own ACTIVE shipping template.'
+                  description: '6-11: required — own ACTIVE shipping template. Missing: SHIPPING_POLICY_REQUIRED; foreign/inactive: INVALID_SHIPPING_POLICY.'
                 bundle_group_key:
                   type: string
                   maxLength: 64
@@ -180,7 +200,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: CATEGORY_REQUIRED, INVALID_CATEGORY, INVALID_IMAGE_URL, INVALID_OPTIONS, TEMPLATE_TEXT_LEFT ([판매자 작성] leftovers), NOTICE_REQUIRED_MISSING, TOO_MANY_IMAGES/SKUS, DUPLICATE_COMBINATION
+          description: CATEGORY_REQUIRED, INVALID_CATEGORY, INVALID_IMAGE_URL, INVALID_OPTIONS, TEMPLATE_TEXT_LEFT ([판매자 작성] leftovers), NOTICE_REQUIRED_MISSING, TOO_MANY_IMAGES/SKUS, DUPLICATE_COMBINATION, SHIPPING_POLICY_REQUIRED, INVALID_SHIPPING_POLICY, BRAND_REQUIRED, GTIN_REQUIRED, INVALID_GTIN, INVALID_EXEMPT_REASON
           content:
             application/json:
               schema:
@@ -207,6 +227,9 @@ paths:
               type: object
               required: [items]
               properties:
+                shipping_policy_id:
+                  type: string
+                  description: '6-11: top-level policy applied to rows without their own; every row needs one.'
                 items:
                   type: array
                   minItems: 1
@@ -240,6 +263,9 @@ paths:
                         maxLength: 60
                       option_json:
                         type: string
+                      shipping_policy_id:
+                        type: string
+                        description: '6-11: per-row override; falls back to the top-level id.'
       responses:
         '201':
           description: All rows registered as DRAFT/PENDING
@@ -1565,11 +1591,59 @@ paths:
         '409':
           description: Template in use (TEMPLATE_IN_USE)
 
+  /api/v1/partner/products/identifiers:
+    post:
+      summary: Backfill brand, manufacturer, model and SKU barcodes (max 500, per-row results)
+      tags: [Partner]
+      description: '6-12: fills identifiers on pre-existing own products. Each item applies or fails apart; duplicate barcodes return GTIN_DUPLICATE warnings without blocking.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [product_id]
+                    properties:
+                      product_id:
+                        type: string
+                      brand:
+                        type: string
+                      manufacturer:
+                        type: string
+                      model_name:
+                        type: string
+                      skus:
+                        type: array
+                        items:
+                          type: object
+                          required: [sku_id]
+                          properties:
+                            sku_id:
+                              type: string
+                            gtin:
+                              type: string
+                            gtin_exempt_reason:
+                              type: string
+      responses:
+        '200':
+          description: Applied and failed lists with per-row warnings
+        '400':
+          description: EMPTY, or BRAND_REQUIRED, INVALID_GTIN, INVALID_EXEMPT_REASON inside a row
+        '401':
+          description: Missing or expired partner JWT
+
   /api/v1/partner/products/bulk-update:
     put:
-      summary: Bulk status, price and stock update (max 500)
+      summary: Bulk status, price, stock and shipping-policy update (max 500)
       tags: [Partner]
-      description: '2-9: per-product status (HIDDEN/DRAFT only, never self-activation), price set/ratio/delta (journaled) and stock; failures stay apart. Separate from POST .../products/bulk (CSV registration).'
+      description: '2-9: per-product status (HIDDEN/DRAFT only, never self-activation), price set/ratio/delta (journaled) and stock; failures stay apart. Separate from POST .../products/bulk (CSV registration). 6-11: updates[].shipping_policy_id bulk-assigns the seller policy (own ACTIVE only).'
       requestBody:
         required: true
         content:
@@ -1583,6 +1657,21 @@ paths:
                   maxItems: 500
                   items:
                     type: object
+                    required: [product_id]
+                    properties:
+                      product_id:
+                        type: string
+                      status:
+                        type: string
+                      price:
+                        type: object
+                      stock_quantity:
+                        type: integer
+                      sku_id:
+                        type: string
+                      shipping_policy_id:
+                        type: string
+                        description: '6-11: own ACTIVE policy id for bulk assignment.'
       responses:
         '200':
           description: Updated and failed lists

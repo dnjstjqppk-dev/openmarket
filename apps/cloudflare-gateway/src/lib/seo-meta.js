@@ -22,27 +22,31 @@ export function clip(raw, max) {
   return `${sp > max * 0.5 ? cut.slice(0, sp) : cut}…`;
 }
 
-const krw = (n) => (Number.isSafeInteger(n) && n > 0 ? `${n.toLocaleString('ko-KR')}원` : '');
-
-/** Product detail meta from the product row + its category name. */
-export function productMeta(p, categoryName = '') {
+/** 6-8: `상품명 | 브랜드 | OLMOA`; the description is extracted from the
+ *  product text — facts only, no blanket shipping or marketing phrases. */
+export function productMeta(p, brand = '') {
   const title = clean(p && p.title) || `${SITE_NAME} 상품`;
-  const cat = clean(categoryName);
-  const price = krw(p && (p.lowest_sale_price ?? p.sale_price));
-  const full = `${title}${cat ? ` | ${cat}` : ''} | ${SITE_NAME}`;
-  const desc = `${title}${cat ? ` — ${cat}` : ''}${price ? ` ${price}` : ''}. ${SITE_NAME}에서 무료배송 혜택으로 만나보세요.`;
-  return { title: clip(full, TITLE_MAX), description: clip(desc, DESC_MAX), h1: title };
+  const b = clean(brand || (p && (p.brand || p.brand_name)) || '');
+  const full = b ? `${title} | ${b} | ${SITE_NAME}` : `${title} | ${SITE_NAME}`;
+  const text = clean(p && (p.description_html || p.description)) || title;
+  return { title: clip(full, TITLE_MAX), description: clip(text, DESC_MAX), h1: title };
 }
 
-/** Category PLP meta from the category row + its live product count. */
-export function categoryMeta(c, count = 0) {
+/** 6-8: `하위 - 상위 | OLMOA` (top level: `카테고리명 | OLMOA`); the
+ *  description combines facts only — sub names, sub count, live count. */
+export function categoryMeta(c, count = 0, parentName = '', subNames = [], subTotal = 0) {
   const name = clean(c && c.name) || '카테고리';
+  const parent = clean(parentName);
   const n = Number.isSafeInteger(count) && count > 0 ? count : 0;
-  const full = `${name} | ${SITE_NAME}`;
-  const desc = n > 0
-    ? `${name} 상품 ${n.toLocaleString('ko-KR')}개를 ${SITE_NAME}에서 만나보세요.`
-    : `${name} 상품을 ${SITE_NAME}에서 만나보세요.`;
-  return { title: clip(full, TITLE_MAX), description: clip(desc, DESC_MAX), h1: name };
+  const full = parent ? `${name} - ${parent} | ${SITE_NAME}` : `${name} | ${SITE_NAME}`;
+  const subs = (Array.isArray(subNames) ? subNames : []).map((s) => clean(s)).filter(Boolean);
+  const total = Number.isSafeInteger(subTotal) && subTotal > 0 ? subTotal : subs.length;
+  const shown = subs.slice(0, 3).join('·');
+  const parts = [name];
+  if (shown && total > 0) parts.push(`${shown}${total > subs.slice(0, 3).length ? ' 등' : ''} 하위 ${total}개`);
+  else if (total > 0) parts.push(`하위 ${total}개`);
+  if (n > 0) parts.push(`상품 ${n.toLocaleString('ko-KR')}개`);
+  return { title: clip(full, TITLE_MAX), description: clip(parts.join(', '), DESC_MAX), h1: name };
 }
 
 /** Seller store meta from the store row. */

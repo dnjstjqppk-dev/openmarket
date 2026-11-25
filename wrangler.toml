@@ -15,8 +15,11 @@ command = "npm run build --workspace=apps/storefront"
 directory = "./apps/storefront/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-# Keep identical to CRAWL_PATHS in apps/storefront/edge/apex-worker.js.
-run_worker_first = ["/robots.txt", "/sitemap.xml", "/sitemap-index.xml", "/sitemaps/*", "/llms.txt", "/llms-full.txt"]
+# Keep identical to RUN_WORKER_FIRST in apps/storefront/edge/apex-worker.js.
+run_worker_first = ["/robots.txt", "/sitemap.xml", "/sitemap-index.xml", "/sitemaps/*", "/llms.txt", "/llms-full.txt", "/llms/*", "/*.txt", "/"]
+# Secrets (wrangler secret put / dashboard; never values here):
+#   NAVER_SITE_VERIFICATION / GOOGLE_SITE_VERIFICATION — engine ownership codes,
+#   injected into <head> of / when set (omit entirely when verifying via DNS TXT).
 
 [[services]]
 binding = "API"

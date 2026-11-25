@@ -12,24 +12,39 @@ export function isNoindex(path) {
   return NOINDEX_PREFIXES.some((pre) => p === pre || p.startsWith(`${pre}/`));
 }
 
-/** Strip tracking params; keep facet params out of the canonical. */
-export function canonicalOf(base, path) {
+/** 6-8: search result pages are never indexed, but their links are followed. */
+export function isSearch(path) {
+  const p = String(path || '/');
+  return p === '/search' || p.startsWith('/search/');
+}
+
+/** 6-8: pagination keeps its page (?page=N, N>=2); page=1 is the bare URL. */
+export function pageOfQuery(query) {
+  const q = query || {};
+  const raw = Array.isArray(q.page) ? q.page[0] : q.page;
+  const n = typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN;
+  return Number.isInteger(n) && n >= 2 ? n : 1;
+}
+
+/** Strip tracking/sort/filter params; keep ?page=N (N>=2, self-canonical per page). */
+export function canonicalOf(base, path, query) {
   const cleanBase = String(base || 'https://olmoa.com').replace(/\/$/, '');
   const p = String(path || '/').split('?')[0] || '/';
-  return `${cleanBase}${p.startsWith('/') ? p : `/${p}`}`;
+  const page = pageOfQuery(query);
+  return `${cleanBase}${p.startsWith('/') ? p : `/${p}`}${page > 1 ? `?page=${page}` : ''}`;
 }
 
 /**
  * Full head for a route. Pure — used by edge injection and mirrored by the
  * SPA hook (useSeoHead.ts) for client-side navigation.
  */
-export function routeHead({ route = '', path = '/', base, title, description = '', image = '' }) {
-  const canonical = canonicalOf(base, path);
-  const noindex = isNoindex(path);
+export function routeHead({ route = '', path = '/', base, title, description = '', image = '', query }) {
+  const canonical = canonicalOf(base, path, query);
   const desc = String(description || '').slice(0, 160);
+  const robots = isSearch(path) ? 'noindex,follow' : (isNoindex(path) ? 'noindex,nofollow' : 'index,follow');
   return {
     title: String(title || 'OLMOA'),
-    robots: noindex ? 'noindex,nofollow' : 'index,follow',
+    robots,
     canonical,
     hreflangs: [{ hreflang: 'x-default', href: canonical }],
     og: {

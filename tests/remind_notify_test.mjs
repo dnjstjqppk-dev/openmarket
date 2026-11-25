@@ -53,9 +53,11 @@ async function login(g, email, role) {
 }
 
 function mkProduct(g, { productId, skuId, title, partnerId = 'pt_001', status = 'ACTIVE', orig = 20000, sale = 15000, stock = 10 }) {
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES (?, ?, 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', ?, ?, ?, 'APPROVED')`)
-    .run(productId, partnerId, title, orig, sale, status);
+  // 6-11: reminders only fire for sellable products.
+  const pol = g.db.prepare("SELECT id FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' ORDER BY is_default DESC LIMIT 1").get(partnerId);
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES (?, ?, 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', ?, ?, ?, 'APPROVED', ?)`)
+    .run(productId, partnerId, title, orig, sale, status, pol.id);
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES (?, ?, ?, '{}', ?, ?, ?, ?)`)
     .run(skuId, productId, `C-${productId}`, orig, sale, stock, stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK');

@@ -53,6 +53,14 @@ lines.push(
   "INSERT INTO supplier_sku_mappings (id, sku_id, supplier_id, supplier_sku_code, unit_cost, fulfillment_mode, resale_authorized, image_use_authorized, authorization_evidence)",
   "SELECT 'ssm_' || s.id, s.id, 'sup_dev_001', 'SUP-' || s.sku_code, CAST(s.sale_price * 6 / 10 AS INTEGER), 'DROP_SHIP', 1, 1, 'DEV-ONLY resale authorization'",
   "FROM product_skus s JOIN products p ON p.id = s.product_id WHERE p.partner_id = 'pt_001';",
+  '',
+  "-- 6-11: every seed seller owns one default policy (conditional 3000/30000,",
+  '-- mirroring the retired legacy fallback) and every seed product names it,',
+  '-- so fixtures stay sellable under the fail-closed rules.',
+  "INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, base_fee, free_threshold, is_default, status)",
+  "SELECT 'sp_dev_' || id, id, '개발 기본배송', 'PARCEL', 'CONDITIONAL', 3000, 30000, 1, 'ACTIVE' FROM partners;",
+  '',
+  "UPDATE products SET shipping_policy_id = 'sp_dev_' || partner_id WHERE shipping_policy_id IS NULL;",
   ''
 );
 const out = path.join(ROOT, 'migrations', 'dev', 'seed_local_dev.sql');

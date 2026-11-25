@@ -217,6 +217,12 @@ const pick = (o, keys) => {
 function mapLiveOrder(o) {
   const externalOrderId = String(pick(o, ['orderId', 'external_order_id']) || '').trim();
   if (!externalOrderId) return { skipped: true, reason: 'missing order id' };
+  // 6-0/D1: a row without a usable total must be skipped, never imported as
+  // a 0-won order (the route used to coerce NaN to 0).
+  const total = Number(o?.totalAmount ?? o?.total_order_amount);
+  if (!Number.isSafeInteger(total) || total < 0) {
+    return { skipped: true, id: externalOrderId, reason: 'invalid total amount' };
+  }
   const missing = [];
   const no = pick(o, ['orderNo', 'orderNumber', 'external_order_no']);
   const buyer = pick(o, ['buyerName', 'ordererName', 'buyer']);
@@ -242,7 +248,7 @@ function mapLiveOrder(o) {
       recipient_phone: pick(o, ['recipientPhone', 'receiverPhone', 'receiverMobile', 'ordererPhone']) ?? null,
       shipping_address: String(address),
       customs_id_pccc: pick(o, ['customsIdPccc', 'pccc', 'customs_id_pccc']) ?? null,
-      total_order_amount: Number(o?.totalAmount ?? o?.total_order_amount),
+      total_order_amount: total,
       currency: pick(o, ['currency']) ?? 'KRW',
       items
     }

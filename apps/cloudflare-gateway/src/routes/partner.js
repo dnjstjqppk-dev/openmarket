@@ -14,6 +14,9 @@ import { notifyRestockedSkus } from '../services/restock.js';
 import { priceHistoryStatements, skuIdsOfProduct } from '../lib/price-history.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { payablePreview, withdrawableAmount, requestPayout, cancelPayoutRequest } from '../services/payouts.js';
+import { requireOwnPolicy, throwMissingPolicy } from '../lib/shipping-policy.js';
+import { requireBrand, validateSkuIdentifiers, findGtinConflicts, gtinConflictWarnings, missingIdentifiersSql } from '../lib/product-identifiers.js';
+import { notifyProductChanged } from '../services/seo/indexnow.js';
 
 
 function optionSummary(json) {
@@ -256,6 +259,16 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (to) { where.push('date(p.created_at) <= date(?)'); args.push(to); }
     if (sMin !== null) { where.push(`${STOCK_SUM} >= ?`); args.push(sMin); }
     if (sMax !== null) { where.push(`${STOCK_SUM} <= ?`); args.push(sMax); }
+    // 6-11: the "unassigned products" list that feeds bulk assignment.
+    const shipFilter = String(url.searchParams.get('shipping') || '').toLowerCase();
+    if (shipFilter === 'unassigned') where.push('p.shipping_policy_id IS NULL');
+    else if (shipFilter === 'assigned') where.push('p.shipping_policy_id IS NOT NULL');
+    else if (shipFilter !== '') throw bad('INVALID_SHIPPING_FILTER', 'shipping은 unassigned·assigned 중 하나여야 합니다.');
+    // 6-12: the "missing identifiers" list that feeds backfill.
+    const idFilter = String(url.searchParams.get('identifiers') || '').toLowerCase();
+    if (idFilter === 'missing') where.push(missingIdentifiersSql('p'));
+    else if (idFilter === 'complete') where.push(`NOT (${missingIdentifiersSql('p')})`);
+    else if (idFilter !== '') throw bad('INVALID_IDENTIFIERS_FILTER', 'identifiers는 missing·complete 중 하나여야 합니다.');
     const whereSql = where.join(' AND ');
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '30', 10) || 30));
@@ -269,7 +282,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const { results } = ids.length ? await env.DB.prepare(
       `SELECT p.*, c.name AS category_name, c.slug AS category_slug, s.id AS sku_id, s.sku_code, s.option_combination_json,
               s.stock_quantity, s.original_price AS sku_original_price, s.sale_price, s.status AS sku_status,
-              ${STOCK_SUM} AS stock_sum
+              ${STOCK_SUM} AS stock_sum,
+              CASE WHEN ${missingIdentifiersSql('p')} THEN 1 ELSE 0 END AS identifiers_missing
        FROM products p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN product_skus s ON s.product_id = p.id
        WHERE p.id IN (${ids.map(() => '?').join(',')}) ORDER BY p.created_at DESC, s.sku_code ASC`
     ).bind(...ids).all() : { results: [] };
@@ -288,7 +302,10 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const custody = b.custody_type !== undefined ? str(b.custody_type, { max: 20 }) : 'SEMI_MANAGED';
     if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
     const supply = b.supply_price !== undefined && b.supply_price !== null ? intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' }) : null;
-    const brand = str(b.brand, { max: 100 }) || null;
+    // 6-12: brand required on new registrations; manufacturer/model optional.
+    const brand = requireBrand(b.brand);
+    const manufacturer = str(b.manufacturer, { max: 100 }) || null;
+    const modelName = str(b.model_name, { max: 100 }) || null;
     // 2-9 gallery (own storage only), options (<=3 kinds), skus (<=200, unique combos).
     const images = b.images !== undefined ? b.images : null;
     if (images !== null) {
@@ -340,11 +357,13 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         if (seen.has(comboJson)) throw bad('DUPLICATE_COMBINATION', '중복된 옵션 조합이 있습니다.');
         seen.add(comboJson);
         const pr = priceFields(s);
+        const stock = intParam(s.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: '재고' });
+        const safety = intParam(s.safety_stock ?? 5, { min: 0, max: 1_000_000, field: '안전재고' });
+        const ids = validateSkuIdentifiers(s, { where: `SKU ${i + 1}` });
         return {
           id: newId('sku'), sku_code: str(s.sku_code, { max: 60 }) || null, combo: comboJson,
-          orig: pr.orig, sale: pr.sale,
-          stock: intParam(s.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: '재고' }),
-          safety: intParam(s.safety_stock ?? 5, { min: 0, max: 1_000_000, field: '안전재고' })
+          orig: pr.orig, sale: pr.sale, stock, safety,
+          gtin: ids.gtin, exempt: ids.exempt
         };
       });
       for (const r of skuRows) if (!r.sku_code) r.sku_code = `SKU-${r.id.slice(-10).toUpperCase()}`;
@@ -355,9 +374,10 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       let legacyCombo;
       try { legacyCombo = normCombo(b.option_combination_json ?? b.option_combination ?? '{"옵션":"기본"}'); }
       catch (e) { if (e instanceof HttpError) throw e; throw bad('INVALID_OPTIONS', '옵션 형식이 올바르지 않습니다.'); }
+      const legacyIds = validateSkuIdentifiers(b, { where: 'SKU 1' });
       skuRows = [{
         id: skuId, sku_code: str(b.sku_code, { max: 60 }) || `SKU-${skuId.slice(-10).toUpperCase()}`, combo: legacyCombo,
-        orig, sale, stock, safety: 5
+        orig, sale, stock, safety: 5, gtin: legacyIds.gtin, exempt: legacyIds.exempt
       }];
     }
     const floorSale = Math.min(...skuRows.map((r) => r.sale));
@@ -380,12 +400,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       const missing = items.filter((it) => it.required).map((it) => it.key).filter((k) => !k || !String(vals[k] ?? '').trim());
       if (missing.length) throw bad('NOTICE_REQUIRED_MISSING', `고시 필수 항목이 비어 있습니다: ${missing.join(', ')}`);
     }
-    let shipTplId = null;
-    if (b.shipping_policy_id !== undefined && b.shipping_policy_id !== null && String(b.shipping_policy_id).trim() !== '') {
-      const spt = await env.DB.prepare("SELECT id FROM shipping_policies WHERE id = ? AND partner_id = ? AND status = 'ACTIVE'").bind(String(b.shipping_policy_id), partnerId).first();
-      if (!spt) throw bad('INVALID_SHIPPING_POLICY', '사용할 수 없는 배송 템플릿입니다.');
-      shipTplId = spt.id;
+    // 6-11: registration requires the seller-chosen policy (never null).
+    if (b.shipping_policy_id === undefined || b.shipping_policy_id === null || String(b.shipping_policy_id).trim() === '') {
+      await throwMissingPolicy(env, partnerId);
     }
+    const shipTplId = (await requireOwnPolicy(env, partnerId, String(b.shipping_policy_id).trim())).id;
     const bundleKey = b.bundle_group_key !== undefined && b.bundle_group_key !== null && String(b.bundle_group_key).trim() !== ''
       ? str(b.bundle_group_key, { field: '묶음 키', max: 64 }) : null;
     // NEW-11/12: notice table + KC certification (optional at registration; operator reviews them).
@@ -400,20 +419,22 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const prodId = newId('prod');
     const pkg = ['package_length_cm', 'package_width_cm', 'package_height_cm', 'package_weight_kg'].map((k) => Number(b[k] || 0));
     const volWeight = Math.round(((pkg[0] * pkg[1] * pkg[2]) / 5000) * 100) / 100;
+    // 6-12: same barcode on another product warns (registration still succeeds).
+    const gtinWarnings = gtinConflictWarnings(await findGtinConflicts(env, skuRows.map((r) => r.gtin), null));
     try {
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status,
              hs_code, country_origin, package_length_cm, package_width_cm, package_height_cm, package_weight_kg, volumetric_weight_kg, warehouse_location,
-             custody_type, supply_price, brand, notice_info_json, notice_template_id, notice_template_version, shipping_policy_id, bundle_group_key, kc_certified, kc_cert_number)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             custody_type, supply_price, brand, manufacturer, model_name, notice_info_json, notice_template_id, notice_template_version, shipping_policy_id, bundle_group_key, kc_certified, kc_cert_number)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(prodId, partnerId, catId, title, thumb, sanitizeHtml(rawDesc || `<p>${title}</p>`), floorOrig, floorSale,
           str(b.hs_code, { max: 12 }) || null, str(b.country_origin, { max: 2 }).toUpperCase() || 'KR', pkg[0], pkg[1], pkg[2], pkg[3], volWeight, str(b.warehouse_location, { max: 50 }) || null,
-          custody, supply, brand, noticeJson, tplId, tplVersion, shipTplId, bundleKey, kcCertified, kcNumber),
+          custody, supply, brand, manufacturer, modelName, noticeJson, tplId, tplVersion, shipTplId, bundleKey, kcCertified, kcNumber),
         ...skuRows.map((r) => env.DB.prepare(
-          `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(r.id, prodId, r.sku_code, r.combo, r.orig, r.sale, r.stock, r.safety, r.stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK')),
+          `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status, gtin, gtin_exempt_reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(r.id, prodId, r.sku_code, r.combo, r.orig, r.sale, r.stock, r.safety, r.stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK', r.gtin, r.exempt)),
         ...gallery.map((im, i) => env.DB.prepare(
           'INSERT INTO product_images (id, product_id, image_url, alt_text, sort_order) VALUES (?, ?, ?, ?, ?)'
         ).bind(newId('pimg'), prodId, im.url, im.alt, i)),
@@ -425,13 +446,19 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       throw e;
     }
     const data = { product_id: prodId, sku_id: skuRows[0].id, sku_code: skuRows[0].sku_code, status: 'DRAFT', review_status: 'PENDING' };
-    return json(corsHeaders, { success: true, ...data, data, message: '상품이 등록되었습니다. 운영자 심사 승인 후 판매가 시작됩니다.' }, 201);
+    return json(corsHeaders, { success: true, ...data, data, warnings: gtinWarnings, message: '상품이 등록되었습니다. 운영자 심사 승인 후 판매가 시작됩니다.' }, 201);
   }
 
   if (p === '/api/v1/partner/products/bulk' && request.method === 'POST') {
     const b = await readJson(request, { maxBytes: 2_000_000 });
     const rows = Array.isArray(b.items) ? b.items.slice(0, 200) : [];
     if (!rows.length) throw bad('EMPTY', '업로드할 상품이 없습니다.');
+    // 6-11: every bulk row needs the seller-chosen policy — per row, or one
+    // top-level id applied to all rows (the upload form requires the choice).
+    let defaultShip = null;
+    if (b.shipping_policy_id !== undefined && b.shipping_policy_id !== null && String(b.shipping_policy_id).trim() !== '') {
+      defaultShip = (await requireOwnPolicy(env, partnerId, String(b.shipping_policy_id).trim())).id;
+    }
     const st = [];
     const created = [];
     const errors = [];
@@ -441,28 +468,115 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         const { sale, orig } = priceFields(row);
         const stock = intParam(row.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: 'stock_quantity' });
         const catId = await resolveCategory(env, row);
+        const rowShipRaw = row.shipping_policy_id !== undefined && row.shipping_policy_id !== null && String(row.shipping_policy_id).trim() !== ''
+          ? String(row.shipping_policy_id).trim() : defaultShip;
+        if (!rowShipRaw) throw bad('SHIPPING_POLICY_REQUIRED', `${i + 1}행: 배송정책을 선택해 주세요.`);
+        const rowShip = (await requireOwnPolicy(env, partnerId, rowShipRaw)).id;
+        // 6-12: brand + one barcode-or-reason per row, like single registration.
+        let rowBrand;
+        try {
+          rowBrand = requireBrand(row.brand);
+        } catch {
+          throw bad('BRAND_REQUIRED', `${i + 1}행: 브랜드를 입력해 주세요.`);
+        }
+        const rowIds = validateSkuIdentifiers(row, { where: `${i + 1}행` });
         const prodId = newId('prod');
         const skuId = newId('sku');
         const skuCode = str(row.sku_code, { max: 60 }) || `SKU-${skuId.slice(-10).toUpperCase()}`;
         st.push(env.DB.prepare(
-          `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING')`
-        ).bind(prodId, partnerId, catId, title, str(row.thumbnail_url, { max: 500 }) || '', `<p>${title}</p>`, orig, sale));
+          `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id, brand, manufacturer, model_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', ?, ?, ?, ?)`
+        ).bind(prodId, partnerId, catId, title, str(row.thumbnail_url, { max: 500 }) || '', `<p>${title}</p>`, orig, sale, rowShip,
+          rowBrand, str(row.manufacturer, { max: 100 }) || null, str(row.model_name, { max: 100 }) || null));
         st.push(env.DB.prepare(
-          `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status) VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?)`
-        ).bind(skuId, prodId, skuCode, row.option_json || '{"옵션":"기본"}', orig, sale, stock, stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'));
-        created.push({ row: i + 1, product_id: prodId, sku_id: skuId, sku_code: skuCode, title });
+          `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status, gtin, gtin_exempt_reason) VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?, ?, ?)`
+        ).bind(skuId, prodId, skuCode, row.option_json || '{"옵션":"기본"}', orig, sale, stock, stock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK', rowIds.gtin, rowIds.exempt));
+        created.push({ row: i + 1, product_id: prodId, sku_id: skuId, sku_code: skuCode, title, gtin: rowIds.gtin });
       } catch (e) {
         errors.push({ row: i + 1, error: e.message });
       }
     }
     if (errors.length) return json(corsHeaders, { success: false, code: 'BULK_VALIDATION_FAILED', error: `${errors.length}개 행에 오류가 있어 전체 업로드를 중단했습니다.`, errors }, 400);
+    // 6-12: duplicate barcodes warn (against existing rows and inside the batch).
+    const rowGtins = created.map((c) => c.gtin).filter(Boolean);
+    const seenGtins = new Set();
+    const intraDupes = new Set();
+    for (const gt of rowGtins) {
+      if (seenGtins.has(gt)) intraDupes.add(gt);
+      seenGtins.add(gt);
+    }
+    const bulkWarnings = [
+      ...[...intraDupes].map((gtin) => ({
+        code: 'GTIN_DUPLICATE',
+        message: `바코드 ${gtin}이(가) 이번 업로드 안에서 중복되었습니다. 관리자 검수 목록에서 확인해 주세요.`
+      })),
+      ...gtinConflictWarnings(await findGtinConflicts(env, rowGtins, null))
+    ];
     try { await env.DB.batch(st); } catch (e) {
       if (String(e.message).includes('UNIQUE')) throw conflict('SKU_CODE_TAKEN', '중복된 SKU 코드가 있어 전체 업로드를 중단했습니다.');
       throw e;
     }
     const data = { inserted_count: created.length, imported_count: created.length, products: created, items: created };
-    return json(corsHeaders, { success: true, partner_id: partnerId, ...data, data, message: `${created.length}건이 심사 대기 상태로 등록되었습니다.` }, 201);
+    return json(corsHeaders, { success: true, partner_id: partnerId, ...data, data, warnings: bulkWarnings, message: `${created.length}건이 심사 대기 상태로 등록되었습니다.` }, 201);
+  }
+
+  // 6-12: identifier backfill for pre-existing products (up to 500 rows, each
+  // applied or failed apart; the missing-identifiers list and CSV upload feed it).
+  if (p === '/api/v1/partner/products/identifiers' && request.method === 'POST') {
+    const b = await readJson(request, { maxBytes: 2_000_000 });
+    const items = Array.isArray(b.items) ? b.items.slice(0, 500) : [];
+    if (!items.length) throw bad('EMPTY', '입력할 식별정보가 없습니다.');
+    const applied = [];
+    const failed = [];
+    for (const [i, it] of items.entries()) {
+      const pid = String(it.product_id || '').trim();
+      try {
+        if (!pid) throw bad('PRODUCT_REQUIRED', 'product_id가 비어 있습니다.');
+        const prod = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND partner_id = ?').bind(pid, partnerId).first();
+        if (!prod) throw notFound('상품을 찾을 수 없거나 권한이 없습니다.');
+        const sets = [];
+        const binds = [];
+        if (it.brand !== undefined) {
+          const v = requireBrand(it.brand);
+          sets.push('brand = ?');
+          binds.push(v);
+        }
+        if (it.manufacturer !== undefined) {
+          sets.push('manufacturer = ?');
+          binds.push(str(it.manufacturer, { max: 100 }) || null);
+        }
+        if (it.model_name !== undefined) {
+          sets.push('model_name = ?');
+          binds.push(str(it.model_name, { max: 100 }) || null);
+        }
+        const skuRows = Array.isArray(it.skus) ? it.skus : [];
+        const skuUpdates = [];
+        for (const s of skuRows) {
+          const sku = await env.DB.prepare('SELECT id, sku_code FROM product_skus WHERE id = ? AND product_id = ?')
+            .bind(String(s.sku_id || ''), pid).first();
+          if (!sku) throw notFound(`옵션을 찾을 수 없습니다: ${s.sku_id || '(빈 값)'}`);
+          const ids = validateSkuIdentifiers(s, { where: `SKU ${sku.sku_code || sku.id}` });
+          skuUpdates.push({ id: sku.id, ...ids });
+        }
+        if (!sets.length && !skuUpdates.length) throw bad('EMPTY_UPDATE', '변경할 항목이 없습니다.');
+        const stmts = [];
+        if (sets.length) stmts.push(env.DB.prepare(`UPDATE products SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...binds, pid));
+        for (const u of skuUpdates) {
+          stmts.push(env.DB.prepare('UPDATE product_skus SET gtin = ?, gtin_exempt_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+            .bind(u.gtin, u.exempt, u.id));
+        }
+        await env.DB.batch(stmts);
+        await notifyProductChanged(env, pid, prod); // 6-7: IndexNow queue.
+        const warnings = gtinConflictWarnings(await findGtinConflicts(env, skuUpdates.map((u) => u.gtin), pid));
+        applied.push({ row: i + 1, product_id: pid, warnings });
+      } catch (e) {
+        failed.push({ row: i + 1, product_id: pid || null, error: e.message || String(e) });
+      }
+    }
+    return json(corsHeaders, {
+      success: failed.length === 0, applied_count: applied.length, failed_count: failed.length,
+      data: { applied, failed }, applied, failed
+    });
   }
 
   // 2-9: bulk status/price/stock update (own products; failures stay apart).
@@ -519,8 +633,17 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
             stmts.push(env.DB.prepare("UPDATE product_skus SET stock_quantity = ?, status = CASE WHEN ? > 0 THEN 'IN_STOCK' ELSE 'OUT_OF_STOCK' END, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?").bind(stock, stock, pid));
           }
         }
+        // 6-11: bulk policy assignment for unassigned products (per-item failures apart).
+        if (u.shipping_policy_id !== undefined) {
+          if (u.shipping_policy_id === null || String(u.shipping_policy_id).trim() === '') {
+            throw bad('SHIPPING_POLICY_REQUIRED', '배송정책을 선택해 주세요.');
+          }
+          const spt = await requireOwnPolicy(env, partnerId, String(u.shipping_policy_id).trim());
+          stmts.push(env.DB.prepare('UPDATE products SET shipping_policy_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(spt.id, pid));
+        }
         if (!stmts.length) throw bad('EMPTY_UPDATE', '변경할 항목이 없습니다.');
         await env.DB.batch(stmts);
+        await notifyProductChanged(env, pid, prod); // 6-7: IndexNow queue.
         if (bulkRestock.length) {
           try {
             await notifyRestockedSkus(env, bulkRestock);
@@ -568,6 +691,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
           .bind(newId('ldg'), sku.id, delta, target, partnerId, newId('adj'), sku.id, target)
       ]);
       if (r[0].meta.changes !== 1) throw conflict('STOCK_CHANGED', '그 사이 주문이 발생해 재고가 변경되었습니다. 새로고침 후 다시 시도해 주세요.');
+      await notifyProductChanged(env, sku.product_id); // 6-7: IndexNow queue.
       try {
         await notifyRestockedSkus(env, [{ skuId: sku.id, before: sku.stock_quantity, after: target }]);
       } catch { /* restock notify must never fail the stock edit */ }
@@ -594,6 +718,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
             lowest_original_price = (SELECT MIN(original_price) FROM product_skus WHERE product_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(product.id, product.id, product.id),
           ...priceHistoryStatements(env, [sku.id], { orig: scoped.orig, sale: scoped.sale, by: me.userId })
         ]);
+        await notifyProductChanged(env, product.id, product); // 6-7: IndexNow queue.
         return json(corsHeaders, { success: true, product_id: product.id, sku_id: sku.id, sale_price: scoped.sale, original_price: scoped.orig, scope: 'SKU' });
       }
       await env.DB.batch([
@@ -601,6 +726,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         env.DB.prepare('UPDATE product_skus SET sale_price = ?, original_price = ?, updated_at = CURRENT_TIMESTAMP, price_updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').bind(sale, orig, product.id),
         ...priceHistoryStatements(env, await skuIdsOfProduct(env, product.id), { orig, sale, by: me.userId })
       ]);
+      await notifyProductChanged(env, product.id, product); // 6-7: IndexNow queue.
       return json(corsHeaders, { success: true, product_id: product.id, lowest_sale_price: sale, lowest_original_price: orig, scope: 'ALL_SKUS' });
     }
     const title = b.title !== undefined ? str(b.title, { field: '상품명', max: 200, required: true }) : product.title;
@@ -610,7 +736,11 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     const custody = b.custody_type !== undefined ? str(b.custody_type, { max: 20 }) : product.custody_type;
     if (!['FULL_MANAGED', 'SEMI_MANAGED'].includes(custody)) throw bad('INVALID_CUSTODY', '운영 모델이 올바르지 않습니다.');
     const supply = b.supply_price !== undefined ? (b.supply_price === null ? null : intParam(b.supply_price, { min: 0, max: 100_000_000, field: '공급가' })) : product.supply_price;
-    const brand = b.brand !== undefined ? (str(b.brand, { max: 100 }) || null) : product.brand;
+    // 6-12: brand/manufacturer/model validate when provided; legacy rows without
+    // them stay editable (backfilled via the missing-identifiers flow instead).
+    const brand = b.brand !== undefined ? requireBrand(b.brand) : product.brand;
+    const manufacturerUpd = b.manufacturer !== undefined ? (str(b.manufacturer, { max: 100 }) || null) : product.manufacturer;
+    const modelUpd = b.model_name !== undefined ? (str(b.model_name, { max: 100 }) || null) : product.model_name;
     // NEW-11/12: notice + KC edits re-trigger operator review (legal display must be verified).
     const noticeInputUpd = b.notice_values ?? b.notice_info ?? b.notice_info_json;
     const noticeUpd = noticeInputUpd !== undefined ? parseNoticeInfo(noticeInputUpd) : product.notice_info_json;
@@ -645,15 +775,16 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       const missing = items.filter((it) => it.required).map((it) => it.key).filter((k) => !k || !String(vals[k] ?? '').trim());
       if (missing.length) throw bad('NOTICE_REQUIRED_MISSING', `고시 필수 항목이 비어 있습니다: ${missing.join(', ')}`);
     }
+    // 6-11: an edit can change the policy but never clear it; unassigned
+    // products must name one in the same edit (bulk-assign covers many).
     let shipUpd = product.shipping_policy_id;
     if (b.shipping_policy_id !== undefined) {
-      if (b.shipping_policy_id === null || String(b.shipping_policy_id).trim() === '') shipUpd = null;
-      else {
-        const spt = await env.DB.prepare("SELECT id FROM shipping_policies WHERE id = ? AND partner_id = ? AND status = 'ACTIVE'").bind(String(b.shipping_policy_id), partnerId).first();
-        if (!spt) throw bad('INVALID_SHIPPING_POLICY', '사용할 수 없는 배송 템플릿입니다.');
-        shipUpd = spt.id;
+      if (b.shipping_policy_id === null || String(b.shipping_policy_id).trim() === '') {
+        await throwMissingPolicy(env, partnerId);
       }
+      shipUpd = (await requireOwnPolicy(env, partnerId, String(b.shipping_policy_id).trim())).id;
     }
+    if (!shipUpd) await throwMissingPolicy(env, partnerId);
     const bundleUpd = b.bundle_group_key !== undefined
       ? (b.bundle_group_key === null || String(b.bundle_group_key).trim() === '' ? null : str(b.bundle_group_key, { field: '묶음 키', max: 64 }))
       : product.bundle_group_key;
@@ -673,6 +804,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     // 2-9: explicit sku upserts replace the legacy whole-product price set.
     const hasTopPrice = ['sale_price', 'price', 'lowest_sale_price', 'original_price', 'lowest_original_price'].some((k) => b[k] !== undefined);
     const editRestock = [];
+    const changedGtins = [];
     let skuStmts;
     if (b.skus !== undefined) {
       if (!Array.isArray(b.skus)) throw bad('INVALID_SKUS', 'skus는 배열이어야 합니다.');
@@ -699,13 +831,23 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
           const stock = entry.stock_quantity !== undefined ? intParam(entry.stock_quantity, { min: 0, max: 1_000_000, field: '재고' }) : old.stock_quantity;
           if (stock !== old.stock_quantity) editRestock.push({ skuId: old.id, before: old.stock_quantity, after: stock });
           const safety = entry.safety_stock !== undefined ? intParam(entry.safety_stock, { min: 0, max: 1_000_000, field: '안전재고' }) : old.safety_stock;
+          let gtinUpd = old.gtin, exemptUpd = old.gtin_exempt_reason;
+          const hasGtinKeys = (entry.gtin !== undefined && String(entry.gtin ?? '').trim() !== '')
+            || (entry.gtin_exempt_reason !== undefined && String(entry.gtin_exempt_reason ?? '').trim() !== '');
+          if (hasGtinKeys) {
+            const ids = validateSkuIdentifiers(entry, { where: `SKU ${old.sku_code || old.id}` });
+            gtinUpd = ids.gtin;
+            exemptUpd = ids.exempt;
+            if (gtinUpd && gtinUpd !== old.gtin) changedGtins.push(gtinUpd);
+          }
           skuStmts.push(env.DB.prepare(
             `UPDATE product_skus SET sku_code = ?, sale_price = ?, original_price = ?, stock_quantity = ?,
                safety_stock = ?, status = CASE WHEN ? > 0 THEN 'IN_STOCK' ELSE 'OUT_OF_STOCK' END,
+               gtin = ?, gtin_exempt_reason = ?,
                updated_at = CURRENT_TIMESTAMP, price_updated_at = CASE WHEN sale_price != ? OR original_price != ? THEN CURRENT_TIMESTAMP ELSE price_updated_at END
              WHERE id = ?`
           ).bind(entry.sku_code !== undefined ? str(entry.sku_code, { max: 60, required: true }) : old.sku_code,
-            pr.sale, pr.orig, stock, safety, stock, pr.sale, pr.orig, old.id));
+            pr.sale, pr.orig, stock, safety, stock, gtinUpd, exemptUpd, pr.sale, pr.orig, old.id));
           if (pr.sale !== old.sale_price || pr.orig !== old.original_price) { histIds.push(old.id); histVals[old.id] = { orig: pr.orig, sale: pr.sale }; }
         } else {
           const obj = entry.option_combination ?? entry.option_combination_json ?? null;
@@ -721,11 +863,20 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
           const nid = newId('sku');
           const ncode = str(entry.sku_code, { max: 60 }) || `SKU-${nid.slice(-10).toUpperCase()}`;
           const nstock = intParam(entry.stock_quantity ?? 0, { min: 0, max: 1_000_000, field: '재고' });
+          let nGtin = null, nExempt = null;
+          const hasNewGtinKeys = (entry.gtin !== undefined && String(entry.gtin ?? '').trim() !== '')
+            || (entry.gtin_exempt_reason !== undefined && String(entry.gtin_exempt_reason ?? '').trim() !== '');
+          if (hasNewGtinKeys) {
+            const ids = validateSkuIdentifiers(entry, { where: `SKU ${ncode}` });
+            nGtin = ids.gtin;
+            nExempt = ids.exempt;
+            if (nGtin) changedGtins.push(nGtin);
+          }
           skuStmts.push(env.DB.prepare(
-            `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, safety_stock, status, gtin, gtin_exempt_reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(nid, product.id, ncode, comboJson, pr.orig, pr.sale, nstock,
-            intParam(entry.safety_stock ?? 5, { min: 0, max: 1_000_000, field: '안전재고' }), nstock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'));
+            intParam(entry.safety_stock ?? 5, { min: 0, max: 1_000_000, field: '안전재고' }), nstock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK', nGtin, nExempt));
           if (nstock > 0) skuStmts.push(env.DB.prepare(`INSERT INTO inventory_ledger (id, sku_id, change_type, quantity_delta, balance_after, reference_id, idempotency_key) VALUES (?, ?, 'RESTOCK', ?, ?, ?, ?)`)
             .bind(newId('ldg'), nid, nstock, nstock, partnerId, `init:${nid}`));
         }
@@ -754,7 +905,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       await env.DB.batch([
         env.DB.prepare(
           `UPDATE products SET title = ?, description_html = ?, thumbnail_url = ?, category_id = ?, lowest_original_price = ?, lowest_sale_price = ?,
-           hs_code = ?, country_origin = ?, custody_type = ?, supply_price = ?, brand = ?,
+           hs_code = ?, country_origin = ?, custody_type = ?, supply_price = ?, brand = ?, manufacturer = ?, model_name = ?,
            notice_info_json = ?, notice_template_id = ?, notice_template_version = ?, shipping_policy_id = ?, bundle_group_key = ?,
            kc_certified = ?, kc_cert_number = ?,
            review_status = CASE WHEN ? = 1 AND review_status = 'APPROVED' THEN 'PENDING' ELSE review_status END,
@@ -763,7 +914,7 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
         ).bind(title, b.description_html !== undefined ? sanitizeHtml(str(b.description_html, { max: 200000 })) : product.description_html,
           thumbUpd, catId, b.skus !== undefined ? product.lowest_original_price : orig, b.skus !== undefined ? product.lowest_sale_price : sale,
           b.hs_code ?? product.hs_code, (b.country_origin || product.country_origin || 'KR').toUpperCase(),
-          custody, supply, brand, noticeUpd, tplUpd, tplVerUpd, shipUpd, bundleUpd, kcUpd, kcNumUpd, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
+          custody, supply, brand, manufacturerUpd, modelUpd, noticeUpd, tplUpd, tplVerUpd, shipUpd, bundleUpd, kcUpd, kcNumUpd, contentChanged ? 1 : 0, contentChanged ? 1 : 0, product.id, partnerId),
         ...skuStmts,
         ...imgStmts
       ]);
@@ -771,13 +922,16 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
       if (String(e.message).includes('UNIQUE')) throw conflict('SKU_CODE_TAKEN', '이미 사용 중인 SKU 코드입니다.');
       throw e;
     }
+    await notifyProductChanged(env, product.id, product); // 6-7: IndexNow queue.
     if (editRestock.length) {
       try {
         await notifyRestockedSkus(env, editRestock);
       } catch { /* restock notify must never fail the product edit */ }
     }
+    const gtinWarnings = gtinConflictWarnings(await findGtinConflicts(env, changedGtins, product.id));
     return json(corsHeaders, {
       success: true, message: contentChanged ? '상세 내용이 변경되어 재심사 후 노출됩니다.' : '상품 정보가 수정되었습니다.',
+      warnings: gtinWarnings,
       data: { product_id: product.id, title, sale_price: b.skus !== undefined ? product.lowest_sale_price : sale, original_price: b.skus !== undefined ? product.lowest_original_price : orig, review_status: contentChanged ? 'PENDING' : product.review_status }
     });
   }

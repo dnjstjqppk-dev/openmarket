@@ -13,11 +13,14 @@ const t = createRunner('Storefront shell')
 const SF = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'apps/storefront')
 const read = (p) => readFileSync(join(SF, p), 'utf8')
 
-await t.test('H01 head carries canonical, x-default hreflang and the theme pre-render snippet', async () => {
+await t.test('H01 head carries canonical, full hreflang set and the theme pre-render snippet', async () => {
   const html = read('index.html')
   assert.ok(html.includes('<link rel="canonical" href="https://olmoa.com/" />'), 'canonical present')
-  assert.ok(html.includes('<link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />'), 'x-default hreflang present')
-  assert.ok(!/<link rel="alternate" hreflang="(ko|en|ja)[^"]*"/.test(html), 'no per-locale hreflang without locale URLs')
+  assert.ok(html.includes('<link rel="alternate" hreflang="ko-KR" href="https://olmoa.com/" />'), 'ko-KR hreflang present')
+  assert.ok(html.includes('<link rel="alternate" hreflang="en-US" href="https://olmoa.com/en" />'), 'en-US hreflang present')
+  assert.ok(html.includes('<link rel="alternate" hreflang="ja-JP" href="https://olmoa.com/ja" />'), 'ja-JP hreflang present')
+  assert.ok(html.includes('<link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />'), 'x-default points at ko')
+  assert.ok(html.includes('<meta property="og:locale" content="ko_KR" />'), 'og:locale present')
   assert.ok(html.includes("localStorage.getItem('olmoa_theme')"), 'theme pre-render reads the saved mode')
   assert.ok(html.includes("setAttribute('data-theme'"), 'theme pre-render sets data-theme')
   assert.ok(html.includes('<link rel="manifest" href="/manifest.webmanifest" />'), 'PWA manifest linked')
@@ -78,6 +81,45 @@ await t.test('SH05 category bar hides on scroll down', async () => {
   const app = read('src/App.vue')
   assert.ok(app.includes('scrollY'), 'scroll position tracked')
   assert.ok(app.includes('categoryBarHidden'), 'bar visibility state exists')
+})
+
+await t.test('H04 6-2 locale mirrors duplicate every route under /en and /ja', async () => {
+  const r = read('src/router/index.ts')
+  assert.ok(r.includes("for (const prefix of ['en', 'ja'])"), 'mirrors generated for both locales')
+  assert.ok(r.includes('appRoutes'), 'same components, catalog and prices')
+})
+
+await t.test('H05 6-2 head carries the hreflang set, og:locale and prefix-aware robots', async () => {
+  const h = readFileSync(join(SF, '..', '..', 'packages/ui/src/composables/useSeoHead.ts'), 'utf8')
+  assert.ok(h.includes('hreflangOf') && h.includes("lang: 'x-default'"), 'ko-KR/en-US/ja-JP/x-default set built')
+  assert.ok(h.includes("href: `${b}${bare}${suf}`"), 'x-default always points at the ko URL')
+  assert.ok(h.includes('og:locale:alternate'), 'alternate locales emitted')
+  assert.ok(h.includes('barePathOf(path)'), 'noindex evaluated on the bare path')
+  const m = read('src/main.ts')
+  assert.ok(m.includes('applyUrlLocale'), 'URL locale applied on navigation')
+  assert.ok(m.includes('document.documentElement.lang'), 'html lang follows the URL')
+})
+
+await t.test('H06 6-2 locale mismatch asks once per session, choices persist', async () => {
+  const n = read('src/components/LocaleNudge.vue')
+  assert.ok(n.includes('nudgeDismissed') && n.includes('dismissNudge'), 'once-per-session dismissal')
+  assert.ok(n.includes('ensureProfile'), 'saved locale read from the server')
+  assert.ok(n.includes('로 계속 볼까요?'), 'asks in the saved language')
+  const a = read('src/App.vue')
+  assert.ok(a.includes('<LocaleNudge />'), 'nudge mounted in the shell')
+  assert.ok(a.includes('switchLocale') && a.includes('saveLocale'), 'explicit choice persists + saves')
+  assert.ok(!a.includes('locale.setLocale(('), 'switcher routes through the explicit path')
+})
+
+await t.test('H07 6-5 head advertises markdown alternates, shell uses the entity', async () => {
+  const h = readFileSync(join(SF, '..', '..', 'packages/ui/src/composables/useSeoHead.ts'), 'utf8')
+  assert.ok(h.includes('mdAlternateOf'), 'alternate builder present')
+  assert.ok(h.includes('/llms/product/') && h.includes('/llms/category/'), 'product and category .md mapped')
+  assert.ok(h.includes('text/markdown'), 'markdown MIME advertised')
+  const a = read('src/App.vue')
+  assert.ok(a.includes('SITE_NAME') && a.includes('SITE_TAGLINE'), 'shell renders the single entity')
+  const home = read('src/views/HomeView.vue')
+  assert.ok(home.includes('olmoa-jsonld-org') && home.includes('organizationGraph'), 'home injects Organization')
 })
 
 t.finish()

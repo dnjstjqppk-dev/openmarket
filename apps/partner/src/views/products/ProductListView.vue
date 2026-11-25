@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders } from '../../config'
-import { userErrorMessage, useConfirm, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar, OmSearchFilterBar, OmDateRangePicker } from '@olmoa/ui'
+import { userErrorMessage, useConfirm, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar, OmSearchFilterBar, OmDateRangePicker, OmModal } from '@olmoa/ui'
 
 const { confirm: askConfirm } = useConfirm()
 const toastApi = useToast()
@@ -37,11 +37,16 @@ const fCategory = ref('')
 const fRange = ref<[string, string]>(['', ''])
 const fStockMin = ref('')
 const fStockMax = ref('')
+const fShipping = ref('')
+const fIdentifiers = ref('')
 
 // Bulk value forms.
 const bulkPriceMode = ref('set')
 const bulkPriceValue = ref('')
 const bulkStockValue = ref('')
+// 6-11: unassigned-product list + bulk assignment.
+const policies = ref<any[]>([])
+const bulkPolicyId = ref('')
 
 const won = (v: any) => `${(Number(v) || 0).toLocaleString('ko-KR')}원`
 const STATUS_LABEL: Record<string, string> = { ACTIVE: '판매중', HIDDEN: '판매중지', DRAFT: '작성중', DELETED: '삭제됨' }
@@ -54,7 +59,11 @@ const products = computed(() => {
       map.set(r.id, {
         id: r.id, title: r.title, thumbnail_url: r.thumbnail_url, category_name: r.category_name,
         category_id: r.category_id, lowest_sale_price: r.lowest_sale_price, stock_sum: 0,
-        status: r.status, review_status: r.review_status, created_at: r.created_at, skus: []
+        status: r.status, review_status: r.review_status, created_at: r.created_at, skus: [],
+        shipping_policy_id: r.shipping_policy_id || null, description_html: r.description_html,
+        notice_info_json: r.notice_info_json, brand: r.brand, hs_code: r.hs_code,
+        country_origin: r.country_origin, kc_cert_number: r.kc_cert_number,
+        identifiers_missing: Number(r.identifiers_missing) || 0
       })
     }
     const p = map.get(r.id)
@@ -96,6 +105,8 @@ async function load() {
     if (fRange.value[1]) params.set('to', fRange.value[1])
     if (fStockMin.value !== '') params.set('stock_min', fStockMin.value)
     if (fStockMax.value !== '') params.set('stock_max', fStockMax.value)
+    if (fShipping.value) params.set('shipping', fShipping.value)
+    if (fIdentifiers.value) params.set('identifiers', fIdentifiers.value)
     const res = await fetch(`${API_BASE_URL}/api/v1/partner/products?${params}`, { headers: getPartnerHeaders() })
     const json = await res.json().catch(() => null)
     if (!res.ok || !json?.success) throw new Error(json?.error || '상품 목록을 불러오지 못했습니다.')
@@ -111,8 +122,100 @@ async function load() {
 
 function applySearch() { page.value = 1; void load() }
 function resetSearch() {
-  fQ.value = ''; fCategory.value = ''; fRange.value = ['', '']; fStockMin.value = ''; fStockMax.value = ''
+  fQ.value = ''; fCategory.value = ''; fRange.value = ['', '']; fStockMin.value = ''; fStockMax.value = ''; fShipping.value = ''; fIdentifiers.value = ''
   page.value = 1; void load()
+}
+
+// 6-12: identifier backfill (missing list + CSV upload).
+const idModalOpen = ref(false)
+const idCsvText = ref('')
+const idFileName = ref('')
+const idApplying = ref(false)
+const idResult = ref<any>(null)
+const idError = ref('')
+const ID_CSV_TEMPLATE = 'product_id,sku_id,brand,manufacturer,model_name,gtin,gtin_exempt_reason\nprod_001,sku_001,Acme,,,5901234123457,\nprod_001,sku_002,Acme,,,96385074,'
+function downloadIdTemplate() {
+  const blob = new Blob(['\uFEFF' + ID_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'olmoa_identifiers_template.csv'
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+async function onIdFile(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (!f) return
+  idFileName.value = f.name
+  idCsvText.value = await f.text()
+}
+function parseIdCsv() {
+  const lines = idCsvText.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map((h) => h.trim())
+  const byProduct = new Map<string, any>()
+  for (let i = 1; i < lines.length; i++) {
+    const vals = (lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []).map((v) => v.trim().replace(/^"|"$/g, ''))
+    const row: any = {}
+    headers.forEach((h, idx) => { row[h] = vals[idx] || '' })
+    if (!row.product_id) continue
+    if (!byProduct.has(row.product_id)) byProduct.set(row.product_id, { product_id: row.product_id, skus: [] })
+    const item = byProduct.get(row.product_id)
+    if (row.brand) item.brand = row.brand
+    if (row.manufacturer) item.manufacturer = row.manufacturer
+    if (row.model_name) item.model_name = row.model_name
+    if (row.sku_id) {
+      item.skus.push({
+        sku_id: row.sku_id,
+        ...(row.gtin ? { gtin: row.gtin } : {}),
+        ...(!row.gtin && row.gtin_exempt_reason ? { gtin_exempt_reason: row.gtin_exempt_reason } : {})
+      })
+    }
+  }
+  return [...byProduct.values()]
+}
+async function applyIdentifiers() {
+  idError.value = ''
+  idResult.value = null
+  const items = parseIdCsv()
+  if (!items.length) { idError.value = 'CSV에서 입력할 행을 찾지 못했습니다. 템플릿 양식에 맞게 작성해 주세요.'; return }
+  idApplying.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/products/identifiers`, {
+      method: 'POST', headers: getPartnerHeaders(), body: JSON.stringify({ items })
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error || '일괄 입력에 실패했습니다.')
+    idResult.value = json.data || json
+    void load()
+  } catch (e: any) {
+    idError.value = userErrorMessage(e, U)
+  } finally {
+    idApplying.value = false
+  }
+}
+
+async function loadPolicies() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/partner/shipping-policies`, { headers: getPartnerHeaders() })
+    const json = await res.json().catch(() => null)
+    if (res.ok && json?.success && Array.isArray(json.data)) {
+      policies.value = json.data
+      const def = policies.value.find((p: any) => Number(p.is_default) === 1) || policies.value[0]
+      if (def && !bulkPolicyId.value) bulkPolicyId.value = def.id
+    }
+  } catch { /* bulk assign stays unavailable */ }
+}
+
+async function bulkAssignPolicy() {
+  const ids = selected.value.map(String)
+  if (!ids.length) return
+  if (!bulkPolicyId.value) { toastApi.error('지정할 배송정책을 선택해 주세요.'); return }
+  if (!(await askConfirm({ title: '배송정책 일괄 지정', body: `${ids.length}개 상품에 선택한 배송정책을 지정합니다.` }))) return
+  const res = await fetch(`${API_BASE_URL}/api/v1/partner/products/bulk-update`, {
+    method: 'PUT', headers: getPartnerHeaders(),
+    body: JSON.stringify({ updates: ids.map((product_id) => ({ product_id, shipping_policy_id: bulkPolicyId.value })) })
+  })
+  reportBulk(await res.json().catch(() => ({})), '배송정책 지정')
 }
 watch(tab, () => { page.value = 1; void load() })
 watch(page, () => void load())
@@ -169,12 +272,14 @@ async function cloneProduct(p: any) {
     try { combo = JSON.parse(s.option_combination_json || '{}') } catch { /* keep default */ }
     return { option_combination: combo, original_price: s.sku_original_price ?? s.original_price, sale_price: s.sale_price, stock_quantity: s.stock_quantity ?? 0 }
   })
+  if (!p.shipping_policy_id) { toastApi.error('배송정책이 지정되지 않은 상품은 복제할 수 없습니다. 먼저 배송정책을 지정해 주세요.'); return }
   const res = await fetch(`${API_BASE_URL}/api/v1/partner/products`, {
     method: 'POST', headers: getPartnerHeaders(),
     body: JSON.stringify({
       title: `${p.title} (복제)`, category_id: p.category_id, thumbnail_url: p.thumbnail_url,
       description_html: p.description_html, notice_info_json: p.notice_info_json, brand: p.brand,
       hs_code: p.hs_code, country_origin: p.country_origin, kc_cert_number: p.kc_cert_number,
+      shipping_policy_id: p.shipping_policy_id,
       skus: skus.length ? skus : [{ option_combination: { 옵션: '기본' }, sale_price: p.lowest_sale_price, stock_quantity: 0 }]
     })
   })
@@ -198,7 +303,7 @@ function exportCsv() {
   URL.revokeObjectURL(a.href)
 }
 
-onMounted(() => { loadCategories(); void load() })
+onMounted(() => { loadCategories(); loadPolicies(); void load() })
 </script>
 
 <template>
@@ -207,6 +312,7 @@ onMounted(() => { loadCategories(); void load() })
       <h1 class="text-xl font-bold text-ink">상품 목록</h1>
       <div class="flex gap-2">
         <button type="button" class="rounded-xl border border-line px-4 py-2 text-xs font-bold text-ink hover:bg-surface-2" @click="exportCsv">현재 목록 CSV 저장</button>
+        <button type="button" class="rounded-xl border border-line px-4 py-2 text-xs font-bold text-ink hover:bg-surface-2" @click="idModalOpen = true; idResult = null; idError = ''">식별정보 일괄 입력</button>
         <button type="button" class="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-on hover:bg-primary-hover" @click="router.push('/products/new')">상품 등록</button>
       </div>
     </div>
@@ -225,6 +331,16 @@ onMounted(() => { loadCategories(); void load() })
           <input v-model="fStockMin" type="number" min="0" placeholder="재고≥" aria-label="최소 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
           <input v-model="fStockMax" type="number" min="0" placeholder="≤" aria-label="최대 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
         </div>
+        <select v-model="fShipping" aria-label="배송정책 지정 여부" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink">
+          <option value="">배송정책 전체</option>
+          <option value="unassigned">배송정책 미지정</option>
+          <option value="assigned">배송정책 지정됨</option>
+        </select>
+        <select v-model="fIdentifiers" aria-label="식별정보 완성 여부" class="h-9 rounded-lg border border-line bg-surface px-2 text-ink">
+          <option value="">식별정보 전체</option>
+          <option value="missing">식별정보 누락</option>
+          <option value="complete">식별정보 완성</option>
+        </select>
       </div>
       <template #actions>
         <button type="button" class="h-9 rounded-lg border border-line px-4 font-bold text-ink-muted hover:bg-surface-2" @click="resetSearch">초기화</button>
@@ -275,6 +391,8 @@ onMounted(() => { loadCategories(); void load() })
         <template #cell-stock="{ row }"><span class="om-num font-bold" :class="Number(row.stock_sum) > 0 ? 'text-ink' : 'text-danger'">{{ Number(row.stock_sum).toLocaleString('ko-KR') }}</span></template>
         <template #cell-status="{ row }">
           <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : row.status === 'HIDDEN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
+          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">식별정보 누락</span>
         </template>
         <template #cell-review="{ row }">
           <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.review_status === 'APPROVED' ? 'bg-success-soft text-success' : row.review_status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ REVIEW_LABEL[row.review_status] || row.review_status }}</span>
@@ -288,6 +406,34 @@ onMounted(() => { loadCategories(); void load() })
         </template>
       </OmDataTable>
     </div>
+
+    <OmModal v-model:open="idModalOpen" title="식별정보 일괄 입력">
+      <div class="space-y-3 text-xs">
+        <p class="text-ink-muted">CSV 컬럼: <span class="font-mono">product_id,sku_id,brand,manufacturer,model_name,gtin,gtin_exempt_reason</span> (최대 500행, 행별 적용/실패 분리)</p>
+        <div class="flex gap-2">
+          <button type="button" class="rounded-lg border border-line px-3 py-1.5 font-bold text-ink hover:bg-surface-2" @click="downloadIdTemplate">템플릿 받기</button>
+          <label class="cursor-pointer rounded-lg bg-secondary px-3 py-1.5 font-bold text-secondary-on hover:bg-secondary-hover">CSV 선택
+            <input type="file" accept=".csv" class="hidden" @change="onIdFile" />
+          </label>
+          <span v-if="idFileName" class="self-center text-ink-muted">{{ idFileName }}</span>
+        </div>
+        <textarea v-model="idCsvText" rows="6" placeholder="또는 CSV 내용을 여기에 붙여넣기" aria-label="식별정보 CSV" class="w-full rounded-lg border border-line bg-surface p-3 font-mono text-ink" />
+        <p v-if="idError" role="alert" class="font-bold text-danger">{{ idError }}</p>
+        <div v-if="idResult" class="space-y-1">
+          <p class="font-bold text-ink">적용 {{ idResult.applied?.length ?? 0 }}건 · 실패 {{ idResult.failed?.length ?? 0 }}건</p>
+          <ul v-if="(idResult.failed || []).length" class="max-h-32 space-y-0.5 overflow-y-auto text-danger">
+            <li v-for="(f, i) in idResult.failed" :key="i">{{ f.row }}행({{ f.product_id }}): {{ f.error }}</li>
+          </ul>
+          <ul v-if="(idResult.applied || []).flatMap((a: any) => a.warnings || []).length" class="max-h-32 space-y-0.5 overflow-y-auto text-warning">
+            <li v-for="(w, i) in (idResult.applied || []).flatMap((a: any) => a.warnings || [])" :key="i">{{ w.message }}</li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <button type="button" class="h-10 rounded-lg border border-line px-4 text-sm font-bold text-ink hover:bg-surface-2" @click="idModalOpen = false">닫기</button>
+        <button type="button" :disabled="idApplying || !idCsvText.trim()" class="h-10 rounded-lg bg-primary px-4 text-sm font-bold text-primary-on hover:bg-primary-hover disabled:opacity-50" @click="applyIdentifiers">{{ idApplying ? '적용 중…' : '일괄 적용' }}</button>
+      </template>
+    </OmModal>
 
     <OmBulkActionBar :count="selected.length" @clear="selected = []">
       <button type="button" class="rounded-lg border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-surface-2" @click="bulkStatus('HIDDEN')">판매중지</button>
@@ -304,6 +450,13 @@ onMounted(() => { loadCategories(); void load() })
       <span class="flex items-center gap-1 text-xs">
         <input v-model="bulkStockValue" type="number" min="0" placeholder="재고" aria-label="재고 값" class="h-8 w-20 rounded-lg border border-line bg-surface px-2 text-ink" />
         <button type="button" class="h-8 rounded-lg bg-secondary px-3 font-bold text-secondary-on hover:bg-secondary-hover" @click="bulkStock">재고 적용</button>
+      </span>
+      <span class="flex items-center gap-1 text-xs">
+        <select v-model="bulkPolicyId" aria-label="일괄 지정 배송정책" class="h-8 max-w-44 rounded-lg border border-line bg-surface px-2 font-bold text-ink">
+          <option value="" disabled>배송정책 선택</option>
+          <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
+        <button type="button" class="h-8 rounded-lg bg-secondary px-3 font-bold text-secondary-on hover:bg-secondary-hover" @click="bulkAssignPolicy">배송정책 지정</button>
       </span>
     </OmBulkActionBar>
   </div>

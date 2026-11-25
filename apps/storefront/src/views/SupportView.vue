@@ -4,14 +4,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
-import { userErrorMessage, OmButton, OmEmptyState, OmStatusTabs } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmEmptyState, OmStatusTabs, OmFaq } from '@olmoa/ui'
 
 const auth = useAuthStore()
 const faqs = ref<any[]>([])
+const faqCategories = ref<string[]>([])
 const inquiries = ref<any[]>([])
 const category = ref('DELIVERY')
 const faqTab = ref('')
 const faqQuery = ref('')
+let faqTimer: ReturnType<typeof setTimeout> | null = null
 const subject = ref('')
 const message = ref('')
 const submitMsg = ref('')
@@ -29,29 +31,41 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 const statusLabel = (s: string) => (s === 'ANSWERED' ? '답변 완료' : s === 'CLOSED' ? '종료' : '답변 대기')
 
-const faqTabs = computed(() => {
-  const cats = [...new Set(faqs.value.map((f: any) => String(f.category || 'OTHER')))]
-  return [{ value: '', label: '전체' }, ...cats.map((c) => ({ value: c, label: CATEGORY_LABEL[c] || '기타' }))]
-})
-const filteredFaqs = computed(() => {
-  const q = faqQuery.value.trim()
-  return faqs.value.filter((f: any) => (!faqTab.value || f.category === faqTab.value)
-    && (!q || `${f.q} ${f.a}`.includes(q)))
-})
+// 6-13: admin-managed FAQ — fixed category tabs from the server, server-side
+// search, expandable OmFaq answers (server-sanitized HTML).
+const faqTabs = computed(() => [
+  { value: '', label: '전체' },
+  ...faqCategories.value.map((c) => ({ value: c, label: c }))
+])
+
+const loadFaq = async () => {
+  try {
+    const params = new URLSearchParams()
+    if (faqTab.value) params.set('category', faqTab.value)
+    if (faqQuery.value.trim()) params.set('q', faqQuery.value.trim())
+    const fRes = await fetch(`${API_BASE_URL}/api/v1/support/faq?${params.toString()}`)
+    const fJson = await fRes.json().catch(() => null)
+    if (!fRes.ok || !fJson?.success) throw new Error(fJson?.error || 'FAQ를 불러오지 못했습니다')
+    faqs.value = fJson.data || []
+    if (Array.isArray(fJson.categories) && fJson.categories.length) faqCategories.value = fJson.categories
+  } catch (e: any) {
+    loadError.value = userErrorMessage(e, '고객센터 정보를 불러오지 못했습니다')
+  }
+}
+
+const onFaqQuery = () => {
+  if (faqTimer) clearTimeout(faqTimer)
+  faqTimer = setTimeout(() => void loadFaq(), 300)
+}
 
 const loadSupport = async () => {
   const cid = auth.user?.id || ''
   loadError.value = null
+  await loadFaq()
   try {
-    const [fRes, iRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/v1/support/faq`),
-      fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
-    ])
-    const fJson = await fRes.json().catch(() => null)
+    const iRes = await fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     const iJson = await iRes.json().catch(() => null)
-    if (!fRes.ok || !fJson?.success) throw new Error(fJson?.error || 'FAQ를 불러오지 못했습니다')
     if (!iRes.ok || !iJson?.success) throw new Error(iJson?.error || '문의 내역을 불러오지 못했습니다')
-    faqs.value = fJson.data || []
     inquiries.value = iJson.data || []
   } catch (e: any) {
     loadError.value = userErrorMessage(e, '고객센터 정보를 불러오지 못했습니다')
@@ -100,22 +114,17 @@ onMounted(loadSupport)
     <section class="rounded-2xl border border-line bg-surface p-6">
       <h2 class="mb-4 text-base font-bold text-ink">자주 묻는 질문</h2>
       <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <OmStatusTabs v-model="faqTab" :tabs="faqTabs" class="min-w-0 flex-1" />
+        <OmStatusTabs v-model="faqTab" :tabs="faqTabs" class="min-w-0 flex-1" @update:model-value="loadFaq" />
         <input
           v-model="faqQuery"
           type="search"
           aria-label="FAQ 검색"
           placeholder="궁금한 내용을 검색하세요"
           class="h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:outline-none focus:ring-2 focus-visible:ring-focus sm:w-56"
+          @input="onFaqQuery"
         />
       </div>
-      <div v-if="filteredFaqs.length" class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div v-for="(f, idx) in filteredFaqs" :key="idx" class="rounded-xl border border-line bg-surface-2 p-4">
-          <span class="text-2xs font-bold text-primary">{{ CATEGORY_LABEL[f.category] || '기타' }}</span>
-          <h3 class="mb-1.5 mt-0.5 text-sm font-bold text-ink">Q. {{ f.q }}</h3>
-          <p class="text-xs leading-relaxed text-ink-muted">A. {{ f.a }}</p>
-        </div>
-      </div>
+      <OmFaq v-if="faqs.length" :items="faqs" :html="true" heading="자주 묻는 질문" />
       <OmEmptyState v-else title="조건에 맞는 질문이 없습니다" description="분류나 검색어를 바꿔 보세요." compact />
     </section>
 

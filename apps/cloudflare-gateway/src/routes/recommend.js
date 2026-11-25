@@ -7,6 +7,7 @@
 import { requireCustomer, authenticate } from '../lib/auth.js';
 import { json, bad, notFound } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
+import { sellableSql } from '../lib/shipping-policy.js';
 
 const CARD = `
   SELECT p.id, p.id AS slug, p.title, p.thumbnail_url, p.lowest_sale_price, p.lowest_original_price,
@@ -32,7 +33,7 @@ async function cardsByIds(env, ids) {
   if (!ids.length) return [];
   const marks = ids.map(() => '?').join(',');
   const { results } = await env.DB.prepare(
-    `${CARD} WHERE p.status = 'ACTIVE' AND p.id IN (${marks})`
+    `${CARD} WHERE p.status = 'ACTIVE' AND ${sellableSql('p')} AND p.id IN (${marks})`
   ).bind(...ids).all();
   const byId = new Map(results.map((r) => [r.id, r]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
@@ -75,14 +76,14 @@ async function popularFill(env, exclude, limit, categoryId = null) {
   const params = () => exclude.concat(picked);
   if (categoryId) {
     const { results } = await env.DB.prepare(
-      `SELECT id FROM products WHERE status = 'ACTIVE' AND category_id = ? AND id NOT IN (${exMarks()})
+      `SELECT id FROM products WHERE status = 'ACTIVE' AND ${sellableSql('products')} AND category_id = ? AND id NOT IN (${exMarks()})
        ORDER BY total_sold_count DESC, id ASC LIMIT ?`
     ).bind(categoryId, ...params(), limit).all();
     picked.push(...results.map((r) => r.id));
   }
   if (picked.length < limit) {
     const { results } = await env.DB.prepare(
-      `SELECT id FROM products WHERE status = 'ACTIVE' AND id NOT IN (${exMarks()})
+      `SELECT id FROM products WHERE status = 'ACTIVE' AND ${sellableSql('products')} AND id NOT IN (${exMarks()})
        ORDER BY total_sold_count DESC, id ASC LIMIT ?`
     ).bind(...params(), limit - picked.length).all();
     picked.push(...results.map((r) => r.id));

@@ -52,6 +52,9 @@
 4. Google Search Console·네이버 서치어드바이저에 `olmoa.com` 소유 확인(DNS TXT) 후 `https://olmoa.com/sitemap-index.xml` 제출.
 5. Cloudflare 대시보드 → `olmoa.com` → **AI Crawl Control**(또는 Security → Bots)에서 AI 크롤러 차단이 꺼져 있는지 확인.
    결정-18(학습용 포함 AI 크롤러 전부 허용)과 맞아야 한다. 새로 추가한 도메인은 차단이 기본으로 켜져 있을 수 있다.
+6. IndexNow 키 발급·등록(6-7): 키 1개 생성(8~128자 영숫자·대시) → API 워커(`olmoa-api`)에 `INDEXNOW_KEY` 시크릿 등록
+   → `https://olmoa.com/<key>.txt`가 키 본문 그대로 200인지 확인. 소유 확인 meta가 필요하면 루트 워커(`openmarket`)에
+   `NAVER_SITE_VERIFICATION`·`GOOGLE_SITE_VERIFICATION` 등록 — DNS TXT로 소유 확인을 하면 등록하지 않는다.
 
 ---
 

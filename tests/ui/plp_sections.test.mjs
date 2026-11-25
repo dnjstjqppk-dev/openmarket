@@ -75,4 +75,26 @@ await t.test('P37 tomorrow chip follows the server switch and roundtrips the URL
   assert.ok(v.includes("label: '내일출발'") && v.includes("tomorrow_shipment: '내일출발'"), 'chip and label shown');
 });
 
+await t.test('P38 6-1 category hub shows subs, measured picks and FAQ link', async () => {
+  const v = read('apps/storefront/src/views/CategoryView.vue');
+  assert.ok(v.includes('CategoryHub'), 'hub mounted above the listing');
+  const h = read('apps/storefront/src/components/plp/CategoryHub.vue');
+  assert.ok(h.includes('childrenOf'), 'sub-category links from the live tree');
+  assert.ok(h.includes('sort=popular&per_page=8'), '8 measured bestsellers');
+  assert.ok(h.includes('to="/support"'), 'FAQ link present');
+  assert.ok(!h.includes('소개'), 'no category intro prose (decision-21)');
+});
+
+await t.test('P39 6-3 hub links up to 10 sibling categories', async () => {
+  const h = read('apps/storefront/src/components/plp/CategoryHub.vue');
+  assert.ok(h.includes('함께 보는 분류'), 'siblings section present');
+  assert.ok(h.includes('.slice(0, 10)'), 'capped at 10');
+});
+
+await t.test('P40 6-4 hub prints sub-category counts as body text', async () => {
+  const h = read('apps/storefront/src/components/plp/CategoryHub.vue');
+  assert.ok(h.includes('product_count'), 'counts from the live tree');
+  assert.ok(h.includes('개 상품') || h.includes('}개'), 'counts rendered as text');
+});
+
 t.finish();

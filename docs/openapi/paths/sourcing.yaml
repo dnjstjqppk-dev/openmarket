@@ -226,6 +226,22 @@ paths:
                   description: SKU variants; defaults to preview variants or a single default option.
                   items:
                     type: object
+                shipping_policy_id:
+                  type: string
+                  description: '6-11: required — own ACTIVE shipping template.'
+                brand:
+                  type: string
+                  description: '6-12: required (falls back to the preview brand).'
+                manufacturer:
+                  type: string
+                model_name:
+                  type: string
+                gtin:
+                  type: string
+                  description: '6-12: top-level barcode for variants without their own.'
+                gtin_exempt_reason:
+                  type: string
+                  description: '6-12: top-level exemption for variants without their own.'
       responses:
         '201':
           description: Product registered as DRAFT/PENDING
@@ -250,7 +266,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: ALREADY_PUBLISHED or a field validation error
+          description: ALREADY_PUBLISHED, SHIPPING_POLICY_REQUIRED, INVALID_SHIPPING_POLICY, BRAND_REQUIRED, GTIN_REQUIRED, INVALID_GTIN, INVALID_EXEMPT_REASON or a field validation error
         '401':
           description: Missing or expired JWT
         '403':

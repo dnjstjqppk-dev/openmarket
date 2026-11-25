@@ -6,6 +6,8 @@ import { enhanceProductWithAi } from '../services/crawler/ai-translator.js';
 import { assertFeatureEnabled, isFeatureEnabled } from '../services/feature-flags.js';
 import { requireAuth, requireApprovedPartner, requireAdmin } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str, intParam } from '../lib/http.js';
+import { requireOwnPolicy, throwMissingPolicy } from '../lib/shipping-policy.js';
+import { requireBrand, validateSkuIdentifiers, findGtinConflicts, gtinConflictWarnings } from '../lib/product-identifiers.js';
 import { priceFields, resolveCategory } from './partner.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { newId } from '../lib/ids.js';
@@ -261,14 +263,27 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
     const thumbUrl = str(merged.thumbnail_url, { field: '대표 이미지', max: 500, required: true });
     if (!/^https:\/\//.test(thumbUrl) && !thumbUrl.startsWith('/api/v1/storage/file/')) throw bad('INVALID_IMAGE_URL', '이미지는 https URL 또는 업로드 파일이어야 합니다.');
     const descHtml = sanitizeHtml(str(merged.description_html, { max: 200000 }) || `<p>${title}</p>`);
-    const brand = str(body.brand ?? preview.product?.brand, { max: 100 }) || 'GLB IMPORT';
+    // 6-12: brand is required (the 'GLB IMPORT' invention is retired); manufacturer/model optional.
+    const brand = requireBrand(body.brand ?? preview.product?.brand);
+    const manufacturer = str(body.manufacturer ?? preview.product?.manufacturer, { max: 100 }) || null;
+    const modelName = str(body.model_name ?? preview.product?.model_name, { max: 100 }) || null;
     const wholesaleCost = intParam(body.wholesale_cost ?? preview.pricing?.wholesale_cost_krw ?? Math.round(salePrice * 0.7), { min: 0, max: 100_000_000, field: '공급원가' });
+    // 6-11: URL imports choose the seller policy at publish time (never null).
+    if (body.shipping_policy_id === undefined || body.shipping_policy_id === null || String(body.shipping_policy_id).trim() === '') {
+      await throwMissingPolicy(env, caller.partner.id);
+    }
+    const shipTplId = (await requireOwnPolicy(env, caller.partner.id, String(body.shipping_policy_id).trim())).id;
 
     const prodId = newId('prod');
     let variants = Array.isArray(body.variants) && body.variants.length > 0 ? body.variants : (preview.variants || []);
     if (variants.length === 0) {
       variants = [{ option_values: { 옵션: '기본' }, price: salePrice, original_price: originalPrice, stock_quantity: 0 }];
     }
+    // 6-12: each variant needs its barcode-or-reason (top-level pair covers variants without their own).
+    const variantIds = variants.map((v, i) => validateSkuIdentifiers({
+      gtin: v?.gtin ?? body.gtin,
+      gtin_exempt_reason: v?.gtin_exempt_reason ?? body.gtin_exempt_reason
+    }, { where: `옵션 ${i + 1}` }));
 
     const stmts = [];
 
@@ -277,10 +292,12 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       INSERT INTO products (
         id, partner_id, category_id, title, thumbnail_url,
         description_html, lowest_sale_price, lowest_original_price,
-        status, review_status, supply_model, target_margin_bps, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', 'FULLY_MANAGED', 2000, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        status, review_status, supply_model, target_margin_bps, shipping_policy_id,
+        brand, manufacturer, model_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'PENDING', 'FULLY_MANAGED', 2000, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `).bind(
-      prodId, caller.partner.id, categoryId, title, thumbUrl, descHtml, salePrice, originalPrice
+      prodId, caller.partner.id, categoryId, title, thumbUrl, descHtml, salePrice, originalPrice, shipTplId,
+      brand, manufacturer, modelName
     ));
 
     // 2. Insert into source_products
@@ -307,10 +324,11 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       stmts.push(env.DB.prepare(`
         INSERT INTO product_skus (
           id, product_id, sku_code, option_combination_json, original_price, sale_price,
-          wholesale_supply_price, stock_quantity, safety_stock, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          wholesale_supply_price, stock_quantity, safety_stock, status, gtin, gtin_exempt_reason, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `).bind(
-        skuId, prodId, skuCode, optJson, vOriginal, vPrice, wholesaleCost, vStock, vStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'
+        skuId, prodId, skuCode, optJson, vOriginal, vPrice, wholesaleCost, vStock, vStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        variantIds[idx].gtin, variantIds[idx].exempt
       ));
 
       // 4. Connect supplier_sku_mappings if supplier exists
@@ -339,6 +357,7 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       WHERE import_job_id = ?
     `).bind(prodId, job.id));
 
+    const gtinWarnings = gtinConflictWarnings(await findGtinConflicts(env, variantIds.map((v) => v.gtin), null));
     try {
       await env.DB.batch(stmts);
     } catch (e) {
@@ -352,6 +371,7 @@ export async function handleProductImportRoutes(request, url, env, corsHeaders) 
       sku_count: variants.length,
       status: 'DRAFT',
       review_status: 'PENDING',
+      warnings: gtinWarnings,
       message: '수집 상품이 등록되었습니다. 운영자 심사 승인 후 판매가 시작됩니다.'
     }, 201);
   }

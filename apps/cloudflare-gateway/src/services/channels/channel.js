@@ -8,6 +8,8 @@ export class ChannelConfigError extends Error {
     super(`CHANNEL_NOT_CONFIGURED: ${channel} needs ${missing.join(', ')}`);
     this.code = 'CHANNEL_NOT_CONFIGURED';
     this.channel = channel;
+    // 6-0/D2: callers (partner-live error mapping) name the blank fields.
+    this.missing = missing;
   }
 }
 

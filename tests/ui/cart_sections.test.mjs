@@ -60,4 +60,13 @@ await t.test('T55 repriced lines state the old-to-new move', async () => {
   assert.ok(s.includes('from: it.price, to: Number(p)'), 'store reports the move');
 });
 
+await t.test('T56 6-11 cart snapshots the policy, never fee defaults', async () => {
+  const s = read('apps/storefront/src/stores/cart.ts');
+  assert.ok(s.includes('policyShipFee'), 'estimate uses the policy snapshot');
+  assert.ok(s.includes('shipping_policy: product.shipping_policy'), 'line snapshots the policy');
+  assert.ok(!s.includes('DEFAULT_SHIPPING_FEE') && !s.includes('DEFAULT_FREE_THRESHOLD'), 'no fee defaults');
+  const p = read('apps/storefront/src/lib/pricing.ts');
+  assert.ok(!p.includes('DEFAULT_SHIPPING_FEE') && !p.includes('DEFAULT_FREE_THRESHOLD'), 'pricing keeps no defaults');
+});
+
 t.finish();

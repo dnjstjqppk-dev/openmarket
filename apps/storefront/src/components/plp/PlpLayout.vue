@@ -6,11 +6,11 @@
 // restores the exact list and scroll position.
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { userErrorMessage, OmSkeleton, OmEmptyState, OmErrorState, OmSelect, OmFilterPanel, OmFilterChips, OmViewToggle, OmBreadcrumb, OmPrice, OmRating, OmButton, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
+import { userErrorMessage, OmSkeleton, OmEmptyState, OmErrorState, OmSelect, OmFilterPanel, OmFilterChips, OmViewToggle, OmBreadcrumb, OmPrice, OmRating, OmButton, formatNumber, applyRouteHead, injectJsonLd, canonicalOf } from '@olmoa/ui'
 import ProductCard from '../ProductCard.vue'
 import { useCatalogStore } from '../../stores/catalog'
 import { API_BASE_URL } from '../../config'
-import { plpJsonLdOf } from '../../lib/productSeo'
+import { plpJsonLdOf, categoryHeadOf } from '../../lib/productSeo'
 
 const props = withDefaults(defineProps<{
   lockedCategory?: string | null
@@ -195,7 +195,7 @@ async function loadMore() {
     page.value += 1
     totalPages.value = Number(json.pagination?.total_pages) || totalPages.value
     products.value = [...products.value, ...json.data]
-    pushUrl(false)
+    pushUrl(false) // the ?page watcher below moves the canonical along
   } catch {
     // Keep loaded pages; the sentinel stays armed for a retry scroll.
   } finally {
@@ -283,10 +283,22 @@ const pageTitle = computed(() => {
 })
 
 // ---- SEO: per-list head + CollectionPage/ItemList JSON-LD (live rows only) --------------------------------
+// 6-8: category pages use the `하위 - 상위 | OLMOA` rule with a facts-only
+// description; list canonicals keep ?page=N and strip sort/filter queries.
 function updatePlpHead() {
   const origin = window.location.origin
-  applyRouteHead({ path: route.path, base: origin, title: `${pageTitle.value} | OLMOA` })
-  injectJsonLd('olmoa-jsonld-plp', plpJsonLdOf(pageTitle.value, `${origin}${route.path}`, products.value, origin))
+  const query = route.query
+  if (lockedNode.value && !q.value) {
+    const node: any = lockedNode.value
+    const parent = node.parent_id ? catalog.categories.find((c: any) => c.id === node.parent_id) : null
+    const kids = catalog.childrenOf(node.id).map((c: any) => c.name)
+    applyRouteHead(categoryHeadOf(
+      { name: node.name, parentName: parent?.name || '', subNames: kids, subTotal: kids.length, productCount: total.value },
+      route.path, origin, query))
+  } else {
+    applyRouteHead({ path: route.path, base: origin, query, title: `${pageTitle.value} | OLMOA` })
+  }
+  injectJsonLd('olmoa-jsonld-plp', plpJsonLdOf(pageTitle.value, canonicalOf(origin, route.path, query), products.value, origin))
 }
 const facetCounts = computed(() => {
   const m = new Map<string, number>()
@@ -368,10 +380,7 @@ function clearAll() {
   pushUrl(true)
 }
 function shippingText(p: any): string {
-  const fee = Number(p.base_shipping_fee ?? 0)
-  const th = Number(p.free_shipping_threshold ?? 0)
-  if (fee === 0) return '무료배송'
-  return th > 0 ? `배송비 ${formatNumber(fee)}원 · ${formatNumber(th)}원 이상 무료` : `배송비 ${formatNumber(fee)}원`
+  return p.shipping_text || ''
 }
 
 // ---- route <-> list sync (page-only changes never reset the list) ------------------------------------
@@ -387,6 +396,9 @@ watch(() => route.fullPath, () => {
   syncFromRoute()
   void load(true).then(() => { void restoreIfPop() })
 })
+// 6-8: page-only navigation (back button, deep links) keeps the list but must
+// move the canonical with ?page=N.
+watch(() => route.query.page, () => updatePlpHead())
 
 const wasPop = ref(false)
 async function restoreIfPop() {

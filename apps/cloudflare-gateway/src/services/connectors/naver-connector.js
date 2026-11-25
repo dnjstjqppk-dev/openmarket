@@ -45,7 +45,7 @@ export function buildNaverListingPayload(input = {}) {
       name: title.slice(0, 100),
       detailAttribute: {
         naverShoppingSearchInfo: {
-          manufacturerName: brand,
+          manufacturerName: String(input.manufacturer || '').trim() || brand,
           brandName: brand
         },
         afterServiceInfo: {

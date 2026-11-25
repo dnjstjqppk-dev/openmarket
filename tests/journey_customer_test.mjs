@@ -47,12 +47,12 @@ async function setupSellers(g) {
     method: 'POST', token: ptA,
     body: {
       title: 'Journey Lamp', description_html: '<p>bright lamp</p>', category_id: 'cat_e_audio',
-      thumbnail_url: 'https://example.com/l.png', shipping_policy_id: tplA.id,
+      thumbnail_url: 'https://example.com/l.png', shipping_policy_id: tplA.id, brand: 'CJ',
       options: [{ name: '종류', values: ['A', 'B', 'C'] }],
       skus: [
-        { option_combination: { 종류: 'A' }, original_price: 30000, sale_price: 20000, stock_quantity: 20 },
-        { option_combination: { 종류: 'B' }, original_price: 19999, sale_price: 9999, stock_quantity: 20 },
-        { option_combination: { 종류: 'C' }, original_price: 20000, sale_price: 10000, stock_quantity: 20 }
+        { option_combination: { 종류: 'A' }, original_price: 30000, sale_price: 20000, stock_quantity: 20, gtin: '5901234123457' },
+        { option_combination: { 종류: 'B' }, original_price: 19999, sale_price: 9999, stock_quantity: 20, gtin: '96385074' },
+        { option_combination: { 종류: 'C' }, original_price: 20000, sale_price: 10000, stock_quantity: 20, gtin_exempt_reason: 'SELF_MADE' }
       ]
     }
   });
@@ -61,8 +61,8 @@ async function setupSellers(g) {
     method: 'POST', token: ptB,
     body: {
       title: 'Journey Mug', description_html: '<p>white mug</p>', category_id: 'cat_e_audio',
-      thumbnail_url: 'https://example.com/m.png', shipping_policy_id: tplB.id,
-      sale_price: 15000, original_price: 18000, stock_quantity: 20
+      thumbnail_url: 'https://example.com/m.png', shipping_policy_id: tplB.id, brand: 'CJ',
+      sale_price: 15000, original_price: 18000, stock_quantity: 20, gtin: '123456789012'
     }
   });
   assert.equal(regB.status, 201, regB.text);

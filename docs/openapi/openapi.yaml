@@ -264,6 +264,12 @@ paths:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1privacy~1access-log'
   /api/v1/admin/audit-log:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1audit-log'
+  /api/v1/admin/faqs:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1faqs'
+  /api/v1/admin/faqs/reorder:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1faqs~1reorder'
+  /api/v1/admin/faqs/{id}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1faqs~1{id}'
   /api/v1/admin/inquiries:
     $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1inquiries'
   /api/v1/admin/inquiries/{id}/reply:
@@ -592,6 +598,8 @@ paths:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1shipping-policies~1{id}'
   /api/v1/partner/products/bulk-update:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1bulk-update'
+  /api/v1/partner/products/identifiers:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1identifiers'
   /api/v1/partner/coupons:
     $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1coupons'
   /api/v1/partner/coupons/{id}:

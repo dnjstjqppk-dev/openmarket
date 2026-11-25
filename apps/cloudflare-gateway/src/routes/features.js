@@ -9,8 +9,12 @@ import { allocate } from '../lib/money.js';
 import { auditStatement } from '../lib/ledger.js';
 import { sha256Hex } from '../utils/crypto-auth.js';
 import { sealPii } from '../lib/pii-crypto.js';
+import { sellableSql } from '../lib/shipping-policy.js';
 
 // OLMOA Extended Features: Autocomplete (with Synonyms), Flash Sales, Reviews, Q&A, Coupons, Credits, Wishlist & Support
+
+/** 6-13: fixed FAQ category order (no per-category intro text — decision-21). */
+export const FAQ_CATEGORIES = ['주문/결제', '배송', '취소/환불', '반품/교환', '회원', '판매자 입점'];
 
 export async function handleFeatureRoutes(request, url, env, corsHeaders) {
   // 1. Search Autocomplete (Chosung + Normalized + Synonyms + Product Previews)
@@ -110,7 +114,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
               pt.business_name AS brand, pt.business_name,
               COALESCE(s.original_price, p.lowest_original_price) AS original_price, s.stock_quantity AS sku_stock
        FROM flash_sale_items f JOIN products p ON f.product_id = p.id LEFT JOIN partners pt ON p.partner_id = pt.id LEFT JOIN product_skus s ON f.sku_id = s.id
-       WHERE f.campaign_id = ? AND f.status = 'APPROVED' AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' ORDER BY f.sort_order ASC`
+       WHERE f.campaign_id = ? AND f.status = 'APPROVED' AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND ${sellableSql('p')} ORDER BY f.sort_order ASC`
     ).bind(campaign.id).all();
     // 2-6: checkout charges f.deal_price, so the feed shows it with measured sell-through.
     const mappedDeals = items.map((it) => ({
@@ -517,7 +521,7 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     if (request.method === 'GET') {
       const { results } = await env.DB.prepare(
         `SELECT w.id as wishlist_id, w.created_at as wished_at, p.*, p.id as product_id, p.id as slug,
-                COALESCE(pt.business_name, 'OLMOA DIRECT') as brand, c.name as category_name, pt.business_name
+                COALESCE(pt.business_name, 'OLMOA DIRECT') as seller_brand, c.name as category_name, pt.business_name
          FROM wishlists w
          JOIN products p ON w.product_id = p.id
          LEFT JOIN categories c ON p.category_id = c.id
@@ -589,16 +593,28 @@ export async function handleFeatureRoutes(request, url, env, corsHeaders) {
     }
   }
 
-  // 9. Support FAQ & 1:1 Customer Inquiries
+  // 9. Support FAQ (6-13: admin-managed rows; published only) & 1:1 inquiries.
   if (url.pathname === '/api/v1/support/faq' && request.method === 'GET') {
-    const faqs = [
-      { category: '배송', q: '배송비와 배송 기간은 어떻게 되나요?', a: '배송비와 무료배송 기준은 판매자(직영/입점)별로 다르며 주문서에서 판매자별로 확인할 수 있습니다. 배송 예정일을 넘긴 경우 주문 상세에서 지연 보상을 신청할 수 있습니다.' },
-      // 5-5 (decision-15): the retired price-match scheme advertises nothing here.
-      { category: '반품/환불', q: '반품은 어떻게 하나요?', a: '상품 수령 후 7일 이내 주문 상세에서 반품을 신청할 수 있습니다. 판매자가 회수·확인하면 결제 금액은 원결제수단으로, 사용한 적립금은 적립금으로 환불됩니다. 단순 변심 반품은 반품 배송비가 부과될 수 있습니다.' },
-      { category: '결제', q: '결제 대금은 언제 판매자에게 지급되나요?', a: '입점 판매자의 판매대금은 구매확정(또는 배송완료 후 7일 자동 확정) 이후 정산되며, 정산 후 환불이 발생하면 다음 정산에서 차감됩니다.' },
-      { category: '파트너입점', q: '올모아 글로벌 셀러로 입점하려면 어떻게 해야 하나요?', a: '상단 [셀러 입점] 메뉴를 통해 사업자등록증 및 정산 계좌를 제출하시면 운영 관리자 심사 완료 후 전용 파트너 센터에서 상품 등록 및 대량 CSV 업로드가 가능합니다.' }
-    ];
-    return new Response(JSON.stringify({ success: true, data: faqs }), { headers: corsHeaders });
+    const category = str(url.searchParams.get('category') || '', { max: 40 });
+    const q = str(url.searchParams.get('q') || '', { max: 100 });
+    const where = ['is_published = 1'];
+    const binds = [];
+    if (category) {
+      if (!FAQ_CATEGORIES.includes(category)) throw bad('INVALID_FAQ_CATEGORY', '알 수 없는 FAQ 분류입니다.');
+      where.push('category = ?');
+      binds.push(category);
+    }
+    if (q) {
+      where.push('(question LIKE ? OR answer LIKE ?)');
+      binds.push(`%${q}%`, `%${q}%`);
+    }
+    const order = FAQ_CATEGORIES.map((c, i) => `WHEN '${c}' THEN ${i}`).join(' ');
+    const { results } = await env.DB.prepare(
+      `SELECT id, category AS section, category, question AS q, question, answer AS a, answer, sort_order, updated_at
+       FROM faqs WHERE ${where.join(' AND ')}
+       ORDER BY CASE category ${order} ELSE 99 END, sort_order ASC, id ASC LIMIT 200`
+    ).bind(...binds).all();
+    return json(corsHeaders, { success: true, data: results || [], categories: FAQ_CATEGORIES });
   }
 
   if (url.pathname === '/api/v1/support/inquiries') {

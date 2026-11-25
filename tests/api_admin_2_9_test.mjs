@@ -80,8 +80,8 @@ await t.test('A3. category commission bounds and forward-only rates', async () =
     method: 'PUT', token: adm, body: { commission_rate_bps: 100 }
   });
   assert.equal(missing.status, 404, 'unknown category rejected');
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_a3', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_a3', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_002')`).run();
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES ('sku_a3', 'prod_a3', 'C-A3', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
   const co1 = await g.call('/api/v1/orders/checkout', {
@@ -237,8 +237,8 @@ await t.test('A8. payout requests approve, reject and complete', async () => {
   const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
   const cust = await login(g, 'customer@example.com', 'CUSTOMER');
   const pt2 = await login(g, 'partner2@olmoa-tech.com', 'PARTNER');
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_a8', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_a8', 'pt_002', 'cat_e_audio', 't', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_002')`).run();
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES ('sku_a8', 'prod_a8', 'C-A8', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
   const co = await g.call('/api/v1/orders/checkout', {
@@ -503,8 +503,8 @@ await t.test('A15. seller detail bundles account, penalties, grade and stats', a
 await t.test('A16. product filters narrow the list', async () => {
   const g = await newGateway();
   const adm = await login(g, 'admin@openmarket.com', 'ADMIN');
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_a16', 'pt_001', 'cat_e_audio', 'a16', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_a16', 'pt_001', 'cat_e_audio', 'a16', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_001')`).run();
   const byPartner = await g.call('/api/v1/admin/products?partner_id=pt_001&per_page=200', { token: adm });
   assert.ok(byPartner.json.data.some((x) => x.id === 'prod_a16'), 'partner narrows');
   assert.ok(byPartner.json.data.every((x) => x.partner_id === 'pt_001'), 'partner excludes others');
@@ -563,8 +563,8 @@ await t.test('A18. category banned words save; fee changes price new orders only
   assert.deepEqual(setWords.json.data.banned_words, ['불법복제'], 'words deduped and trimmed');
   const list = await g.call('/api/v1/admin/categories', { token: adm });
   assert.ok(list.json.data.find((c) => c.id === 'cat_e_audio').banned_words.includes('불법복제'), 'list carries words');
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_a18', 'pt_002', 'cat_e_audio', 'a18', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_a18', 'pt_002', 'cat_e_audio', 'a18', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_002')`).run();
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES ('sku_a18', 'prod_a18', 'C-A18', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
   const addr = { recipient_name: '홍길동', recipient_phone: '010-1234-5678', shipping_address_line1: '서울특별시 강남구 테헤란로 1', shipping_postal_code: '06236' };
@@ -758,8 +758,8 @@ await t.test('A24. platform coupon stats split platform and seller shares', asyn
   });
   assert.equal(claim.status, 200, claim.text);
   // Seller burden exists only on MARKETPLACE lines (pt_002 in the dev seed).
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES ('prod_a24', 'pt_002', 'cat_e_audio', 'a24', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`).run();
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES ('prod_a24', 'pt_002', 'cat_e_audio', 'a24', 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_002')`).run();
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES ('sku_a24', 'prod_a24', 'C-A24', '{}', 20000, 15000, 100, 'IN_STOCK')`).run();
   const o = (await g.call('/api/v1/orders/checkout', {

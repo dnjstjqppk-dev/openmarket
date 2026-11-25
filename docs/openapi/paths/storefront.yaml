@@ -266,8 +266,10 @@ paths:
                         description: Stored per-product notice inputs, else null.
                       shipping_policy:
                         type: object
-                        nullable: true
-                        description: '2-9: effective shipping template (product ref, else seller default), else null.'
+                        description: '6-11: the product''s own seller-chosen template (unassigned products 404).'
+                      shipping_text:
+                        type: string
+                        description: '6-11: the single server-rendered shipping display string.'
                       seller:
                         type: object
                         description: '2-9: seller summary (grade, rating, followers, inquiry_response_rate).'
@@ -414,7 +416,7 @@ paths:
               schema:
                 $ref: '../schemas/common.yaml#/components/schemas/ErrorResponse'
         '409':
-          description: STOCK_INSUFFICIENT, PRODUCT_NOT_ON_SALE, DIRECT_SKU_NOT_SOURCEABLE, CREDIT_MIN_ORDER, CREDIT_INSUFFICIENT
+          description: STOCK_INSUFFICIENT, PRODUCT_NOT_ON_SALE, DIRECT_SKU_NOT_SOURCEABLE, CREDIT_MIN_ORDER, CREDIT_INSUFFICIENT, SHIPPING_POLICY_REQUIRED
           content:
             application/json:
               schema:
@@ -667,10 +669,12 @@ paths:
                         type: object
                       shipping_policy:
                         type: object
+                        nullable: true
+                        description: '6-11: the seller default template, or null (products carry their own shipping_text).'
                         properties:
                           base_fee:
                             type: integer
-                          free_shipping_threshold:
+                          free_threshold:
                             type: integer
                       profile:
                         type: object

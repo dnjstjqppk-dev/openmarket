@@ -35,7 +35,7 @@ const RULES = [
   R(null, /^\/api\/v1\/admin\/(products|categories|reviews|review-reports|notice-templates|ipr-reports|sample-qc)(\/|$)/, 'catalog.read', 'catalog.manage'),
   R(null, /^\/api\/v1\/admin\/(coupons|banners|notifications|flash-sales|exhibitions)(\/|$)/, 'marketing'),
   R(null, /^\/api\/v1\/admin\/(penalty-rules|penalties|grade-policies|grades)(\/|$)/, 'partners.read', 'partners.manage'),
-  R(null, /^\/api\/v1\/admin\/(orders|claims|disputes|inquiries)(\/|$)/, 'orders.read', 'orders.manage'),
+  R(null, /^\/api\/v1\/admin\/(orders|claims|disputes|inquiries|faqs)(\/|$)/, 'orders.read', 'orders.manage'),
   R(null, /^\/api\/v1\/admin\/users(\/|$)/, 'users.read'),
   R(null, /^\/api\/v1\/admin\/(dashboard|metrics|control-tower|fds)(\/|$)/, 'dashboard'),
   R(null, /^\/api\/v1\/admin\/legal-documents(\/|$)/, 'super'),       // 5-6: SUPER_ADMIN only (read + register)

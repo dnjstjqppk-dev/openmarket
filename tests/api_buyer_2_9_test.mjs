@@ -70,8 +70,11 @@ await t.test('B4. detail adds template, seller summary and max coupon', async ()
   const g = await newGateway();
   const cust = await login(g, 'customer@example.com');
   const pid = g.db.prepare("SELECT partner_id FROM products WHERE id = 'prod_001'").get().partner_id;
+  // 6-11: the seed owns the default; detail shows the product's own policy.
+  g.db.prepare('UPDATE shipping_policies SET is_default = 0 WHERE partner_id = ?').run(pid);
   g.db.prepare(`INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, base_fee, is_default, status)
     VALUES ('sp_t1', ?, 't', 'PARCEL', 'PAID', 3000, 1, 'ACTIVE')`).run(pid);
+  g.db.prepare("UPDATE products SET shipping_policy_id = 'sp_t1' WHERE id = 'prod_001'").run();
   g.db.prepare('INSERT INTO store_follows (id, user_id, partner_id) VALUES (?, ?, ?)')
     .run('sf_t1', 'u_customer_001', pid);
   g.db.prepare(`INSERT INTO coupons (id, code, title, discount_type, discount_value, min_order_amount, expires_at, is_active,

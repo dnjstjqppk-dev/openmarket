@@ -277,7 +277,7 @@ await t.test('NEW-11/12 product create stores notice JSON and KC fields', async 
     body: {
       title: 'phase3 legal product', category_id: cat.id, sale_price: 10000, original_price: 12000, stock_quantity: 5,
       thumbnail_url: 'https://example.com/t.png', notice_info_json: { '제조국': '대한민국', 'A/S': '02-111-2222' },
-      kc_certified: true, kc_cert_number: 'KC-2026-0001'
+      kc_certified: true, kc_cert_number: 'KC-2026-0001', shipping_policy_id: 'sp_dev_pt_001', brand: 'P3', gtin: '5901234123457'
     }
   });
   assert.equal(r.status, 201, r.text);
@@ -295,7 +295,7 @@ await t.test('NEW-11/12 notice and KC inputs are validated', async () => {
   const g = await boot();
   const pt = await g.login('seller@temu-supply.com', 'PARTNER');
   const cat = g.one('SELECT id FROM categories WHERE is_active = 1 LIMIT 1');
-  const base = { title: 'phase3 invalid', category_id: cat.id, sale_price: 10000, stock_quantity: 5, thumbnail_url: 'https://example.com/t.png' };
+  const base = { title: 'phase3 invalid', category_id: cat.id, sale_price: 10000, stock_quantity: 5, thumbnail_url: 'https://example.com/t.png', shipping_policy_id: 'sp_dev_pt_001', brand: 'P3', gtin: '5901234123457' };
   assert.equal((await g.call('/api/v1/partner/products', { method: 'POST', token: pt, body: { ...base, notice_info_json: [['x']] } })).json.code, 'INVALID_NOTICE_INFO');
   assert.equal((await g.call('/api/v1/partner/products', { method: 'POST', token: pt, body: { ...base, kc_certified: true } })).json.code, 'KC_NUMBER_REQUIRED');
 });
@@ -372,7 +372,7 @@ await t.test('NEW-16 /health exposes the applied schema version', async () => {
   const g = await boot();
   const r = await g.call('/health');
   assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.schemaVersion, 'd1_74_seo_crawl.sql');
+  assert.equal(r.json.schemaVersion, 'd1_77_user_locale.sql');
   assert.ok(Number(r.json.migrationsApplied) >= 50);
   assert.equal(g.one("SELECT COUNT(*) AS c FROM schema_migrations WHERE version = 'd1_42_legal_compliance_fields.sql'").c, 1);
 });

@@ -335,7 +335,7 @@ await t.test('7. Dynamic Feature Flags Enforcement & End-to-End Control', async 
   const pubRes = await g.call(`/api/v1/imports/${jobId}/publish`, {
     method: 'POST',
     token: ptToken,
-    body: { category_id: 'cat_e_audio', sale_price: 52000, wholesale_cost: 40000 }
+    body: { category_id: 'cat_e_audio', sale_price: 52000, wholesale_cost: 40000, shipping_policy_id: 'sp_dev_pt_001', brand: 'CRW', gtin: '5901234123457' }
   });
   assert.equal(pubRes.status, 201);
   const newProdId = pubRes.json.product_id;

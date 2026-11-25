@@ -492,7 +492,7 @@ await t.test('I24 DIRECT goods without a valid resale authorisation cannot be so
   I.db.prepare('UPDATE supplier_sku_mappings SET resale_authorized = 1 WHERE sku_id = ?').run(I.directSku.id);
 });
 await t.test('I25 seller product needs operator review before it is visible or purchasable', async () => {
-  const cr = await I.call('/api/v1/partner/products', { method: 'POST', token: p2, body: { title: '심사 테스트 상품 무선 마우스', sale_price: 19900, original_price: 25000, stock_quantity: 10, category_id: I.one('SELECT id FROM categories LIMIT 1').id, thumbnail_url: 'https://img.example/x.jpg' } });
+  const cr = await I.call('/api/v1/partner/products', { method: 'POST', token: p2, body: { title: '심사 테스트 상품 무선 마우스', sale_price: 19900, original_price: 25000, stock_quantity: 10, category_id: I.one('SELECT id FROM categories LIMIT 1').id, thumbnail_url: 'https://img.example/x.jpg', shipping_policy_id: 'sp_dev_pt_002', brand: 'I25', gtin: '5901234123457' } });
   assert.equal(cr.status, 201, cr.text);
   const list = await I.call(`/api/v1/products?partner_id=pt_002&limit=200`);
   assert.ok(!list.json.data.some((p) => p.id === cr.json.product_id));

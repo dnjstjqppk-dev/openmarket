@@ -42,8 +42,8 @@ async function setupShop(g) {
     method: 'POST', token: ptA,
     body: {
       title: 'Journey Desk', description_html: '<p>oak desk</p>', category_id: 'cat_e_audio',
-      thumbnail_url: 'https://example.com/d.png', shipping_policy_id: tpl.id,
-      sale_price: 60000, original_price: 80000, stock_quantity: 100
+      thumbnail_url: 'https://example.com/d.png', shipping_policy_id: tpl.id, brand: 'SJ',
+      sale_price: 60000, original_price: 80000, stock_quantity: 100, gtin: '5901234123457'
     }
   });
   assert.equal(reg.status, 201, reg.text);

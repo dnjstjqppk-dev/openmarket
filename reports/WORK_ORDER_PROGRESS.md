@@ -59,3 +59,28 @@ G3 | 통과 | 04af54a | browser 16/16 + LCP 최대820 + smoke 68+의도2 + lint 
 4-21 | 통과 | 3dcb99c | A27 + p4adm3 6/6 | 규칙·부과·이의·등급산정, 해석 → Q-4-21
 4-22 | 통과 | 3dcb99c | design_lint 3/3 + p4adm3 6/6 | 기타7화면·어드민검사0·CAPS제거, 해석 → Q-4-22
 4-23 | 통과 | 3dcb99c | flutter analyze 0 + test 42 | 파이프라인8카드·발주확인, 해석 → Q-4-23
+5-0 | 통과 | f123899 | - | 저장소 정리·기록 바로잡기(f123899 일괄 커밋)
+5-1 | 통과 | f123899 | design_lint 4/4 + order 8/8 | 검사기 수정(D04)+주문2화면 285행 토큰·OmBadge 전환(f123899 실측)
+5-2 | 통과 | f123899 | settlement 19/19 | 출금 전액만(결정-16), WITHDRAWAL_FULL_AMOUNT_ONLY(f123899 실측)
+5-3 | 통과 | f123899 | restock_notify 13건 | 재입고 알림 발송(K-05). f123899 실측 12/13 1건 플레이크 → f9c080a tiebreak 안정화
+5-4 | 통과 | f123899 | plp_filters 11/11 | 오늘출발 필터 결정-10 전 동작(F8·F11, f123899 실측)
+5-5 | 통과 | f123899 | funds_abuse 9/9 | 최저가 보장 삭제(결정-15), PRICE_ADJUSTMENT 400 퇴역(f123899 실측)
+5-6 | 통과 | f123899 | legal_documents 10/10 | 약관 운영자 관리·버전 이력(f123899 실측)
+5-7 | 통과 | f123899 | customs_invoice 6/6 | 상업송장 지어낸 수출자 제거(f123899 실측)
+5-8 | 통과 | f123899 | settlement 19/19 | 정책 적용일 KST 기준(16-19항, f123899 실측)
+5-9 | 통과 | f123899 | remind_notify 18/18 | 남은 알림(K-06/K-09, f123899 실측)
+5-10 | 통과 | f123899 | rehearse apply 24/24 + rollback PASS | 운영 반영 리허설(원격 0건), DEPLOY_RUNBOOK
+6-0 | 통과 | 미커밋 | channels_live 5/5 | 48360ae 감사, 결론 운영 배포 가능(D1·D2 수정)
+6-11 | 통과 | 미커밋 | shipping_required 12/12 | 판매자 배송정책 필수(결정-19), 기본값 0건
+6-12 | 통과 | 미커밋 | identifiers 11/11 | 브랜드·바코드 필수(d1_75), GS1 검증
+6-13 | 통과 | 미커밋 | faq_managed 7/7 | 관리자 FAQ(d1_76, 6분류), 하드코딩 0건
+6-1 | 통과 | 미커밋 | seo_brief 6/6 | PDP brief 바이트 동일 + 크롤
+6-2 | 통과 | 미커밋 | seo_locale 2/2 | /en·/ja 미러 + 저장 로케일(d1_77)
+6-3 | 통과 | 미커밋 | seo_structured 7/7 | JSON-LD 확장(쿠폰·반품·Q&A)
+6-4 | 통과 | 미커밋 | seo_answer 6/6 | 핵심표·질문見出し AEO 블록
+6-5 | 통과 | 미커밋 | seo_llms 8/8 | llms.txt·full·.md + 엔터티 단일화
+6-6 | 통과 | 미커밋 | seo_robots 5/5 | robots 정책표 3묶음 전부 허용(결정-18) + 신호
+6-7 | 통과 | 미커밋 | seo_indexnow 7/7 | 키 파일 env화 + 큐 9지점 + 소유확인 meta
+6-8 | 통과 | 미커밋 | seo_head_policy 9/9 | ko-KR·canonical·제목규칙·alt·깨짐0, LCP 예산 내
+6-9 | 통과 | 미커밋 | 비교표 15행 + LCP 0 | 2스택 리허설(원격 0건) + DEPLOY_PLAN
+6-10 | 통과 | 미커밋 | openapi 3/3 | 크롤 경로 문서·진행기록·질문서(본 행)

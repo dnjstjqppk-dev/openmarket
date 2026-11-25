@@ -69,4 +69,28 @@ await t.test('L7 payment result renamed its confirm entry', async () => {
   assert.ok(v.includes('@click="confirmPayment"'), 'simulator calls the renamed entry');
 });
 
+await t.test('L8 6-13 support renders admin FAQ via OmFaq, console manages rows', async () => {
+  const v = view('SupportView.vue');
+  assert.ok(v.includes('OmFaq') && v.includes(':html="true"'), 'expandable sanitized answers');
+  assert.ok(v.includes("params.set('category'") && v.includes("params.set('q'"), 'server-side tab + search');
+  const a = readFileSync('apps/admin/src/views/FaqView.vue', 'utf8');
+  assert.ok(a.includes('/api/v1/admin/faqs'), 'console wired to the FAQ API');
+  assert.ok(a.includes('is_published') && a.includes('/reorder'), 'publish toggle and reorder present');
+  const r = readFileSync('apps/admin/src/router/index.ts', 'utf8');
+  assert.ok(r.includes("path: '/faqs'"), 'console route registered');
+});
+
+await t.test('L9 6-4 policy and legal pages lead with questions', async () => {
+  const p = view('PolicyView.vue');
+  assert.ok(p.includes('배송비는 얼마인가요?') && p.includes('보상받을 수 있나요?'), 'policy headings ask');
+  assert.ok(p.includes('언제 지급되나요?'), 'purchase-confirm heading asks');
+  const l = readFileSync('apps/storefront/src/lib/legal.ts', 'utf8');
+  assert.ok(l.includes('questionFor') && l.includes('반품은 언제까지 할 수 있나요?'), 'legal question map present');
+  for (const f of ['LegalTermsView.vue', 'LegalPrivacyView.vue', 'LegalRefundView.vue']) {
+    const v = view(f);
+    assert.ok(v.includes('questionFor('), `${f} renders question headings`);
+    assert.ok(v.includes('원문 조항'), `${f} keeps the verbatim title visible`);
+  }
+});
+
 t.finish();

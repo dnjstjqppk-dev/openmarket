@@ -5,7 +5,8 @@
 
 import { STATIC_URLS, LEGACY_PRODUCT_CAP, PRODUCTS_PER_SITEMAP, categoryUrls, storeUrls,
   productUrls, approvedProductCount, productPageCount, renderUrlset, renderIndex } from '../services/seo/sitemap.js';
-import { robotsTxt, llmsTxt, llmsFullTxt } from '../services/seo/crawl-text.js';
+import { robotsTxt, llmsTxt, llmsFullTxt, couponFeed, returnPolicyFeed, productMarkdown, categoryMarkdown } from '../services/seo/crawl-text.js';
+import { buildPdpBrief, renderPdpText } from '../services/seo/pdp-brief.js';
 
 const xml = (cors, body) => new Response(body, { headers: { ...cors, 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
 const txt = (cors, body) => new Response(body, { headers: { ...cors, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
@@ -46,5 +47,48 @@ export async function handleSeoRoutes(request, url, env, corsHeaders) {
   if (p === '/robots.txt') return txt(corsHeaders, robotsTxt(base));
   if (p === '/llms.txt') return txt(corsHeaders, await llmsTxt(env, base));
   if (p === '/llms-full.txt') return txt(corsHeaders, await llmsFullTxt(env, base));
+  // 6-7: IndexNow key file from env (never a static file). Official key shape:
+  // 8-128 chars of [A-Za-z0-9-] (indexnow.org/documentation). Served byte-exact
+  // with no trailing newline; anything else 404s like any unknown file. Placed
+  // after the exact .txt files: `llms-full` itself matches the key shape.
+  const keyM = p.match(/^\/([A-Za-z0-9-]{8,128})\.txt$/);
+  if (keyM) {
+    const key = String(env.INDEXNOW_KEY || '');
+    if (key && keyM[1] === key) {
+      return new Response(key, { headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+    }
+    return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+  }
+  // 6-1: machine-readable PDP brief — indexable products only, same builder
+  // as the storefront detail section (byte-identical by construction).
+  const crawlM = p.match(/^\/api\/crawl\/product\/([^/]+)$/);
+  if (crawlM) {
+    const row = await env.DB.prepare("SELECT id FROM products WHERE id = ? AND status = 'ACTIVE' AND review_status = 'APPROVED'").bind(crawlM[1]).first();
+    if (!row) return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+    const brief = await buildPdpBrief(env, crawlM[1]);
+    if (!brief) return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+    return txt(corsHeaders, renderPdpText(brief));
+  }
+  // 6-3: coupon + return-policy feeds (live rows only, capped).
+  // 6-5: also served under /llms/* so the apex canonical links resolve.
+  if (p === '/api/crawl/coupons' || p === '/llms/coupons') {
+    return Response.json(await couponFeed(env), { headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=3600' } });
+  }
+  if (p === '/api/crawl/return-policies' || p === '/llms/return-policies') {
+    return Response.json(await returnPolicyFeed(env, base), { headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=3600' } });
+  }
+  // 6-5: per-product and per-category markdown (live rows only, else 404).
+  const prodMd = p.match(/^\/llms\/product\/([^/]+)\.md$/);
+  if (prodMd) {
+    const md = await productMarkdown(env, base, prodMd[1]);
+    if (md === null) return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+    return new Response(md, { headers: { ...corsHeaders, 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+  }
+  const catMd = p.match(/^\/llms\/category\/([^/]+)\.md$/);
+  if (catMd) {
+    const md = await categoryMarkdown(env, base, catMd[1]);
+    if (md === null) return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+    return new Response(md, { headers: { ...corsHeaders, 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+  }
   return null;
 }

@@ -28,6 +28,7 @@
   //   CARRIER_WEBHOOK_SECRET, (optional) SOLAPI_API_KEY/SOLAPI_API_SECRET, PRICESCANNER_API_KEY,
   //   (optional) UNIPASS_API_KEY for customs PCCC verification (FORMAT_ONLY without it).
   //   Phase 2 channels: SMARTSTORE_CLIENT_ID/SMARTSTORE_CLIENT_SECRET, COUPANG_ACCESS_KEY/COUPANG_SECRET_KEY/COUPANG_VENDOR_ID.
+  //   Phase 6-7 IndexNow: INDEXNOW_KEY (8-128 chars [A-Za-z0-9-]; serves /<key>.txt and signs drains), optional INDEXNOW_ENDPOINT override.
   // Local development overrides these through apps/cloudflare-gateway/.dev.vars (git-ignored).
   "vars": {
     "ENVIRONMENT": "production",

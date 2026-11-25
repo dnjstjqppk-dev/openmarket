@@ -1,5 +1,5 @@
 # OLMOA Domain Architecture & Cloudflare Configuration
-**Document Version:** 1.3.0 (2026-11-25, after the account move)
+**Document Version:** 1.4.0 (2026-11-25, phase-6 crawl surface: llms docs, key file, home meta injection)
 **Target Domain:** `olmoa.com` (Cloudflare Registrar, registered 2026-11-25)
 **Brand:** OLMOA (올모아)
 
@@ -20,7 +20,7 @@ operator's request. The pre-move data survives only as the export in `.ops-backu
 
 | Hostname | Worker (config) | Notes |
 |---|---|---|
-| `olmoa.com` | `openmarket` (root `wrangler.toml`) | Static storefront SPA; `/robots.txt`, `/sitemap*.xml`, `/sitemaps/*`, `/llms*.txt` forwarded to `olmoa-api` over the `API` service binding (`apps/storefront/edge/apex-worker.js`) |
+| `olmoa.com` | `openmarket` (root `wrangler.toml`) | Static storefront SPA; crawl paths forwarded to `olmoa-api` over the `API` service binding (`apps/storefront/edge/apex-worker.js`, mirror of `RUN_WORKER_FIRST`): `/robots.txt`, `/sitemap.xml`, `/sitemap-index.xml`, `/sitemaps/*`, `/llms.txt`, `/llms-full.txt`, `/llms/*`, `/*.txt` (6-7 IndexNow key file). `/` runs through the worker for edge verification-meta injection (served from ASSETS, never forwarded) |
 | `www.olmoa.com` | `olmoa-edge` (`infra/domain-proxy/`) | 301 → `https://olmoa.com` (path + query kept); nothing else |
 | `api.olmoa.com` | `olmoa-api` (`apps/cloudflare-gateway/wrangler.jsonc`) | D1 `openmarket-db` `6e23f7cd…`, R2 `olmoa-media`, rate limiters, cron `*/5` |
 | `admin.olmoa.com` | `olmoa-admin` (`apps/admin/wrangler.jsonc`) | Static console |

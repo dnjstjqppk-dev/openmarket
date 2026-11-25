@@ -44,8 +44,8 @@ async function checkoutPaid(g, cust, skuId, qty = 1) {
 
 function pt2Product(g,overrides = {}) {
   const pid = overrides.id || 'prod_pt2_01';
-  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status)
-    VALUES (?, 'pt_002', 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED')`)
+  g.db.prepare(`INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html, lowest_original_price, lowest_sale_price, status, review_status, shipping_policy_id)
+    VALUES (?, 'pt_002', 'cat_e_audio', ?, 'https://x/y.png', '<p>t</p>', 20000, 15000, 'ACTIVE', 'APPROVED', 'sp_dev_pt_002')`)
     .run(pid, overrides.title || 'pt2 product');
   g.db.prepare(`INSERT INTO product_skus (id, product_id, sku_code, option_combination_json, original_price, sale_price, stock_quantity, status)
     VALUES (?, ?, ?, '{}', 20000, 15000, 100, 'IN_STOCK')`).run(overrides.sku || 'sku_pt2_01', pid, `C-${pid}`);
@@ -240,8 +240,8 @@ const FULL_PRODUCT = {
   ],
   options: [{ name: '색상', values: ['Black', 'White'] }],
   skus: [
-    { sku_code: 'P6-BLK', option_combination: { 색상: 'Black' }, original_price: 20000, sale_price: 15000, stock_quantity: 5 },
-    { sku_code: 'P6-WHT', option_combination: { 색상: 'White' }, original_price: 20000, sale_price: 15000, stock_quantity: 7 }
+    { sku_code: 'P6-BLK', option_combination: { 색상: 'Black' }, original_price: 20000, sale_price: 15000, stock_quantity: 5, gtin: '5901234123457' },
+    { sku_code: 'P6-WHT', option_combination: { 색상: 'White' }, original_price: 20000, sale_price: 15000, stock_quantity: 7, gtin: '96385074' }
   ],
   notice_info: { 모델명: 'P6' },
   bundle_group_key: 'BND-P6'
@@ -334,7 +334,7 @@ await t.test('P7. bulk update changes status, price and stock with failures apar
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const mk = async (title) => (await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png' }
+    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png', shipping_policy_id: 'sp_dev_pt_001', brand: 'P7', gtin: '5901234123457' }
   })).json.product_id;
   const a = await mk('벌크 A');
   const b = await mk('벌크 B');
@@ -671,7 +671,7 @@ await t.test('P16. product list pages and filters on the server', async () => {
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const mk = async (title) => (await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png' }
+    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png', shipping_policy_id: 'sp_dev_pt_001', brand: 'P16', gtin: '5901234123457' }
   })).json.product_id;
   const a = await mk('P16 판매중');
   const b = await mk('P16 품절');
@@ -700,7 +700,7 @@ await t.test('P17. resume to ACTIVE needs an approved review', async () => {
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const mk = async (title) => (await g.call('/api/v1/partner/products', {
     method: 'POST', token: pt,
-    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png' }
+    body: { title, sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', thumbnail_url: 'https://cdn.example/x.png', shipping_policy_id: 'sp_dev_pt_001', brand: 'P17', gtin: '5901234123457' }
   })).json.product_id;
   const a = await mk('P17 재개');
   g.db.prepare("UPDATE products SET status = 'ACTIVE', review_status = 'APPROVED' WHERE id = ?").run(a);
@@ -718,7 +718,7 @@ await t.test('P18. single product carries gallery and skus for the edit form', a
   const g = await newGateway();
   const pt = await login(g, 'seller@temu-supply.com', 'PARTNER');
   const created = await g.call('/api/v1/partner/products', { method: 'POST', token: pt,
-    body: { title: 'P18 단건', sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video',
+    body: { title: 'P18 단건', sale_price: 10000, original_price: 12000, stock_quantity: 5, category_slug: 'audio-video', shipping_policy_id: 'sp_dev_pt_001', brand: 'P18', gtin: '5901234123457',
       thumbnail_url: 'https://cdn.example/p18.png', images: [{ image_url: '/api/v1/storage/file/p18a.png' }, { image_url: '/api/v1/storage/file/p18b.png' }] } });
   assert.equal(created.status, 201, created.text);
   const id = created.json.product_id;

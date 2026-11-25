@@ -96,9 +96,11 @@ paths:
                         type: array
                         items:
                           type: object
-                          description: '2-9: each carries store_discount_amount and shipping_groups.'
+                          description: '2-9: each carries store_discount_amount and shipping_groups (6-11: groups carry shipping_text).'
         '401':
           description: Missing or expired customer JWT
+        '409':
+          description: SHIPPING_POLICY_REQUIRED when a line names no usable seller policy
         '503':
           description: OPERATOR_NOT_CONFIGURED when no active business entity exists; SCHEMA_MISMATCH when D1 lags the code schema level
 

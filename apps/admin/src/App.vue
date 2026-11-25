@@ -83,6 +83,7 @@ const rawMenu: ConsoleMenuItem[] = [
     children: [
       { to: "/users", label: '회원' },
       { to: "/inquiries", label: '1:1 문의' },
+      { to: "/faqs", label: 'FAQ 관리' },
       { to: "/reviews", label: '리뷰' }
     ]
   },

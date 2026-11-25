@@ -30,6 +30,25 @@ export async function enqueueUrls(env, urls) {
   return { queued: list.length };
 }
 
+const indexableOf = (row) => Boolean(row) && row.status === 'ACTIVE' && row.review_status === 'APPROVED';
+
+/** 6-7: notify IndexNow after a product write. Best-effort — the product write
+ *  is primary, so a queue failure only logs. A URL is queued when the product
+ *  is indexable after the write, or when it just left the indexed set (a removal
+ *  signal: IndexNow covers added, updated AND deleted URLs). `before` is the
+ *  pre-write { status, review_status } row, or null when it was not read. */
+export async function notifyProductChanged(env, productId, before = null) {
+  try {
+    const after = await env.DB.prepare('SELECT status, review_status FROM products WHERE id = ?').bind(productId).first();
+    if (!indexableOf(after) && !indexableOf(before)) return { queued: 0, skipped: 'NOT_INDEXABLE' };
+    const base = String(env.PUBLIC_STOREFRONT_URL || 'https://olmoa.com').replace(/\/$/, '');
+    return await enqueueUrls(env, [`${base}/product/${productId}`]);
+  } catch (e) {
+    console.warn('indexnow notify failed', productId, String((e && e.message) || e));
+    return { queued: 0, skipped: 'NOTIFY_FAILED' };
+  }
+}
+
 export async function listQueue(env, { status = '', limit = 100 } = {}) {
   const lim = Math.min(500, Math.max(1, Number(limit) || 100));
   const q = status

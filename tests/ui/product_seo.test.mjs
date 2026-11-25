@@ -25,6 +25,10 @@ await t.test('P02 head input carries PDP title, description and image', async ()
   assert.equal(h.title, '무선 이어폰 Pro | OLMOA')
   assert.ok(h.description.includes('노이즈캔슬링') && !h.description.includes('<p>'))
   assert.equal(h.image, 'https://cdn/x.jpg')
+  const branded = productHeadOf({ ...live, brand: 'Acme' }, '/product/earphones', 'https://olmoa.com')
+  assert.equal(branded.title, '무선 이어폰 Pro | Acme | OLMOA')
+  const long = productHeadOf({ ...live, title: '가 나 다 라 마 바 사 아 자 차 카 타 파 하 가 나 다 라 마 바 사 아 자 차 카 타 파 하', brand: 'AcmeAudio' }, '/p', 'https://olmoa.com')
+  assert.ok(long.title.length <= 60 && long.title.endsWith('…'), 'titles clip at 60')
 })
 
 await t.test('P03 product JSON-LD omits missing offer and rating nodes', async () => {

@@ -11,7 +11,7 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { lineTotal, shippingFee as shippingFeeFor, DEFAULT_FREE_THRESHOLD } from '../lib/pricing';
+import { lineTotal, policyShipFee, type ShippingPolicyLike } from '../lib/pricing';
 
 export interface CartItem {
   sku_id: string;
@@ -26,8 +26,9 @@ export interface CartItem {
   partner_id: string;
   business_name?: string;
   sales_model?: string;
-  base_shipping_fee?: number;
-  free_shipping_threshold?: number;
+  shipping_policy?: (ShippingPolicyLike & { id?: string }) | null;
+  bundle_group_key?: string | null;
+  shipping_text?: string | null;
   requires_pccc?: number;
 }
 
@@ -73,7 +74,8 @@ function optionSummary(sku: any): string {
   }
 }
 
-/** Groups lines by seller exactly like the server splits sub-orders (services/orders.js). */
+/** Groups lines by seller exactly like the server splits sub-orders (services/orders.js),
+ * with the same shipping-group split inside (bundle key -> seller-chosen template). */
 function groupBySeller(list: CartItem[]): PartnerCartGroup[] {
   const map = new Map<string, CartItem[]>();
   for (const it of list) {
@@ -83,8 +85,23 @@ function groupBySeller(list: CartItem[]): PartnerCartGroup[] {
   }
   return [...map.entries()].map(([pid, groupItems]) => {
     const goods = groupItems.reduce((sum, it) => sum + lineTotal(it.price, it.quantity), 0);
-    const threshold = groupItems[0].free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD;
-    const fee = shippingFeeFor(goods, groupItems[0].base_shipping_fee, groupItems[0].free_shipping_threshold);
+    const subs = new Map<string, CartItem[]>();
+    for (const it of groupItems) {
+      const key = it.bundle_group_key || (it.shipping_policy?.id ? `tpl:${it.shipping_policy.id}` : 'legacy');
+      if (!subs.has(key)) subs.set(key, []);
+      subs.get(key)!.push(it);
+    }
+    let fee = 0;
+    for (const lines of subs.values()) {
+      const g = lines.reduce((sum, it) => sum + lineTotal(it.price, it.quantity), 0);
+      const q = lines.reduce((sum, it) => sum + it.quantity, 0);
+      fee += policyShipFee(lines[0].shipping_policy, g, q);
+    }
+    // The free-shipping gauge only makes sense for a single conditional group.
+    const single = subs.size === 1 ? [...subs.values()][0] : null;
+    const subPolicy = single ? single[0].shipping_policy : null;
+    const threshold = subPolicy && String(subPolicy.fee_type).toUpperCase() === 'CONDITIONAL'
+      ? Number(subPolicy.free_threshold ?? 0) : 0;
     const name = groupItems[0].business_name || (pid === UNKNOWN_SELLER ? '판매자 확인 필요' : '판매자');
     const remaining = threshold > 0 && fee > 0 ? Math.max(0, threshold - goods) : 0;
     return {
@@ -147,8 +164,16 @@ export const useCartStore = defineStore('cart', () => {
         partner_id: product.partner_id,
         business_name: product.business_name || product.partner_name || '',
         sales_model: product.sales_model || undefined,
-        base_shipping_fee: product.base_shipping_fee ?? undefined,
-        free_shipping_threshold: product.free_shipping_threshold ?? undefined,
+        shipping_policy: product.shipping_policy ? {
+          id: product.shipping_policy.id,
+          fee_type: product.shipping_policy.fee_type,
+          base_fee: product.shipping_policy.base_fee,
+          free_threshold: product.shipping_policy.free_threshold,
+          qty_unit: product.shipping_policy.qty_unit,
+          remote_surcharge: product.shipping_policy.remote_surcharge
+        } : (product.shipping_policy_id ? { id: product.shipping_policy_id } : null),
+        bundle_group_key: product.bundle_group_key ?? null,
+        shipping_text: product.shipping_text ?? null,
         requires_pccc: product.requires_pccc != null ? Number(product.requires_pccc) : undefined
       });
     }

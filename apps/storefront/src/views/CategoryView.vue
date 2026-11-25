@@ -6,12 +6,14 @@ import { useRoute, RouterLink } from 'vue-router'
 import { OmEmptyState } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import PlpLayout from '../components/plp/PlpLayout.vue'
+import CategoryHub from '../components/plp/CategoryHub.vue'
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || ''))
 </script>
 
 <template>
+  <CategoryHub :key="`hub-${slug}`" :slug="slug" />
   <PlpLayout :key="slug" :locked-category="slug">
     <template #zero="{ popular, parent }">
       <OmEmptyState title="이 카테고리에 상품이 없습니다" description="필터를 풀거나 다른 카테고리를 보세요.">

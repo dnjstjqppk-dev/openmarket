@@ -6,27 +6,27 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGateway, createRunner } from './lib/harness.mjs';
-import apex, { CRAWL_PATHS, isCrawlPath } from '../apps/storefront/edge/apex-worker.js';
+import apex, { RUN_WORKER_FIRST, isCrawlPath, injectVerifyMeta } from '../apps/storefront/edge/apex-worker.js';
 import { requireBuildEnv } from '../scripts/vite-require-env.mjs';
 
 const t = createRunner('Apex Worker / Domain Cutover');
 const SHELL = '<!DOCTYPE html><html><body>spa</body></html>';
 const assets = { fetch: async () => new Response(SHELL, { headers: { 'Content-Type': 'text/html' } }) };
 
-await t.test('A01 run_worker_first in wrangler.toml matches CRAWL_PATHS exactly', () => {
+await t.test('A01 run_worker_first in wrangler.toml matches RUN_WORKER_FIRST exactly', () => {
   const toml = fs.readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
   const m = toml.match(/^run_worker_first\s*=\s*(\[.*\])\s*$/m);
   assert.ok(m, 'run_worker_first missing from root wrangler.toml');
-  assert.deepEqual(JSON.parse(m[1]), CRAWL_PATHS);
+  assert.deepEqual(JSON.parse(m[1]), RUN_WORKER_FIRST);
   assert.match(toml, /^main\s*=\s*"apps\/storefront\/edge\/apex-worker\.js"/m);
   assert.match(toml, /\[\[services\]\]\s*\nbinding\s*=\s*"API"\s*\nservice\s*=\s*"olmoa-api"/);
 });
 
 await t.test('A02 crawl paths are matched, app routes are not', () => {
-  for (const p of ['/robots.txt', '/sitemap.xml', '/sitemap-index.xml', '/sitemaps/products-1.xml', '/llms.txt', '/llms-full.txt']) {
+  for (const p of ['/robots.txt', '/sitemap.xml', '/sitemap-index.xml', '/sitemaps/products-1.xml', '/llms.txt', '/llms-full.txt', '/llms/product/prod_001.md', '/llms/category/audio.md', '/llms/coupons', '/llms/return-policies', '/abc12345.txt', '/a/b.txt']) {
     assert.equal(isCrawlPath(p), true, p);
   }
-  for (const p of ['/', '/category/food', '/sitemaps', '/robots.txt.bak', '/llms.txt/x', '/product/1']) {
+  for (const p of ['/', '/category/food', '/sitemaps', '/robots.txt.bak', '/llms.txt/x', '/product/1', '/llms', '/x.md']) {
     assert.equal(isCrawlPath(p), false, p);
   }
 });
@@ -79,6 +79,43 @@ await t.test('A05 static storefront files carry no stale host', () => {
   const pub = new URL('../apps/storefront/public/', import.meta.url);
   assert.equal(fs.existsSync(new URL('sitemap.xml', pub)), false, 'static sitemap.xml shadows the generated one');
   assert.doesNotMatch(fs.readFileSync(new URL('robots.txt', pub), 'utf8'), /workers\.dev|pages\.dev|^Sitemap:/m);
+});
+
+await t.test('A06b 6-7 key file resolves on the apex when the key exists, else 404', async () => {
+  const mk = (extra) => createGateway({
+    seedFiles: ['migrations/dev/seed_local_dev.sql'],
+    env: { JWT_SECRET: 'e2e-secret-0123456789abcdefghijklmnopqrstu', ENVIRONMENT: 'development', PUBLIC_STOREFRONT_URL: 'https://olmoa.com', ...extra }
+  });
+  const keyed = await mk({ INDEXNOW_KEY: '0f26d5e892544f74b806ec5c5522e6a1' });
+  const kEnv = { ASSETS: assets, API: { fetch: (req) => keyed.worker.fetch(req, keyed.env, keyed.ctx) } };
+  const kf = await apex.fetch(new Request('https://olmoa.com/0f26d5e892544f74b806ec5c5522e6a1.txt'), kEnv);
+  assert.equal(kf.status, 200);
+  assert.match(kf.headers.get('Content-Type'), /text\/plain/);
+  assert.equal(await kf.text(), '0f26d5e892544f74b806ec5c5522e6a1');
+  const wrong = await apex.fetch(new Request('https://olmoa.com/DeadBeefCafeBabe99.txt'), kEnv);
+  assert.equal(wrong.status, 404);
+  const bare = await mk({});
+  const bEnv = { ASSETS: assets, API: { fetch: (req) => bare.worker.fetch(req, bare.env, bare.ctx) } };
+  const miss = await apex.fetch(new Request('https://olmoa.com/0f26d5e892544f74b806ec5c5522e6a1.txt'), bEnv);
+  assert.equal(miss.status, 404);
+});
+
+await t.test('A06c 6-7 homepage carries verification meta tags only when codes exist', async () => {
+  const page = '<!DOCTYPE html><html><head><title>t</title></head><body>home</body></html>';
+  const html = { fetch: async () => new Response(page, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': String(page.length) } }) };
+  const coded = await apex.fetch(new Request('https://olmoa.com/'), {
+    ASSETS: html, NAVER_SITE_VERIFICATION: 'naver-code-1', GOOGLE_SITE_VERIFICATION: 'google-code-2'
+  });
+  assert.equal(coded.status, 200);
+  const body = await coded.text();
+  assert.ok(body.includes('<meta name="naver-site-verification" content="naver-code-1" />'), 'naver meta');
+  assert.ok(body.includes('<meta name="google-site-verification" content="google-code-2" />'), 'google meta');
+  assert.ok(body.indexOf('naver-site-verification') < body.indexOf('</head>'), 'inside head');
+  const plain = await apex.fetch(new Request('https://olmoa.com/'), { ASSETS: html });
+  assert.equal(await plain.text(), page, 'byte-identical without codes');
+  const evil = injectVerifyMeta(page, { NAVER_SITE_VERIFICATION: '"><script>alert(1)</script>' });
+  assert.doesNotMatch(evil, /<script>alert/);
+  assert.ok(evil.includes('&quot;&gt;&lt;script&gt;'), 'code is escaped');
 });
 
 await t.test('A06 deployable builds fail without VITE_* endpoints; other builds are untouched', () => {

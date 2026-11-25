@@ -8,6 +8,7 @@
 import { newId, sqlNow } from '../lib/ids.js';
 import { getPolicy } from '../lib/ledger.js';
 import { isDropFakeFlagged } from '../lib/fake-discount.js';
+import { sellableSql } from '../lib/shipping-policy.js';
 
 const DAY_MS = 86400000;
 
@@ -40,7 +41,7 @@ export async function runPriceDropNotifs(env, { limit = 200 } = {}) {
   const { results: users } = await env.DB.prepare(
     `SELECT DISTINCT w.user_id AS user_id FROM wishlists w
      JOIN products p ON p.id = w.product_id
-     WHERE p.status = 'ACTIVE'
+     WHERE p.status = 'ACTIVE' AND ${sellableSql('p')}
        AND NOT EXISTS (SELECT 1 FROM price_drop_notifs l WHERE l.user_id = w.user_id AND l.notified_day = ?)
      LIMIT ?`
   ).bind(today, limit).all();
@@ -62,7 +63,7 @@ async function bundleUserDrops(env, userId, today) {
      JOIN product_skus s ON s.id = h.sku_id
      JOIN products p ON p.id = s.product_id
      JOIN wishlists w ON w.product_id = p.id AND w.user_id = ?
-     WHERE p.status = 'ACTIVE'
+     WHERE p.status = 'ACTIVE' AND ${sellableSql('p')}
        AND h.sale_price < (
          SELECT h2.sale_price FROM sku_price_history h2
          WHERE h2.sku_id = h.sku_id

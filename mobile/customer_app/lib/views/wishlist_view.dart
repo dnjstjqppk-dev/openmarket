@@ -124,7 +124,7 @@ class _WishlistViewState extends State<WishlistView> {
                 overflow: TextOverflow.ellipsis,
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            subtitle: Text((p['brand'] ?? '').toString(),
+            subtitle: Text((p['brand'] ?? p['business_name'] ?? '').toString(),
                 style: const TextStyle(fontSize: 11, color: Colors.grey)),
             trailing: IconButton(
               tooltip: '찜 해제',

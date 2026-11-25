@@ -6,6 +6,7 @@ import router from './router';
 import App from './App.vue';
 import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
+import { useLocaleStore } from './stores/locale';
 import { i18n } from './i18n';
 import { useTheme, applyRouteHead } from '@olmoa/ui';
 
@@ -81,10 +82,29 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return res;
 };
 
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
   const auth = useAuthStore(pinia);
+  const toPath = String(to.path || '/');
+  const toLocale = toPath === '/en' || toPath.startsWith('/en/') ? 'en'
+    : toPath === '/ja' || toPath.startsWith('/ja/') ? 'ja' : 'ko';
+  // 6-2: the URL is the locale source of truth — apply it for display only
+  // (never persisted here, so no silent-setting; never redirected from
+  // stored preference, so no redirect loop).
+  try {
+    useLocaleStore(pinia).applyUrlLocale(toLocale === 'en' ? 'en-US' : toLocale === 'ja' ? 'ja-JP' : 'ko-KR');
+    document.documentElement.lang = toLocale === 'en' ? 'en' : toLocale === 'ja' ? 'ja' : 'ko';
+  } catch { /* display locale must never break navigation */ }
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { path: '/login', query: { redirect: to.fullPath } };
+    const loginPath = toLocale === 'ko' ? '/login' : `/${toLocale}/login`;
+    return { path: loginPath, query: { redirect: to.fullPath } };
+  }
+  // 6-2: keep the mirror prefix across in-app navigation (explicit locale
+  // URLs always win; this only re-applies the current prefix to bare targets).
+  const fromPath = String(from.path || '/');
+  const fromLocale = fromPath === '/en' || fromPath.startsWith('/en/') ? 'en'
+    : fromPath === '/ja' || fromPath.startsWith('/ja/') ? 'ja' : 'ko';
+  if (toLocale === 'ko' && fromLocale !== 'ko' && to.name !== 'not-found') {
+    return { path: `/${fromLocale}${toPath === '/' ? '' : toPath}`, query: to.query, hash: to.hash };
   }
   return true;
 });

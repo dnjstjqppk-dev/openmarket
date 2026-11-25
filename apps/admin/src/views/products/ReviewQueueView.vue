@@ -57,7 +57,8 @@ async function approve(row: any) {
     ...(row.checks.notice.ok ? [] : [`고시 누락(${row.checks.notice.missing.join(', ')})`]),
     ...row.checks.banned_words.map((w: string) => `금칙어(${w})`),
     ...row.checks.exaggeration.map((w: string) => `과장(${w})`),
-    ...(row.checks.price_hike ? ['정가인상 의심'] : [])
+    ...(row.checks.price_hike ? ['정가인상 의심'] : []),
+    ...(row.checks.shipping_policy && !row.checks.shipping_policy.ok ? ['배송정책 미지정(승인 불가)'] : [])
   ]
   const ok = await askConfirm({
     title: '심사 승인',
@@ -143,6 +144,7 @@ onMounted(() => void load())
           <div class="flex max-w-md flex-wrap gap-1">
             <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.checks.images.ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">이미지 {{ row.checks.images.count }}장</span>
             <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.checks.notice.ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">{{ row.checks.notice.template ? (row.checks.notice.ok ? '고시 완료' : `고시 누락(${row.checks.notice.missing.join(', ')})`) : '고시 미지정' }}</span>
+            <span v-if="row.checks.shipping_policy && !row.checks.shipping_policy.ok" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
             <span v-for="w in row.checks.banned_words" :key="w" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">금칙어({{ w }})</span>
             <span v-for="w in row.checks.exaggeration" :key="w" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">과장({{ w }})</span>
             <span v-if="row.checks.price_hike" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">정가인상 의심({{ won(row.checks.price_hike.original_before) }}→{{ won(row.checks.price_hike.original_raised) }})</span>

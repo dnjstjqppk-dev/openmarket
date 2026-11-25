@@ -29,14 +29,17 @@ function seedRefs(g) {
 }
 
 function insertProduct(g, partnerId, categoryId, row) {
+  // 6-11: search only exposes products that name a live policy.
+  const pol = g.db.prepare("SELECT id FROM shipping_policies WHERE partner_id = ? AND status = 'ACTIVE' ORDER BY is_default DESC LIMIT 1").get(partnerId);
+  assert.ok(pol, 'seller owns a shipping policy');
   g.db.prepare(
     `INSERT INTO products (id, partner_id, category_id, title, thumbnail_url, description_html,
-      lowest_original_price, lowest_sale_price, total_sold_count, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`
+      lowest_original_price, lowest_sale_price, total_sold_count, status, shipping_policy_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)`
   ).run(
     row.id, partnerId, categoryId, row.title, 'https://img.test/x.jpg',
     row.desc || '<p>설명</p>', row.orig || 20000, row.sale || 10000,
-    row.sold === undefined ? 0 : row.sold
+    row.sold === undefined ? 0 : row.sold, pol.id
   );
 }
 

@@ -232,6 +232,8 @@ export async function handleMultiChannelRoutes(request, url, env, corsHeaders) {
 
     const listingInput = {
       title: prod.title, description_html: prod.description_html, channel_sale_price: salePrice, channel_original_price: origPrice, stock_quantity: stock,
+      // 6-12: seller identifiers flow to the market payloads (naver manufacturer slot live now).
+      manufacturer: prod.manufacturer || null, model_name: prod.model_name || null,
       brand: str(body.brand, { max: 100 }),
       business_name: caller.partner.business_name,
       as_phone: asPhone,

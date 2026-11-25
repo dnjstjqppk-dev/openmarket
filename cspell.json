@@ -303,7 +303,13 @@
     "ampm",
     "newneek",
     "wepick",
-    "windly"
+    "windly",
+    "nobrand",
+    "NOBRAND",
+    "gtins",
+    "barcodes",
+    "seznam",
+    "Seznam"
   ],
   "ignorePaths": [
     "**/node_modules/**",

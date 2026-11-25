@@ -30,6 +30,7 @@ import ApplicationDetailView from '../views/partners/ApplicationDetailView.vue';
 import SecurityView from '../views/SecurityView.vue';
 import AuditLogView from '../views/AuditLogView.vue';
 import InquiriesView from '../views/InquiriesView.vue';
+import FaqView from '../views/FaqView.vue';
 import ShippingZonesView from '../views/ShippingZonesView.vue';
 import ShipBadgePolicyView from '../views/shipping/ShipBadgePolicyView.vue';
 import LegalDocumentsView from '../views/legal/LegalDocumentsView.vue';
@@ -73,6 +74,7 @@ const routes = [
   { path: '/security', name: 'security', component: SecurityView, meta: { roles: ALL } },
   { path: '/audit-log', name: 'audit-log', component: AuditLogView, meta: { roles: ['SUPER_ADMIN', 'PRIVACY_OFFICER'] } },
   { path: '/inquiries', name: 'inquiries', component: InquiriesView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS', 'CS'] } },
+  { path: '/faqs', name: 'faqs', component: FaqView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS', 'CS'] } },
   { path: '/shipping-zones', name: 'shipping-zones', component: ShippingZonesView, meta: { roles: ['SUPER_ADMIN', 'OPERATIONS'] } },
   { path: '/shipping/badges', name: 'shipping-badges', component: ShipBadgePolicyView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS'] } },
   { path: '/legal-documents', name: 'legal-documents', component: LegalDocumentsView, meta: { roles: ['SUPER_ADMIN'] } },

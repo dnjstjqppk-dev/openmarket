@@ -280,18 +280,29 @@ paths:
 
   /api/v1/support/faq:
     get:
-      summary: Static support FAQ list
+      summary: Published support FAQ list
       tags: [Features]
       security: []
-      description: Hardcoded FAQ entries (shipping, price-match, returns, payout, partner onboarding); no database read.
+      description: '6-13: admin-managed rows (published only), fixed category order, optional category + q filters.'
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: ['주문/결제', '배송', '취소/환불', '반품/교환', '회원', '판매자 입점']
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 100
       responses:
         '200':
-          description: FAQ entries with category, q and a
+          description: FAQ entries with category, q and a, plus the fixed categories list
           content:
             application/json:
               schema:
                 type: object
-                required: [success, data]
+                required: [success, data, categories]
                 properties:
                   success:
                     type: boolean
@@ -301,12 +312,20 @@ paths:
                       type: object
                       required: [category, q, a]
                       properties:
+                        id:
+                          type: string
                         category:
                           type: string
                         q:
                           type: string
                         a:
                           type: string
+                  categories:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: INVALID_FAQ_CATEGORY
 
   /api/v1/support/inquiries:
     get:

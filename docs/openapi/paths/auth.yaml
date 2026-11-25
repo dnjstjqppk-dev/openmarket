@@ -254,6 +254,10 @@ paths:
                 terms_version:
                   type: string
                   maxLength: 40
+                locale:
+                  type: string
+                  enum: [ko-KR, en-US, ja-JP]
+                  description: '6-2: saved storefront locale behind the /en /ja mirrors.'
       responses:
         '200':
           description: Profile updated; token is present only when the password changed

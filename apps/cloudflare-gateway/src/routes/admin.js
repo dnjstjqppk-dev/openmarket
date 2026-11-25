@@ -17,6 +17,28 @@ import { decidePayoutRequest, markRequestTransferred } from '../services/payouts
 import { getTodayShipMinRateBps, isTomorrowShipEnabled, currentKstHm } from './catalog.js';
 import { computeMonthlyGrades } from '../services/grading.js';
 import { findPriceHike } from '../lib/fake-discount.js';
+import { sellableSql } from '../lib/shipping-policy.js';
+import { notifyProductChanged } from '../services/seo/indexnow.js';
+import { missingIdentifiersSql, gtinConflictSql } from '../lib/product-identifiers.js';
+import { FAQ_CATEGORIES } from './features.js';
+import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
+import { RETURN_WINDOW_DAYS_DEFAULT } from './orders.js';
+
+/**
+ * 6-13: non-blocking drift check — "후 N일" windows written in a FAQ answer
+ * should match the effective return window, else the answer lies about
+ * policy. Plain durations ("2-4일 소요", "3일 이내 환불") are not windows.
+ */
+export function faqPolicyWarnings(env, answer) {
+  const effective = parseInt(env.RETURN_WINDOW_DAYS || RETURN_WINDOW_DAYS_DEFAULT, 10);
+  const mentions = [...String(answer || '').matchAll(/후\s*(\d+)\s*일/g)].map((m) => Number(m[1]));
+  const drifted = [...new Set(mentions)].filter((n) => n !== effective);
+  if (!drifted.length) return [];
+  return drifted.map((n) => ({
+    code: 'POLICY_NUMBER_MISMATCH',
+    message: `답변의 "후 ${n}일"이 현재 반품 가능 기간(${effective}일)과 다릅니다. 문구를 확인해 주세요.`
+  }));
+}
 
 export async function handleAdminRoutes(request, url, env, corsHeaders) {
   if (!url.pathname.startsWith('/api/v1/admin')) return null;
@@ -436,6 +458,17 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const fMax = url.searchParams.get('max_price');
     if (fMin !== null && fMin !== '') { where.push('p.lowest_sale_price >= ?'); args.push(intParam(fMin, { min: 0, max: 1_000_000_000, field: 'min_price' })); }
     if (fMax !== null && fMax !== '') { where.push('p.lowest_sale_price <= ?'); args.push(intParam(fMax, { min: 0, max: 1_000_000_000, field: 'max_price' })); }
+    // 6-11: operator visibility into policy-less products.
+    const fShip = str(url.searchParams.get('shipping') || '', { max: 20 }).toLowerCase();
+    if (fShip === 'unassigned') where.push(`NOT (${sellableSql('p')})`);
+    else if (fShip === 'assigned') where.push(sellableSql('p'));
+    else if (fShip !== '') throw bad('INVALID_SHIPPING_FILTER', 'shipping은 unassigned·assigned 중 하나여야 합니다.');
+    // 6-12: missing identifiers + cross-product barcode conflicts.
+    const fIds = str(url.searchParams.get('identifiers') || '', { max: 20 }).toLowerCase();
+    if (fIds === 'missing') where.push(missingIdentifiersSql('p'));
+    else if (fIds === 'complete') where.push(`NOT (${missingIdentifiersSql('p')})`);
+    else if (fIds === 'conflict') where.push(gtinConflictSql('p'));
+    else if (fIds !== '') throw bad('INVALID_IDENTIFIERS_FILTER', 'identifiers는 missing·complete·conflict 중 하나여야 합니다.');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(url.searchParams.get('per_page') || url.searchParams.get('limit') || '50', 10) || 50));
@@ -445,7 +478,9 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const { results } = await env.DB.prepare(
       `SELECT p.*, pt.business_name, c.name as category_name,
               (SELECT COUNT(*) FROM product_skus s WHERE s.product_id = p.id) as sku_count,
-              (SELECT SUM(stock_quantity) FROM product_skus s WHERE s.product_id = p.id) as total_stock
+              (SELECT SUM(stock_quantity) FROM product_skus s WHERE s.product_id = p.id) as total_stock,
+              CASE WHEN ${missingIdentifiersSql('p')} THEN 1 ELSE 0 END AS identifiers_missing,
+              CASE WHEN ${gtinConflictSql('p')} THEN 1 ELSE 0 END AS gtin_conflict
        FROM products p
        LEFT JOIN partners pt ON p.partner_id = pt.id
        LEFT JOIN categories c ON p.category_id = c.id
@@ -517,14 +552,20 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         hike = findPriceHike(s.id, hist);
         if (hike) break;
       }
+      // 6-11: approval is impossible without a usable policy — flag it here.
+      const shipOk = pr.shipping_policy_id
+        ? Boolean(await env.DB.prepare("SELECT id FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'").bind(pr.shipping_policy_id).first())
+        : false;
       out.push({
         ...pr,
+        shipping_missing: !shipOk,
         checks: {
           images: { count: imgCount, ok: imgCount > 0 },
           notice: { template: noticeTemplate, missing: noticeMissing, ok: noticeTemplate !== null && noticeMissing.length === 0 },
           banned_words: bannedHits,
           exaggeration: exagHits,
-          price_hike: hike
+          price_hike: hike,
+          shipping_policy: { ok: shipOk }
         }
       });
     }
@@ -541,13 +582,21 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
     const body = await readJson(request);
     if (!['ACTIVE', 'HIDDEN', 'DELETED'].includes(body.status)) throw bad('INVALID_STATUS', 'status 값이 올바르지 않습니다.');
     const status = body.status;
-    const beforeProd = await env.DB.prepare('SELECT id, status, review_status FROM products WHERE id = ?').bind(prodId).first();
+    const beforeProd = await env.DB.prepare('SELECT id, status, review_status, shipping_policy_id FROM products WHERE id = ?').bind(prodId).first();
     if (!beforeProd) throw notFound('상품을 찾을 수 없습니다.');
     if (status === 'ACTIVE' && beforeProd.review_status !== 'APPROVED') throw conflict('REVIEW_REQUIRED', '심사 승인되지 않은 상품은 판매 상태로 전환할 수 없습니다.');
+    // 6-11: nothing goes on sale without the seller-chosen policy.
+    if (status === 'ACTIVE') {
+      const usable = beforeProd.shipping_policy_id
+        ? await env.DB.prepare("SELECT id FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'").bind(beforeProd.shipping_policy_id).first()
+        : null;
+      if (!usable) throw conflict('SHIPPING_POLICY_REQUIRED', '배송정책이 지정되지 않은 상품은 판매 상태로 전환할 수 없습니다.');
+    }
     await env.DB.batch([
       env.DB.prepare('UPDATE products SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, prodId),
       audit('PRODUCT_STATUS', 'product', prodId, beforeProd, { status })
     ]);
+    await notifyProductChanged(env, prodId, beforeProd); // 6-7: IndexNow queue.
     return new Response(JSON.stringify({ success: true, brand: 'OLMOA', product_id: prodId, status }), { headers: corsHeaders });
   }
 
@@ -555,17 +604,25 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
   const reviewMatch = url.pathname.match(/^\/api\/v1\/admin\/products\/([^\/]+)\/review$/);
   if (reviewMatch && (request.method === 'POST' || request.method === 'PUT')) {
     const body = await readJson(request);
-    const prod = await env.DB.prepare('SELECT id, status, review_status FROM products WHERE id = ?').bind(reviewMatch[1]).first();
+    const prod = await env.DB.prepare('SELECT id, status, review_status, shipping_policy_id FROM products WHERE id = ?').bind(reviewMatch[1]).first();
     if (!prod) throw notFound('상품을 찾을 수 없습니다.');
     const decision = String(body.decision || '').toUpperCase();
     if (!['APPROVE', 'REJECT'].includes(decision)) throw bad('INVALID_DECISION', 'decision은 APPROVE 또는 REJECT 입니다.');
     const note = str(body.note, { max: 500 });
     if (decision === 'REJECT' && !note) throw bad('REASON_REQUIRED', '반려 사유를 입력해 주세요.');
+    // 6-11: approving a policy-less product would put an unsellable row on sale.
+    if (decision === 'APPROVE') {
+      const usable = prod.shipping_policy_id
+        ? await env.DB.prepare("SELECT id FROM shipping_policies WHERE id = ? AND status = 'ACTIVE'").bind(prod.shipping_policy_id).first()
+        : null;
+      if (!usable) throw conflict('SHIPPING_POLICY_REQUIRED', '배송정책이 지정되지 않은 상품은 승인할 수 없습니다.');
+    }
     const next = decision === 'APPROVE' ? { review_status: 'APPROVED', status: 'ACTIVE' } : { review_status: 'REJECTED', status: 'DRAFT' };
     await env.DB.batch([
       env.DB.prepare('UPDATE products SET review_status = ?, status = ?, review_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(next.review_status, next.status, note || null, prod.id),
       audit('PRODUCT_REVIEW', 'product', prod.id, prod, { ...next, note })
     ]);
+    await notifyProductChanged(env, prod.id, prod); // 6-7: IndexNow queue.
     return json(corsHeaders, { success: true, product_id: prod.id, ...next });
   }
 
@@ -990,6 +1047,88 @@ export async function handleAdminRoutes(request, url, env, corsHeaders) {
         results.map((r) => [r.created_at, r.actor_user_id, r.actor_role, r.action, r.target_type, r.target_id, r.ip]));
     }
     return json(corsHeaders, { success: true, count: results.length, data: results });
+  }
+
+  // 6-13: admin-managed FAQ (list incl. unpublished, create, edit, reorder).
+  if (url.pathname === '/api/v1/admin/faqs' && request.method === 'GET') {
+    const fCat = str(url.searchParams.get('category') || '', { max: 40 });
+    const fQ = str(url.searchParams.get('q') || '', { max: 100 });
+    const where = [];
+    const binds = [];
+    if (fCat) {
+      if (!FAQ_CATEGORIES.includes(fCat)) throw bad('INVALID_FAQ_CATEGORY', '알 수 없는 FAQ 분류입니다.');
+      where.push('category = ?');
+      binds.push(fCat);
+    }
+    if (fQ) {
+      where.push('(question LIKE ? OR answer LIKE ?)');
+      binds.push(`%${fQ}%`, `%${fQ}%`);
+    }
+    const order = FAQ_CATEGORIES.map((c, i) => `WHEN '${c}' THEN ${i}`).join(' ');
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM faqs ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+       ORDER BY CASE category ${order} ELSE 99 END, sort_order ASC, id ASC LIMIT 500`
+    ).bind(...binds).all();
+    return json(corsHeaders, { success: true, count: (results || []).length, data: results || [], categories: FAQ_CATEGORIES });
+  }
+
+  if (url.pathname === '/api/v1/admin/faqs' && request.method === 'POST') {
+    const body = await readJson(request);
+    const category = str(body.category, { field: '분류', max: 40, required: true });
+    if (!FAQ_CATEGORIES.includes(category)) throw bad('INVALID_FAQ_CATEGORY', '알 수 없는 FAQ 분류입니다.');
+    const question = str(body.question, { field: '질문', max: 500, required: true });
+    const answer = sanitizeHtml(str(body.answer, { field: '답변', max: 20000, required: true }));
+    if (!answer.trim()) throw bad('ANSWER_REQUIRED', '답변을 입력해 주세요.');
+    const sortOrder = body.sort_order === undefined ? 0 : intParam(body.sort_order, { min: 0, max: 1000000, field: '순서' });
+    const published = body.is_published === undefined ? 1 : (body.is_published ? 1 : 0);
+    const id = newId('faq');
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO faqs (id, category, question, answer, sort_order, is_published, updated_at, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id, category, question, answer, sortOrder, published, now, admin.userId),
+      audit('FAQ_CREATE', 'faq', id, null, { category, question })
+    ]);
+    return json(corsHeaders, { success: true, faq_id: id, warnings: faqPolicyWarnings(env, answer) }, 201);
+  }
+
+  if (url.pathname === '/api/v1/admin/faqs/reorder' && (request.method === 'PUT' || request.method === 'POST')) {
+    const body = await readJson(request);
+    const orders = Array.isArray(body.orders) ? body.orders.slice(0, 500) : [];
+    if (!orders.length) throw bad('EMPTY', '순서를 입력해 주세요.');
+    const stmts = [];
+    for (const o of orders) {
+      const id = String(o.id || '');
+      const sort = intParam(o.sort_order, { min: 0, max: 1000000, field: '순서' });
+      const exists = await env.DB.prepare('SELECT id FROM faqs WHERE id = ?').bind(id).first();
+      if (!exists) throw notFound(`FAQ를 찾을 수 없습니다: ${id}`);
+      stmts.push(env.DB.prepare('UPDATE faqs SET sort_order = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?')
+        .bind(sort, admin.userId, id));
+    }
+    stmts.push(audit('FAQ_REORDER', 'faq', `${orders.length} rows`, null, { count: orders.length }));
+    await env.DB.batch(stmts);
+    return json(corsHeaders, { success: true, updated_count: orders.length });
+  }
+
+  const faqM = url.pathname.match(/^\/api\/v1\/admin\/faqs\/([^/]+)$/);
+  if (faqM && (request.method === 'PUT' || request.method === 'PATCH')) {
+    const row = await env.DB.prepare('SELECT * FROM faqs WHERE id = ?').bind(faqM[1]).first();
+    if (!row) throw notFound('FAQ를 찾을 수 없습니다.');
+    const body = await readJson(request);
+    const category = body.category === undefined ? row.category : str(body.category, { field: '분류', max: 40 });
+    if (!FAQ_CATEGORIES.includes(category)) throw bad('INVALID_FAQ_CATEGORY', '알 수 없는 FAQ 분류입니다.');
+    const question = body.question === undefined ? row.question : str(body.question, { field: '질문', max: 500, required: true });
+    const answer = body.answer === undefined ? row.answer : sanitizeHtml(str(body.answer, { field: '답변', max: 20000, required: true }));
+    if (!String(answer).trim()) throw bad('ANSWER_REQUIRED', '답변을 입력해 주세요.');
+    const sortOrder = body.sort_order === undefined ? row.sort_order : intParam(body.sort_order, { min: 0, max: 1000000, field: '순서' });
+    const published = body.is_published === undefined ? row.is_published : (body.is_published ? 1 : 0);
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE faqs SET category = ?, question = ?, answer = ?, sort_order = ?, is_published = ?, updated_at = ?, updated_by = ? WHERE id = ?`)
+        .bind(category, question, answer, sortOrder, published, now, admin.userId, row.id),
+      audit('FAQ_UPDATE', 'faq', row.id, { category: row.category, question: row.question, is_published: row.is_published }, { category, question, is_published: published })
+    ]);
+    return json(corsHeaders, { success: true, faq_id: row.id, warnings: faqPolicyWarnings(env, answer) });
   }
 
   // 10b. NEW-09: customer 1:1 inquiries - list + reply (previously no operator path existed).

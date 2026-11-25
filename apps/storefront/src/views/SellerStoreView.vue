@@ -4,11 +4,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { Store } from 'lucide-vue-next'
-import { userErrorMessage, OmBreadcrumb, OmBadge, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmStatusTabs, OmImage, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmBreadcrumb, OmBadge, OmSkeleton, OmEmptyState, OmErrorState, OmButton, OmStatusTabs, OmImage, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import PlpLayout from '../components/plp/PlpLayout.vue'
+import { storeJsonLdOf } from '../lib/productSeo'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
+import { RETURN_WINDOW_DAYS } from '../config/policy'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,26 +41,33 @@ async function load() {
     const res = await fetch(`${API_BASE_URL}/api/v1/partners/${encodeURIComponent(partnerId.value)}/store`, { headers })
     const json = await res.json().catch(() => null)
     if (my !== seq) return
-    if (res.status === 404) { notFound.value = true; store.value = null; return }
+    if (res.status === 404) { notFound.value = true; store.value = null; document.getElementById('olmoa-jsonld-store')?.remove(); return }
     if (!res.ok || !json?.success) throw new Error(json?.error || `스토어를 불러오지 못했습니다`)
     store.value = json.data
+    applyStoreHead(json.data)
   } catch (e: any) {
     if (my === seq) loadError.value = userErrorMessage(e, '스토어를 불러오지 못했습니다')
   } finally {
     if (my === seq) loading.value = false
   }
 }
+function applyStoreHead(data: any) {
+  const origin = window.location.origin
+  const name = data?.partner?.company_name || '스토어'
+  applyRouteHead({ path: route.path, base: origin, title: `${name} | OLMOA` })
+  const graph = storeJsonLdOf(data, `${origin}${route.path}`, RETURN_WINDOW_DAYS)
+  if (graph) injectJsonLd('olmoa-jsonld-store', graph)
+  else document.getElementById('olmoa-jsonld-store')?.remove()
+}
+
 onMounted(load)
 watch(() => route.params.id, () => { tab.value = 'home'; reviewsLoaded.value = false; load() })
 
-const policy = computed(() => store.value?.shipping_policy || {})
-const freeThreshold = computed(() => policy.value.free_threshold ?? policy.value.free_shipping_threshold ?? 0)
+const policy = computed(() => store.value?.shipping_policy || null)
 const products = computed(() =>
   (store.value?.products || []).map((p: any) => ({
     ...p,
-    business_name: store.value.partner.company_name,
-    base_shipping_fee: policy.value.base_fee,
-    free_shipping_threshold: freeThreshold.value
+    business_name: store.value.partner.company_name
   }))
 )
 const m = computed(() => store.value?.metrics || {})
@@ -298,18 +307,21 @@ const formatDateOnly = (dStr?: string) => {
           <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">고객센터 전화</dt><dd class="text-right text-ink">{{ store.partner.customer_service_phone || '미등록' }}</dd></div>
           <div class="flex justify-between gap-4 border-b border-line-divider py-2 sm:col-span-2"><dt class="text-ink-subtle">고객센터 이메일</dt><dd class="text-right text-ink">{{ store.partner.cs_email || '미등록' }}</dd></div>
         </dl>
-        <h3 class="mb-2 mt-6 text-base font-bold text-ink">배송·반품 정책 ({{ policy.name || '기본 정책' }})</h3>
-        <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">배송방법</dt><dd class="text-right text-ink">{{ METHOD_LABEL[policy.method] || '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">기본 배송비</dt><dd class="om-num text-right text-ink">{{ Number(policy.base_fee) === 0 ? '무료' : `${formatNumber(policy.base_fee)}원` }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">무료배송 기준</dt><dd class="om-num text-right text-ink">{{ Number(freeThreshold) > 0 ? `${formatNumber(freeThreshold)}원 이상` : '없음' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">도서산간 추가비</dt><dd class="om-num text-right text-ink">{{ policy.remote_surcharge != null ? `${formatNumber(policy.remote_surcharge)}원` : '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">반품 배송비</dt><dd class="om-num text-right text-ink">{{ policy.return_fee != null ? `${formatNumber(policy.return_fee)}원` : '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">교환 배송비</dt><dd class="om-num text-right text-ink">{{ policy.exchange_fee != null ? `${formatNumber(policy.exchange_fee)}원` : '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">출고 소요일</dt><dd class="om-num text-right text-ink">{{ policy.processing_days != null ? `${policy.processing_days}일` : '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">오늘출발 마감</dt><dd class="om-num text-right text-ink">{{ policy.today_cutoff || '미등록' }}</dd></div>
-          <div class="flex justify-between gap-4 border-b border-line-divider py-2 sm:col-span-2"><dt class="text-ink-subtle">반품지</dt><dd class="text-right text-ink">{{ policy.return_address || '미등록' }}</dd></div>
-        </dl>
+        <template v-if="policy">
+          <h3 class="mb-2 mt-6 text-base font-bold text-ink">배송·반품 정책 ({{ policy.name || '기본 정책' }})</h3>
+          <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">배송방법</dt><dd class="text-right text-ink">{{ METHOD_LABEL[policy.method] || '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">기본 배송비</dt><dd class="om-num text-right text-ink">{{ Number(policy.base_fee) === 0 ? '무료' : `${formatNumber(policy.base_fee)}원` }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">무료배송 기준</dt><dd class="om-num text-right text-ink">{{ Number(policy.free_threshold) > 0 ? `${formatNumber(policy.free_threshold)}원 이상` : '없음' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">도서산간 추가비</dt><dd class="om-num text-right text-ink">{{ policy.remote_surcharge != null ? `${formatNumber(policy.remote_surcharge)}원` : '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">반품 배송비</dt><dd class="om-num text-right text-ink">{{ policy.return_fee != null ? `${formatNumber(policy.return_fee)}원` : '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">교환 배송비</dt><dd class="om-num text-right text-ink">{{ policy.exchange_fee != null ? `${formatNumber(policy.exchange_fee)}원` : '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">출고 소요일</dt><dd class="om-num text-right text-ink">{{ policy.processing_days != null ? `${policy.processing_days}일` : '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2"><dt class="text-ink-subtle">오늘출발 마감</dt><dd class="om-num text-right text-ink">{{ policy.today_cutoff || '미등록' }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-line-divider py-2 sm:col-span-2"><dt class="text-ink-subtle">반품지</dt><dd class="text-right text-ink">{{ policy.return_address || '미등록' }}</dd></div>
+          </dl>
+        </template>
+        <p v-else class="mt-6 text-sm text-ink-muted">등록된 대표 배송정책이 없습니다. 상품별 배송비는 상품 화면에서 확인해 주세요.</p>
       </section>
     </template>
   </div>

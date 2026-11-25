@@ -31,7 +31,8 @@
       </nav>
 
       <section v-for="s in sections" :id="s.id" :key="s.id" class="scroll-mt-24 space-y-2">
-        <h2 v-if="s.title" class="text-base font-bold text-ink">{{ s.title }}</h2>
+        <h2 v-if="s.title" class="text-base font-bold text-ink">{{ questionFor('REFUND', s.title) || s.title }}</h2>
+        <p v-if="s.title && questionFor('REFUND', s.title)" class="text-2xs text-ink-subtle">원문 조항: {{ s.title }}</p>
         <template v-for="(b, i) in s.blocks" :key="i">
           <p v-if="b.type === 'p'"><template v-for="(part, j) in b.parts" :key="j"><strong v-if="part.bold">{{ part.text }}</strong><template v-else>{{ part.text }}</template></template></p>
           <ul v-else class="list-inside list-disc space-y-1 text-ink-muted">
@@ -64,7 +65,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL } from '../config'
-import { parseLegalBody, formatEffectiveDate } from '../lib/legal'
+import { parseLegalBody, formatEffectiveDate, questionFor } from '../lib/legal'
 import type { LegalPayload } from '../lib/legal'
 
 const VERSION_QUERY_KEY = 'version'

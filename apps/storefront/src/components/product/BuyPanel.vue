@@ -28,8 +28,7 @@ const sellerName = computed(() => props.product?.business_name || props.product?
 const reviewCount = computed(() => Number(props.product?.review_count || 0))
 const avgRating = computed(() => (reviewCount.value > 0 && props.product?.avg_rating != null ? Number(props.product.avg_rating) : null))
 
-const shipFee = computed(() => Number(props.product?.shipping_policy?.base_fee ?? props.product?.base_shipping_fee ?? 0))
-const shipThreshold = computed(() => Number(props.product?.shipping_policy?.free_threshold ?? props.product?.free_shipping_threshold ?? 0))
+const shipText = computed(() => props.product?.shipping_text || null)
 const shipDays = computed(() => {
   const d = props.product?.shipping_policy?.processing_days
   return d === null || d === undefined ? null : Number(d)
@@ -89,10 +88,7 @@ const maxCoupon = computed(() => (props.product?.max_coupon_discount == null ? n
     <dl class="mt-4 grid gap-2.5 rounded-lg bg-surface-2 p-4 text-sm">
       <div class="flex gap-3">
         <dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><Truck class="h-4 w-4" aria-hidden="true" />배송비</dt>
-        <dd class="text-ink">
-          <template v-if="shipFee === 0">무료배송</template>
-          <template v-else>{{ formatNumber(shipFee) }}원<span v-if="shipThreshold > 0" class="text-ink-muted"> · {{ formatNumber(shipThreshold) }}원 이상 무료</span></template>
-        </dd>
+        <dd class="text-ink">{{ shipText || '배송정책 미지정' }}</dd>
       </div>
       <div v-if="shipBy" class="flex gap-3">
         <dt class="flex w-20 shrink-0 items-center gap-1.5 text-ink-muted"><CalendarClock class="h-4 w-4" aria-hidden="true" />출고 예정</dt>
