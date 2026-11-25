@@ -10,7 +10,7 @@ info:
     `{page, per_page, limit, total, total_pages, has_more}`, and the feed Cache-Control is
     `public, max-age=60, s-maxage=60`.
 servers:
-  - url: https://olmoa-api.dnjstjqppk.workers.dev
+  - url: https://api.olmoa.com
     description: Production Cloudflare Gateway
 paths:
   /api/v1/integrations/pricescanner/feed:
@@ -218,7 +218,7 @@ components:
         product_url:
           type: string
           format: uri
-          example: https://openmarket.dnjstjqppk.workers.dev/product/prod_001
+          example: https://olmoa.com/product/prod_001
         last_updated:
           type: string
           format: date-time

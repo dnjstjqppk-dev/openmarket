@@ -12,7 +12,7 @@ info:
     (SEO crawl ops, 219 paths); every path below is
     covered by tests/openapi_reconciliation_test.mjs.
 servers:
-  - url: https://olmoa-api.dnjstjqppk.workers.dev
+  - url: https://api.olmoa.com
     description: Production Workers gateway
   - url: http://localhost:8787
     description: Local wrangler dev gateway

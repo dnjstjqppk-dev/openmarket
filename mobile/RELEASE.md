@@ -39,13 +39,13 @@
 ```bash
 # 고객 (Play 업로드용)
 cd mobile/customer_app
-flutter build appbundle --release --dart-define API_BASE_URL=https://olmoa-api.dnjstjqppk.workers.dev
+flutter build appbundle --release --dart-define API_BASE_URL=https://api.olmoa.com
 # 파트너
 cd mobile/partner_app
-flutter build appbundle --release --dart-define API_BASE_URL=https://olmoa-api.dnjstjqppk.workers.dev
+flutter build appbundle --release --dart-define API_BASE_URL=https://api.olmoa.com
 # 크래시 리포팅을 켜려면 (둘 다, 선택): --dart-define SENTRY_DSN=https://... --dart-define SENTRY_ENVIRONMENT=production
 # iOS (Mac)
-flutter build ipa --release --dart-define API_BASE_URL=https://olmoa-api.dnjstjqppk.workers.dev
+flutter build ipa --release --dart-define API_BASE_URL=https://api.olmoa.com
 ```
 버전은 각 `pubspec.yaml`의 `version: 1.0.0+1` (이름+코드) — 스토어 업로드마다
 +code 증가. 첫 제출 전 실버전 번호 확정 필요 (PO).

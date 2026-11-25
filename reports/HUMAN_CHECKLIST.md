@@ -31,13 +31,25 @@
 2. `/health`에서 `operator_entity_active:true` 확인
 3. 테스트 주문 1건으로 체크아웃 정상 확인 (현재 OPERATOR_NOT_CONFIGURED로 차단 중)
 4. 관리자 `dnjstjqp@naver.com` 2FA 등록 완료 확인 (OTP 앱 필요)
+   - 2026-11-25 계정 이전 때 TOTP 키를 새로 만들어 기존 2FA가 초기화됐다 → **다시 등록** 필요. 모든 사용자 1회 재로그인.
 
 ## 4. 계약 10종 (최종보고서 §10 순서대로, P0 통과 후)
 
 - Cloudflare Paid · Toss 실가맹 · Resend · Kakao 정식 · SMS ·
-  캐리어/UNI-PASS · olmoa.com · 스토어 계정 · 법무검토 · 검색클라우드
+  캐리어/UNI-PASS · ~~olmoa.com~~(2026-11-25 구매·연결 완료) · 스토어 계정 · 법무검토 · 검색클라우드
 - 메일 연동 시 P2R-01 재검토: forgot-password가 자동으로 메일 발송으로 전환됨
   (코드 변경 불필요, `emailConfigured` 분기)
+
+
+## 5. 도메인·계정 이전 후속 (2026-11-25)
+
+1. Cloudflare 대시보드 → `olmoa.com` → SSL/TLS → Edge Certificates → **Always Use HTTPS 켜기**
+   (지금 `http://olmoa.com`은 301 없이 200).
+2. `.ops-backups/olmoa-api-secrets-2026-11-25.json`(새 운영 시크릿 사본)을 비밀번호 관리자로 옮긴 뒤 파일 삭제.
+   Cloudflare는 시크릿 값을 다시 보여 주지 않는다.
+3. GitHub `CLOUDFLARE_API_TOKEN`은 **도메인 계정** 권한으로 발급. 단 넣기 전에 48360ae 감사 필요
+   (`OPENMARKET_WORK_ORDER_PHASE6.md` 작업 6-0).
+4. Google Search Console·네이버 서치어드바이저에 `olmoa.com` 소유 확인(DNS TXT) 후 `https://olmoa.com/sitemap-index.xml` 제출.
 
 ---
 
@@ -45,3 +57,4 @@
 - [ ] 2. 실기기 캡처 (일자/서명: ______)
 - [ ] 3. 사업자 등록·활성화·테스트주문 (일자: ______)
 - [ ] 4. 계약 진행 (별도 일정)
+- [ ] 5. 도메인·계정 이전 후속 (일자: ______)

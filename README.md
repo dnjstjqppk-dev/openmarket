@@ -6,17 +6,19 @@
 
 ---
 
-## 1. Cloudflare 실배포 5대 독립 서비스 현황
+> **진행 중인 작업 (2026-11-25):** `OPENMARKET_WORK_ORDER_PHASE6.md` — 48360ae 감사, 검색 최적화(SEO·AEO·GEO·LLMO·AIO).
+> 현재 인프라 구조는 `docs/DOMAIN_CONFIGURATION.md`, 운영자 할 일은 `reports/HUMAN_CHECKLIST.md` §5.
+
+## 1. Cloudflare 실배포 서비스 현황 (2026-11-25 도메인 계정 이전 후)
 
 OLMOA 플랫폼은 단일 모놀리스가 아닌, 5개의 독립 Cloudflare Workers 서비스 및 D1 관계형 데이터베이스로 배포·운영 중입니다.
 
 | 서비스 구분 | Cloudflare Worker 명칭 | 실 배포 운영 URL | 핵심 역할 및 기능 |
 |---|---|---|---|
-| **고객 쇼핑몰 (메인)** | `openmarket` | [https://openmarket.dnjstjqppk.workers.dev](https://openmarket.dnjstjqppk.workers.dev) | 글로벌 핫딜, 42대 루트 카테고리(전체 194개 분류), 검색, 장바구니, 체크아웃 |
-| **고객 쇼핑몰 (전용)** | `olmoa-storefront` | [https://olmoa-storefront.dnjstjqppk.workers.dev](https://olmoa-storefront.dnjstjqppk.workers.dev) | 전용 Vue 3 + Vite 스토어프론트 엔드포인트 |
-| **통합 관리자 콘솔** | `olmoa-admin` | [https://olmoa-admin.dnjstjqppk.workers.dev](https://olmoa-admin.dnjstjqppk.workers.dev) | 플랫폼 총 거래액(GMV) 관제, 셀러 입점 심사 및 승인 |
-| **파트너 판매자 센터** | `olmoa-partner` | [https://olmoa-partner.dnjstjqppk.workers.dev](https://olmoa-partner.dnjstjqppk.workers.dev) | 입점사 테넌트 격리, SKU 재고 실시간 수정, 송장 출고 |
-| **통합 백엔드 API** | `olmoa-api` | [https://olmoa-api.dnjstjqppk.workers.dev](https://olmoa-api.dnjstjqppk.workers.dev) | Edge API Gateway (Cloudflare D1 SQL Relational Engine) |
+| **고객 쇼핑몰 (메인)** | `openmarket` | [https://olmoa.com](https://olmoa.com) | 글로벌 핫딜, 42대 루트 카테고리(전체 194개 분류), 검색, 장바구니, 체크아웃 |
+| **통합 관리자 콘솔** | `olmoa-admin` | [https://admin.olmoa.com](https://admin.olmoa.com) | 플랫폼 총 거래액(GMV) 관제, 셀러 입점 심사 및 승인 |
+| **파트너 판매자 센터** | `olmoa-partner` | [https://partner.olmoa.com](https://partner.olmoa.com) | 입점사 테넌트 격리, SKU 재고 실시간 수정, 송장 출고 |
+| **통합 백엔드 API** | `olmoa-api` | [https://api.olmoa.com](https://api.olmoa.com) | Edge API Gateway (Cloudflare D1 SQL Relational Engine) |
 
 ---
 

@@ -19,7 +19,7 @@ To prevent database query exhaustion and security leaks, PriceScanner is NOT gra
 - **Data Filtering**:
   - Only products with `status = 'ACTIVE'` and non-empty stock are included.
   - Sensitive internal cost data, partner settlement margins, and customer identifiers are stripped.
-- **Deep Linking**: Each item generates a canonical tracking URL (`https://openmarket.dnjstjqppk.workers.dev/product/{id}?ref=pricescanner`).
+- **Deep Linking**: Each item generates a canonical tracking URL (`https://olmoa.com/product/{id}?ref=pricescanner`).
 - **Edge Caching**: Cached with `Cache-Control: public, max-age=60, s-maxage=300`.
 - **Incremental Sync**: Supports `since` parameter (`ISO 8601`) returning only catalog updates since specified timestamp.
 

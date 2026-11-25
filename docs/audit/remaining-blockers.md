@@ -26,6 +26,6 @@ The remaining items are strictly external legal, commercial, and domain registra
 - **Activation Action**: Connect official B2B logistics Webhooks upon contract signing.
 
 ### 3. Custom Domain (olmoa.com) Binding
-- **Current State**: Fully functional across `openmarket.dnjstjqppk.workers.dev`, `olmoa-storefront.dnjstjqppk.workers.dev`, and `olmoa-api.dnjstjqppk.workers.dev`.
+- **Current State** (updated 2026-11-25): served on `olmoa.com`, `admin.olmoa.com`, `partner.olmoa.com`, `api.olmoa.com` from the domain account; the old `*.dnjstjqppk.workers.dev` hosts are deleted.
 - **External Blocker**: Purchase of `olmoa.com` domain.
 - **Activation Action**: Add custom domain route mappings in Cloudflare Dashboard.

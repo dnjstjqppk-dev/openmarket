@@ -289,7 +289,17 @@
     "hostnames",
     "ipcountry",
     "spoofable",
-    "keepends"
+    "keepends",
+    "Applebot",
+    "Bingbot",
+    "Bytespider",
+    "Daum",
+    "GTIN",
+    "Googlebot",
+    "LLMO",
+    "externalagent",
+    "lastmod",
+    "llmstxt"
   ],
   "ignorePaths": [
     "**/node_modules/**",

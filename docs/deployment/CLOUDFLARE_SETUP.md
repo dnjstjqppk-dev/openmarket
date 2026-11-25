@@ -2,14 +2,21 @@
 
 ## 1. 프로젝트 구성 (실측 기준)
 
-| Worker 이름 | 용도 | 디렉터리 | 진입점 |
-|---|---|---|---|
-| `olmoa-api` | Edge API 게이트웨이 + D1 | `apps/cloudflare-gateway` | `src/index.js` (`wrangler.jsonc`) |
-| `olmoa-storefront` | 구매자 스토어프론트 (정적) | `apps/storefront` | `dist` (`wrangler.jsonc` assets) |
-| `olmoa-partner` | 판매자 콘솔 (정적) | `apps/partner` | `dist` (`wrangler.jsonc` assets) |
-| `olmoa-admin` | 관리자 콘솔 (정적) | `apps/admin` | `dist` (`wrangler.jsonc` assets) |
+모든 자원은 **도메인 계정** `f5c363135efe9b22ca66eb39f2f8e1da`(olmoa.com 존 소유)에 있다. 각 wrangler 설정에 `account_id`가 고정돼 있다.
+(구 계정 `6d53e0…`의 OLMOA 자원은 2026-11-25 삭제. 상세: `docs/DOMAIN_CONFIGURATION.md`, `reports/DOMAIN_CUTOVER_RUNBOOK.md`)
 
-D1 데이터베이스: `openmarket-db` (`6935e21b-ffdc-47d1-8e7d-d97b1b8b317a`), 바인딩명 `DB`.
+| Worker 이름 | 주소 (Custom Domain) | 디렉터리 | 진입점 |
+|---|---|---|---|
+| `olmoa-api` | `https://api.olmoa.com` | `apps/cloudflare-gateway` | `src/index.js` (`wrangler.jsonc`) |
+| `openmarket` | `https://olmoa.com` | 저장소 루트 | `wrangler.toml` — 스토어프론트 `dist` + `apps/storefront/edge/apex-worker.js`(크롤 경로 → API) |
+| `olmoa-admin` | `https://admin.olmoa.com` | `apps/admin` | `dist` (`wrangler.jsonc` assets) |
+| `olmoa-partner` | `https://partner.olmoa.com` | `apps/partner` | `dist` (`wrangler.jsonc` assets) |
+| `olmoa-edge` | `https://www.olmoa.com` → 301 apex | `infra/domain-proxy` | `worker.js` |
+
+모든 워커는 `workers_dev: false`다. `olmoa-storefront`(예비 워커)는 폐지됐다.
+
+D1 데이터베이스: `openmarket-db` (`6e23f7cd-7999-4419-ac6e-63481edc5454`, APAC), 바인딩명 `DB`. R2: `olmoa-media`(바인딩 `STORAGE_BUCKET`).
+백업: `wrangler d1 export`는 FTS5 테이블 때문에 실패한다 → `reports/WORK_ORDER_PHASE5/DEPLOY_RUNBOOK.md` 상단 주의와 `scripts/ops/build_d1_restore.py` 참조.
 `apps/api`와 `backend/`(구 Go 참조 구현)는 2026-11-12 NEW-24 결정으로 삭제됐다. API는 `apps/cloudflare-gateway` 단일 구현이다.
 
 ## 2. 시크릿 주입 (프로덕션 필수)
