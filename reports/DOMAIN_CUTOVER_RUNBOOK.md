@@ -4,6 +4,33 @@
 - 원격 단계(DNS·시크릿·배포·대시보드)는 전부 운영자 승인 후 실행. 코드 수정은 이미 끝난 것만 둔다.
 - 2026-11-25 조회: `olmoa.com`·`olmoa.net`·`olmoa.co.kr`·`olmoa.kr` 모두 NXDOMAIN, Verisign RDAP(.com/.net) 404 → 미등록.
 
+## ★ 실행 기록 (2026-11-25) — 실제 적용된 구조
+
+`olmoa.com`은 2026-11-25 Cloudflare Registrar로 **도메인 계정**(`f5c363…`, 운영자가 모든 도메인을 관리)에 등록됐다.
+앱 워커·D1·R2·시크릿은 **워커 계정**(`6d53e0…`)에 있다. Custom Domain은 같은 계정끼리만 붙으므로
+(`wrangler triggers deploy` → `The zone "olmoa.com" does not exist on your account [10083]`), 아래 §3-4의
+"각 앱 워커에 Custom Domain" 방식은 **쓰지 않았다**. 대신:
+
+| 단계 | 내용 | 결과 |
+|---|---|---|
+| 프록시 워커 | 도메인 계정에 `olmoa-edge`(`infra/domain-proxy/`) 배포. Custom Domain 4개: `olmoa.com`, `www`, `admin`, `partner` → 각 workers.dev 업스트림. apex 크롤 경로는 API로 직행. www·http 301, HSTS(preload 없음) | 배포 완료 (version `364bef02`) |
+| API | `api.olmoa.com` **미사용**. 프록시를 거치면 모든 사용자가 같은 egress IP로 보여 API의 IP별 레이트리밋(로그인 5/분)이 공유 버킷이 된다. API는 workers.dev 유지 | 변경 없음 |
+| CORS | `ALLOWED_ORIGINS` = workers.dev 4종 + `olmoa.com`, `www`, `admin`, `partner` (기존 6개 유지 + 2개 추가) | 8개 허용·임의 오리진 차단 확인 |
+| 검증 | apex 200 SPA, `www`/`http` 301(경로·쿼리 유지), robots `text/plain`, sitemap-index·sitemaps `application/xml`(loc 전부 `https://olmoa.com/...`), llms `text/plain`, admin/partner 200 | 통과 |
+
+**연결 직후 이상 현상:** 첫 몇 분간 `olmoa.com`·`www`가 Shopify(423 Locked, `powered-by: Shopify`)로 응답했다.
+운영자는 Shopify를 연결한 적이 없다. 웹 아카이브상 이 도메인은 2016–2025년 다른 소유자가 썼던 이력이 있어,
+이전 소유자의 Shopify 라우팅이 엣지에 남아 있던 것으로 보인다(추정). 몇 분 뒤 자동으로 `olmoa-edge`로 바뀌었다.
+다시 나타나면 Cloudflare/Shopify 지원에 도메인 소유 증빙과 함께 해제를 요청한다.
+
+**남은 일 (이 표 이후 §3에서 유효한 것):**
+- deploy.yml·대시보드의 `VITE_STOREFRONT_URL`/`VITE_PARTNER_URL`/`VITE_ADMIN_URL`을 custom domain으로 교체 후 재빌드
+  (콘솔 간 링크용). `VITE_API_BASE_URL`은 workers.dev 그대로.
+- `PUBLIC_STOREFRONT_URL=https://olmoa.com` 명시 설정 (현재 기본값과 같음, 명시만).
+- 메일 DNS(§3-8), 검색엔진 등록(§3-9), 카카오 도입 시 Redirect URI는 API workers.dev 호스트 기준.
+- `api.olmoa.com`이 필요해지면: API 워커+D1+R2+시크릿을 도메인 계정으로 이전하거나, 존을 워커 계정으로 이동.
+- 링크가 모두 custom domain으로 바뀐 뒤 `ALLOWED_ORIGINS`에서 workers.dev 제거. 앱 워커의 workers.dev 자체는 끄지 않는다(프록시 업스트림).
+
 ## 0. 구매 전 금지 사항
 
 코드의 `PUBLIC_STOREFRONT_URL` 기본값이 `https://olmoa.com`이다. 비밀번호 재설정·이메일 인증 링크(`lib/email.js`)와

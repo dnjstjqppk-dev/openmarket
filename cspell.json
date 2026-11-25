@@ -286,7 +286,9 @@
     "normalised",
     "econn",
     "DMARC",
-    "hostnames"
+    "hostnames",
+    "ipcountry",
+    "spoofable"
   ],
   "ignorePaths": [
     "**/node_modules/**",
