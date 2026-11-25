@@ -284,7 +284,9 @@
     "repurchasable",
     "unticked",
     "normalised",
-    "econn"
+    "econn",
+    "DMARC",
+    "hostnames"
   ],
   "ignorePaths": [
     "**/node_modules/**",

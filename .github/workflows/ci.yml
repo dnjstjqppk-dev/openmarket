@@ -98,6 +98,9 @@ jobs:
           cd apps/partner
           npx wrangler deploy --dry-run
 
+      - name: Verify Root Apex Worker Config (assets + crawl-path service binding)
+        run: npx wrangler deploy --dry-run
+
       - name: Verify Cloudflare D1 Edge Gateway Config
         run: |
           cd apps/cloudflare-gateway

@@ -10,6 +10,18 @@ jobs:
     name: Build & Deploy 4 Apps to Cloudflare Edge
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    # Job-level on purpose: every `wrangler deploy` below re-runs its config's [build]
+    # command, so the endpoint env must reach those steps too, not just the first build.
+    env:
+      # P2-A06: frontend endpoint config lives here, never hardcoded in src.
+      # Domain cutover: swap these four for the custom domains (reports/DOMAIN_CUTOVER_RUNBOOK.md).
+      # A missing value fails the build instead of shipping a bundle that throws on boot
+      # (scripts/vite-require-env.mjs).
+      OLMOA_REQUIRE_BUILD_ENV: '1'
+      VITE_API_BASE_URL: https://olmoa-api.dnjstjqppk.workers.dev
+      VITE_STOREFRONT_URL: https://openmarket.dnjstjqppk.workers.dev
+      VITE_PARTNER_URL: https://olmoa-partner.dnjstjqppk.workers.dev
+      VITE_ADMIN_URL: https://olmoa-admin.dnjstjqppk.workers.dev
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,12 +35,6 @@ jobs:
         run: |
           npm ci
           npm run build
-        env:
-          # P2-A06: frontend endpoint config lives here, never hardcoded in src.
-          VITE_API_BASE_URL: https://olmoa-api.dnjstjqppk.workers.dev
-          VITE_STOREFRONT_URL: https://openmarket.dnjstjqppk.workers.dev
-          VITE_PARTNER_URL: https://olmoa-partner.dnjstjqppk.workers.dev
-          VITE_ADMIN_URL: https://olmoa-admin.dnjstjqppk.workers.dev
 
       - name: Deploy Edge API Gateway (olmoa-api)
         run: cd apps/cloudflare-gateway && npx wrangler deploy

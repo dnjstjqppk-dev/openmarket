@@ -1,76 +1,85 @@
-# OLMOA Official Domain Architecture & Cloudflare Configuration
-**Document Version:** 1.0.0  
-**Target Domain:** `olmoa.com`  
-**Brand:** OLMOA (올모아)  
-**Tagline:** 내가 찾는 모든 것, 여기. (Everything You Seek. All Here.)
+# OLMOA Domain Architecture & Cloudflare Configuration
+**Document Version:** 1.1.0 (2026-11-25, corrected against the code)
+**Target Domain:** `olmoa.com`
+**Brand:** OLMOA (올모아)
+
+The step-by-step cutover procedure, verification commands and rollback live in
+`reports/DOMAIN_CUTOVER_RUNBOOK.md`. This document describes the target state only.
 
 ---
 
-## 1. Official Subdomain Routing & Worker Mapping
+## 1. Hostname → Worker Mapping
 
-| Domain / Subdomain | Target Cloudflare Worker | Role | Status |
-|---|---|---|---|
-| `https://olmoa.com` | `olmoa-storefront` | Official Customer E-Commerce Storefront | Prepared for Custom Domain |
-| `https://www.olmoa.com` | `olmoa-storefront` | CNAME / 301 Permanent Redirect to `olmoa.com` | Prepared for Custom Domain |
-| `https://admin.olmoa.com` | `olmoa-admin` | Platform Internal Operator Admin Console | Prepared for Custom Domain |
-| `https://partner.olmoa.com` | `olmoa-partner` | Seller Operations & Merchant Portal | Prepared for Custom Domain |
-| `https://api.olmoa.com` | `olmoa-api` | Cloudflare D1 Edge Gateway | Prepared for Custom Domain |
+| Hostname | Worker (wrangler config) | Role |
+|---|---|---|
+| `olmoa.com` | `openmarket` (root `wrangler.toml`) | Customer storefront (static SPA) + crawl paths forwarded to the API |
+| `www.olmoa.com` | — (Redirect Rule) | 301 → `https://olmoa.com` (path and query kept) |
+| `api.olmoa.com` | `olmoa-api` (`apps/cloudflare-gateway/wrangler.jsonc`) | D1 edge gateway |
+| `admin.olmoa.com` | `olmoa-admin` (`apps/admin/wrangler.jsonc`) | Operator console |
+| `partner.olmoa.com` | `olmoa-partner` (`apps/partner/wrangler.jsonc`) | Seller console |
+| — | `olmoa-storefront` (`apps/storefront/wrangler.jsonc`) | Same storefront build on workers.dev only, kept as a warm spare; not attached to the apex |
+
+The apex worker serves `/robots.txt`, `/sitemap.xml`, `/sitemap-index.xml`, `/sitemaps/*`, `/llms.txt` and
+`/llms-full.txt` by forwarding them over the `API` service binding to `olmoa-api` (`run_worker_first`,
+`apps/storefront/edge/apex-worker.js`). Every other path is the static SPA. These documents are generated from D1
+with `PUBLIC_STOREFRONT_URL` as the URL base, so that secret must be `https://olmoa.com`.
 
 ---
 
-## 2. Cloudflare DNS Configuration Table
+## 2. DNS
 
-Once `olmoa.com` domain registration is confirmed in Cloudflare Registrar or external registrar:
+Worker **Custom Domains** create their own proxied DNS records and edge certificates. Do **not** pre-create
+`A`/`CNAME` records for `olmoa.com`, `api`, `admin` or `partner`: an existing record on the same name blocks the
+Custom Domain. (Version 1.0.0 of this document listed such records, including `CNAME → olmoa-*.workers.dev`
+targets that lacked the account subdomain; they must not be used.)
+
+The only manual record:
 
 ```dns
 ;; Zone: olmoa.com
-;; Type  Name     Target                               Proxy Status  TTL
-A        @        192.0.2.1                            Proxied (Orange Cloud)  Auto
-CNAME    www      olmoa.com                            Proxied (Orange Cloud)  Auto
-CNAME    admin    olmoa-admin.workers.dev              Proxied (Orange Cloud)  Auto
-CNAME    partner  olmoa-partner.workers.dev            Proxied (Orange Cloud)  Auto
-CNAME    api      olmoa-api.workers.dev                Proxied (Orange Cloud)  Auto
+AAAA   www   100::   Proxied   ; placeholder so the www → apex Redirect Rule can run
 ```
 
-*Note: Worker Custom Domains (`Workers & Pages` -> `Settings` -> `Domains & Routes` -> `Custom Domains`) automatically provision Cloudflare Edge SSL certificates without manual origin server certificates.*
+Mail records (Resend SPF/DKIM, DMARC, inbound MX) are added when email is enabled — see the runbook §3-8.
 
 ---
 
-## 3. SSL / TLS & Security Policy
+## 3. TLS & Security Headers
 
-1. **SSL/TLS Encryption Mode**: `Full (Strict)` with Cloudflare Universal Edge SSL.
-2. **Always Use HTTPS**: Enabled (`HTTP 301` -> `HTTPS`).
-3. **HTTP Strict Transport Security (HSTS)**:
-   - Max-Age: `31536000` (1 Year)
-   - Include Subdomains: `true`
-   - Preload: `true`
-4. **CORS Policy (`api.olmoa.com`)**:
-   - Allowed Origins: `https://olmoa.com`, `https://www.olmoa.com`, `https://admin.olmoa.com`, `https://partner.olmoa.com`
-   - Allowed Headers: `Content-Type`, `Authorization`, `X-Idempotency-Key`
-   - Allowed Methods: `GET, POST, PUT, PATCH, DELETE, OPTIONS`
-5. **Cookie Isolation**:
-   - Operator and partner JWT/session tokens are bound strictly to their respective subdomains (`admin.olmoa.com` and `partner.olmoa.com`) using `Domain=admin.olmoa.com; Secure; HttpOnly; SameSite=Strict`.
-   - Prevent admin credentials from leaking to public storefront cookies.
+1. **Always Use HTTPS**: on (HTTP 301 → HTTPS).
+2. **HSTS**: `max-age=31536000; includeSubDomains`. The API already sends this header (`lib/http.js`).
+   Do not submit to the preload list until the domain has run stably for several weeks — preload removal is slow.
+3. **SSL/TLS mode**: Workers have no origin server; the default is fine. `Full (Strict)` does no harm.
+4. **CSP**: per-console `public/_headers`; `connect-src 'self' https:` already allows `api.olmoa.com`.
+   Toss redirects use `window.location.origin`, so no hostname is baked in.
 
 ---
 
-## 5. DNS Cutover Checklist — Frontend Rebuild Required (OPS-N05)
+## 4. CORS (`api.olmoa.com`)
 
-`VITE_*` endpoint URLs are baked into the frontend bundles at build time
-(`.env.example`, `.github/workflows/deploy.yml`), so flipping DNS alone leaves
-every shipped bundle calling `*.workers.dev`. On cutover day:
+- `ALLOWED_ORIGINS` (worker secret) is matched exactly against `Origin`; no hostname is hardcoded in the gateway.
+- Target value: `https://olmoa.com,https://www.olmoa.com,https://admin.olmoa.com,https://partner.olmoa.com`
+  (during the cutover window also keep the old `*.workers.dev` origins, then remove them).
+- Allowed headers: `Content-Type`, `Authorization`, `X-Idempotency-Key`. Methods: `GET, POST, PUT, PATCH, DELETE, OPTIONS`.
 
-1. Set the four build-time URLs to the custom domains:
-   - `VITE_API_BASE_URL=https://api.olmoa.com`
-   - `VITE_STOREFRONT_URL=https://olmoa.com`
-   - `VITE_PARTNER_URL=https://partner.olmoa.com`
-   - `VITE_ADMIN_URL=https://admin.olmoa.com`
-   (CI: `deploy.yml` env block; manual builds: shell env before `npm run build`.)
-2. Update `ALLOWED_ORIGINS` (worker secret) to the four `https://` custom
-   domains above — no `workers.dev` leftovers.
-3. Rebuild and redeploy all five workers (`npm run deploy:all` or the deploy
-   workflow on `main`). A deploy without a rebuild does NOT move traffic.
-4. Verify: `/health` on `api.olmoa.com` (`UP`, expected `schemaVersion`),
-   one page load per console over the custom domain, and one sandbox test
-   order end to end before announcing the cutover.
+---
 
+## 5. Session Storage (actual behaviour)
+
+The gateway sets **no cookies**. Each console keeps its JWT in `localStorage` on its own origin
+(storefront `olmoa_token`, partner `partner_token`, admin `olmoa_admin_token`) and sends it as `Authorization: Bearer`.
+Isolation between consoles therefore comes from the browser's per-origin storage, which the separate
+`admin.` / `partner.` hostnames preserve. (Version 1.0.0 described `Domain=…; HttpOnly` cookies; that was never implemented.)
+
+---
+
+## 6. Build-time Endpoints (`VITE_*`)
+
+`VITE_API_BASE_URL`, `VITE_STOREFRONT_URL`, `VITE_PARTNER_URL` and `VITE_ADMIN_URL` are baked into the bundles at build
+time. DNS changes alone do not move the frontends: every cutover needs a rebuild and redeploy of all five workers (OPS-N05).
+
+- CI: job-level `env` in `.github/workflows/deploy.yml`. It has to be job-level because every `wrangler deploy`
+  step re-runs its config's `[build]` command.
+- Cloudflare Git-connected builds: the worker's Build → Variables in the dashboard.
+- `scripts/vite-require-env.mjs` fails the build when a value is missing in Workers Builds (`WORKERS_CI`) or
+  with `OLMOA_REQUIRE_BUILD_ENV=1`, instead of shipping a bundle that throws on boot.
