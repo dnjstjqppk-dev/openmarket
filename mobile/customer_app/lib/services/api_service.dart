@@ -321,7 +321,7 @@ class ApiService {
   //   flutter run --dart-define API_BASE_URL=https://staging-api.example.com
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://olmoa-api.dnjstjqppk.workers.dev',
+    defaultValue: 'https://api.olmoa.com',
   );
 
   /// P2-SEC-07: runs an authenticated request, refreshing once on 401 and

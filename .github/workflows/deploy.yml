@@ -14,14 +14,14 @@ jobs:
     # command, so the endpoint env must reach those steps too, not just the first build.
     env:
       # P2-A06: frontend endpoint config lives here, never hardcoded in src.
-      # Domain cutover: swap these four for the custom domains (reports/DOMAIN_CUTOVER_RUNBOOK.md).
+      # Custom domains since the 2026-11-25 account move (reports/DOMAIN_CUTOVER_RUNBOOK.md).
       # A missing value fails the build instead of shipping a bundle that throws on boot
       # (scripts/vite-require-env.mjs).
       OLMOA_REQUIRE_BUILD_ENV: '1'
-      VITE_API_BASE_URL: https://olmoa-api.dnjstjqppk.workers.dev
-      VITE_STOREFRONT_URL: https://openmarket.dnjstjqppk.workers.dev
-      VITE_PARTNER_URL: https://olmoa-partner.dnjstjqppk.workers.dev
-      VITE_ADMIN_URL: https://olmoa-admin.dnjstjqppk.workers.dev
+      VITE_API_BASE_URL: https://api.olmoa.com
+      VITE_STOREFRONT_URL: https://olmoa.com
+      VITE_PARTNER_URL: https://partner.olmoa.com
+      VITE_ADMIN_URL: https://admin.olmoa.com
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,11 +43,6 @@ jobs:
 
       - name: Deploy Root Portal / Storefront
         run: npx wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy Dedicated Storefront Worker
-        run: cd apps/storefront && npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 

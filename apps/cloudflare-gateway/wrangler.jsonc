@@ -1,12 +1,17 @@
 {
   "name": "olmoa-api",
+  // Domain account (owns the olmoa.com zone). Moved 2026-11-25 from the workers
+  // account 6d53e0a853ad74dec5fefcd4b4600e3a — see reports/DOMAIN_CUTOVER_RUNBOOK.md.
+  "account_id": "f5c363135efe9b22ca66eb39f2f8e1da",
   "main": "src/index.js",
   "compatibility_date": "2024-04-03",
+  "workers_dev": false,
+  "routes": [{ "pattern": "api.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" }],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "openmarket-db",
-      "database_id": "6935e21b-ffdc-47d1-8e7d-d97b1b8b317a"
+      "database_id": "6e23f7cd-7999-4419-ac6e-63481edc5454"
     }
   ],
   // NEW-06: media/KYB object storage. Ops must create the bucket

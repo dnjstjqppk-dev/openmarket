@@ -4,6 +4,30 @@
 - 원격 단계(DNS·시크릿·배포·대시보드)는 전부 운영자 승인 후 실행. 코드 수정은 이미 끝난 것만 둔다.
 - 2026-11-25 조회: `olmoa.com`·`olmoa.net`·`olmoa.co.kr`·`olmoa.kr` 모두 NXDOMAIN, Verisign RDAP(.com/.net) 404 → 미등록.
 
+## ★★ 계정 이전 기록 (2026-11-25, 최신 상태) — 아래 "실행 기록"의 프록시 구조를 대체
+
+운영자 결정: 도메인은 도메인 계정(`f5c363…`)에서 관리 → **워커·D1·R2·시크릿을 도메인 계정으로 이전**.
+현재 구조는 `docs/DOMAIN_CONFIGURATION.md` 1.3.0.
+
+| 단계 | 내용 | 결과 |
+|---|---|---|
+| 조사 | 암호화 PII(`enc:v1:`) 0셀, 2FA 관리자 1명, 사용자 43, 주문 59(전부 CANCELLED), R2 객체 0, D1 2.25MB | 새 키 생성 가능 판단 |
+| 백업 | `d1 export`는 FTS5 가상테이블 때문에 실패 → 실테이블 128개 `--table` 개별 export (`.ops-backups/`, git 제외). 인덱스·트리거는 export에 없음 → prod `sqlite_master`에서 DDL 추출 | 1,603행 |
+| 복원 스크립트 | `scripts/ops/build_d1_restore.py`: CREATE TABLE 전부 → FK 의존 순서 INSERT(자기참조 `categories.parent_id`는 트리 깊이순) → FTS(d1_51) + 백필 → 수정(파일 URL 호스트 교체, 2FA 초기화) → 인덱스 105·트리거 55 | 로컬 FK-ON 리허설 통과 + 게이트웨이 스모크 |
+| 함정 | D1 `--file` 가져오기는 `PRAGMA defer_foreign_keys`를 적용하지 않음 → 1차 가져오기 FK 실패(원자적 롤백, 데이터 무손상). 부모 우선 정렬로 해결 | 2차 성공 |
+| 새 D1 | `openmarket-db` `6e23f7cd-7999-4419-ac6e-63481edc5454` (APAC). 128테이블 1,603행 0불일치, 인덱스 105, 트리거 55, FTS 64 | 일치 |
+| 시크릿 | `JWT_SECRET`/`PII_ENCRYPTION_KEY`/`TOTP_ENCRYPTION_KEY` **새로 생성** (원본은 Cloudflare에서 읽을 수 없음) + `ALLOWED_ORIGINS`(custom 4종) + `PUBLIC_STOREFRONT_URL`. 값 사본: `.ops-backups/olmoa-api-secrets-2026-11-25.json` → **비밀번호 관리자로 옮긴 뒤 삭제** | 영향: 전원 1회 재로그인, 2FA 관리자 1명 재등록 |
+| API | `olmoa-api` = **라이브와 동일한 fe4e11f 게이트웨이 코드** (미감사 48360ae 제외) → `api.olmoa.com` | /health 구계정과 동일 |
+| 콘솔 | `openmarket`(olmoa.com), `olmoa-admin`, `olmoa-partner`를 VITE custom domain 값으로 빌드·배포 → Custom Domain 인수 (`olmoa-edge`는 www 리다이렉트만) | 번들 API=`api.olmoa.com`, 구 workers.dev 참조 0 |
+| 데이터 공백 | 최종 export(06:44:02Z) 이후 구 DB 신규 사용자·주문 0 | 손실 없음 |
+
+**아직 남은 것**
+1. **Always Use HTTPS 켜기** (대시보드: olmoa.com → SSL/TLS → Edge Certificates). 지금 `http://olmoa.com`은 301 없이 200.
+2. ~~구 계정 정리~~ **완료(2026-11-25, 운영자 지시)**: 구 계정의 OLMOA 워커 5개(`openmarket`, `olmoa-storefront`, `olmoa-admin`, `olmoa-partner`, `olmoa-api`), D1 `openmarket-db`(`6935e21b…`), R2 `olmoa-media` 삭제. 옛 `*.dnjstjqppk.workers.dev` 주소는 더 이상 응답하지 않는다. 같은 계정의 다른 프로젝트(luno·checkin·Pages 6개)는 이 저장소와 무관해 별도 판단.
+3. CI: `deploy.yml`은 이제 도메인 계정으로 배포된다(설정에 `account_id`). `CLOUDFLARE_API_TOKEN`은 도메인 계정 권한으로 발급. 단, **main의 게이트웨이에는 미감사 48360ae가 포함**되어 있어 토큰을 넣으면 그 코드가 배포된다 → 먼저 감사.
+4. ~~구 계정 `openmarket` Git 자동 빌드~~ 워커 삭제로 함께 사라짐. 새 계정 워커에는 Git 연결이 없다(CI `deploy.yml`만 사용).
+5. 롤백: 구 계정 자원이 삭제되어 **계정 롤백은 불가**. 새 계정 안에서의 복구는 D1 Time Travel(`wrangler d1 time-travel`) 또는 `.ops-backups/` export + `scripts/ops/build_d1_restore.py`로 새 DB를 만들어 바인딩 교체.
+
 ## ★ 실행 기록 (2026-11-25) — 실제 적용된 구조
 
 `olmoa.com`은 2026-11-25 Cloudflare Registrar로 **도메인 계정**(`f5c363…`, 운영자가 모든 도메인을 관리)에 등록됐다.

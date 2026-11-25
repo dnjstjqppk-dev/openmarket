@@ -1,5 +1,11 @@
 # Phase-5 deploy runbook — backup → migrate → gateway → 3 apps → /health → smoke
 
+> **2026-11-25 — backup command no longer works as written.** Since d1_51 added the FTS5 table
+> `product_search_fts`, `wrangler d1 export` fails with "cannot export databases with virtual tables".
+> Export the real tables with one `--table <name>` per table (all except `product_search_fts*`, `_cf_*`,
+> `sqlite_*`), and save indexes/triggers separately from `sqlite_master`. `scripts/ops/build_d1_restore.py`
+> rebuilds a restorable file from both (FK-ordered, FTS backfilled) and rehearses it locally.
+
 Date: 2026-11-17, re-run 2026-11-21. Scope: apply `d1_51` … `d1_74` (24 files) to prod D1
 (`openmarket-db`, currently `schemaVersion = d1_50`) and ship the phase-5
 code. Every remote step needs explicit operator approval first (work-order

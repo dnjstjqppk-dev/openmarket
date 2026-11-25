@@ -1,6 +1,10 @@
 {
   "name": "olmoa-admin",
   "compatibility_date": "2024-04-03",
+  // Domain account (owns the olmoa.com zone; moved 2026-11-25).
+  "account_id": "f5c363135efe9b22ca66eb39f2f8e1da",
+  "workers_dev": false,
+  "routes": [{ "pattern": "admin.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" }],
   "build": {
     "command": "npm run build"
   },

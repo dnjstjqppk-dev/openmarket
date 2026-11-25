@@ -1,6 +1,7 @@
 {
-  // Edge proxy for the olmoa.com custom domains. Deployed to the DOMAIN account
-  // (the one that owns the olmoa.com zone), not the workers account — see worker.js.
+  // www → apex redirect for the olmoa.com zone (domain account).
+  // Since the 2026-11-25 account move, olmoa.com / admin / partner / api are Custom
+  // Domains on the app workers themselves; this worker only answers www.olmoa.com.
   // Deploy: npx wrangler deploy --config infra/domain-proxy/wrangler.jsonc
   "name": "olmoa-edge",
   "account_id": "f5c363135efe9b22ca66eb39f2f8e1da",
@@ -8,9 +9,6 @@
   "compatibility_date": "2024-04-03",
   "workers_dev": false,
   "routes": [
-    { "pattern": "olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" },
-    { "pattern": "www.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" },
-    { "pattern": "admin.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" },
-    { "pattern": "partner.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" }
+    { "pattern": "www.olmoa.com", "custom_domain": true, "zone_name": "olmoa.com" }
   ]
 }
