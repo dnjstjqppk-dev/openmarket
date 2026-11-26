@@ -51,7 +51,8 @@ function fillAll() {
       <table class="w-full min-w-[880px] text-xs">
         <thead>
           <tr class="border-b border-line bg-surface-2 text-left text-ink-muted">
-            <th class="px-3 py-2 font-bold">옵션 조합</th>
+            <!-- Pinned so the row label stays visible while the 880px table scrolls sideways on phones/tablets. -->
+            <th class="sticky left-0 z-10 bg-surface-2 px-3 py-2 font-bold shadow-[1px_0_0_rgb(var(--om-border))]">옵션 조합</th>
             <th class="px-3 py-2 font-bold">SKU 코드</th>
             <th class="px-3 py-2 text-right font-bold">정상가</th>
             <th class="px-3 py-2 text-right font-bold">판매가</th>
@@ -63,7 +64,7 @@ function fillAll() {
         </thead>
         <tbody>
           <tr v-for="(r, i) in rows" :key="r.key" class="border-b border-line-divider last:border-0">
-            <td class="px-3 py-1.5 font-semibold text-ink">{{ r.label }}</td>
+            <td class="sticky left-0 z-10 bg-surface px-3 py-1.5 font-semibold text-ink shadow-[1px_0_0_rgb(var(--om-border))]">{{ r.label }}</td>
             <td class="px-3 py-1.5"><input :value="r.sku_code" maxlength="60" placeholder="자동 생성" aria-label="SKU 코드"
               class="h-8 w-full rounded-lg border border-line bg-surface px-2 font-mono text-ink"
               @input="rows = rows.map((x, n) => (n === i ? { ...x, sku_code: ($event.target as HTMLInputElement).value } : x))" /></td>

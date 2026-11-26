@@ -4,7 +4,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Bell, ChevronUp, Heart, History, House, LayoutGrid, LogOut, Monitor, Moon, Package, Search, ShoppingBag, Sun, Ticket, User, Zap } from 'lucide-vue-next'
-import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, OmConfirmDialog, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode } from '@olmoa/ui'
+import { OmHeader, OmSearchBar, OmIconButton, OmNavigation, OmPopover, OmFooter, OmBadge, OmToast, OmConfirmDialog, formatDateTime, parseTrendingKeywords, useTheme, nextThemeMode, useBreakpoint } from '@olmoa/ui'
 import type { AcFetcher, AcItem, NavItem, FooterColumn } from '@olmoa/ui'
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
@@ -16,6 +16,9 @@ import LocaleNudge from './components/LocaleNudge.vue'
 import { SITE_NAME, SITE_TAGLINE } from '../../cloudflare-gateway/src/lib/site-entity.js'
 import { barePathOf } from '@olmoa/ui'
 import type { SupportedLocale } from './stores/locale'
+
+// The full placeholder is cut mid-word in the phone header (≤390px beside the logo and icons).
+const { isPhone } = useBreakpoint()
 
 const cart = useCartStore()
 const auth = useAuthStore()
@@ -265,7 +268,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
       </template>
 
       <div class="mx-auto w-full max-w-2xl">
-        <OmSearchBar :fetcher="searchFetcher" placeholder="상품, 브랜드, 카테고리 검색" label="상품 검색" empty-text="검색 결과가 없습니다." @select="onSearchSelect" @submit="onSearchSubmit">
+        <OmSearchBar :fetcher="searchFetcher" :placeholder="isPhone ? '상품·브랜드 검색' : '상품, 브랜드, 카테고리 검색'" label="상품 검색" empty-text="검색 결과가 없습니다." @select="onSearchSelect" @submit="onSearchSubmit">
           <template #idle="{ close }">
             <div class="grid gap-4 px-3 py-2 sm:grid-cols-2">
               <div v-if="recentSearches.length">

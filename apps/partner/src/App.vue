@@ -5,6 +5,10 @@ import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession } from './config';
 
+// Raw enum codes (APPROVED…) were shown in the header; show Korean labels, keep unknown codes visible.
+const PARTNER_STATUS_LABEL: Record<string, string> = { APPROVED: '승인', PENDING: '심사 중', REJECTED: '반려', SUSPENDED: '정지', TERMINATED: '해지' }
+const partnerStatusLabel = (s?: string | null) => (s ? PARTNER_STATUS_LABEL[s] || s : '확인 필요')
+
 const router = useRouter();
 const route = useRoute();
 const collapsed = ref(false);
@@ -124,7 +128,7 @@ onMounted(() => { loadHeader(); });
       <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
         <span class="truncate font-bold text-ink">{{ partnerName }}</span>
         <template v-if="profile">
-          <span class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ profile.status || '확인 필요' }}</span>
+          <span class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ partnerStatusLabel(profile.status) }}</span>
           <span
             class="hidden shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold sm:inline-block"
             :class="profile.payout_account_verified ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'"

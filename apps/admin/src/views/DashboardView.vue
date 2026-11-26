@@ -178,8 +178,9 @@ onMounted(loadDashboard)
     </div>
 
     <div v-else class="space-y-6">
-      <div class="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-2xl border border-line bg-surface p-5">
+      <!-- Phones: money card full width (amounts outgrow a half card), count cards two per row. -->
+      <div class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+        <div class="col-span-2 rounded-2xl border border-line bg-surface p-4 sm:col-span-1 sm:p-5">
           <p class="text-ink-muted">오늘 결제금액</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ won(compare.gmv.today) }}</p>
@@ -187,7 +188,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">오늘 주문 수</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.orders.today) }}건</p>
@@ -195,7 +196,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">오늘 신규 회원</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.users.today) }}명</p>
@@ -203,7 +204,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">오늘 입점 신청</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.applications.today) }}건</p>
@@ -211,7 +212,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">검수 대기 상품</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.review_queue) }}건</p>
@@ -219,7 +220,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">미처리 클레임</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.open_claims) }}건</p>
@@ -227,7 +228,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">분쟁</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.open_disputes) }}건</p>
@@ -235,7 +236,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="col-span-2 min-w-0 rounded-2xl border border-line bg-surface p-4 sm:col-span-1 sm:p-5">
           <p class="text-ink-muted">지급 승인 대기액</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ won(compare.payout_pending_amount) }}</p>
@@ -243,7 +244,7 @@ onMounted(loadDashboard)
           </template>
           <p v-else class="mt-1 font-bold text-danger">불러오지 못함 <button type="button" class="underline" @click="loadDashboard">다시 시도</button></p>
         </div>
-        <div class="rounded-2xl border border-line bg-surface p-5">
+        <div class="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <p class="text-ink-muted">이상거래 검토</p>
           <template v-if="!dashFailed && compare">
             <p class="om-num mt-1 text-2xl font-bold text-ink">{{ num(compare.fds_reviews) }}건</p>

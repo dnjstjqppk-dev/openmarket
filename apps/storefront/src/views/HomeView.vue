@@ -7,13 +7,16 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Zap } from 'lucide-vue-next'
-import { userErrorMessage, OmButton, OmSkeleton, OmEmptyState, OmErrorState, OmCarousel, OmCountdown, OmProgress, formatNumber, injectJsonLd } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmSkeleton, OmEmptyState, OmErrorState, OmCarousel, OmCountdown, OmProgress, formatNumber, injectJsonLd, useBreakpoint } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { organizationGraph } from '../../../cloudflare-gateway/src/lib/site-entity.js'
 import { useCatalogStore } from '../stores/catalog'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
+
+// Phones keep the 16:9 hero (H31); a smaller CTA keeps badge + title + button inside it.
+const { isPhone } = useBreakpoint()
 
 const catalog = useCatalogStore()
 const auth = useAuthStore()
@@ -147,11 +150,11 @@ async function selectRankTab(slug: string) {
           <div class="relative aspect-video w-full overflow-hidden bg-secondary text-white sm:aspect-auto sm:h-[360px]">
             <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-60" :fetchpriority="index === 0 ? 'high' : 'auto'" />
             <div class="absolute inset-0 bg-gradient-to-r from-overlay/75 via-overlay/40 to-transparent" aria-hidden="true" />
-            <div class="relative flex h-full flex-col justify-end gap-3 p-6 sm:p-10" aria-live="polite">
+            <div class="relative flex h-full flex-col justify-end gap-2 p-4 sm:gap-3 sm:p-10" aria-live="polite">
               <span v-if="banners[index].badge_text" class="w-fit rounded-sm bg-primary-on/15 px-2 py-0.5 text-2xs font-semibold tracking-wide backdrop-blur">{{ banners[index].badge_text }}</span>
-              <h1 class="max-w-xl text-2xl font-bold leading-tight sm:text-4xl">{{ banners[index].title }}</h1>
-              <p v-if="banners[index].subtitle" class="max-w-xl text-sm text-white/85 sm:text-md">{{ banners[index].subtitle }}</p>
-              <div><OmButton :to="banners[index].link_url" variant="primary" size="md">자세히 보기</OmButton></div>
+              <h1 class="line-clamp-2 max-w-xl text-lg font-bold leading-tight sm:text-4xl">{{ banners[index].title }}</h1>
+              <p v-if="banners[index].subtitle" class="hidden max-w-xl text-sm text-white/85 sm:block sm:text-md">{{ banners[index].subtitle }}</p>
+              <div><OmButton :to="banners[index].link_url" variant="primary" :size="isPhone ? 'sm' : 'md'">자세히 보기</OmButton></div>
             </div>
           </div>
         </template>

@@ -250,7 +250,7 @@ async function submit() {
     )
     const json = await res.json().catch(() => ({}))
     if (!res.ok || !json.success) throw new Error(json.error || '저장에 실패했습니다.')
-    toastApi.success(isNew.value ? '심사 대기 상태로 등록되었습니다. (DRAFT + PENDING)' : '저장되었습니다. 내용 변경 시 재심사로 전환됩니다.')
+    toastApi.success(isNew.value ? '심사 대기 상태로 등록되었습니다.' : '저장되었습니다. 내용 변경 시 재심사로 전환됩니다.')
     for (const w of (Array.isArray(json.warnings) ? json.warnings : [])) {
       toastApi.warning(w.message || '바코드 중복이 의심됩니다.', { title: '식별정보 확인 필요', timeout: 8000 })
     }
@@ -279,7 +279,7 @@ onMounted(async () => {
   <div class="mx-auto max-w-4xl space-y-6">
     <div>
       <h1 class="text-xl font-bold text-ink">{{ isNew ? '상품 등록' : '상품 수정' }}</h1>
-      <p class="mt-1 text-xs text-ink-muted">{{ isNew ? '등록된 상품은 심사 대기(DRAFT + PENDING) 상태로 저장됩니다.' : '내용 변경 시 재심사(DRAFT + PENDING)로 전환됩니다.' }}</p>
+      <p class="mt-1 text-xs text-ink-muted">{{ isNew ? '등록된 상품은 심사 대기 상태로 저장되고, 승인 후 판매됩니다.' : '내용을 바꾸면 다시 심사를 받고, 승인 후 판매가 재개됩니다.' }}</p>
     </div>
 
     <div v-if="loading"><OmSkeleton variant="rect" height="h-64" /></div>
