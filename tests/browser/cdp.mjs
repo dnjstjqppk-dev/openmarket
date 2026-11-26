@@ -29,15 +29,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function launchBrowser({ port = 9333 } = {}) {
   const exe = CANDIDATES.find((p) => fs.existsSync(p));
   if (!exe) throw new Error('No Chrome/Edge executable found (set CHROME_PATH)');
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'olmoa-cdp-'));
   // GitHub Actions runs as root: Chrome refuses to start without --no-sandbox there.
   const ciFlags = process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] : [];
-  const proc = spawn(exe, [`--remote-debugging-port=${port}`, '--headless=new', `--user-data-dir=${profile}`, '--no-first-run',
-    '--no-default-browser-check', '--disable-extensions', '--lang=ko-KR', ...ciFlags, 'about:blank'], { stdio: 'ignore' });
-  for (let i = 0; i < 100; i++) {
-    try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) break; } catch { /* starting */ }
-    await sleep(100);
-  }
+  // CI flake (ECONNREFUSED on the debug port): a cold runner can need >10 s, and
+  // the old loop fell through silently. Wait up to 30 s, notice an early exit,
+  // and relaunch once with a fresh profile before failing loudly.
+  const start = async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'olmoa-cdp-'));
+    const child = spawn(exe, [`--remote-debugging-port=${port}`, '--headless=new', `--user-data-dir=${dir}`, '--no-first-run',
+      '--no-default-browser-check', '--disable-extensions', '--lang=ko-KR', ...ciFlags, 'about:blank'], { stdio: 'ignore' });
+    let exited = false;
+    child.on('exit', () => { exited = true; });
+    for (let i = 0; i < 300 && !exited; i++) {
+      try { const r = await fetch(`http://127.0.0.1:${port}/json/version`); if (r.ok) return { child, dir }; } catch { /* starting */ }
+      await sleep(100);
+    }
+    try { child.kill(); } catch { /* ignore */ }
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* locked */ }
+    return null;
+  };
+  const started = (await start()) || (await start());
+  if (!started) throw new Error(`Chrome DevTools port ${port} did not come up (2 launches x 30 s): ${exe}`);
+  const { child: proc, dir: profile } = started;
   return {
     exe,
     async newPage() {
