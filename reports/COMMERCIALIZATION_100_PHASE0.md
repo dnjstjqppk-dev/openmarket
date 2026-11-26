@@ -67,7 +67,7 @@
 | 관리자 18종 | 구현됨 | — | P2R-04는 7623a54에서 처리됨(검증 예정) |
 | SEO/robots/sitemap/PWA manifest | 구현됨 | — | hreflang·/ko//en/ 없음(P2), SW 없음(P2) |
 | useBreakpoint 7구간 | 미구현 → 구현됨(이번 세션) | P0 완료 | B01~B05 테스트 포함 |
-| OpenAPI 전체 | 부분(15/약150) | P1 | 나머지 reconcilation 필요, 기존 13건 중 stale 의심 |
+| OpenAPI 전체 | 부분(15/약150) | P1 | 나머지 reconciliation 필요, 기존 13건 중 stale 의심 |
 | 다국어 구조 | 부분(21키 TS 딕셔너리) | P1 | vue-i18n+locales 스캐폴드 필요 |
 | Flutter 테마/태블릿 분기 | 미구현 | P1 | app_theme.dart + LayoutBuilder 필요 |
 | LCP 측정 | 미구현 | P1 | route_smoke 확장 또는 별도 측정 |
@@ -114,7 +114,7 @@ P0 통과 후 상용화 단계에서 진행할 목록(상세 비교·추정치�
 
 ## 10. 남은 작업 (다음 단계)
 
-- P1: OpenAPI reconcilation(기존 13건 stale 검증 + 핵심 경로 확대), vue-i18n 스캐폴드,
+- P1: OpenAPI reconciliation(기존 13건 stale 검증 + 핵심 경로 확대), vue-i18n 스캐폴드,
   Flutter app_theme + 태블릿 분기, route_smoke 768/1024/360 확장 실행, LCP 측정.
 - PO(운영자 결정): P2R-01(메일 계약 vs 관리자 재설정), P2R-02(시드 배너 문구), P2R-05(서버 장바구니).
 - Phase 5: 미션 §10 목차 12항 전체 보고서 (엔진 비교표·로드맵·계약 비교 포함).

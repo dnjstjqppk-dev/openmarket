@@ -1,0 +1,72 @@
+OLMOA Proprietary License — 올모아 독점 라이선스
+Copyright © 2026 OLMOA. All rights reserved.
+
+1. Ownership. The OLMOA openmarket platform — including all source code,
+   documentation, configuration, migrations, tests, and accompanying materials
+   in this repository (the "Software") — is the exclusive property of OLMOA
+   ("Licensor"). All rights not expressly granted are reserved.
+
+2. No grant by default. No license to use, copy, modify, merge, publish,
+   distribute, sublicense, or sell the Software is granted except under a
+   separate written agreement signed by the Licensor. Possession of a copy
+   (for example as an employee or contractor with repository access) grants
+   no redistribution or reuse rights beyond the assigned duties.
+
+3. Confidentiality. Recipients with repository access must treat the Software
+   as confidential information of the Licensor and must not disclose it to
+   third parties or use it for any purpose other than the assigned OLMOA work,
+   unless a separate agreement states otherwise.
+
+4. Third-party components. The Software depends on third-party open-source
+   packages listed in THIRD_PARTY_NOTICES.md. Those packages remain under
+   their own licenses; nothing in this License limits the rights granted
+   by those licenses for those packages alone.
+
+5. Trademarks. "OLMOA", "올모아", and related marks, slogans, and trade dress
+   are the property of the Licensor. No trademark license is granted.
+
+6. Warranty disclaimer. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+   ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+   OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of liability. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW,
+   THE LICENSOR SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+   CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR RELATED TO THE
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+8. Governing law. This License is governed by the laws of the Republic of
+   Korea. Disputes shall be submitted to the courts of competent jurisdiction
+   in Seoul, Republic of Korea, unless a separate agreement states otherwise.
+
+---
+1. 소유권. OLMOA openmarket 플랫폼(본 저장소의 모든 소스 코드, 문서, 설정,
+   마이그레이션, 테스트 및 부속 자료를 포함하며, 이하 "소프트웨어")의 독점적
+   권리는 OLMOA(이하 "라이선서")에게 있습니다. 명시적으로 부여되지 않은 모든
+   권리는 유보됩니다.
+
+2. 기본 불허. 라이선서가 서명한 별도의 서면 계약이 없는 한, 소프트웨어의
+   사용·복제·수정·병합·게시·배포·서브라이선스·판매에 대한 어떠한 라이선스도
+   부여되지 않습니다. 저장소 접근 권한으로 사본을 보유하는 사실(임직원 또는
+   수탁자 등)만으로는 부여된 업무 범위를 넘는 재배포·재사용 권리가 발생하지
+   않습니다.
+
+3. 비밀유지. 저장소에 접근하는 자는 소프트웨어를 라이선서의 기밀정보로
+   취급해야 하며, 별도 계약이 없는 한 제3자에게 공개하거나 부여된 OLMOA 업무
+   외의 목적으로 사용해서는 안 됩니다.
+
+4. 제3자 구성요소. 소프트웨어는 THIRD_PARTY_NOTICES.md에 열거된 제3자
+   오픈소스 패키지에 의존합니다. 해당 패키지에는 각자의 라이선스가 그대로
+   적용되며, 본 라이선스는 그 패키지들에 대한 권리를 제한하지 않습니다.
+
+5. 상표. "OLMOA", "올모아" 및 관련 표장·슬로건·트레이드드레스는 라이선서의
+   재산이며, 상표 사용권은 부여되지 않습니다.
+
+6. 보증 부인. 소프트웨어는 "있는 그대로" 제공되며, 상품성, 특정 목적 적합성,
+   비침해성에 대한 보증을 포함하여 명시적·묵시적 어떠한 보증도 하지 않습니다.
+
+7. 책임 제한. 관련 법령이 허용하는 최대 한도 내에서, 라이선서는 소프트웨어와
+   관련하여 발생하는 간접적·부수적·특별·결과적·징벌적 손해에 대해 책임지지
+   않습니다.
+
+8. 준거법. 본 라이선스는 대한민국 법률을 준거법으로 하며, 분쟁은 별도 계약이
+   없는 한 대한민국 서울 소재 관할 법원에 제기합니다.

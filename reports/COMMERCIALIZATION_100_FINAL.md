@@ -119,7 +119,7 @@
 | 결제 구조 | Toss+샌드박스 | 계약 | 실가맹점 승인 |
 | 쿠폰·포인트·리뷰·공유·신고 | 구현됨 | — | — |
 | useBreakpoint 7구간 | 구현됨(본 미션) | — | 뷰 적용 확대는 P1 |
-| OpenAPI | 15/약150 | P1 | reconcilation + 확대 |
+| OpenAPI | 15/약150 | P1 | reconciliation + 확대 |
 
 ## 5. 엔진 비교표
 
@@ -187,7 +187,7 @@
 | 단계 | 작업 | 담당 | 예상 |
 |---|---|---|---|
 | P0 잔여 | d1_35 원격 D1 적용 + 배포, 인간 육안 검수 | Go/공통 | 0.5일 |
-| P1 | OpenAPI reconcilation·확대 | Go | 2일 |
+| P1 | OpenAPI reconciliation·확대 | Go | 2일 |
 | P1 | vue-i18n + locales 스캐폴드·키 인벤토리 | Vue | 2일 |
 | P1 | Flutter 검색·상세·결제 안내 UX + 실기기 캡처 | Flutter | 3일 |
 | P1 | LCP CI 편입·이미지 최적화·FCM 구조 | Vue/Go | 2일 |

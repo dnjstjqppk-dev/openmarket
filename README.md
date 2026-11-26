@@ -2,16 +2,16 @@
 
 > **공식 브랜드**: OLMOA (올모아)  
 > **공식 슬로건**: 내가 찾는 모든 것, 여기. (Everything You Seek. All Here.)  
-> **기술 스택**: Vue 3 + TypeScript, Cloudflare Workers & D1 SQL, Go 1.23 도메인 코어, Flutter(예정)
+> **기술 스택**: Vue 3 + TypeScript, Cloudflare Workers & D1 SQL, Flutter 고객·파트너 앱
 
 ---
 
-> **진행 중인 작업 (2026-11-25):** `OPENMARKET_WORK_ORDER_PHASE6.md` — 48360ae 감사, 검색 최적화(SEO·AEO·GEO·LLMO·AIO).
+> **진행 중인 작업 (2026-11-26):** `reports/FOLLOWUP_2026-11-26.md` — 775c3b8 기반 8건 수정(반응형 QA 잔여 + 6-2 엣지 렌더링), `npm test` 1,143 PASS / 0 FAIL.
 > 현재 인프라 구조는 `docs/DOMAIN_CONFIGURATION.md`, 운영자 할 일은 `reports/HUMAN_CHECKLIST.md` §5.
 
 ## 1. Cloudflare 실배포 서비스 현황 (2026-11-25 도메인 계정 이전 후)
 
-OLMOA 플랫폼은 단일 모놀리스가 아닌, 5개의 독립 Cloudflare Workers 서비스 및 D1 관계형 데이터베이스로 배포·운영 중입니다.
+OLMOA 플랫폼은 단일 모놀리스가 아닌, 4개의 독립 Cloudflare Workers 서비스 및 D1 관계형 데이터베이스로 배포·운영 중입니다.
 
 | 서비스 구분 | Cloudflare Worker 명칭 | 실 배포 운영 URL | 핵심 역할 및 기능 |
 |---|---|---|---|
@@ -41,7 +41,7 @@ flowchart TD
 ## 3. 핵심 커머스 엔진 무결성 (Zero Mock)
 
 ### A. 42대 글로벌 카테고리 계층 (194개 전체 분류, 100% 실데이터)
-- Temu 텍소노미 벤치마킹 기반 42개 대분류(루트 depth=0) 및 총 194개 카테고리가 Cloudflare D1에 영구 적재되어 있습니다.
+- 글로벌 마켓플레이스 텍소노미 벤치마킹 기반 42개 대분류(루트 depth=0) 및 총 194개 카테고리가 Cloudflare D1에 영구 적재되어 있습니다.
 - 모든 루트 카테고리는 하위 서브카테고리의 활성 실상품(고해상도 썸네일, 정상가, 할인가, 상세 스펙)으로 롤업 집계(Rollup Aggregation)되어 매핑됩니다.
 
 ### B. 원자적 재고 감산 (Atomic Inventory Decrement)
@@ -56,7 +56,7 @@ flowchart TD
 
 ## 4. 자동화 E2E 테스트 검증 결과
 
-[과거 E2E 실행 기록 - Phase 1 배포 기준 (2026-10-26)]:
+[과거 E2E 실행 기록 - Phase 1 배포 기준 (2026-10-26), 당시 수치 그대로 보존]:
 ```text
 === OLMOA E2E AUTOMATED TEST SUITE ===
 1. Health Check: Status=UP, DB=CONNECTED_D1, Categories=33, Products=52
@@ -87,7 +87,10 @@ openmarket/
 │   ├── admin/                     # 관리자 콘솔 (Vue 3 + TS + Vite)
 │   ├── partner/                   # 파트너 판매자센터 (Vue 3 + TS + Vite)
 │   └── cloudflare-gateway/        # 통합 Edge API Gateway (Cloudflare D1 연동)
-├── migrations/                    # Cloudflare D1 SQL 마이그레이션 6종
+├── packages/                      # 공용 UI·타입·i18n 패키지 (@olmoa/*)
+├── mobile/                        # Flutter 고객·파트너 앱
+├── migrations/                    # Cloudflare D1 SQL 마이그레이션 d1_01~d1_77
+├── tests/                         # Node 게이트웨이·UI 회귀 스위트
 ├── docs/audit/                    # 전수감사 보고서 14종 (CSV 및 Markdown)
 └── package.json                   # 모노레포 워크스페이스
 ```

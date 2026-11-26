@@ -44,9 +44,10 @@ export 파일로 복원할 때는 빈 D1(또는 복원 전용 DB)에 `d1 execute
 ## 4. 복원 후 검증 (트래픽 재개 전 필수)
 
 ```bash
-# 스키마 수준: 최신 마이그레이션까지 와 있는지
+# 스키마 수준: 최신 마이그레이션까지 와 있는지 (숫자 기준 — MAX(version)은
+# d1_100 이후 사전순으로 오판한다)
 npx wrangler d1 execute openmarket-db --remote \
-  --command "SELECT MAX(version) FROM schema_migrations"
+  --command "SELECT version FROM schema_migrations ORDER BY CAST(SUBSTR(version, 4) AS INTEGER) DESC, version DESC LIMIT 1"
 # 동등: GET /health 의 schemaVersion / migrationsApplied
 ```
 

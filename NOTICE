@@ -1,0 +1,23 @@
+NOTICE — OLMOA openmarket
+=========================
+
+Copyright © 2026 OLMOA. All rights reserved. (저작권자: OLMOA, 2026)
+
+This repository is proprietary software of OLMOA. See LICENSE for the terms:
+no use, copying, modification, or distribution is permitted without a separate
+written agreement signed by OLMOA.
+
+본 저장소는 OLMOA의 독점 소프트웨어입니다. 이용 조건은 LICENSE 파일을
+따릅니다. OLMOA가 서명한 별도 서면 계약 없이는 사용·복제·수정·배포가
+허용되지 않습니다.
+
+Trademarks: OLMOA, 올모아, and related marks are the property of OLMOA.
+
+Third-party software: this project depends on third-party open-source
+packages. The inventory and license texts references are in
+THIRD_PARTY_NOTICES.md. The Pretendard font package ("pretendard") and all
+npm/Flutter dependencies remain under their own licenses.
+
+App surfaces: the storefront footer renders `© {year} {operator}` from
+/api/v1/business-info (the registered operator entity), which complements —
+and does not replace — this repository copyright notice.

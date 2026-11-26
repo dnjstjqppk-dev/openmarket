@@ -1,0 +1,432 @@
+# Third-party notices — OLMOA openmarket
+
+Generated from package-lock.json (2026-11-26). Regenerate after dependency changes with npx license-checker.
+
+## License summary
+
+No GPL/AGPL (strong copyleft) dependencies on either platform. MPL-2.0 entries (npm: file-level only; Flutter: dbus only) impose no disclosure duty for unmodified use; all other entries are permissive (MIT/ISC/Apache-2.0/BSD/OFL/0BSD/CC-BY/CC-BY-SA/WTFPL; the last two arrive via the dev-only spell checker and never ship in the product). Five Flutter entries without a LICENSE file are first-party/SDK packages (olmoa_customer, olmoa_partner, flutter_localizations, flutter_test, flutter_web_plugins).
+
+## Package inventory (name@version — license)
+
+- @alloc/quick-lru@5.3.0 — MIT
+- @babel/helper-string-parser@7.29.7 — MIT
+- @babel/helper-validator-identifier@7.29.7 — MIT
+- @babel/parser@7.29.9 — MIT
+- @babel/types@7.29.8 — MIT
+- @cspell/cspell-bundled-dicts@10.5.2 — MIT
+- @cspell/cspell-json-reporter@10.5.2 — MIT
+- @cspell/cspell-performance-monitor@10.5.2 — MIT
+- @cspell/cspell-pipe@10.5.2 — MIT
+- @cspell/cspell-resolver@10.5.2 — MIT
+- @cspell/cspell-service-bus@10.5.2 — MIT
+- @cspell/cspell-types@10.5.2 — MIT
+- @cspell/cspell-worker@10.5.2 — MIT
+- @cspell/dict-ada@4.1.1 — MIT
+- @cspell/dict-al@1.1.1 — MIT
+- @cspell/dict-aws@4.0.17 — MIT
+- @cspell/dict-bash@4.2.3 — MIT
+- @cspell/dict-companies@3.2.14 — MIT
+- @cspell/dict-cpp@7.2.1 — MIT
+- @cspell/dict-cryptocurrencies@5.0.5 — MIT
+- @cspell/dict-csharp@4.0.8 — MIT
+- @cspell/dict-css@4.1.2 — MIT
+- @cspell/dict-dart@2.3.2 — MIT
+- @cspell/dict-data-science@2.0.17 — MIT
+- @cspell/dict-django@4.1.7 — WTFPL
+- @cspell/dict-docker@1.1.17 — MIT
+- @cspell/dict-dotnet@5.0.15 — MIT
+- @cspell/dict-elixir@4.0.8 — MIT
+- @cspell/dict-en-common-misspellings@2.2.7 — CC-BY-SA-4.0
+- @cspell/dict-en-gb-mit@3.1.32 — MIT
+- @cspell/dict-en_us@4.4.43 — MIT
+- @cspell/dict-filetypes@3.0.18 — MIT
+- @cspell/dict-flutter@1.1.1 — MIT
+- @cspell/dict-fonts@4.0.6 — MIT
+- @cspell/dict-fsharp@1.1.1 — MIT
+- @cspell/dict-fullstack@3.2.9 — MIT
+- @cspell/dict-gaming-terms@1.1.3 — MIT
+- @cspell/dict-git@3.1.1 — MIT
+- @cspell/dict-golang@6.0.30 — MIT
+- @cspell/dict-google@1.0.9 — MIT
+- @cspell/dict-haskell@4.0.6 — MIT
+- @cspell/dict-html-symbol-entities@4.0.5 — MIT
+- @cspell/dict-html@4.0.16 — MIT
+- @cspell/dict-java@5.0.12 — MIT
+- @cspell/dict-julia@1.1.1 — MIT
+- @cspell/dict-k8s@1.0.13 — MIT
+- @cspell/dict-kotlin@1.1.1 — MIT
+- @cspell/dict-latex@5.1.0 — MIT
+- @cspell/dict-lorem-ipsum@4.0.5 — MIT
+- @cspell/dict-lua@4.0.8 — MIT
+- @cspell/dict-makefile@1.0.5 — MIT
+- @cspell/dict-markdown@2.0.18 — MIT
+- @cspell/dict-monkeyc@1.1.2 — MIT
+- @cspell/dict-node@5.0.9 — MIT
+- @cspell/dict-npm@5.2.58 — MIT
+- @cspell/dict-php@4.1.3 — MIT
+- @cspell/dict-powershell@5.0.17 — MIT
+- @cspell/dict-public-licenses@2.0.17 — MIT
+- @cspell/dict-python@4.5.4 — MIT
+- @cspell/dict-r@2.1.1 — MIT
+- @cspell/dict-ruby@5.1.4 — MIT
+- @cspell/dict-rust@4.1.2 — MIT
+- @cspell/dict-scala@5.0.11 — MIT
+- @cspell/dict-shell@1.2.0 — MIT
+- @cspell/dict-software-terms@5.4.11 — MIT
+- @cspell/dict-sql@2.2.1 — MIT
+- @cspell/dict-svelte@1.0.7 — MIT
+- @cspell/dict-swift@2.0.6 — MIT
+- @cspell/dict-terraform@1.1.4 — MIT
+- @cspell/dict-typescript@3.2.3 — MIT
+- @cspell/dict-vue@3.0.5 — MIT
+- @cspell/dict-zig@1.0.0 — MIT
+- @cspell/dynamic-import@10.5.2 — MIT
+- @cspell/filetypes@10.5.2 — MIT
+- @cspell/rpc@10.5.2 — MIT
+- @cspell/strong-weak-map@10.5.2 — MIT
+- @cspell/url@10.5.2 — MIT
+- @emnapi/core@2.0.0-beta.2 — MIT
+- @emnapi/runtime@2.0.0-beta.2 — MIT
+- @emnapi/wasi-threads@2.2.0 — MIT
+- @intlify/core-base@11.4.24 — MIT
+- @intlify/devtools-types@11.4.24 — MIT
+- @intlify/message-compiler@11.4.24 — MIT
+- @intlify/shared@11.4.24 — MIT
+- @jridgewell/gen-mapping@0.3.13 — MIT
+- @jridgewell/resolve-uri@3.1.2 — MIT
+- @jridgewell/sourcemap-codec@1.6.0 — MIT
+- @jridgewell/trace-mapping@0.3.31 — MIT
+- @napi-rs/wasm-runtime@1.2.6 — MIT
+- @nodelib/fs.scandir@2.1.5 — MIT
+- @nodelib/fs.stat@2.0.5 — MIT
+- @nodelib/fs.walk@1.2.8 — MIT
+- @olmoa/i18n@1.0.0 — UNLICENSED (this repo, proprietary)
+- @olmoa/types@1.0.0 — UNLICENSED (this repo, proprietary)
+- @olmoa/ui@1.0.0 — UNLICENSED (this repo, proprietary)
+- @oxc-project/types@0.156.0 — MIT
+- @rolldown/binding-android-arm-eabi@1.2.19 — MIT
+- @rolldown/binding-android-arm64@1.2.19 — MIT
+- @rolldown/binding-darwin-arm64@1.2.19 — MIT
+- @rolldown/binding-darwin-x64@1.2.19 — MIT
+- @rolldown/binding-freebsd-x64@1.2.19 — MIT
+- @rolldown/binding-linux-arm-gnueabihf@1.2.19 — MIT
+- @rolldown/binding-linux-arm64-gnu@1.2.19 — MIT
+- @rolldown/binding-linux-arm64-musl@1.2.19 — MIT
+- @rolldown/binding-linux-ppc64-gnu@1.2.19 — MIT
+- @rolldown/binding-linux-s390x-gnu@1.2.19 — MIT
+- @rolldown/binding-linux-x64-gnu@1.2.19 — MIT
+- @rolldown/binding-linux-x64-musl@1.2.19 — MIT
+- @rolldown/binding-openharmony-arm64@1.2.19 — MIT
+- @rolldown/binding-wasm32-wasi@1.2.19 — MIT
+- @rolldown/binding-win32-arm64-msvc@1.2.19 — MIT
+- @rolldown/binding-win32-x64-msvc@1.2.19 — MIT
+- @rolldown/pluginutils@1.1.1 — MIT
+- @streetsidesoftware/unindent@1.0.1 — MIT
+- @tybys/wasm-util@0.10.5 — MIT
+- @vitejs/plugin-vue@6.0.11 — MIT
+- @volar/language-core@2.4.30 — MIT
+- @volar/language-service@2.4.30 — MIT
+- @volar/source-map@2.4.30 — MIT
+- @volar/typescript@2.4.30 — MIT
+- @vue/compiler-core@3.5.44 — MIT
+- @vue/compiler-dom@3.5.44 — MIT
+- @vue/compiler-sfc@3.5.44 — MIT
+- @vue/compiler-ssr@3.5.44 — MIT
+- @vue/devtools-api@6.6.4 — MIT
+- @vue/language-core@3.3.14 — MIT
+- @vue/reactivity@3.5.44 — MIT
+- @vue/runtime-core@3.5.44 — MIT
+- @vue/runtime-dom@3.5.44 — MIT
+- @vue/server-renderer@3.5.44 — MIT
+- @vue/shared@3.5.44 — MIT
+- alien-signals@3.2.1 — MIT
+- ansi-regex@6.6.0 — MIT
+- any-promise@1.3.0 — MIT
+- anymatch@3.1.3 — ISC
+- arg@5.0.2 — MIT
+- array-timsort@1.0.3 — MIT
+- autoprefixer@10.4.20 — MIT
+- baseline-browser-mapping@2.11.35 — Apache-2.0
+- binary-extensions@2.3.0 — MIT
+- braces@3.0.3 — MIT
+- browserslist@4.29.5 — MIT
+- camelcase-css@2.0.1 — MIT
+- caniuse-lite@1.0.30001820 — CC-BY-4.0
+- chalk-template@1.1.3 — MIT
+- chalk@5.6.2 — MIT
+- chalk@6.0.1 — MIT
+- chokidar@3.6.0 — MIT
+- commander@15.1.0 — MIT
+- commander@4.1.1 — MIT
+- comment-json@5.0.0 — MIT
+- cspell-config-lib@10.5.2 — MIT
+- cspell-dictionary@10.5.2 — MIT
+- cspell-gitignore@10.5.2 — MIT
+- cspell-glob@10.5.2 — MIT
+- cspell-grammar@10.5.2 — MIT
+- cspell-io@10.5.2 — MIT
+- cspell-lib@10.5.2 — MIT
+- cspell-trie-lib@10.5.2 — MIT
+- cspell@10.5.2 — MIT
+- cssesc@3.0.0 — MIT
+- csstype@3.2.3 — MIT
+- detect-libc@2.1.2 — Apache-2.0
+- didyoumean@1.2.2 — Apache-2.0
+- dlv@1.1.3 — MIT
+- electron-to-chromium@1.5.477 — ISC
+- entities@7.0.1 — BSD-2-Clause
+- env-paths@4.0.0 — MIT
+- es-errors@1.3.0 — MIT
+- escalade@3.2.0 — MIT
+- esprima@4.0.1 — BSD-2-Clause
+- estree-walker@2.0.2 — MIT
+- fast-equals@6.4.1 — MIT
+- fast-glob@3.3.3 — MIT
+- fastq@1.20.3 — ISC
+- fdir@6.5.0 — MIT
+- fill-range@7.1.1 — MIT
+- flatted@3.4.4 — ISC
+- fraction.js@4.3.7 — MIT
+- fsevents@2.3.3 — MIT
+- function-bind@1.1.2 — MIT
+- gensequence@8.0.8 — MIT
+- glob-parent@5.1.2 — ISC
+- glob-parent@6.0.2 — ISC
+- global-directory@5.0.0 — MIT
+- hasown@2.0.4 — MIT
+- import-fresh@4.0.1 — MIT
+- import-meta-resolve@4.2.0 — MIT
+- ini@6.0.0 — ISC
+- is-binary-path@2.1.0 — MIT
+- is-core-module@2.18.0 — MIT
+- is-extglob@2.1.1 — MIT
+- is-glob@4.0.3 — MIT
+- is-number@7.0.0 — MIT
+- is-safe-filename@0.1.1 — MIT
+- jiti@1.21.7 — MIT
+- lightningcss-android-arm64@1.33.0 — MPL-2.0
+- lightningcss-darwin-arm64@1.33.0 — MPL-2.0
+- lightningcss-darwin-x64@1.33.0 — MPL-2.0
+- lightningcss-freebsd-x64@1.33.0 — MPL-2.0
+- lightningcss-linux-arm-gnueabihf@1.33.0 — MPL-2.0
+- lightningcss-linux-arm64-gnu@1.33.0 — MPL-2.0
+- lightningcss-linux-arm64-musl@1.33.0 — MPL-2.0
+- lightningcss-linux-x64-gnu@1.33.0 — MPL-2.0
+- lightningcss-linux-x64-musl@1.33.0 — MPL-2.0
+- lightningcss-win32-arm64-msvc@1.33.0 — MPL-2.0
+- lightningcss-win32-x64-msvc@1.33.0 — MPL-2.0
+- lightningcss@1.33.0 — MPL-2.0
+- lilconfig@3.1.4 — MIT
+- lines-and-columns@1.2.4 — MIT
+- lucide-vue-next@1.0.0 — ISC
+- magic-string@0.30.21 — MIT
+- merge2@1.4.1 — MIT
+- micromatch@4.0.8 — MIT
+- muggle-string@0.4.1 — MIT
+- mz@2.7.0 — MIT
+- nanoid@3.3.20 — MIT
+- node-releases@2.0.63 — MIT
+- normalize-path@3.0.0 — MIT
+- normalize-range@0.1.2 — MIT
+- object-assign@4.1.1 — MIT
+- object-hash@3.0.0 — MIT
+- olmoa-api-gateway@1.0.0 — UNLICENSED (this repo, proprietary)
+- openmarket-admin@1.0.0 — UNLICENSED (this repo, proprietary)
+- openmarket-partner@1.0.0 — UNLICENSED (this repo, proprietary)
+- openmarket-storefront@1.0.0 — UNLICENSED (this repo, proprietary)
+- path-browserify@1.0.1 — MIT
+- path-parse@1.0.7 — MIT
+- picocolors@1.1.1 — ISC
+- picomatch@2.3.2 — MIT
+- picomatch@4.0.7 — MIT
+- pinia@2.3.1 — MIT
+- pirates@4.0.7 — MIT
+- postcss-import@15.1.0 — MIT
+- postcss-js@4.1.0 — MIT
+- postcss-load-config@6.0.1 — MIT
+- postcss-nested@6.2.0 — MIT
+- postcss-selector-parser@6.1.5 — MIT
+- postcss-value-parser@4.2.0 — MIT
+- postcss@8.5.33 — MIT
+- pretendard@1.3.9 — OFL-1.1
+- queue-microtask@1.2.3 — MIT
+- read-cache@1.0.2 — MIT
+- readdirp@3.6.0 — MIT
+- resolve-from@5.0.0 — MIT
+- resolve@1.22.14 — MIT
+- reusify@1.1.0 — MIT
+- rolldown@1.2.19 — MIT
+- run-parallel@1.2.0 — MIT
+- semver@7.8.6 — ISC
+- smol-toml@1.9.1 — BSD-3-Clause
+- source-map-js@1.2.2 — BSD-3-Clause
+- sucrase@3.35.1 — MIT
+- supports-preserve-symlinks-flag@1.0.0 — MIT
+- tailwindcss@3.4.19 — MIT
+- thenify-all@1.6.0 — MIT
+- thenify@3.3.1 — MIT
+- tinyglobby@0.2.17 — MIT
+- to-regex-range@5.0.1 — MIT
+- ts-interface-checker@0.1.13 — Apache-2.0
+- tslib@2.9.1 — 0BSD
+- typescript@5.9.3 — Apache-2.0
+- update-browserslist-db@1.3.4 — MIT
+- util-deprecate@1.0.2 — MIT
+- vite@8.3.8 — MIT
+- vscode-jsonrpc@10.0.1 — MIT
+- vscode-languageserver-protocol@3.18.6 — MIT
+- vscode-languageserver-textdocument@1.0.16 — MIT
+- vscode-languageserver-types@3.18.6 — MIT
+- vscode-uri@3.2.0 — MIT
+- vue-demi@0.14.10 — MIT
+- vue-i18n@11.4.24 — MIT
+- vue-router@4.6.4 — MIT
+- vue-tsc@3.3.14 — MIT
+- vue@3.5.44 — MIT
+- xdg-basedir@5.1.0 — MIT
+- yaml@2.9.1 — ISC
+
+## Fonts
+
+- pretendard (included above) — OFL-1.1 (SIL Open Font License).
+
+## Mobile (Flutter)
+
+Inventoried from both apps' package_config.json (2026-11-26). Regenerate after `flutter pub upgrade` by re-running the inventory over .dart_tool/package_config.json.
+
+### Package inventory (name@version — license — apps)
+
+- _flutterfire_internals@1.3.77 — BSD (LICENSE: Copyright 2017, the Chromium project authors. All rights reserved.) — customer_app, partner_app
+- app_links@7.2.2 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- app_links_linux@1.0.5 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- app_links_platform_interface@2.0.4 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- app_links_web@1.0.5 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- args@2.7.0 — BSD (LICENSE: Copyright 2013, the Dart project authors.) — customer_app, partner_app
+- async@2.13.1 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- boolean_selector@2.1.2 — BSD (LICENSE: Copyright 2016, the Dart project authors.) — customer_app, partner_app
+- cached_network_image@3.4.1 — MIT (LICENSE: The MIT License (MIT)) — customer_app, partner_app
+- cached_network_image_platform_interface@4.1.1 — MIT (LICENSE: The MIT License (MIT)) — customer_app, partner_app
+- cached_network_image_web@1.3.1 — MIT (LICENSE: The MIT License (MIT)) — customer_app, partner_app
+- characters@1.4.1 — BSD (LICENSE: Copyright 2019, the Dart project authors.) — customer_app, partner_app
+- clock@1.1.3 — Apache-2.0 (LICENSE: Apache License) — customer_app, partner_app
+- code_assets@1.2.1 — BSD (LICENSE: Copyright 2025, the Dart project authors.) — customer_app, partner_app
+- collection@1.19.1 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- crypto@3.0.8 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- cupertino_icons@1.0.9 — MIT (LICENSE: The MIT License (MIT)) — customer_app, partner_app
+- dbus@0.8.0 — MPL-2.0 (LICENSE: Mozilla Public License Version 2.0) — customer_app, partner_app
+- fake_async@1.3.3 — Apache-2.0 (LICENSE: Apache License) — customer_app, partner_app
+- ffi@2.2.0 — BSD (LICENSE: Copyright 2019, the Dart project authors.) — customer_app, partner_app
+- ffi_leak_tracker@0.1.2 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- file@7.0.1 — BSD (LICENSE: Copyright 2017, the Dart project authors. All rights reserved.) — customer_app, partner_app
+- firebase_core@4.15.2 — BSD (LICENSE: // Copyright 2017 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- firebase_core_platform_interface@8.1.1 — BSD (LICENSE: // Copyright 2017 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- firebase_core_web@3.12.0 — BSD (LICENSE: // Copyright 2020 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- firebase_messaging@16.7.1 — BSD (LICENSE: // Copyright 2017 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- firebase_messaging_platform_interface@4.10.0 — BSD (LICENSE: Copyright 2020, the Chromium project authors. All rights reserved.) — customer_app, partner_app
+- firebase_messaging_web@4.2.5 — BSD (LICENSE: // Copyright 2020 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- fixnum@1.1.1 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- flutter@? — BSD (LICENSE: Copyright 2014 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- flutter_cache_manager@3.5.0 — MIT (LICENSE: The MIT License (MIT)) — customer_app, partner_app
+- flutter_inappwebview@6.1.5 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_android@1.1.3 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_internal_annotations@1.3.0 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_ios@1.1.2 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_macos@1.1.2 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_platform_interface@1.3.0+1 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_web@1.1.2 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_inappwebview_windows@0.6.0 — Apache-2.0 (LICENSE: Apache License) — customer_app
+- flutter_lints@3.0.2 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- flutter_local_notifications@22.3.3 — BSD (LICENSE: Copyright 2018 Michael Bui. All rights reserved.) — customer_app, partner_app
+- flutter_local_notifications_linux@8.0.2 — BSD (LICENSE: Copyright 2018 Michael Bui. All rights reserved.) — customer_app, partner_app
+- flutter_local_notifications_platform_interface@12.2.0 — BSD (LICENSE: Copyright 2020 Michael Bui. All rights reserved.) — customer_app, partner_app
+- flutter_local_notifications_web@1.0.0 — BSD (LICENSE: Copyright 2020 Michael Bui. All rights reserved.) — customer_app, partner_app
+- flutter_local_notifications_windows@3.1.1 — BSD (LICENSE: Copyright 2024 Michael Bui. All rights reserved.) — customer_app, partner_app
+- flutter_localizations@? — NO-LICENSE-FILE — customer_app, partner_app
+- flutter_secure_storage@11.2.0 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_secure_storage_darwin@0.4.3 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_secure_storage_linux@3.0.3 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_secure_storage_platform_interface@2.1.1 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_secure_storage_web@2.1.1 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_secure_storage_windows@4.2.2 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- flutter_test@? — NO-LICENSE-FILE — customer_app, partner_app
+- flutter_web_plugins@? — NO-LICENSE-FILE — customer_app, partner_app
+- hooks@2.0.2 — BSD (LICENSE: Copyright 2025, the Dart project authors.) — customer_app, partner_app
+- http@1.6.0 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- http_parser@4.1.2 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- intl@0.20.3 # This should follow semver to not break Flutter, where it is unpinned, see https://github.com/flutter/flutter/blob/main/pubspec.yaml — BSD (LICENSE: Copyright 2013, the Dart project authors.) — customer_app, partner_app
+- jni@1.1.2 — BSD (LICENSE: Copyright 2022, the Dart project authors.) — partner_app
+- jni_flutter@1.0.4+1 — BSD (LICENSE: Copyright 2026, the Dart project authors.) — partner_app
+- jni_util@1.0.0 — BSD (LICENSE: Copyright 2026, the Dart project authors.) — partner_app
+- json_annotation@4.12.0 — BSD (LICENSE: Copyright 2017, the Dart project authors. All rights reserved.) — customer_app
+- leak_tracker@11.0.2 — BSD (LICENSE: Copyright 2022, the Dart project authors.) — customer_app, partner_app
+- leak_tracker_flutter_testing@3.0.10 — BSD (LICENSE: Copyright 2022, the Dart project authors.) — customer_app, partner_app
+- leak_tracker_testing@3.0.2 — BSD (LICENSE: Copyright 2022, the Dart project authors.) — customer_app, partner_app
+- lints@3.0.0 — BSD (LICENSE: Copyright 2021, the Dart project authors.) — customer_app, partner_app
+- logging@1.3.0 — BSD (LICENSE: Copyright 2013, the Dart project authors.) — customer_app, partner_app
+- matcher@0.12.20 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- material_color_utilities@0.13.0 — Apache-2.0 (LICENSE: Apache License) — customer_app, partner_app
+- meta@1.18.3 — BSD (LICENSE: Copyright 2016, the Dart project authors.) — customer_app, partner_app
+- nested@1.0.0 — MIT (LICENSE: MIT License) — customer_app, partner_app
+- objective_c@9.5.0 — BSD (LICENSE: Copyright 2024, the Dart project authors.) — customer_app, partner_app
+- octo_image@2.1.4 — MIT (LICENSE: MIT License) — customer_app, partner_app
+- olmoa_customer@1.0.0+1 — NO-LICENSE-FILE — customer_app
+- olmoa_partner@1.0.0+1 — NO-LICENSE-FILE — partner_app
+- os_info_plugin@0.0.1 — MIT (LICENSE: Copyright 2023 yj) — customer_app
+- package_config@3.0.0 — BSD (LICENSE: Copyright 2019, the Dart project authors.) — partner_app
+- path@1.9.1 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- path_provider@2.1.6 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- path_provider_android@2.2.23 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- path_provider_android@2.3.1 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — partner_app
+- path_provider_foundation@2.6.0 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- path_provider_linux@2.2.2 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- path_provider_platform_interface@2.1.3 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- path_provider_windows@2.3.0 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- petitparser@7.0.2 — MIT (LICENSE: The MIT License) — customer_app, partner_app
+- platform@3.2.0 — BSD (LICENSE: Copyright 2017, the Dart project authors. All rights reserved.) — customer_app, partner_app
+- plugin_platform_interface@2.1.8 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- provider@6.1.5+1 — MIT (LICENSE: MIT License) — customer_app, partner_app
+- pub_semver@2.2.1 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- record_use@0.6.0 — BSD (LICENSE: Copyright 2024, the Dart project authors.) — customer_app, partner_app
+- rxdart@0.28.0 — Apache-2.0 (LICENSE: Apache License) — customer_app, partner_app
+- sentry@10.3.0 — BSD (LICENSE: // Copyright 2014 The Chromium Authors. All rights reserved.) — customer_app, partner_app
+- shared_preferences@2.5.6 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- shared_preferences_android@2.4.28 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- shared_preferences_android@2.5.4 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — partner_app
+- shared_preferences_foundation@2.5.7 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- shared_preferences_linux@2.4.1 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- shared_preferences_platform_interface@2.4.2 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- shared_preferences_web@2.4.3 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- shared_preferences_windows@2.4.1 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- sky_engine@? — MIT (license: vulkan-validation-layers) — customer_app, partner_app
+- source_span@1.10.2 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- sqflite@2.4.6 — BSD (LICENSE: BSD 2-Clause License) — customer_app, partner_app
+- sqflite_android@2.4.6 — BSD (LICENSE: BSD 2-Clause License) — customer_app, partner_app
+- sqflite_common@2.5.17 — BSD (LICENSE: BSD 2-Clause License) — customer_app, partner_app
+- sqflite_darwin@2.4.6 — BSD (LICENSE: BSD 2-Clause License) — customer_app, partner_app
+- sqflite_platform_interface@2.4.4 — BSD (LICENSE: BSD 2-Clause License) — customer_app, partner_app
+- stack_trace@1.12.2 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- stream_channel@2.1.4 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- string_scanner@1.4.1 — BSD (LICENSE: Copyright 2014, the Dart project authors.) — customer_app, partner_app
+- synchronized@3.6.1+1 — MIT (LICENSE: MIT License) — customer_app, partner_app
+- term_glyph@1.2.2 — BSD (LICENSE: Copyright 2017, the Dart project authors.) — customer_app, partner_app
+- test_api@0.7.12 — BSD (LICENSE: Copyright 2018, the Dart project authors.) — customer_app, partner_app
+- timezone@0.11.2 — BSD (LICENSE: Copyright (c) 2014, timezone project authors.) — customer_app, partner_app
+- tosspayments_webview_flutter@1.0.6 — MIT (LICENSE: Copyright 2023 yj) — customer_app
+- tosspayments_widget_sdk_flutter@2.3.0 — MIT (LICENSE: Copyright 2023 yj) — customer_app
+- typed_data@1.4.0 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- url_launcher@6.3.3 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_android@6.3.33 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_ios@6.4.2 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_linux@3.2.3 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_macos@3.2.6 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_platform_interface@2.3.2 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app
+- url_launcher_web@2.4.3 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- url_launcher_windows@3.1.6 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app
+- uuid@4.6.0 — MIT (LICENSE: Copyright (c) 2021 Yulian Kuncheff) — customer_app, partner_app
+- vector_math@2.4.0 — BSD (LICENSE: Copyright 2013 The Flutter Authors) — customer_app, partner_app
+- vm_service@15.4.0 — BSD (LICENSE: Copyright 2015, the Dart project authors.) — customer_app, partner_app
+- web@1.1.2 — BSD (LICENSE: Copyright 2023, the Dart project authors.) — customer_app, partner_app
+- win32@6.4.0 — BSD (LICENSE: BSD 3-Clause License) — customer_app, partner_app
+- xdg_directories@1.1.0 — BSD (LICENSE: Copyright 2013 The Flutter Authors. All rights reserved.) — customer_app, partner_app
+- xml@7.0.1 — MIT (LICENSE: The MIT License) — customer_app, partner_app
+- yaml@3.1.4 — MIT (LICENSE: Copyright (c) 2014, the Dart project authors.) — customer_app, partner_app
