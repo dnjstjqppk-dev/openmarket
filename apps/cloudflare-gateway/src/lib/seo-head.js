@@ -1,10 +1,11 @@
 // apps/cloudflare-gateway/src/lib/seo-head.js
 // Edge head policy for storefront routes: canonical, robots, hreflang, OG and
-// Twitter tags. Single-URL app (locale switches in-app), so hreflang carries
-// x-default only. Private/transactional paths are noindex,nofollow.
+// Twitter tags. The /en and /ja mirrors are untranslated copies that canonicalize
+// to the ko URL, so hreflang carries ko-KR + x-default only. Private/transactional
+// paths are noindex,nofollow.
 
 const NOINDEX_PREFIXES = ['/cart', '/checkout', '/my', '/orders', '/login', '/register',
-  '/forgot-password', '/verify-email', '/addresses', '/wishlist', '/coupons', '/payments', '/support'];
+  '/forgot-password', '/verify-email', '/addresses', '/wishlist', '/coupons', '/payments'];
 
 /** True when the path must never be indexed (private or transactional). */
 export function isNoindex(path) {
@@ -44,9 +45,10 @@ export function routeHead({ route = '', path = '/', base, title, description = '
   const robots = isSearch(path) ? 'noindex,follow' : (isNoindex(path) ? 'noindex,nofollow' : 'index,follow');
   return {
     title: String(title || 'OLMOA'),
+    description: desc,
     robots,
     canonical,
-    hreflangs: [{ hreflang: 'x-default', href: canonical }],
+    hreflangs: [{ hreflang: 'ko-KR', href: canonical }, { hreflang: 'x-default', href: canonical }],
     og: {
       'og:type': route === 'product' ? 'product' : 'website',
       'og:url': canonical, 'og:title': String(title || 'OLMOA'),
@@ -63,8 +65,9 @@ export function routeHead({ route = '', path = '/', base, title, description = '
 /** Render a routeHead() result as <head> HTML (edge injection). */
 export function renderHeadHtml(head) {
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  const tags = [`<title>${esc(head.title)}</title>`, `<meta name="robots" content="${head.robots}">`,
-    `<link rel="canonical" href="${esc(head.canonical)}">`];
+  const tags = [`<title>${esc(head.title)}</title>`, `<meta name="robots" content="${head.robots}">`];
+  if (head.description) tags.push(`<meta name="description" content="${esc(head.description)}">`);
+  tags.push(`<link rel="canonical" href="${esc(head.canonical)}">`);
   for (const h of head.hreflangs) tags.push(`<link rel="alternate" hreflang="${h.hreflang}" href="${esc(h.href)}">`);
   for (const [k, v] of Object.entries(head.og)) tags.push(`<meta property="${k}" content="${esc(v)}">`);
   for (const [k, v] of Object.entries(head.twitter)) tags.push(`<meta name="${k}" content="${esc(v)}">`);

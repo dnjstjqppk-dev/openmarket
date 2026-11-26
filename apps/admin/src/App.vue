@@ -174,29 +174,5 @@ onMounted(() => {
     <router-view @auth-changed="checkAuth" />
     <OmToast />
     <OmConfirmDialog />
-    <!-- Mobile Navigation Dropdown: explicit role-gated links (P1-A02). -->
-    <template #mobile-nav>
-      <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">
-        <li><RouterLink v-if="canSee('/')" to="/" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대시보드</RouterLink></li>
-        <li><RouterLink v-if="canSee('/products')" to="/products" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">상품 관리</RouterLink></li>
-        <li><RouterLink v-if="canSee('/orders')" to="/orders" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">주문 관리</RouterLink></li>
-        <li><RouterLink v-if="canSee('/users')" to="/users" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">회원 관리</RouterLink></li>
-        <li><RouterLink v-if="canSee('/reviews')" to="/reviews" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">리뷰 모더레이션</RouterLink></li>
-        <li><RouterLink v-if="canSee('/coupons')" to="/coupons" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">쿠폰 관리</RouterLink></li>
-        <li><RouterLink v-if="canSee('/categories')" to="/categories" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">카테고리 관리</RouterLink></li>
-        <li><RouterLink v-if="canSee('/partners')" to="/partners" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">셀러 심사</RouterLink></li>
-        <li><RouterLink v-if="canSee('/ledger')" to="/ledger" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">에스크로 원장</RouterLink></li>
-        <li><RouterLink v-if="canSee('/partner-applications')" to="/partner-applications" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">입점 심사</RouterLink></li>
-        <li><RouterLink v-if="canSee('/business')" to="/business" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">운영 사업자</RouterLink></li>
-        <li><RouterLink v-if="canSee('/suppliers')" to="/suppliers" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">공급사·발주</RouterLink></li>
-        <li><RouterLink v-if="canSee('/supplier-integrations')" to="/supplier-integrations" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">3PL·수집통합</RouterLink></li>
-        <li><RouterLink v-if="canSee('/reconciliation')" to="/reconciliation" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">데이터 대사</RouterLink></li>
-        <li><RouterLink v-if="canSee('/security')" to="/security" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">계정 보안</RouterLink></li>
-        <li><RouterLink v-if="canSee('/audit-log')" to="/audit-log" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">감사 로그</RouterLink></li>
-        <li><RouterLink v-if="canSee('/inquiries')" to="/inquiries" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">고객 문의</RouterLink></li>
-        <li><RouterLink v-if="canSee('/shipping-zones')" to="/shipping-zones" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">도서산간 배송비</RouterLink></li>
-        <li><RouterLink v-if="canSee('/marketing')" to="/marketing" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">마케팅·배너</RouterLink></li>
-      </ul>
-    </template>
   </OmConsoleShell>
 </template>

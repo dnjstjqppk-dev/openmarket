@@ -1,12 +1,16 @@
 <script setup lang="ts">
 // Buyer support center (3-11): FAQ category tabs plus search, 1:1 inquiry
-// write and history. Categories match the server allowlist.
+// write and history. Categories match the server allowlist. The FAQ is public
+// (decision-21, like 11st's help center); the inquiry area needs a login.
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_BASE_URL, authHeader } from '../config'
 import { userErrorMessage, OmButton, OmEmptyState, OmStatusTabs, OmFaq } from '@olmoa/ui'
 
 const auth = useAuthStore()
+const route = useRoute()
+const loginTo = computed(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`)
 const faqs = ref<any[]>([])
 const faqCategories = ref<string[]>([])
 const inquiries = ref<any[]>([])
@@ -62,6 +66,7 @@ const loadSupport = async () => {
   const cid = auth.user?.id || ''
   loadError.value = null
   await loadFaq()
+  if (!auth.isAuthenticated) return
   try {
     const iRes = await fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     const iJson = await iRes.json().catch(() => null)
@@ -128,7 +133,13 @@ onMounted(loadSupport)
       <OmEmptyState v-else title="조건에 맞는 질문이 없습니다" description="분류나 검색어를 바꿔 보세요." compact />
     </section>
 
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
+    <section v-if="!auth.isAuthenticated" class="rounded-2xl border border-line bg-surface p-6 text-center">
+      <h2 class="text-base font-bold text-ink">1:1 문의</h2>
+      <p class="mt-1 text-xs text-ink-muted">문의 작성과 답변 확인은 로그인 후 이용할 수 있습니다.</p>
+      <OmButton class="mt-4" :to="loginTo" variant="primary" size="md">로그인하고 문의하기</OmButton>
+    </section>
+
+    <div v-else class="grid grid-cols-1 gap-8 lg:grid-cols-12">
       <form class="space-y-4 rounded-2xl border border-line bg-surface p-6 lg:col-span-6" @submit.prevent="submitInquiry">
         <h2 class="text-base font-bold text-ink">1:1 문의 쓰기</h2>
         <div class="text-xs">

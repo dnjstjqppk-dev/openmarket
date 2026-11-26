@@ -89,6 +89,7 @@ const EXPECTED = [
   ['/api/v1/recommendations/for-you', 'GET', 200],
   ['/api/v1/recommendations/cart-bundle', 'GET', 400],
   ['/api/v1/shipping/remote-zones', 'GET', 200],
+  ['/api/v1/seo/page', 'GET', 200], // 6-2 edge rendering data (bare probe = path '/')
   ['/api/v1/admin/shipping/remote-zones', 'GET', 401],
   ['/api/v1/admin/shipping/remote-zones', 'PUT', 401],
   ['/api/v1/admin/shipping/remote-zones/{prefix}', 'DELETE', 401],

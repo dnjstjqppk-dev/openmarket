@@ -1,23 +1,24 @@
 // Client head manager for the SPA storefront (no Nuxt SSR in this repo).
 // Mirrors the gateway seo-head policy: canonical per path, noindex on
-// private routes, x-default hreflang, OG/Twitter, JSON-LD injection.
+// private routes, ko-KR + x-default hreflang, OG/Twitter, JSON-LD injection.
 // Pure policy + thin DOM writers (guarded for SSR/test runtimes).
 
 export const NOINDEX_PREFIXES = ['/cart', '/checkout', '/my', '/orders', '/login',
   '/register', '/forgot-password', '/verify-email', '/addresses', '/wishlist',
-  '/coupons', '/payments', '/support']
+  '/coupons', '/payments']
 
 /** 6-2: locale sub-paths of the storefront mirrors (ko has no prefix). */
 export const LOCALE_PREFIXES: Record<string, string> = { ko: '', en: '/en', ja: '/ja' }
 export const LOCALE_OF_PREFIX: Record<string, string> = { '': 'ko', '/en': 'en', '/ja': 'ja' }
 export const OG_LOCALE: Record<string, string> = { ko: 'ko_KR', en: 'en_US', ja: 'ja_JP' }
 
-/** 6-8: hreflang in BCP47 region codes, consistent with og:locale and the saved
- *  user locale (ko-KR/en-US/ja-JP). x-default always points at the ko URL. */
+/** Locales advertised to search engines. The /en and /ja mirrors render the same
+ *  Korean catalog and UI (no translations exist), so advertising them as en-US/ja-JP
+ *  alternates would publish three copies of one page. Only ko-KR is advertised and
+ *  every mirror canonicalizes to its bare ko URL; add a locale here only together
+ *  with real translated content. */
 export const HREFLANG_LOCALES = [
-  { key: 'ko', lang: 'ko-KR', prefix: '', og: 'ko_KR' },
-  { key: 'en', lang: 'en-US', prefix: '/en', og: 'en_US' },
-  { key: 'ja', lang: 'ja-JP', prefix: '/ja', og: 'ja_JP' }
+  { key: 'ko', lang: 'ko-KR', prefix: '', og: 'ko_KR' }
 ]
 
 /** Strip a leading /en or /ja mirror prefix (bare path, always with leading slash). */
@@ -67,14 +68,14 @@ export function pageSuffixOf(query: unknown): string {
   return n > 1 ? `?page=${n}` : ''
 }
 
-/** 6-8: every query is stripped except ?page=N (N>=2, self-canonical per page). */
+/** 6-8: every query is stripped except ?page=N (N>=2, self-canonical per page).
+ *  /en and /ja mirrors canonicalize to the bare ko URL (same content). */
 export function canonicalOf(base: string, path: string, query?: unknown): string {
   const b = String(base || '').replace(/\/$/, '')
-  const p = String(path || '/').split('?')[0] || '/'
-  return `${b}${p.startsWith('/') ? p : `/${p}`}${pageSuffixOf(query)}`
+  return `${b}${barePathOf(path)}${pageSuffixOf(query)}`
 }
 
-/** 6-8: ko-KR/en-US/ja-JP alternates plus x-default (always the ko URL — Korean market). */
+/** Advertised locale alternates (HREFLANG_LOCALES) plus x-default (always the ko URL — Korean market). */
 export function hreflangOf(base: string, path: string, query?: unknown): Array<{ lang: string; href: string }> {
   const b = String(base || '').replace(/\/$/, '')
   const bare = barePathOf(path)
@@ -152,11 +153,16 @@ export function applyRouteHead(input: RouteHeadInput): void {
   for (const alt of hreflangOf(input.base, input.path, input.query)) upsertLink('alternate', alt.href, alt.lang)
   upsertMeta('property', 'og:url', head.canonical)
   upsertMeta('property', 'og:title', head.title)
-  upsertMeta('property', 'og:locale', OG_LOCALE[localeOfPath(input.path)] || 'ko_KR')
+  upsertMeta('property', 'og:locale', 'ko_KR')
+  // Drop hreflang links for locales no longer advertised (static shell or older navigation).
+  const advertised = new Set([...HREFLANG_LOCALES.map((l) => l.lang), 'x-default'])
+  doc.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((el: any) => {
+    if (!advertised.has(el.getAttribute('hreflang'))) el.remove()
+  })
+  // og:locale:alternate only for advertised locales other than ko (none today).
   doc.head.querySelectorAll('meta[property="og:locale:alternate"]').forEach((el: any) => el.remove())
-  const self = localeOfPath(input.path)
   for (const loc of HREFLANG_LOCALES) {
-    if (loc.key === self) continue
+    if (loc.key === 'ko') continue
     const el = doc.createElement('meta')
     el.setAttribute('property', 'og:locale:alternate')
     el.setAttribute('content', loc.og)

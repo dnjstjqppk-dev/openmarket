@@ -218,7 +218,8 @@ await t.test('NEW-09 inquiries console view, route, and nav are wired', async ()
   const vw = fs.readFileSync('apps/admin/src/views/InquiriesView.vue', 'utf8');
   assert.ok(vw.includes('/api/v1/admin/inquiries') && vw.includes('/reply'));
   assert.ok(fs.readFileSync('apps/admin/src/router/index.ts', 'utf8').includes("path: '/inquiries'"));
-  assert.ok(fs.readFileSync('apps/admin/src/App.vue', 'utf8').includes('고객 문의'));
+  const app = fs.readFileSync('apps/admin/src/App.vue', 'utf8');
+  assert.ok(app.includes(`to: "/inquiries", label: '1:1 문의'`), 'menu (rail and drawer) links the inquiry console');
 });
 
 // ---------- NEW-10: seller identity ----------

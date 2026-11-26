@@ -26,6 +26,10 @@ const dueList = ref<any[]>([])
 const dueError = ref('')
 const overdueQna = ref<any[]>([])
 const qnaError = ref('')
+// 6-11: products without a live shipping policy are hidden from buyers until the
+// seller assigns one (null = count unavailable, notice stays hidden).
+const unassignedCount = ref<number | null>(null)
+const policyCount = ref<number | null>(null)
 
 const trendSeries = computed(() => (trendRange.value === '7' ? metrics.value.weekly_gmv || [] : metrics.value.monthly_gmv || []))
 const trendDelta = computed(() => (trendRange.value === '7' ? metrics.value.wow_pct : metrics.value.mom_pct))
@@ -89,9 +93,20 @@ async function loadOverdueQna() {
   }
 }
 
+async function loadShippingGaps() {
+  try {
+    const [list, pols] = await Promise.all([
+      getJson('/api/v1/partner/products?shipping=unassigned&per_page=1'),
+      getJson('/api/v1/partner/shipping-policies')
+    ])
+    unassignedCount.value = Number(list.pagination?.total ?? 0) || 0
+    policyCount.value = Array.isArray(pols.data) ? pols.data.length : 0
+  } catch { unassignedCount.value = null }
+}
+
 onMounted(async () => {
   loading.value = true
-  await Promise.all([loadPipeline(), loadMetrics(), loadDue(), loadOverdueQna()])
+  await Promise.all([loadPipeline(), loadMetrics(), loadDue(), loadOverdueQna(), loadShippingGaps()])
   loading.value = false
 })
 </script>
@@ -101,6 +116,15 @@ onMounted(async () => {
     <div>
       <h1 class="text-2xl font-bold text-ink">대시보드</h1>
       <p class="mt-1 text-xs text-ink-muted">처리해야 할 일부터 보여줍니다. 카드 숫자는 눌렀을 때 열리는 목록 건수와 같습니다.</p>
+    </div>
+
+    <div v-if="unassignedCount" class="flex flex-col gap-3 rounded-xl border border-warning bg-warning-soft p-4 text-xs sm:flex-row sm:items-center" role="status" data-shipping-gap>
+      <p class="min-w-0 flex-1 text-ink">
+        <strong class="text-warning">배송정책 미지정 상품 {{ unassignedCount.toLocaleString('ko-KR') }}개</strong>는 구매자에게 노출되지 않고 주문도 받을 수 없습니다.
+        {{ policyCount ? '상품 목록에서 선택한 뒤 배송정책을 일괄 지정해 주세요.' : '먼저 배송정책을 만든 뒤 상품에 지정해 주세요.' }}
+      </p>
+      <OmButton v-if="policyCount" to="/products?shipping=unassigned" variant="primary" size="sm">미지정 상품 일괄 지정</OmButton>
+      <OmButton v-else to="/store/shipping-policies" variant="primary" size="sm">배송정책 만들기</OmButton>
     </div>
 
     <div v-if="pipeError" class="rounded-xl border border-danger bg-danger-soft p-3.5 text-xs font-bold text-danger" role="alert">

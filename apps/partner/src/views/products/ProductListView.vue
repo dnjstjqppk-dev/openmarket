@@ -3,13 +3,14 @@
 // with summed stock, row actions and bulk ops. Paging and filters run on the
 // server; the table groups the returned SKU rows by product.
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders } from '../../config'
 import { userErrorMessage, useConfirm, useToast, OmDataTable, OmStatusTabs, OmSkeleton, OmBulkActionBar, OmSearchFilterBar, OmDateRangePicker, OmModal } from '@olmoa/ui'
 
 const { confirm: askConfirm } = useConfirm()
 const toastApi = useToast()
 const router = useRouter()
+const route = useRoute()
 
 const U = '문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
 const PER_PAGE = 30
@@ -303,7 +304,12 @@ function exportCsv() {
   URL.revokeObjectURL(a.href)
 }
 
-onMounted(() => { loadCategories(); loadPolicies(); void load() })
+onMounted(() => {
+  // Dashboard notice link: /products?shipping=unassigned opens the bulk-assign list.
+  const ship = String(route.query.shipping || '')
+  if (ship === 'unassigned' || ship === 'assigned') fShipping.value = ship
+  loadCategories(); loadPolicies(); void load()
+})
 </script>
 
 <template>

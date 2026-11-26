@@ -96,3 +96,23 @@ paths:
           description: Missing or expired JWT
         '403':
           description: Admin role required
+
+  /api/v1/seo/page:
+    get:
+      summary: Edge rendering data for one storefront path
+      tags: [SEO]
+      security: []
+      description: '6-2: head (title, description, robots, canonical, hreflang, OG, Twitter), JSON-LD graphs and a plain summary block built from live rows, injected by the apex worker into index.html for every visitor alike. Missing or not-live product/category/store answers status 404 in the body; paths with nothing to add answer status "pass". /en and /ja mirror prefixes are stripped (canonical is the ko URL). Cached public, s-maxage=300.'
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 512
+            pattern: '^/'
+      responses:
+        '200':
+          description: '{ status: 200|404|"pass", head, jsonld[], summary_html }'
+        '400':
+          description: Path missing the leading slash or longer than 512 characters

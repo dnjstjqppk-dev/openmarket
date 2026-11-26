@@ -1,7 +1,8 @@
 name = "openmarket"
 compatibility_date = "2024-04-03"
 # Apex storefront (olmoa.com after cutover). Static SPA from ASSETS; the crawl
-# surface (robots/sitemaps/llms) is forwarded to the API worker — see the script.
+# surface (robots/sitemaps/llms) is forwarded to the API worker, and public page
+# paths get edge-rendered head/JSON-LD/summary (6-2) — see the script.
 main = "apps/storefront/edge/apex-worker.js"
 # Domain account (owns the olmoa.com zone; moved 2026-11-25).
 account_id = "f5c363135efe9b22ca66eb39f2f8e1da"
@@ -16,7 +17,7 @@ directory = "./apps/storefront/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 # Keep identical to RUN_WORKER_FIRST in apps/storefront/edge/apex-worker.js.
-run_worker_first = ["/robots.txt", "/sitemap.xml", "/sitemap-index.xml", "/sitemaps/*", "/llms.txt", "/llms-full.txt", "/llms/*", "/*.txt", "/"]
+run_worker_first = ["/robots.txt", "/sitemap.xml", "/sitemap-index.xml", "/sitemaps/*", "/llms.txt", "/llms-full.txt", "/llms/*", "/*.txt", "/", "/product/*", "/category/*", "/store/*", "/categories", "/channel/*", "/legal/*", "/policy/*", "/support", "/en", "/en/*", "/ja", "/ja/*"]
 # Secrets (wrangler secret put / dashboard; never values here):
 #   NAVER_SITE_VERIFICATION / GOOGLE_SITE_VERIFICATION — engine ownership codes,
 #   injected into <head> of / when set (omit entirely when verifying via DNS TXT).

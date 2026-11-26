@@ -80,7 +80,7 @@ await t.test('route head policy indexes PDP and blocks private routes', async ()
   const pdp = routeHead({ route: 'product', path: '/product/p1', base: 'https://olmoa.com', title: '이어폰 | OLMOA' });
   assert.equal(pdp.robots, 'index,follow');
   assert.equal(pdp.canonical, 'https://olmoa.com/product/p1');
-  assert.ok(pdp.hreflangs[0].hreflang === 'x-default' && pdp.og['og:title'] === '이어폰 | OLMOA');
+  assert.ok(pdp.hreflangs.map((h) => h.hreflang).join() === 'ko-KR,x-default' && pdp.og['og:title'] === '이어폰 | OLMOA');
   assert.ok(pdp.twitter['twitter:card'] === 'summary_large_image');
   for (const path of ['/cart', '/checkout', '/my', '/orders/1', '/login', '/payments/success']) {
     assert.equal(routeHead({ route: 'x', path, base: 'https://olmoa.com', title: 't' }).robots, 'noindex,nofollow', path);

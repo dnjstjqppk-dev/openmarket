@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Ticket, Truck } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
-import { RouterLink, useRouter, useRoute } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession } from './config';
 
@@ -147,28 +147,5 @@ onMounted(() => { loadHeader(); });
     <router-view />
     <OmToast />
     <OmConfirmDialog />
-    <!-- Mobile Dropdown Menu: explicit links (F-T16). -->
-    <template #mobile-nav>
-      <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">
-        <li><RouterLink to="/" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대시보드</RouterLink></li>
-        <li><RouterLink to="/products" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">상품 관리</RouterLink></li>
-        <li><RouterLink to="/bulk-upload" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">대량 등록</RouterLink></li>
-        <li><RouterLink to="/imports" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">URL 수집</RouterLink></li>
-        <li><RouterLink to="/shipments" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">주문·배송</RouterLink></li>
-        <li><RouterLink to="/claims/cancel" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">취소 내역</RouterLink></li>
-        <li><RouterLink to="/claims/return" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink">반품 클레임</RouterLink></li>
-        <li><RouterLink to="/claims/exchange" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">교환 클레임</RouterLink></li>
-        <li><RouterLink to="/settlements" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">정산 내역</RouterLink></li>
-        <li><RouterLink to="/promotions/coupons" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 쿠폰</RouterLink></li>
-        <li><RouterLink to="/promotions/flash-sales" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">번개특가 신청</RouterLink></li>
-        <li><RouterLink to="/promotions/exhibitions" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">기획전 현황</RouterLink></li>
-        <li><RouterLink to="/qna" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">Q&A 문의</RouterLink></li>
-        <li><RouterLink to="/reviews" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">리뷰 관리</RouterLink></li>
-        <li><RouterLink to="/profile" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 설정</RouterLink></li>
-        <li><RouterLink to="/store-profile" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">스토어 장식</RouterLink></li>
-        <li><RouterLink to="/channels" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">멀티채널 연동</RouterLink></li>
-        <li><RouterLink to="/bidding" class="block rounded-lg px-2.5 py-2.5 text-sm font-semibold text-ink-muted hover:bg-surface-2 hover:text-ink" active-class="bg-primary-soft text-primary-soft-ink">역경매</RouterLink></li>
-      </ul>
-    </template>
   </OmConsoleShell>
 </template>

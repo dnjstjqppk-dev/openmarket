@@ -42,11 +42,16 @@ await t.test('P1-A01 routes carry meta.roles and the guard + nav enforce them', 
 })
 
 await t.test('P1-A02 mobile nav reaches orders/users/reviews/coupons/categories', async () => {
+  // The drawer is drawn by OmConsoleShell from the same role-filtered menu as the
+  // side rail (a hand-kept copy had drifted and dropped 13 screens).
   const app = read('apps/admin/src/App.vue')
-  const mobile = app.split('Mobile Navigation Dropdown')[1] || ''
-  for (const to of ['to="/orders"', 'to="/users"', 'to="/reviews"', 'to="/coupons"', 'to="/categories"']) {
-    assert.ok(mobile.includes(to), `mobile dropdown contains ${to}`)
+  assert.ok(!app.includes('#mobile-nav'), 'no hand-kept drawer copy')
+  assert.ok(app.includes(':menu="menu"') && app.includes('canSee(c.to)'), 'drawer data is the role-filtered menu')
+  for (const to of ['to: "/orders"', 'to: "/users"', 'to: "/reviews"', 'to: "/coupons"', 'to: "/categories"']) {
+    assert.ok(app.includes(to), `menu contains ${to}`)
   }
+  const shell = read('packages/ui/src/components/OmConsoleShell.vue')
+  assert.ok(shell.split('<Teleport')[1].includes('v-for="c in m.children"'), 'drawer renders child entries')
 })
 
 await t.test('P1-A03 status badges derive from fetch outcomes, not static copy', async () => {

@@ -686,6 +686,8 @@ paths:
     $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1queue'
   /api/v1/admin/seo/indexnow/drain:
     $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1drain'
+  /api/v1/seo/page:
+    $ref: './paths/seo.yaml#/paths/~1api~1v1~1seo~1page'
 
 components:
   securitySchemes:

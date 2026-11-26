@@ -21,13 +21,19 @@ await t.test('1. shell and builder agree on ko-KR plus x-default', async () => {
   const shell = readFileSync('apps/storefront/index.html', 'utf8');
   assert.ok(shell.includes('<html lang="ko">'), 'html lang');
   assert.ok(shell.includes('<meta property="og:locale" content="ko_KR" />'), 'og:locale');
-  for (const [code, href] of [['ko-KR', 'https://olmoa.com/'], ['en-US', 'https://olmoa.com/en'], ['ja-JP', 'https://olmoa.com/ja'], ['x-default', 'https://olmoa.com/']]) {
+  for (const [code, href] of [['ko-KR', 'https://olmoa.com/'], ['x-default', 'https://olmoa.com/']]) {
     assert.ok(shell.includes(`<link rel="alternate" hreflang="${code}" href="${href}" />`), `shell ${code}`);
   }
+  // The /en and /ja mirrors are untranslated copies: never advertised, canonical to ko.
+  assert.ok(!/hreflang="(en|ja)/.test(shell), 'no en/ja alternates in the shell');
+  assert.ok(!shell.includes('og:locale:alternate'), 'no alternate og locales');
   const alts = hreflangOf('https://olmoa.com', '/category/dress');
-  assert.deepEqual(alts.map((a) => a.lang), ['ko-KR', 'en-US', 'ja-JP', 'x-default']);
+  assert.deepEqual(alts.map((a) => a.lang), ['ko-KR', 'x-default']);
   assert.equal(alts[0].href, 'https://olmoa.com/category/dress');
-  assert.equal(alts[3].href, 'https://olmoa.com/category/dress', 'x-default points at ko');
+  assert.equal(alts[1].href, 'https://olmoa.com/category/dress', 'x-default points at ko');
+  assert.deepEqual(hreflangOf('https://olmoa.com', '/en/category/dress'), alts, 'mirror advertises the same ko set');
+  assert.equal(canonicalOf('https://olmoa.com', '/ja/product/p1'), 'https://olmoa.com/product/p1', 'mirror canonical is the ko URL');
+  assert.equal(canonicalOf('https://olmoa.com', '/en'), 'https://olmoa.com/', 'mirror home canonical');
 });
 
 // 2. Sort/filter queries strip; page 2+ self-canonicals; page=1 is bare.
@@ -41,7 +47,7 @@ await t.test('2. canonical keeps only ?page=N (N>=2)', async () => {
   assert.equal(c({ page: 'abc' }), 'https://olmoa.com/category/dress');
   assert.equal(pageOfQuery({}), 1);
   const alts = hreflangOf('https://olmoa.com', '/category/dress', { page: '2' });
-  assert.ok(alts.every((a) => a.href.endsWith('?page=2') || a.href === 'https://olmoa.com/en?page=2'), 'alternates ride along');
+  assert.ok(alts.every((a) => a.href.endsWith('/category/dress?page=2')), 'alternates ride along');
   assert.equal(srvCanonicalOf('https://olmoa.com', '/category/dress', { sort: 'x', page: '4' }),
     'https://olmoa.com/category/dress?page=4', 'server mirror agrees');
 });

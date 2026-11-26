@@ -14,7 +14,7 @@ import { notifyRestockedSkus } from '../services/restock.js';
 import { priceHistoryStatements, skuIdsOfProduct } from '../lib/price-history.js';
 import { sanitizeHtml } from '../services/crawler/html-sanitizer.js';
 import { payablePreview, withdrawableAmount, requestPayout, cancelPayoutRequest } from '../services/payouts.js';
-import { requireOwnPolicy, throwMissingPolicy } from '../lib/shipping-policy.js';
+import { requireOwnPolicy, throwMissingPolicy, sellableSql } from '../lib/shipping-policy.js';
 import { requireBrand, validateSkuIdentifiers, findGtinConflicts, gtinConflictWarnings, missingIdentifiersSql } from '../lib/product-identifiers.js';
 import { notifyProductChanged } from '../services/seo/indexnow.js';
 
@@ -261,8 +261,8 @@ export async function handlePartnerRoutes(request, url, env, corsHeaders) {
     if (sMax !== null) { where.push(`${STOCK_SUM} <= ?`); args.push(sMax); }
     // 6-11: the "unassigned products" list that feeds bulk assignment.
     const shipFilter = String(url.searchParams.get('shipping') || '').toLowerCase();
-    if (shipFilter === 'unassigned') where.push('p.shipping_policy_id IS NULL');
-    else if (shipFilter === 'assigned') where.push('p.shipping_policy_id IS NOT NULL');
+    if (shipFilter === 'unassigned') where.push(`NOT (${sellableSql('p')})`);
+    else if (shipFilter === 'assigned') where.push(sellableSql('p'));
     else if (shipFilter !== '') throw bad('INVALID_SHIPPING_FILTER', 'shipping은 unassigned·assigned 중 하나여야 합니다.');
     // 6-12: the "missing identifiers" list that feeds backfill.
     const idFilter = String(url.searchParams.get('identifiers') || '').toLowerCase();

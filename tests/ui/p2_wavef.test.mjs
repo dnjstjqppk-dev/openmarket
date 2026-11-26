@@ -251,9 +251,15 @@ await t.test('F-T08 product preview links use the env storefront base', async ()
 })
 
 await t.test('F-T16 mobile menu links multichannel', async () => {
+  // The drawer is drawn by OmConsoleShell from the same menu data as the side rail
+  // (a hand-kept copy had drifted and dropped shipping policies).
   const v = read('apps/partner/src/App.vue')
-  const mobile = v.split('Mobile Dropdown Menu')[1]
-  assert.ok(mobile.includes('to="/channels"'), 'mobile dropdown links /channels')
+  assert.ok(!v.includes('#mobile-nav'), 'no hand-kept drawer copy')
+  assert.ok(v.includes("to: '/channels'"), 'menu data links /channels')
+  assert.ok(v.includes("to: '/store/shipping-policies'"), 'menu data links shipping policies')
+  const shell = read('packages/ui/src/components/OmConsoleShell.vue')
+  const drawer = shell.split('<Teleport')[1]
+  assert.ok(drawer.includes('v-for="c in m.children"'), 'drawer renders child entries')
 })
 
 await t.test('F-TN02 bulk upload renders per-row server errors', async () => {

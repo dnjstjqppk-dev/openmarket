@@ -113,6 +113,9 @@ router.beforeEach((to, from) => {
 // navigation. Entity views overwrite the title with their own meta afterwards.
 router.afterEach((to) => {
   try {
+    // 6-2: drop the edge-rendered JSON-LD of the first response; views inject
+    // their own graphs, and a stale one must not survive client navigation.
+    document.querySelectorAll('script[data-olmoa-edge]').forEach((el) => el.remove());
     applyRouteHead({ path: to.path, base: window.location.origin, title: document.title });
   } catch { /* head policy must never break navigation */ }
 });

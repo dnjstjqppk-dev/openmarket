@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Shared console frame for seller center and admin: 240px side menu
-// (64px icon rail when collapsed), 56px top header, drawer menu on mobile.
+// (64px icon rail when collapsed), 56px top header, drawer menu below 1024px
+// (a 240px rail left tablets in portrait with a cramped content column).
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Menu, X } from 'lucide-vue-next'
@@ -21,7 +22,7 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
 <template>
   <div class="flex min-h-dvh bg-bg">
     <aside
-      class="sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line-divider bg-surface transition-[width] md:flex"
+      class="sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line-divider bg-surface transition-[width] lg:flex"
       :class="collapsed ? 'w-[64px]' : 'w-[240px]'"
       aria-label="주 메뉴"
     >
@@ -66,7 +67,7 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
       <header class="sticky top-0 z-sticky flex h-14 items-center gap-2 border-b border-line-divider bg-surface px-4">
         <button
           type="button"
-          class="rounded p-2 text-ink-muted hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus md:hidden"
+          class="rounded p-2 text-ink-muted hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus lg:hidden"
           aria-label="메뉴 열기"
           @click="drawer = true"
         >
@@ -80,7 +81,7 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
     </div>
 
     <Teleport to="body">
-      <div v-if="drawer" class="fixed inset-0 z-drawer md:hidden">
+      <div v-if="drawer" class="fixed inset-0 z-drawer lg:hidden">
         <div class="absolute inset-0 animate-fade-in bg-overlay/50" aria-hidden="true" @click="drawer = false" />
         <nav class="absolute inset-y-0 left-0 flex w-[280px] animate-slide-in-left flex-col bg-surface shadow-overlay" aria-label="주 메뉴">
           <div class="flex h-14 items-center justify-between border-b border-line-divider px-3">
@@ -90,15 +91,28 @@ const isActive = (to: string) => route.path === to || route.path.startsWith(`${t
             </button>
           </div>
           <slot name="mobile-nav" :close="() => { drawer = false }">
-            <ul class="flex-1 space-y-0.5 overflow-y-auto p-2" @click="drawer = false">
+            <!-- Same menu data as the side rail, children included, so no screen is desktop-only. -->
+            <ul class="flex-1 space-y-0.5 overflow-y-auto p-2">
               <li v-for="m in menu" :key="m.to">
                 <RouterLink
                   :to="m.to"
-                  :class="['flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-semibold', isActive(m.to) ? 'bg-primary-soft text-primary-soft-ink' : 'text-ink-muted']"
+                  :class="['flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', isActive(m.to) ? 'bg-primary-soft text-primary-soft-ink' : 'text-ink-muted hover:bg-surface-2 hover:text-ink']"
+                  @click="drawer = false"
                 >
                   <component :is="m.icon" v-if="m.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
                   {{ m.label }}
                 </RouterLink>
+                <ul v-if="m.children?.length" class="ml-6 mt-0.5 space-y-0.5 border-l border-line-divider pl-2">
+                  <li v-for="c in m.children" :key="`${c.to}::${c.label}`">
+                    <RouterLink
+                      :to="c.to"
+                      :class="['block rounded px-2 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus', isActive(c.to) ? 'font-bold text-ink' : 'text-ink-muted hover:text-ink']"
+                      @click="drawer = false"
+                    >
+                      {{ c.label }}
+                    </RouterLink>
+                  </li>
+                </ul>
               </li>
             </ul>
           </slot>

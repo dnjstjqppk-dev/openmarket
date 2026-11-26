@@ -7,6 +7,7 @@ import { STATIC_URLS, LEGACY_PRODUCT_CAP, PRODUCTS_PER_SITEMAP, categoryUrls, st
   productUrls, approvedProductCount, productPageCount, renderUrlset, renderIndex } from '../services/seo/sitemap.js';
 import { robotsTxt, llmsTxt, llmsFullTxt, couponFeed, returnPolicyFeed, productMarkdown, categoryMarkdown } from '../services/seo/crawl-text.js';
 import { buildPdpBrief, renderPdpText } from '../services/seo/pdp-brief.js';
+import { renderSeoPage } from '../services/seo/page-render.js';
 
 const xml = (cors, body) => new Response(body, { headers: { ...cors, 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
 const txt = (cors, body) => new Response(body, { headers: { ...cors, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
@@ -43,6 +44,16 @@ export async function handleSeoRoutes(request, url, env, corsHeaders) {
       return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
     }
     return xml(corsHeaders, renderUrlset(base, await productUrls(env, page, PRODUCTS_PER_SITEMAP)));
+  }
+  // 6-2: edge rendering data for one storefront path (the apex worker injects
+  // it into index.html for every visitor alike). Read-only, public, cached 5 min.
+  if (p === '/api/v1/seo/page') {
+    const path = String(url.searchParams.get('path') || '/');
+    if (path.length > 512 || !path.startsWith('/')) {
+      return Response.json({ status: 'pass' }, { status: 400, headers: { ...corsHeaders, 'Cache-Control': 'no-store' } });
+    }
+    const data = await renderSeoPage(env, base, path);
+    return Response.json(data, { headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=60, s-maxage=300' } });
   }
   if (p === '/robots.txt') return txt(corsHeaders, robotsTxt(base));
   if (p === '/llms.txt') return txt(corsHeaders, await llmsTxt(env, base));
