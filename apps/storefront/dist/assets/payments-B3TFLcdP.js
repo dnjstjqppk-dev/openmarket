@@ -1,0 +1,1 @@
+function e(){return new Promise((e,t)=>{if(window.TossPayments)return e(window.TossPayments);let n=document.createElement(`script`);n.src=`https://js.tosspayments.com/v1/payment`,n.onload=()=>e(window.TossPayments),n.onerror=()=>t(Error(`결제 모듈을 불러오지 못했습니다.`)),document.head.appendChild(n)})}export{e as t};

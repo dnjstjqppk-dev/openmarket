@@ -1,3 +1,7 @@
+# Fallback only. On the apex worker (`openmarket`, root wrangler.toml) /robots.txt is
+# forwarded to the API, which generates it with the sitemap URLs for PUBLIC_STOREFRONT_URL
+# (apps/storefront/edge/apex-worker.js). This static copy is what the warm-spare
+# `olmoa-storefront` worker serves; it carries no host so it can never point at a stale one.
 User-agent: *
 Allow: /
 Disallow: /cart
@@ -7,6 +11,3 @@ Disallow: /profile
 Disallow: /addresses
 Disallow: /wishlist
 Disallow: /payments/
-
-# Product sitemap is served by the API gateway (moves to the apex domain after DNS cutover).
-Sitemap: https://olmoa-api.dnjstjqppk.workers.dev/sitemap.xml

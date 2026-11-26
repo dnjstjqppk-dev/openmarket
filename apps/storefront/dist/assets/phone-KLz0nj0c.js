@@ -1,0 +1,1 @@
+var e=e=>String(e||``).replace(/\D/g,``);function t(t){let n=e(t);return/^0\d{8,10}$/.test(n)?null:`연락처를 숫자로 입력해 주세요 (예: 010-1234-5678)`}function n(t){let n=e(t);return/^01[016789]\d{7,8}$/.test(n)?null:`휴대폰 번호 10-11자리를 입력해 주세요 (예: 01012345678)`}function r(t){let n=e(t);return/^\d{10}$/.test(n)?null:`사업자등록번호 숫자 10자리를 입력해 주세요`}export{n,t as r,r as t};

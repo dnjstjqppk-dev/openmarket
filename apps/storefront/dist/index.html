@@ -1,27 +1,26 @@
 <!DOCTYPE html>
 <html lang="ko">
   <head>
-    <script>
-    /* Apply the saved theme before first paint (see useTheme in @olmoa/ui). */
-    try { var m = localStorage.getItem('olmoa_theme'); if (m === 'light' || m === 'dark') document.documentElement.setAttribute('data-theme', m) } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OLMOA (올모아) - 내가 찾는 모든 것, 여기. | Global Marketplace</title>
-    
+    <title>OLMOA (올모아) - 국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다.</title>
+
     <!-- Primary Meta Tags -->
-    <meta name="title" content="OLMOA (올모아) - 내가 찾는 모든 것, 여기. | Global Marketplace" />
-    <meta name="description" content="글로벌 종합 쇼핑몰 올모아(OLMOA). 전 세계 인기 상품, 패션, 전자, 라이프스타일을 가장 합리적인 가격과 무료배송으로 만나보세요. Everything You Seek. All Here." />
-    <meta name="keywords" content="OLMOA, 올모아, 글로벌 쇼핑몰, 오픈마켓, 해외직구, 최저가 쇼핑, Temu, e-commerce" />
+    <meta name="title" content="OLMOA (올모아) - 국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다." />
+    <meta name="description" content="국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다." />
+    <meta name="keywords" content="OLMOA, 올모아, 오픈마켓, 해외직구, 온라인 쇼핑" />
     <link rel="canonical" href="https://olmoa.com/" />
-    <!-- Single-URL app (locale switches in-app, no /ko/ /en/ URLs), so only x-default is valid here. -->
+    <!-- 6-8: BCP47 region codes (SPA navigation rewrites these per route). -->
+    <link rel="alternate" hreflang="ko-KR" href="https://olmoa.com/" />
     <link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://olmoa.com/" />
-    <meta property="og:title" content="OLMOA (올모아) - 내가 찾는 모든 것, 여기." />
-    <meta property="og:description" content="전 세계의 상품을 한곳에서! 올모아에서 준비한 특가 프로모션과 무료배송 혜택을 누리세요." />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="OLMOA (올모아) - 국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다." />
+    <meta property="og:description" content="국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다." />
     <meta property="og:image" content="https://olmoa.com/olmoa-logo.svg" />
     <meta property="og:site_name" content="OLMOA" />
     
@@ -29,7 +28,7 @@
     <meta property="twitter:card" content="summary_large_image" />
     <meta property="twitter:url" content="https://olmoa.com/" />
     <meta property="twitter:title" content="OLMOA (올모아) - Everything You Seek. All Here." />
-    <meta property="twitter:description" content="글로벌 쇼핑의 새로운 표준, 올모아(OLMOA)." />
+    <meta property="twitter:description" content="국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다." />
     <meta property="twitter:image" content="https://olmoa.com/olmoa-logo.svg" />
     
     <!-- Favicon & PWA App Manifest -->
@@ -45,10 +44,26 @@
     <!-- Stylesheets & Fonts -->
         <!-- Stylesheets & Fonts -->
     <!-- Font Awesome removed (work order 1-6): icons are lucide-vue-next components -->
-    <script type="module" crossorigin src="/assets/index-_0M7IuRs.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CBkSz6G1.css">
+    <script type="module" crossorigin src="/assets/index-BnLJhNLs.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/src-kUZcEtbb.js">
+    <link rel="modulepreload" crossorigin href="/assets/runtime-dom.esm-bundler-CYNUa8rS.js">
+    <link rel="modulepreload" crossorigin href="/assets/pinia-D97vi4l5.js">
+    <link rel="modulepreload" crossorigin href="/assets/vue-router-BamAauKg.js">
+    <link rel="modulepreload" crossorigin href="/assets/createLucideIcon-DdGzL9hH.js">
+    <link rel="modulepreload" crossorigin href="/assets/shopping-cart-DCnztK13.js">
+    <link rel="modulepreload" crossorigin href="/assets/OmButton-CqKsLx8e.js">
+    <link rel="modulepreload" crossorigin href="/assets/OmModal-DmAcsnF7.js">
+    <link rel="modulepreload" crossorigin href="/assets/format-CGHs9-Bj.js">
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-DK3Fl9T5.js">
+    <link rel="modulepreload" crossorigin href="/assets/config-jBaHFyse.js">
+    <link rel="modulepreload" crossorigin href="/assets/locale-ClL391-x.js">
+    <link rel="modulepreload" crossorigin href="/assets/auth-TZq-GFLC.js">
+    <link rel="modulepreload" crossorigin href="/assets/cart-CMEGaQWF.js">
+    <link rel="modulepreload" crossorigin href="/assets/wishlist-BtCSS8n1.js">
+    <link rel="modulepreload" crossorigin href="/assets/ProductCard-DInYx-vJ.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-B684IyMf.css">
   </head>
   <body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
-    <div id="app"></div>
+    <div id="app"></div>
   </body>
 </html>
