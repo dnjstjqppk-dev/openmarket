@@ -7,7 +7,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { MapPin, ShoppingCart, Store } from 'lucide-vue-next'
-import { userErrorMessage, OmButton, OmInput, OmSelect, OmCheckbox, OmRadio, OmAlert, OmBadge, OmEmptyState, OmSkeleton, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmInput, OmSelect, OmCheckbox, OmRadio, OmAlert, OmBadge, OmEmptyState, OmSkeleton, formatNumber, loadTossSdk } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import SellerCouponModal from '../components/checkout/SellerCouponModal.vue'
 import { useCartStore } from '../stores/cart'
@@ -290,16 +290,7 @@ async function createOrderOnce() {
   return json.data
 }
 
-function loadTossSdk(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).TossPayments) return resolve((window as any).TossPayments)
-    const s = document.createElement('script')
-    s.src = 'https://js.tosspayments.com/v1/payment'
-    s.onload = () => resolve((window as any).TossPayments)
-    s.onerror = () => reject(new Error('결제 모듈을 불러오지 못했습니다.'))
-    document.head.appendChild(s)
-  })
-}
+
 
 async function submitOrder() {
   showErrors.value = true

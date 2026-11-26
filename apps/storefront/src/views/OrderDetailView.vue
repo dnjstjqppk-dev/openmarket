@@ -5,7 +5,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { paymentStatusLabel, subOrderStatusLabel, paymentStatusTone, subOrderStatusTone } from '../utils/orderStatus'
-import { userErrorMessage, OmBadge, OmSkeleton, useConfirm } from '@olmoa/ui'
+import { userErrorMessage, OmBadge, OmSkeleton, useConfirm, loadTossSdk } from '@olmoa/ui'
 
 const { confirm: askConfirm } = useConfirm()
 import { validateKrMobile, validateBrnDigits } from '../utils/phone'
@@ -275,16 +275,7 @@ const resuming = ref(false)
 // NEW-07: resume with the buyer's chosen Toss v1 method (was hardcoded to 카드).
 const resumeMethod = ref('카드')
 const RESUME_METHODS = ['카드', '계좌이체', '가상계좌', '토스페이']
-function loadTossSdk(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).TossPayments) return resolve((window as any).TossPayments)
-    const s = document.createElement('script')
-    s.src = 'https://js.tosspayments.com/v1/payment'
-    s.onload = () => resolve((window as any).TossPayments)
-    s.onerror = () => reject(new Error('결제 모듈을 불러오지 못했습니다.'))
-    document.head.appendChild(s)
-  })
-}
+
 // S-N02: resume payment on the existing READY order with its own order_no/amount.
 // A failed attempt leaves the order READY with stock/coupon held, so retrying the
 // same order (never a duplicate order) is the only correct recovery.

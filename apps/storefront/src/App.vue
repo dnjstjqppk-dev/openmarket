@@ -47,7 +47,7 @@ const notifications = ref<any[]>([])
 const unread = ref(0)
 const notiError = ref(false)
 async function fetchNotifications() {
-  if (!auth.isAuthenticated) return
+  if (!(await auth.ensureSession())) return
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/notifications`, { headers: { ...authHeader() } })
     const json = await res.json()
@@ -204,12 +204,55 @@ function loadRecents() {
 }
 
 // ---- category bar hides on scroll down, returns on scroll up ----
+// Direction-locked + rAF-throttled: the bar flips only after sustained
+// movement, so finger/trackpad micro-jitter and scroll-anchor adjustments
+// can't flutter it. (The old per-event flip compared raw consecutive scroll
+// positions, so every ±2px wiggle toggled the bar, and the sticky header's
+// own height change fed scroll events back into a self-sustaining loop.)
 const categoryBarHidden = ref(false)
-let lastScrollY = 0
-function onScroll() {
+const SCROLL_DELTA_PX = 12
+const HIDE_BELOW_Y = 200
+const SETTLE_MS = 250
+let pivotY = 0
+let scrollQueued = false
+let settleUntil = 0
+function onScrollFrame() {
+  scrollQueued = false
   const y = window.scrollY
-  categoryBarHidden.value = y > 200 && y > lastScrollY
-  lastScrollY = y
+  // After a flip, the sticky header's height change shifts content and scroll
+  // anchoring moves scrollY in response — without this window that feedback
+  // re-flips the bar into a self-sustaining oscillation. Absorb it instead.
+  if (performance.now() < settleUntil) {
+    pivotY = y
+    return
+  }
+  if (!categoryBarHidden.value) {
+    if (y > HIDE_BELOW_Y && y - pivotY > SCROLL_DELTA_PX) {
+      categoryBarHidden.value = true
+      pivotY = y
+      settleUntil = performance.now() + SETTLE_MS
+    } else if (y < pivotY) {
+      pivotY = y
+    }
+  } else {
+    if (pivotY - y > SCROLL_DELTA_PX || y <= HIDE_BELOW_Y) {
+      categoryBarHidden.value = false
+      pivotY = y
+      settleUntil = performance.now() + SETTLE_MS
+    } else if (y > pivotY) {
+      pivotY = y
+    }
+  }
+}
+function onScroll() {
+  if (!scrollQueued) {
+    scrollQueued = true
+    requestAnimationFrame(onScrollFrame)
+  }
+}
+function resetCategoryBar() {
+  categoryBarHidden.value = false
+  pivotY = 0
 }
 
 onMounted(async () => {
@@ -219,7 +262,7 @@ onMounted(async () => {
   loadRecents()
   window.addEventListener('scroll', onScroll, { passive: true })
 })
-watch(() => route.fullPath, () => { loadRecents() })
+watch(() => route.fullPath, () => { loadRecents(); resetCategoryBar() })
 onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
 </script>
 
@@ -366,8 +409,8 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
 
       <template #bottom>
         <div
-          class="overflow-hidden border-t border-line transition-all duration-fast"
-          :class="categoryBarHidden ? 'max-h-0 border-transparent opacity-0' : 'max-h-12 opacity-100'"
+          class="overflow-hidden border-t border-line transition-[max-height,opacity,visibility] duration-fast"
+          :class="categoryBarHidden ? 'max-h-0 border-transparent opacity-0 invisible' : 'max-h-12 opacity-100 visible'"
         >
           <div class="om-container"><OmNavigation :items="categoryNav" label="쇼핑 메뉴" /></div>
         </div>

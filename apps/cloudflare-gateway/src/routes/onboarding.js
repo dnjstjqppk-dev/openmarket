@@ -7,7 +7,7 @@
 //   GET  /api/v1/admin/partner-applications                   operator: review queue
 //   POST /api/v1/admin/partner-applications/:id/review        operator: APPROVE | REJECT | REQUEST_RESUBMIT
 
-import { requireAuth, requireAdmin, issueToken } from '../lib/auth.js';
+import { requireAuth, requireAdmin, issueToken, attachAuthCookies } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
@@ -93,7 +93,11 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
             formatted: chk.formatted
           });
         }
-      } catch (_) {}
+      } catch (e) {
+        // P2: the CHECKSUM_ONLY fallback below is intentional, but an NTS
+        // outage or key error must be visible instead of silently degrading.
+        console.error(JSON.stringify({ level: 'error', job: 'nts_lookup', error: String(e && e.message || e) }));
+      }
     }
     return json(corsHeaders, {
       success: true,
@@ -163,10 +167,10 @@ export async function handleOnboardingRoutes(request, url, env, corsHeaders) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
     const partner = await env.DB.prepare('SELECT id, business_name, status, sales_model FROM partners WHERE id = ?').bind(partnerId).first();
     const token = await issueToken(env, user, partner);
-    return json(corsHeaders, {
+    return attachAuthCookies(json(corsHeaders, {
       success: true, message: '입점 신청서가 저장되었습니다. 서류를 올리고 심사를 요청해 주세요.',
       data: { token, partner, required_documents: REQUIRED_DOCS }
-    }, 201);
+    }, 201), env, { token });
   }
 
   if (isApplicant) {

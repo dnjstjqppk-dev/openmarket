@@ -7,7 +7,10 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
 const persist = path.join(root, '.wrangler', 'local-state');
 fs.rmSync(persist, { recursive: true, force: true });
-const files = fs.readdirSync(path.join(root, 'migrations')).filter((f) => /^d1_\d+.*\.sql$/.test(f)).sort().map((f) => path.join('migrations', f));
+const migNum = (f) => { const m = /^d1_(\d+)/.exec(f); return m ? Number(m[1]) : -1; };
+const migCmp = (a, b) => (migNum(a) - migNum(b)) || (a < b ? -1 : a > b ? 1 : 0);
+// Numeric order: lexical sort would apply d1_100 before d1_20.
+const files = fs.readdirSync(path.join(root, 'migrations')).filter((f) => /^d1_\d+.*\.sql$/.test(f)).sort(migCmp).map((f) => path.join('migrations', f));
 files.push(path.join('migrations', 'dev', 'seed_local_dev.sql'));
 for (const f of files) {
   process.stdout.write(`applying ${f} ... `);

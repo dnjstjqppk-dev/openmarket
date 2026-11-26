@@ -12,7 +12,7 @@
 // An e-mail already registered with a password is NEVER auto-linked (account takeover):
 // the buyer signs in with the password instead (EMAIL_TAKEN).
 
-import { issueToken, issueRefreshToken, ACCESS_TOKEN_TTL_SECONDS } from '../lib/auth.js';
+import { issueToken, issueRefreshToken, ACCESS_TOKEN_TTL_SECONDS, attachAuthCookies } from '../lib/auth.js';
 import { json, readJson, bad, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { randomToken, sha256Hex } from '../utils/crypto-auth.js';
@@ -145,7 +145,7 @@ export async function handleSocialAuthRoutes(request, url, env, corsHeaders) {
     if (!user || Number(user.is_active) !== 1) throw invalid();
     const jwt = await issueToken(env, user, null);
     const refreshToken = await issueRefreshToken(env, user);
-    return json(corsHeaders, { success: true, token: jwt, refresh_token: refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS, customer_id: user.id, user: publicUser(user) });
+    return attachAuthCookies(json(corsHeaders, { success: true, token: jwt, refresh_token: refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS, customer_id: user.id, user: publicUser(user) }), env, { token: jwt, refreshToken });
   }
 
   return null;

@@ -24,12 +24,14 @@ export function json(corsHeaders, data, status = 200) {
 }
 
 export function errorResponse(corsHeaders, err, env, { request = null, ctx = null } = {}) {
+  // P0-4: every error carries a tracking id (previously only 500s did), so
+  // 4xx/503 reports can be correlated with server logs.
+  const requestId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   if (err instanceof HttpError) {
-    const res = json(corsHeaders, { success: false, error: err.message, code: err.code, ...err.extra }, err.status);
+    const res = json(corsHeaders, { success: false, error: err.message, code: err.code, ...err.extra, request_id: requestId }, err.status);
     if (err.headers) for (const [k, v] of Object.entries(err.headers)) res.headers.set(k, v);
     return res;
   }
-  const requestId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   console.error(JSON.stringify({ level: 'error', requestId, message: err && err.message, stack: err && err.stack }));
   // NEW-18: unexpected errors go to Sentry (no-op without SENTRY_DSN); never blocks the response.
   try {
@@ -77,12 +79,20 @@ export function buildCorsHeaders(request, env = {}) {
     'Vary': 'Origin',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
+    // P1: API responses are JSON/text, never executable documents — lock that in.
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'deny'",
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json; charset=utf-8'
   };
-  if (originAllowed(origin, env)) headers['Access-Control-Allow-Origin'] = origin;
+  // P0-2: credentialed cookie requests need an explicit opt-in. The origin is
+  // echoed only when allowlisted (never '*'), so this cannot open the API to
+  // arbitrary sites.
+  if (originAllowed(origin, env)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
   return headers;
 }
 

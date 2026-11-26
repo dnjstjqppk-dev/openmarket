@@ -13,13 +13,12 @@ export const useWishlistStore = defineStore('wishlist', () => {
 
   function load(): Promise<void> {
     const auth = useAuthStore()
-    if (!auth.isAuthenticated || loaded.value) return Promise.resolve()
+    if (loaded.value) return Promise.resolve()
     if (inflight) return inflight
     inflight = (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
-          headers: { Authorization: `Bearer ${auth.token}` }
-        })
+        if (!(await auth.ensureSession())) return
+        const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`)
         const json = await res.json().catch(() => null)
         if (res.ok && json?.success && Array.isArray(json.data)) {
           ids.value = new Set(json.data.map((r: any) => r.product_id || r.id).filter(Boolean))
@@ -37,10 +36,10 @@ export const useWishlistStore = defineStore('wishlist', () => {
   /** Toggles server-side; returns the new state, or null on failure. */
   async function toggle(productId: string): Promise<boolean | null> {
     const auth = useAuthStore()
-    if (!auth.isAuthenticated) return null
+    if (!(await auth.ensureSession())) return null
     const res = await fetch(`${API_BASE_URL}/api/v1/wishlist`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product_id: productId })
     })
     const json = await res.json().catch(() => null)

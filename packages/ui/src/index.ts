@@ -107,6 +107,10 @@ export type { FaqItem } from './components/OmFaq.vue'
 export { formatKrw, formatNumber, formatDate, formatDateTime, discountRate, userErrorMessage } from './format'
 export { priceDisplayLines, clampQuantity, countdownParts, ratingVisible, tablePages, soldoutPct } from './commerce'
 export type { PriceLines, Countdown } from './commerce'
+export { loadTossSdk } from './payments'
+export { requiredEnv } from './config'
+export { installApiFetch } from './apiFetch'
+export type { ApiFetchOptions } from './apiFetch'
 
 const all: Record<string, any> = {
   OmButton, OmIconButton, OmInput, OmTextarea, OmSelect, OmCheckbox, OmRadio, OmSwitch, OmModal, OmDrawer,

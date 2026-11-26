@@ -47,8 +47,14 @@ ROLLBACK_LOG = "rehearsal-rollback.log"
 SUMMARY_JSON = "rehearsal-summary.json"
 
 
+def mig_key(name):
+    """Numeric-aware migration order: lexical sort would place d1_100 before d1_20."""
+    m = re.match(r"^d1_(\d+)", name)
+    return (int(m.group(1)) if m else -1, name)
+
+
 def list_migrations():
-    return sorted(f.name for f in MIG.glob("d1_*.sql") if re.match(r"^d1_\d+.*\.sql$", f.name))
+    return sorted((f.name for f in MIG.glob("d1_*.sql") if re.match(r"^d1_\d+.*\.sql$", f.name)), key=mig_key)
 
 
 def connect(path):
@@ -100,14 +106,15 @@ def schema_sha(objects):
 
 def ledger_max(db):
     try:
-        return db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        rows = [r[0] for r in db.execute("SELECT version FROM schema_migrations")]
     except sqlite3.Error:
         return None
+    return max(rows, key=mig_key) if rows else None
 
 
 def ledger_versions(db):
     try:
-        return sorted(r[0] for r in db.execute("SELECT version FROM schema_migrations"))
+        return sorted((r[0] for r in db.execute("SELECT version FROM schema_migrations")), key=mig_key)
     except sqlite3.Error:
         return []
 
@@ -166,12 +173,12 @@ def main():
                            f"foreign_key_check={n_fk} {fk_tables}")
         if n_fk:
             raise SystemExit(f"baseline {src.name} already has {n_fk} FK violations; refusing to rehearse on it")
-        pending = [f for f in files if base_max is None or f > base_max]
+        pending = [f for f in files if base_max is None or mig_key(f) > mig_key(base_max)]
         db.close()
     else:
         db = connect(baseline_db)
         for f in files:
-            if f > BASELINE_FILE:
+            if mig_key(f) > mig_key(BASELINE_FILE):
                 break
             apply_file(db, MIG / f)
         apply_file(db, DEV_SEED)
@@ -179,7 +186,7 @@ def main():
         db.close()
         if base_max != BASELINE_FILE:
             raise SystemExit(f"built baseline ledger MAX={base_max}, expected {BASELINE_FILE}")
-        pending = [f for f in files if f > BASELINE_FILE]
+        pending = [f for f in files if mig_key(f) > mig_key(BASELINE_FILE)]
         apply_lines.append(f"baseline: built {BASELINE_FILE} + dev seed, ledger MAX={base_max}")
     if not pending:
         raise SystemExit("no pending migrations after the baseline ledger MAX; nothing to rehearse")

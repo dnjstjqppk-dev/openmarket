@@ -38,8 +38,12 @@ http.createServer(async (req, res) => {
     });
     const out = await worker.fetch(request, workerEnv, ctx);
     const outHeaders = {};
-    out.headers.forEach((v, k) => { outHeaders[k] = v; });
-    res.writeHead(out.status, outHeaders);
+    // Set-Cookie must never be combined: Headers.forEach merges (or the loop
+    // overwrites) repeated values, which drops all but one cookie. Forward
+    // each Set-Cookie as its own header line, like a real edge server does.
+    out.headers.forEach((v, k) => { if (k.toLowerCase() !== 'set-cookie') outHeaders[k] = v; });
+    const setCookies = typeof out.headers.getSetCookie === 'function' ? out.headers.getSetCookie() : [];
+    res.writeHead(out.status, setCookies.length ? { ...outHeaders, 'Set-Cookie': setCookies } : outHeaders);
     res.end(Buffer.from(await out.arrayBuffer()));
     console.log(`${out.status} ${req.method} ${req.url}`);
   } catch (e) {

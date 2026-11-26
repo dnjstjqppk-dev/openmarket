@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { API_BASE_URL, setAdminToken, setAdminRefreshToken, setAdminRole } from '../config'
+import { API_BASE_URL, setAdminSession } from '../config'
 
 const router = useRouter()
 const route = useRoute()
@@ -25,14 +25,13 @@ const handleAdminLogin = async () => {
     })
     const json = await res.json().catch(() => ({}))
     if (json.code === 'OTP_REQUIRED') { otpStep.value = true; return }
-    if (!res.ok || !json.success || !json.token) {
+    if (!res.ok || !json.success || !json.user) {
       errorMsg.value = json.error || '로그인에 실패했습니다.'
       otp.value = ''
       return
     }
-    setAdminToken(json.token)
-    if (json.refresh_token) setAdminRefreshToken(json.refresh_token)
-    setAdminRole(json.admin_role || '')
+    // P0-2: the session cookie is set by the server; only the profile is kept.
+    setAdminSession(json.user, json.admin_role || '')
     if (json.mfa_setup_required) { router.replace('/security'); return }
     const r = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
     router.replace(r)

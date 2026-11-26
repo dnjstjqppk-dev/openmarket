@@ -37,8 +37,7 @@ async function load() {
   notFound.value = false
   followError.value = ''
   try {
-    const headers: Record<string, string> = auth.isAuthenticated ? { ...authHeader() } : {}
-    const res = await fetch(`${API_BASE_URL}/api/v1/partners/${encodeURIComponent(partnerId.value)}/store`, { headers })
+    const res = await fetch(`${API_BASE_URL}/api/v1/partners/${encodeURIComponent(partnerId.value)}/store`)
     const json = await res.json().catch(() => null)
     if (my !== seq) return
     if (res.status === 404) { notFound.value = true; store.value = null; document.getElementById('olmoa-jsonld-store')?.remove(); return }
@@ -93,7 +92,9 @@ const fillProducts = computed(() => {
 })
 
 async function toggleFollow() {
-  if (!auth.isAuthenticated) {
+  // Await the restore: on a fresh page load the memory session may not have
+  // resolved yet, and a sync check would wrongly bounce to login.
+  if (!(await auth.ensureSession())) {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
@@ -225,7 +226,7 @@ const formatDateOnly = (dStr?: string) => {
           <p class="mb-4 text-sm text-ink-muted">{{ formatNumber(fillMin) }}원 이상 상품부터 보여드립니다.</p>
           <OmEmptyState v-if="!fillProducts.length" :title="`${formatNumber(fillMin)}원 이상 상품이 없습니다`" compact />
           <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-            <ProductCard v-for="(p, i) in fillProducts.slice(0, 8)" :key="p.id" :product="p" :eager="i < 5" />
+            <ProductCard v-for="(p, i) in fillProducts.slice(0, 8)" :key="p.id" :product="p" :eager="Number(i) < 5" />
           </div>
           <button
             v-if="fillProducts.length > 8"
@@ -246,7 +247,7 @@ const formatDateOnly = (dStr?: string) => {
           <h2 id="store-featured" class="mb-4 text-xl font-bold text-ink">대표 상품</h2>
           <OmEmptyState v-if="!featured.length" title="판매 중인 상품이 없습니다" compact />
           <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-            <ProductCard v-for="(p, i) in featured" :key="p.id" :product="p" :eager="i < 5" />
+            <ProductCard v-for="(p, i) in featured" :key="p.id" :product="p" :eager="Number(i) < 5" />
           </div>
         </section>
       </div>
@@ -278,7 +279,7 @@ const formatDateOnly = (dStr?: string) => {
               </div>
               <p class="whitespace-pre-wrap text-sm text-ink">{{ r.content }}</p>
               <div v-if="r.images && r.images.length" class="flex flex-wrap gap-2">
-                <OmImage v-for="(img, i) in r.images" :key="i" :src="img" :alt="`리뷰 사진 ${i + 1}`" ratio="h-16 w-16 rounded-lg border border-line" />
+                <OmImage v-for="(img, i) in r.images" :key="i" :src="img" :alt="`리뷰 사진 ${Number(i) + 1}`" ratio="h-16 w-16 rounded-lg border border-line" />
               </div>
               <div v-if="r.reply" class="rounded-xl bg-surface-2 p-3 text-xs">
                 <p class="font-bold text-ink">판매자 답글</p>

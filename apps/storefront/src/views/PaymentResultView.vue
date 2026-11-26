@@ -5,7 +5,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CircleCheck, CircleX, FlaskConical } from 'lucide-vue-next'
-import { userErrorMessage, OmButton, OmAlert, OmSpinner, formatNumber } from '@olmoa/ui'
+import { userErrorMessage, OmButton, OmAlert, OmSpinner, formatNumber, loadTossSdk } from '@olmoa/ui'
 import CheckoutSteps from '../components/CheckoutSteps.vue'
 import { API_BASE_URL, authHeader, newIdempotencyKey } from '../config'
 import { useCartStore } from '../stores/cart'
@@ -50,16 +50,7 @@ async function loadResumeOrder() {
   } catch { /* resume stays hidden; the buyer can still use order/cart links */ }
 }
 
-function loadTossSdk(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).TossPayments) return resolve((window as any).TossPayments)
-    const s = document.createElement('script')
-    s.src = 'https://js.tosspayments.com/v1/payment'
-    s.onload = () => resolve((window as any).TossPayments)
-    s.onerror = () => reject(new Error('결제 모듈을 불러오지 못했습니다.'))
-    document.head.appendChild(s)
-  })
-}
+
 
 async function retryPayment() {
   if (!resumeOrderId.value || resuming.value) return

@@ -10,6 +10,7 @@ import { pgConfirm, pgCancel, paymentMode, cardSummaryOf } from '../lib/pg.js';
 import { evaluateCheckoutFds } from './fds.js';
 import { loadHeldCouponByRef, matchScope, couponAmount, splitPlatformBurden } from './coupons.js';
 import { sealPii } from '../lib/pii-crypto.js';
+import { maxMigrationVersion } from '../lib/migration-version.js';
 import { pushRefundCompleted, pushSellerNewOrder } from './push.js';
 import { notifyRestockedSkus } from './restock.js';
 import { resolveRemoteZone } from '../lib/remote-zones.js';
@@ -83,7 +84,9 @@ export const REQUIRED_SCHEMA_VERSION = 'd1_77_user_locale.sql';
 export async function assertSchemaLevel(env) {
   let applied = null;
   try {
-    applied = await env.DB.prepare('SELECT MAX(version) AS v FROM schema_migrations').first('v');
+    // Numeric max, not MAX(version): lexical MAX misorders past d1_99.
+    const rows = await env.DB.prepare('SELECT version AS v FROM schema_migrations').all();
+    applied = maxMigrationVersion((rows.results || []).map((r) => r.v));
   } catch {
     applied = null;
   }

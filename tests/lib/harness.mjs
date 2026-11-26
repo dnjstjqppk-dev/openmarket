@@ -7,13 +7,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { compareMigrationNames } from '../../apps/cloudflare-gateway/src/lib/migration-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..', '..');
 export const MIGRATIONS_DIR = path.join(ROOT, 'migrations');
 
 export function listMigrations() {
-  return fs.readdirSync(MIGRATIONS_DIR).filter((f) => /^d1_\d+.*\.sql$/.test(f)).sort();
+  // Numeric order: lexical sort would apply d1_100 before d1_20.
+  return fs.readdirSync(MIGRATIONS_DIR).filter((f) => /^d1_\d+.*\.sql$/.test(f)).sort(compareMigrationNames);
 }
 
 export function createDatabase({ seedFiles = [] } = {}) {

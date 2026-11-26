@@ -1,35 +1,67 @@
 // P2-A06: endpoints are required env. Production builds refuse to boot on an
 // implicit host; `vite dev` falls back to the local gateway (npm run dev:api).
-import { userErrorMessage } from '@olmoa/ui'
-function requiredEnv(name: string, devFallback: string): string {
-  const env = (import.meta as any).env || {}
-  if (env[name]) return env[name]
-  if (env.DEV === true) return devFallback
-  throw new Error(`[config] ${name} is not set — refusing to boot with an implicit endpoint`)
-}
+import { userErrorMessage, requiredEnv } from '@olmoa/ui'
 export const API_BASE_URL = requiredEnv('VITE_API_BASE_URL', 'http://127.0.0.1:8787')
 
-const TOKEN_KEY = 'olmoa_admin_token'
-// P2-SEC-07: single-use refresh token, sent ONLY to POST /api/v1/auth/refresh.
-const REFRESH_KEY = 'olmoa_admin_refresh_token'
+// P0-2: the operator session lives in httpOnly cookies (olmoa_at/olmoa_rt),
+// which JS cannot read — so NO credential is kept here or in localStorage.
+// Identity is memory-only and restored from GET /api/v1/auth/me. Legacy token
+// keys from older builds are purged once on load.
+const LEGACY_TOKEN_KEYS = ['olmoa_admin_token', 'olmoa_admin_refresh_token', 'admin_token']
+try { for (const k of LEGACY_TOKEN_KEYS) localStorage.removeItem(k) } catch { /* private mode */ }
 
-export const getAdminToken = (): string | null => {
-  try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
+export interface AdminSessionUser { id: string; email: string; name: string }
+let sessionUser: AdminSessionUser | null = null
+let restoreInflight: Promise<boolean> | null = null
+
+export const getAdminSessionUser = (): AdminSessionUser | null => sessionUser
+
+export function setAdminSession(user: { id: string; email?: string; full_name?: string; name?: string }, role: string) {
+  sessionUser = { id: user.id, email: user.email || '', name: user.full_name || user.name || '운영자' }
+  setAdminRole(role)
+  restoreInflight = Promise.resolve(true)
 }
 
-export const getAdminRefreshToken = (): string | null => {
-  try { return localStorage.getItem(REFRESH_KEY) } catch { return null }
+/** Rebuild the memory session from the cookie. False when logged out. */
+export async function restoreAdminSession(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`)
+    const json = await res.json().catch(() => null)
+    const u = json?.data?.user
+    if (res.ok && json?.success && u && u.id && u.role === 'ROLE_ADMIN') {
+      sessionUser = { id: u.id, email: u.email || '', name: u.full_name || u.name || '운영자' }
+      setAdminRole(json?.data?.admin?.role || '')
+      return true
+    }
+  } catch { /* logged out: fall through */ }
+  sessionUser = null
+  return false
 }
 
-/** Operator identity = server-issued JWT for a ROLE_ADMIN account. There is no default/fallback credential. */
+export function ensureAdminSession(): Promise<boolean> {
+  if (sessionUser) return Promise.resolve(true)
+  if (!restoreInflight) restoreInflight = restoreAdminSession()
+  return restoreInflight
+}
+
+/** End the session: best-effort server logout (revokes rotation, clears cookies) + local clear. */
+export function clearAdminToken(): void {
+  sessionUser = null
+  restoreInflight = null
+  try { localStorage.removeItem(ROLE_KEY) } catch { /* ignore */ }
+  try {
+    void fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).catch(() => {})
+  } catch { /* local state is already cleared */ }
+}
+
+/** Operator identity = server-issued session for a ROLE_ADMIN account. There is no default/fallback credential. */
 export const getAdminHeaders = (): Record<string, string> => {
-  const token = getAdminToken()
-  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  return { 'Content-Type': 'application/json' }
 }
-
-export const setAdminToken = (t: string) => localStorage.setItem(TOKEN_KEY, t)
-export const setAdminRefreshToken = (t: string) => { try { localStorage.setItem(REFRESH_KEY, t) } catch { /* ignore */ } }
-export const clearAdminToken = () => { try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(REFRESH_KEY); localStorage.removeItem('admin_token'); localStorage.removeItem(ROLE_KEY) } catch { /* ignore */ } }
 
 // Display-only: the server enforces the operator role on every request (lib/admin-policy.js).
 const ROLE_KEY = 'olmoa_admin_role'

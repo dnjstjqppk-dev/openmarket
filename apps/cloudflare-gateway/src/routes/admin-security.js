@@ -6,7 +6,7 @@
 //   POST /api/v1/admin/admin-users                 SUPER_ADMIN: create an operator with a role
 //   PUT  /api/v1/admin/admin-users/:id             SUPER_ADMIN: change role / deactivate / reset 2FA
 
-import { requireAuth, requireAdmin, issueToken } from '../lib/auth.js';
+import { requireAuth, requireAdmin, issueToken, attachAuthCookies } from '../lib/auth.js';
 import { json, readJson, bad, conflict, notFound, str } from '../lib/http.js';
 import { newId } from '../lib/ids.js';
 import { auditStatement } from '../lib/ledger.js';
@@ -78,10 +78,11 @@ export async function handleAdminSecurityRoutes(request, url, env, corsHeaders) 
       auditStatement(env, me, { action: 'ADMIN_MFA_ENABLE', targetType: 'user', targetId: me.userId, request })
     ]);
     const fresh = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
-    return json(corsHeaders, {
+    const mfaToken = await issueToken(env, fresh, null, { mfa: true });
+    return attachAuthCookies(json(corsHeaders, {
       success: true, message: '2단계 인증이 켜졌습니다. 복구 코드는 지금 한 번만 표시됩니다.',
-      data: { token: await issueToken(env, fresh, null, { mfa: true }), recovery_codes: codes }
-    });
+      data: { token: mfaToken, recovery_codes: codes }
+    }), env, { token: mfaToken });
   }
 
   if (!(p === '/api/v1/admin/admin-users' || p.startsWith('/api/v1/admin/admin-users/'))) return null;

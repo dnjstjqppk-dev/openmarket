@@ -17,6 +17,7 @@ import ProductCard from '../components/ProductCard.vue'
 import { useBuySelection } from '../components/product/useBuySelection'
 import { API_BASE_URL } from '../config'
 import { RETURN_WINDOW_DAYS } from '../config/policy'
+import { stripToSafeHtml } from '../utils/stripHtml'
 
 const route = useRoute()
 
@@ -118,15 +119,10 @@ async function loadRelated(id: string) {
   } catch { /* section stays hidden */ }
 }
 
-// ---- description: strip active content (server stores seller HTML) ---------------------------------
-const descriptionHtml = computed(() => {
-  const raw = String(product.value?.description_html || '')
-  return raw
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<\/?(iframe|object|embed|form|link|meta|style|base)\b[^>]*>/gi, '')
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(href|src)\s*=\s*(["'])\s*(javascript|vbscript|data:text\/html)[^"']*\2/gi, '$1="#"')
-})
+// ---- description: allowlist-sanitize (server stores seller HTML) --------------------------------------
+// stripToSafeHtml mirrors the server sanitizer: slash-separated handlers like
+// `<img/src=x/onerror=...>` that survived the old regex stripper are dropped.
+const descriptionHtml = computed(() => stripToSafeHtml(product.value?.description_html))
 
 // ---- notice table in template order; seller blanks read "상세페이지 참조" -----------------------------
 const noticeRows = computed<[string, string][]>(() => {

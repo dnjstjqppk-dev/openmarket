@@ -66,7 +66,7 @@ const loadSupport = async () => {
   const cid = auth.user?.id || ''
   loadError.value = null
   await loadFaq()
-  if (!auth.isAuthenticated) return
+  if (!(await auth.ensureSession())) return
   try {
     const iRes = await fetch(`${API_BASE_URL}/api/v1/support/inquiries?customer_id=${encodeURIComponent(cid)}`, { headers: { ...authHeader() } })
     const iJson = await iRes.json().catch(() => null)

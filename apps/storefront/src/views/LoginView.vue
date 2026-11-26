@@ -44,11 +44,12 @@ async function handleLogin() {
       body: JSON.stringify({ email: email.value.trim(), password: password.value, role: 'CUSTOMER' })
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success || !json.token) {
+    if (!res.ok || !json.success || !json.user) {
       error.value = json.error || '로그인에 실패했습니다.'
       return
     }
-    auth.login({ id: json.user.id, name: json.user.full_name || '회원', email: json.user.email }, json.token, json.refresh_token)
+    // P0-2: the session cookie is set by the server; only the profile is kept.
+    auth.login({ id: json.user.id, name: json.user.full_name || '회원', email: json.user.email })
     router.replace(safeRedirect())
   } catch {
     error.value = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
@@ -146,13 +147,13 @@ async function consumeSocialReturn() {
       body: JSON.stringify({ code: loginCode })
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success || !json.token || !json.user) {
+    if (!res.ok || !json.success || !json.user) {
       router.replace({ path: '/login', query: cleanQuery })
       error.value = json.error || '소셜 로그인에 실패했습니다.'
       return
     }
     const u = json.user
-    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email }, json.token, json.refresh_token)
+    auth.login({ id: u.id, name: u.full_name || '회원', email: u.email })
     router.replace(safeRedirect())
   } catch {
     router.replace({ path: '/login', query: cleanQuery })

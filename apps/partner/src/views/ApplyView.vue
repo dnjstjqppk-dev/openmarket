@@ -73,7 +73,9 @@ async function submit() {
     const res = await fetch(`${API_BASE_URL}/api/v1/partner-applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const json = await res.json().catch(() => ({}))
     if (!res.ok || !json.success) { error.value = json.error || '신청서를 저장하지 못했습니다.'; return }
-    savePartnerSession(json.data.token, json.data.partner)
+    // P0-2: the applicant session cookie is set by the server; the guard
+    // restores the profile from /me on entry.
+    savePartnerSession(null, json.data.partner)
     router.replace('/application')
   } catch {
     error.value = '서버에 연결할 수 없습니다.'

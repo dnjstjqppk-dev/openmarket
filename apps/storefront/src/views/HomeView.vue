@@ -42,12 +42,10 @@ const rankTab = ref<string>('ALL')
 const rankCache = ref<Record<string, any[]>>({})
 const rankLoading = ref(false)
 
-function authHeaders(): Record<string, string> {
-  return auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
-}
-
-async function getJson(path: string, authed = false) {
-  const res = await fetch(`${API_BASE_URL}${path}`, authed ? { headers: authHeaders() } : undefined)
+async function getJson(path: string, _authed = false) {
+  // P0-2: cookies authenticate (see the fetch wrapper); the flag is kept so
+  // call sites read unchanged.
+  const res = await fetch(`${API_BASE_URL}${path}`)
   const json = await res.json().catch(() => null)
   if (!res.ok || !json?.success) throw new Error(json?.error || '불러오지 못했습니다')
   return json
@@ -79,7 +77,7 @@ async function load() {
     const rows = Array.isArray(j.data) ? j.data : []
     exhibitions.value = rows.filter((e: any) => Array.isArray(e.products) && e.products.length > 0)
   }).catch(() => { exhibitions.value = [] })
-  if (auth.isAuthenticated) {
+  if (await auth.ensureSession()) {
     getJson('/api/v1/recommendations/for-you?limit=10', true).then((j) => { forYou.value = Array.isArray(j.data) ? j.data.slice(0, 10) : [] }).catch(() => { forYou.value = [] })
   }
   try {

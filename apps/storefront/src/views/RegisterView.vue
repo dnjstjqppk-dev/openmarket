@@ -96,7 +96,7 @@ async function handleRegister() {
       error.value = data.error || '회원가입을 완료하지 못했습니다.'
       return
     }
-    auth.login({ id: data.user.id, name: data.user.full_name, email: data.user.email }, data.token)
+    auth.login({ id: data.user.id, name: data.user.full_name, email: data.user.email })
     welcomeCredit.value = Number(data.welcome_credit || 0)
     success.value = true
   } catch {

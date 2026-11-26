@@ -134,13 +134,18 @@ db.execute('PRAGMA foreign_keys = ON')
 db.executescript(out)
 kinds = dict(db.execute("SELECT type, COUNT(*) FROM sqlite_master WHERE sql IS NOT NULL GROUP BY type").fetchall())
 print('fk cycles', cycles)
+# Fail closed: a cycle means the generated insert order is unverified for that
+# table pair, and the D1 import (FKs on, no deferral) would roll back.
+assert not cycles, f'cyclic foreign keys cannot be ordered for D1 import: {cycles}'
 print('objects (sql not null)', kinds)
 print('fts rows', db.execute('SELECT COUNT(*) FROM product_search_fts').fetchone()[0],
       'products', db.execute('SELECT COUNT(*) FROM products').fetchone()[0])
 print('old-host urls left', db.execute('SELECT COUNT(*) FROM storage_objects WHERE public_url LIKE ?',
                                        (old_api + '%',)).fetchone()[0])
 print('totp enabled left', db.execute('SELECT COUNT(*) FROM users WHERE totp_secret_enc IS NOT NULL').fetchone()[0])
-print('fk violations', len(db.execute('PRAGMA foreign_key_check').fetchall()))
+_fk_violations = db.execute('PRAGMA foreign_key_check').fetchall()
+print('fk violations', len(_fk_violations))
+assert not _fk_violations, 'restore rehearsal left FK violations'
 tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' "
                                    "AND name NOT LIKE 'product_search_fts%' AND name NOT LIKE 'sqlite_%'")]
 counts = {t: db.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables}

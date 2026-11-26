@@ -20,8 +20,12 @@ await t.test('H01 head carries canonical, ko-KR + x-default hreflang and the the
   assert.ok(!/hreflang="(en|ja)/.test(html), 'untranslated /en /ja mirrors are not advertised')
   assert.ok(html.includes('<link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />'), 'x-default points at ko')
   assert.ok(html.includes('<meta property="og:locale" content="ko_KR" />'), 'og:locale present')
-  assert.ok(html.includes("localStorage.getItem('olmoa_theme')"), 'theme pre-render reads the saved mode')
-  assert.ok(html.includes("setAttribute('data-theme'"), 'theme pre-render sets data-theme')
+  // P1: the pre-render snippet lives in /theme-init.js (external) so the CSP
+  // script-src 'self' stays strict; an inline copy would be blocked.
+  assert.ok(html.includes('<script src="/theme-init.js"></script>'), 'theme pre-render loads before paint')
+  const themeInit = read('public/theme-init.js')
+  assert.ok(themeInit.includes("localStorage.getItem('olmoa_theme')"), 'theme pre-render reads the saved mode')
+  assert.ok(themeInit.includes("setAttribute('data-theme'"), 'theme pre-render sets data-theme')
   assert.ok(html.includes('<link rel="manifest" href="/manifest.webmanifest" />'), 'PWA manifest linked')
 })
 
@@ -80,6 +84,12 @@ await t.test('SH05 category bar hides on scroll down', async () => {
   const app = read('src/App.vue')
   assert.ok(app.includes('scrollY'), 'scroll position tracked')
   assert.ok(app.includes('categoryBarHidden'), 'bar visibility state exists')
+  // Anti-flutter: direction lock + rAF throttle (behavior in tests/browser/category_tremble.mjs).
+  assert.ok(app.includes('requestAnimationFrame(onScrollFrame)'), 'scroll handling is rAF-throttled')
+  assert.ok(app.includes('SCROLL_DELTA_PX'), 'flips need sustained movement')
+  assert.ok(app.includes('SETTLE_MS'), 'post-flip feedback is absorbed, not re-flipped')
+  assert.ok(!app.includes('y > lastScrollY'), 'no per-event direction flip')
+  assert.ok(app.includes('resetCategoryBar()'), 'stale state resets on navigation')
 })
 
 await t.test('H04 6-2 locale mirrors duplicate every route under /en and /ja', async () => {

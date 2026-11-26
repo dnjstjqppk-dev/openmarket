@@ -151,7 +151,11 @@ await step('B05c platform and store coupons minted and claimed for checkout', pa
   const store = await api('/api/v1/partner/coupons', { method: 'POST', headers: { Authorization: `Bearer ${sellerLogin.token}` },
     body: JSON.stringify({ code: `E2E${ts}S`, title: 'E2E 스토어 쿠폰', discount_type: 'FIXED_AMOUNT', discount_value: 500 }) });
   if (store.data?.id == null) throw new Error(`store coupon mint failed: ${JSON.stringify(store).slice(0, 120)}`);
-  const custToken = await page.eval("localStorage.getItem('olmoa_token')");
+  // P0-2: web sessions live in httpOnly cookies (unreadable from JS); the
+  // script authenticates its direct API calls with its own Bearer login.
+  const custLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'customer@example.com', password: PW, role: 'CUSTOMER' }) });
+  if (!custLogin.token) throw new Error('customer API login failed');
+  const custToken = custLogin.token;
   for (const code of [`E2E${ts}P`, `E2E${ts}S`]) {
     const claim = await api('/api/v1/coupons/claim', { method: 'POST', headers: { Authorization: `Bearer ${custToken}`, 'X-Idempotency-Key': `e2e-${ts}-${code}` },
       body: JSON.stringify({ code }) });
@@ -212,8 +216,9 @@ await step('B06 checkout shows the server quote; pay with the local simulator', 
   await page.waitFor("document.querySelector('[data-testid=order-status]')");
   const status = await page.eval("document.querySelector('[data-testid=order-status]').textContent.trim()");
   if (!status.includes('결제 완료')) throw new Error(`order status shown: ${status}`);
-  const token = await page.eval("localStorage.getItem('olmoa_token')");
-  const o = await api(`/api/v1/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+  const verifyLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'customer@example.com', password: PW, role: 'CUSTOMER' }) });
+  if (!verifyLogin.token) throw new Error('customer API login failed');
+  const o = await api(`/api/v1/orders/${orderId}`, { headers: { Authorization: `Bearer ${verifyLogin.token}` } });
   if (String(o.data.total_pay_amount) !== shown) throw new Error(`displayed ${shown} != charged ${o.data.total_pay_amount}`);
   if (o.data.sub_orders.length !== 2) throw new Error('expected 2 seller shipments');
   if (!(o.data.coupon_discount_amount > 0)) throw new Error('coupons did not discount the order');
@@ -234,12 +239,12 @@ await step('B07 seller center: login, see the paid order, ship it', ptPage, asyn
   await ptPage.goto(`${PARTNER}/shipments`);
   await ptPage.idle(1200);
   await shots(ptPage, 'partner_shipments', ['desktop', 'mobile']);
-  // Shipping is performed with the seller's own session token from the page (seller UI form layout varies per order).
+  // Shipping is performed with the seller's own page session (P0-2: the httpOnly
+  // cookies authenticate in-page fetches; seller UI form layout varies per order).
   const r = await ptPage.eval(`(async () => {
-    const t = localStorage.getItem('partner_token');
-    const list = await (await fetch('${API}/api/v1/partner/orders', { headers: { Authorization: 'Bearer ' + t } })).json();
+    const list = await (await fetch('${API}/api/v1/partner/orders')).json();
     const sub = list.data.find((s) => s.parent_order_id === ${JSON.stringify(orderId)});
-    const res = await fetch('${API}/api/v1/partner/orders/' + sub.id + '/shipment', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ carrier: 'CJ대한통운', tracking_number: 'TRK20261105001' }) });
+    const res = await fetch('${API}/api/v1/partner/orders/' + sub.id + '/shipment', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ carrier: 'CJ대한통운', tracking_number: 'TRK20261105001' }) });
     return res.status;
   })()`);
   if (r !== 200) throw new Error(`ship status ${r}`);
@@ -270,10 +275,28 @@ await step('B08 operator console: login, reconciliation, entities, purchase orde
   await adPage.goto(`${ADMIN}/`);
   await adPage.idle(1200);
   await shots(adPage, 'admin_dashboard', ['desktop', 'mobile']);
-  adminToken = await adPage.eval("localStorage.getItem('olmoa_admin_token')");
+  // P0-2: web sessions live in httpOnly cookies; later steps authenticate
+  // direct API calls with a dedicated Bearer login instead.
+  const admLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'admin@openmarket.com', password: PW, role: 'ADMIN' }) });
+  if (!admLogin.token) throw new Error('admin API login failed');
+  adminToken = admLogin.token;
 });
+// P0-2: one browser profile holds one API (cookie) session, so logging into
+// the partner/admin consoles clobbers the storefront session. Re-establish
+// the customer session in the page before customer UI steps that follow a
+// console switch. Harmless when the session is already the customer's.
+async function ensureCustomerUiLogin(pg) {
+  await pg.goto(`${STORE}/login`);
+  await pg.idle(800);
+  if ((await pg.eval('location.pathname')) !== '/login') return;
+  await pg.type('#login-email', 'customer@example.com');
+  await pg.type('#login-password', PW);
+  await pg.click('[data-testid=login-submit]');
+  await pg.waitFor("location.pathname !== '/login'");
+}
 await step('B09 delivery (dev simulator) -> customer purchase confirmation in the UI', page, async () => {
   for (let i = 0; i < 2; i++) await api(`/api/v1/orders/${orderId}/advance-tracking`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+  await ensureCustomerUiLogin(page);
   await page.goto(`${STORE}/orders/${orderId}`, { waitFor: "document.querySelector('[data-testid=confirm-order]')" });
   await page.click('[data-testid=confirm-order]');
   await page.waitFor("document.body.innerText.includes('구매확정 완료')");
@@ -296,8 +319,10 @@ await step('B10 customer cancels the remaining (direct) shipment from the UI', p
   await shots(page, 'store_partial_cancel', ['desktop']);
 });
 await step('B10b partial return on one seller shipment from the UI', page, async () => {
-  const token = await page.eval("localStorage.getItem('olmoa_token')");
-  const auth = { Authorization: `Bearer ${token}` };
+  // P0-2: web sessions live in httpOnly cookies; direct API calls use a dedicated Bearer login.
+  const retLogin = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'customer@example.com', password: PW, role: 'CUSTOMER' }) });
+  if (!retLogin.token) throw new Error('customer API login failed');
+  const auth = { Authorization: `Bearer ${retLogin.token}` };
   const s1 = (await api('/api/v1/products?partner_id=pt_001&limit=5')).data.find((p) => p.default_sku_id);
   const s2 = (await api('/api/v1/products?partner_id=pt_002&limit=5')).data.find((p) => p.default_sku_id);
   const co = await api('/api/v1/orders/checkout', { method: 'POST', headers: auth,
@@ -320,6 +345,7 @@ await step('B10b partial return on one seller shipment from the UI', page, async
     if (ship.status !== 'SHIPPED') throw new Error(`ship failed: ${JSON.stringify(ship).slice(0, 160)}`);
   }
   for (let i = 0; i < 2; i++) await api(`/api/v1/orders/${co.order_id}/advance-tracking`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+  await ensureCustomerUiLogin(page);
   await page.goto(`${STORE}/orders/${co.order_id}`, { waitFor: "document.body.innerText.includes('반품 · 교환 신청')" });
   await page.click('text=반품 · 교환 신청');
   await page.waitFor("document.querySelector('[aria-labelledby=claim-title]')");
@@ -330,7 +356,18 @@ await step('B10b partial return on one seller shipment from the UI', page, async
   if (claims.length !== 1) throw new Error(`expected 1 claim, saw ${claims.length}`);
   await shots(page, 'store_partial_return', ['desktop']);
 });
+async function ensureAdminUiLogin(pg) {
+  await pg.goto(`${ADMIN}/login`);
+  await pg.idle(800);
+  if ((await pg.eval('location.pathname')) !== '/login') return;
+  await pg.type('#adm-email', 'admin@openmarket.com');
+  await pg.type('#adm-pw', PW);
+  await pg.click('text=로그인');
+  await pg.waitFor("location.pathname !== '/login'");
+}
 await step('B11 reconciliation still clean after the browser journey', adPage, async () => {
+  // P0-2: the customer re-login in B09/B10b clobbered the shared admin cookies.
+  await ensureAdminUiLogin(adPage);
   await adPage.goto(`${ADMIN}/reconciliation`, { waitFor: "document.querySelector('[data-testid=recon-status]')" });
   const recon = await adPage.eval("document.querySelector('[data-testid=recon-status]').textContent");
   if (!recon.includes('통과')) throw new Error(`reconciliation: ${recon}`);

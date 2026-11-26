@@ -188,10 +188,17 @@ export async function handleStorageRoutes(request, url, env, corsHeaders) {
           } else {
             headers.set('Cache-Control', 'public, max-age=31536000, immutable');
             headers.set('Access-Control-Allow-Origin', '*');
+            // P1: public files are still seller bytes — same sandbox as the D1 branch.
+            headers.set('X-Content-Type-Options', 'nosniff');
+            headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
           }
           return new Response(object.body, { headers });
         }
-      } catch (_) {}
+      } catch (e) {
+        // P2: the D1 fallback below is intentional, but an R2 outage or
+        // permission error must be visible instead of silently degrading.
+        console.error(JSON.stringify({ level: 'error', job: 'r2_download', error: String(e && e.message || e) }));
+      }
     }
 
     // B. Check D1 Storage Object

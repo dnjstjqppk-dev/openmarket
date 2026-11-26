@@ -80,7 +80,12 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
     let rows = [];
     try {
       rows = (await env.DB.prepare('SELECT target_currency, rate, inverse_rate, spread_pct, updated_at FROM exchange_rates WHERE base_currency = ?').bind('KRW').all()).results || [];
-    } catch (_) { rows = []; }
+    } catch (e) {
+      // P2: keep serving the (possibly empty) rate table, but a DB failure
+      // must be visible instead of disguised as "no rates configured".
+      console.error(JSON.stringify({ level: 'error', job: 'fx_rates', error: String(e && e.message || e) }));
+      rows = [];
+    }
     const valid = rows.filter((r) => Number(r.rate) > 0 && Number(r.inverse_rate) > 0);
     const rates = { KRW: 1 };
     const inverseRates = {};

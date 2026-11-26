@@ -29,7 +29,7 @@ const adding = ref(false)
 wishlist.load()
 
 async function onWish() {
-  if (!auth.isAuthenticated) {
+  if (!(await auth.ensureSession())) {
     router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
     return
   }

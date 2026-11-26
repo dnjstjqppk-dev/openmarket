@@ -2,7 +2,12 @@
 // Unified authentication. Every role logs in with a users-table account and a PBKDF2 password.
 
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from '../utils/crypto-auth.js';
-import { issueToken, issueRefreshToken, useRefreshToken, requireAuth, ACCESS_TOKEN_TTL_SECONDS } from '../lib/auth.js';
+import { issueToken, issueRefreshToken, useRefreshToken, requireAuth, ACCESS_TOKEN_TTL_SECONDS, REFRESH_COOKIE, parseCookies, attachAuthCookies, clearAuthCookieHeaders } from '../lib/auth.js';
+
+function withCookies(res, values) {
+  for (const v of values) res.headers.append('Set-Cookie', v);
+  return res;
+}
 import { json, readJson, bad, unauthorized, conflict, str, HttpError, unavailable } from '../lib/http.js';
 import { emailConfigured, sendEmail, storefrontBaseUrl, resetPasswordMail, verifyEmailMail } from '../lib/email.js';
 import { newId, sqlNow } from '../lib/ids.js';
@@ -93,13 +98,17 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
       ...(partner ? { partner_id: partner.id, partner } : {})
     };
-    return json(corsHeaders, { success: true, ...payload, data: payload });
+    // P0-2: JSON tokens stay for native/mobile clients; web apps use the
+    // httpOnly cookies and MUST NOT persist the JSON tokens (see web auth stores).
+    return attachAuthCookies(json(corsHeaders, { success: true, ...payload, data: payload }), env, { token, refreshToken });
   }
 
   // P2-SEC-07: rotate a single-use refresh token into a fresh access + refresh pair.
+  // P0-2: the presented token comes from the JSON body (native) or the
+  // httpOnly refresh cookie (web); rotation re-sets both cookies.
   if (p === '/api/v1/auth/refresh' && request.method === 'POST') {
     const body = await readJson(request);
-    const raw = str(body.refresh_token, { field: '리프레시 토큰', max: 200 });
+    const raw = str(body.refresh_token, { field: '리프레시 토큰', max: 200 }) || parseCookies(request)[REFRESH_COOKIE] || '';
     if (!raw) throw bad('REFRESH_TOKEN_REQUIRED', '리프레시 토큰이 필요합니다.');
     const { user, mfa } = await useRefreshToken(env, raw);
     let partner = null;
@@ -115,7 +124,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
       ...(user.role === 'ROLE_CUSTOMER' ? { customer_id: user.id } : {}),
       ...(partner ? { partner_id: partner.id, partner } : {})
     };
-    return json(corsHeaders, { success: true, ...payload, data: payload });
+    return attachAuthCookies(json(corsHeaders, { success: true, ...payload, data: payload }), env, { token, refreshToken });
   }
 
   if (p === '/api/v1/auth/register' && request.method === 'POST') {
@@ -163,7 +172,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
     const token = await issueToken(env, user, null);
     const payload = { role: 'ROLE_CUSTOMER', token, customer_id: userId, user: publicUser(user), welcome_credit: 0, expiresIn: 43200 };
-    return json(corsHeaders, { success: true, message: '회원가입이 완료되었습니다.', ...payload, data: payload }, 201);
+    return attachAuthCookies(json(corsHeaders, { success: true, message: '회원가입이 완료되었습니다.', ...payload, data: payload }, 201), env, { token });
   }
 
   if ((p === '/api/v1/auth/me' || p === '/api/v1/auth/profile') && request.method === 'GET') {
@@ -206,7 +215,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     }
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     const token = tokenVersion !== Number(user.token_version || 0) ? await issueToken(env, updated, me.partner, { mfa: me.mfa }) : undefined;
-    return json(corsHeaders, { success: true, message: '회원 정보가 수정되었습니다.', data: { user: publicUser(updated), token } });
+    return attachAuthCookies(json(corsHeaders, { success: true, message: '회원 정보가 수정되었습니다.', data: { user: publicUser(updated), token } }), env, { token });
   }
 
   // O10: 개인정보 열람 (data-subject export) and 회원 탈퇴 (withdrawal).
@@ -236,7 +245,20 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
   if (p === '/api/v1/auth/logout-all' && request.method === 'POST') {
     const me = await requireAuth(request, env);
     await env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').bind(me.userId).run();
-    return json(corsHeaders, { success: true, message: '모든 기기에서 로그아웃되었습니다.' });
+    return withCookies(json(corsHeaders, { success: true, message: '모든 기기에서 로그아웃되었습니다.' }), clearAuthCookieHeaders(env));
+  }
+
+  // P0-2: single-device web logout. Revokes the presented refresh token (body
+  // or httpOnly cookie) when there is one and always clears both cookies. The
+  // access JWT itself stays valid until its 1h expiry, but it is httpOnly so
+  // clearing the cookie removes the browser's ability to present it.
+  if (p === '/api/v1/auth/logout' && request.method === 'POST') {
+    const body = await readJson(request);
+    const raw = str(body.refresh_token, { field: '리프레시 토큰', max: 200 }) || parseCookies(request)[REFRESH_COOKIE] || '';
+    if (raw) {
+      await env.DB.prepare('DELETE FROM refresh_tokens WHERE token_hash = ?').bind(await sha256Hex(raw)).run();
+    }
+    return withCookies(json(corsHeaders, { success: true, message: '로그아웃되었습니다.' }), clearAuthCookieHeaders(env));
   }
 
   if (p === '/api/v1/auth/forgot-password' && request.method === 'POST') {

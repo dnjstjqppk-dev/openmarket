@@ -11,7 +11,7 @@ import MultiChannelListingView from '../views/MultiChannelListingView.vue';
 import ApplyView from '../views/ApplyView.vue';
 import ApplicationView from '../views/ApplicationView.vue';
 import NotFoundView from '../views/NotFoundView.vue';
-import { getPartnerStatus } from '../config';
+import { getPartnerStatus, ensurePartnerSession } from '../config';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -164,9 +164,9 @@ const router = createRouter({
   ]
 });
 
-router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem('partner_token');
-  if (to.meta.requiresAuth && !token) {
+router.beforeEach(async (to, _from, next) => {
+  // P0-2: the session is memory-only; restore it from the cookie on entry.
+  if (to.meta.requiresAuth && !(await ensurePartnerSession())) {
     next({ path: '/login', query: { redirect: to.fullPath } });
   } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() !== 'APPROVED') {
     // P2-T02: unknown/empty status also routes to the application (the API

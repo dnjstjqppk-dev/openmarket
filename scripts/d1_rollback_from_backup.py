@@ -8,10 +8,17 @@ wipes the same data d1_30 wipes, runs the restore script and compares the result
 """
 import json
 import pathlib
+import re
 import sqlite3
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def mig_key(name):
+    """Numeric-aware migration order: lexical sort would place d1_100 before d1_20."""
+    m = re.match(r"^d1_(\d+)", name)
+    return (int(m.group(1)) if m else -1, name)
 
 
 def rows(path):
@@ -43,7 +50,7 @@ def build(reviews, products):
 
 def verify(sql, reviews, products):
     db = sqlite3.connect(":memory:")
-    for f in sorted((ROOT / "migrations").glob("d1_*.sql")):
+    for f in sorted((ROOT / "migrations").glob("d1_*.sql"), key=lambda p: mig_key(p.name)):
         if f.name.startswith("d1_30"):
             break
         db.executescript(f.read_text(encoding="utf-8"))

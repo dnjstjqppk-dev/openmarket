@@ -8,7 +8,7 @@ import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
 import { useLocaleStore } from './stores/locale';
 import { i18n } from './i18n';
-import { useTheme, applyRouteHead } from '@olmoa/ui';
+import { useTheme, applyRouteHead, installApiFetch } from '@olmoa/ui';
 
 useTheme().init();
 
@@ -25,53 +25,10 @@ app.use(pinia);
 app.use(router);
 app.use(i18n);
 
-// Session refresh (P2-SEC-07): access tokens live 1h. On 401, one single-flight
-// refresh is attempted and the original request retried once; only a failed
-// refresh ends the session. The x-olmoa-retried marker stops refresh loops.
-let refreshInflight: Promise<string | null> | null = null;
-async function refreshAccessToken(): Promise<string | null> {
-  if (!refreshInflight) {
-    refreshInflight = (async () => {
-      try {
-        const auth = useAuthStore(pinia);
-        const rt = auth.refreshToken;
-        if (!rt) return null;
-        const res = await nativeFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: rt })
-        });
-        const data = await res.json().catch(() => ({} as any));
-        if (!res.ok || !data.success || !data.token || !data.refresh_token) return null;
-        auth.applyRefresh(data.token, data.refresh_token);
-        return data.token as string;
-      } catch {
-        return null;
-      } finally {
-        refreshInflight = null;
-      }
-    })();
-  }
-  return refreshInflight;
-}
-const nativeFetch = window.fetch.bind(window);
-const NO_REFRESH_PATHS = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/register'];
-window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const res = await nativeFetch(input, init);
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  const initHeaders = new Headers(init?.headers);
-  const skipRefresh = initHeaders.get('x-olmoa-retried') === '1'
-    || input instanceof Request
-    || NO_REFRESH_PATHS.some((p) => url.includes(p));
-  if (res.status === 401 && url.startsWith(API_BASE_URL) && !skipRefresh) {
-    const fresh = await refreshAccessToken();
-    if (fresh) {
-      const merged: Record<string, string> = {};
-      initHeaders.forEach((v, k) => { merged[k] = v; });
-      merged['authorization'] = `Bearer ${fresh}`;
-      merged['x-olmoa-retried'] = '1';
-      return nativeFetch(input, { ...init, headers: merged });
-    }
+// P0-2 + P2: cookie sessions via the shared fetch wrapper (see @olmoa/ui).
+installApiFetch({
+  apiBaseUrl: API_BASE_URL,
+  onExpiredSession: () => {
     const auth = useAuthStore(pinia);
     if (auth.isAuthenticated) {
       auth.logout();
@@ -79,10 +36,12 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       router.push({ path: '/login', query: { redirect: here, expired: '1' } });
     }
   }
-  return res;
-};
+});
+// The session is memory-only: restore it on every boot so public pages (no
+// route guard runs for them) also see the logged-in state.
+void useAuthStore(pinia).ensureSession();
 
-router.beforeEach((to, from) => {
+router.beforeEach(async (to, from) => {
   const auth = useAuthStore(pinia);
   const toPath = String(to.path || '/');
   const toLocale = toPath === '/en' || toPath.startsWith('/en/') ? 'en'
@@ -94,7 +53,8 @@ router.beforeEach((to, from) => {
     useLocaleStore(pinia).applyUrlLocale(toLocale === 'en' ? 'en-US' : toLocale === 'ja' ? 'ja-JP' : 'ko-KR');
     document.documentElement.lang = toLocale === 'en' ? 'en' : toLocale === 'ja' ? 'ja' : 'ko';
   } catch { /* display locale must never break navigation */ }
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+  // P0-2: the session is memory-only; restore it from the cookie on entry.
+  if (to.meta.requiresAuth && !(await auth.ensureSession())) {
     const loginPath = toLocale === 'ko' ? '/login' : `/${toLocale}/login`;
     return { path: loginPath, query: { redirect: to.fullPath } };
   }

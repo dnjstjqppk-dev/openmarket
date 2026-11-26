@@ -2,7 +2,7 @@
 // 입점 신청 현황 · 서류 제출 · 심사 요청 (O05). 서류는 비공개 저장소(kyb)에만 올라간다.
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { API_BASE_URL, getPartnerHeaders, getPartnerToken, setPartnerStatus, clearPartnerSession } from '../config'
+import { API_BASE_URL, getPartnerHeaders, setPartnerStatus, clearPartnerSession } from '../config'
 
 const router = useRouter()
 const app = ref<any>(null)
@@ -67,8 +67,8 @@ async function uploadDoc(docType: string, ev: Event) {
 }
 
 async function openDoc(fileId: string) {
-  // Private file: fetched with the session token, shown from a local blob URL (never a shareable link).
-  const res = await fetch(`${API_BASE_URL}/api/v1/storage/file/${fileId}`, { headers: { Authorization: `Bearer ${getPartnerToken()}` } })
+  // Private file: fetched with the cookie session, shown from a local blob URL (never a shareable link).
+  const res = await fetch(`${API_BASE_URL}/api/v1/storage/file/${fileId}`)
   if (!res.ok) { error.value = '파일을 열 수 없습니다.'; return }
   const url = URL.createObjectURL(await res.blob())
   window.open(url, '_blank', 'noopener')

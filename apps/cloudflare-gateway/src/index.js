@@ -2,6 +2,7 @@
 // OLMOA Edge API Gateway (Cloudflare Worker + D1).
 
 import { buildCorsHeaders, errorResponse, json } from './lib/http.js';
+import { maxMigrationVersion } from './lib/migration-version.js';
 import { emailConfigured } from './lib/email.js';
 import { handleAuthRoutes } from './routes/auth.js';
 import { handleSocialAuthRoutes } from './routes/social-auth.js';
@@ -113,7 +114,9 @@ async function health(env, corsHeaders) {
   }
   if (db === 'CONNECTED_D1') {
     try {
-      schemaVersion = await env.DB.prepare('SELECT MAX(version) AS v FROM schema_migrations').first('v');
+      // Numeric max, not MAX(version): lexical MAX misorders past d1_99.
+      const versions = await env.DB.prepare('SELECT version AS v FROM schema_migrations').all();
+      schemaVersion = maxMigrationVersion((versions.results || []).map((r) => r.v));
       migrationsApplied = Number(await env.DB.prepare('SELECT COUNT(*) AS c FROM schema_migrations').first('c')) || 0;
     } catch {
       schemaVersion = null;
@@ -124,8 +127,11 @@ async function health(env, corsHeaders) {
   const pm = String(env.PAYMENT_MODE || '').toLowerCase();
   if (pm === 'live' && env.TOSS_SECRET_KEY) payment = String(env.TOSS_SECRET_KEY).startsWith('test_') ? 'TOSS_TEST_KEY' : 'TOSS_LIVE_KEY';
   else if (pm === 'sandbox' && env.ENVIRONMENT !== 'production') payment = 'LOCAL_SIMULATOR';
+  // P0-4: a disconnected DB is an outage, not a healthy 200 — uptime checks
+  // and load balancers must see 503 so failover actually triggers.
+  const degraded = db !== 'CONNECTED_D1';
   return json(corsHeaders, {
-    status: db === 'CONNECTED_D1' ? 'UP' : 'DEGRADED',
+    status: degraded ? 'DEGRADED' : 'UP',
     brand: 'OLMOA',
     version: SERVICE_VERSION,
     environment: env.ENVIRONMENT || 'unset',
@@ -145,7 +151,7 @@ async function health(env, corsHeaders) {
       supplier_order_api: 'NOT_INTEGRATED'
     },
     timestamp: new Date().toISOString()
-  });
+  }, degraded ? 503 : 200);
 }
 
 export default {
@@ -187,7 +193,15 @@ export default {
   // Cron Triggers (configure in wrangler.jsonc "triggers": {"crons": ["*/5 * * * *"]})
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      const expired = await expireStaleOrders(env, 200);
+      // P0-4: one failing job must not abort the whole tick (previously an
+      // exception here skipped reminders, auto-confirm, reconciliation, ...).
+      let expired;
+      try {
+        expired = await expireStaleOrders(env, 200);
+      } catch (e) {
+        expired = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'expire_orders', error: String(e && e.message || e) }));
+      }
       // 5-9 (K-06, K-09): reminders run before auto-confirm so the confirm
       // reminder always lands before the automatic confirmation it warns of.
       let reminders = 'SKIPPED';
@@ -199,7 +213,13 @@ export default {
         reminders = 'ERROR';
         console.error(JSON.stringify({ level: 'error', job: 'reminders', error: String(e && e.message || e) }));
       }
-      const confirmed = await autoConfirmDelivered(env, 7, 200);
+      let confirmed;
+      try {
+        confirmed = await autoConfirmDelivered(env, 7, 200);
+      } catch (e) {
+        confirmed = 'ERROR';
+        console.error(JSON.stringify({ level: 'error', job: 'auto_confirm', error: String(e && e.message || e) }));
+      }
       // O19: hourly reconciliation with persisted result + alert (ALERT_WEBHOOK_URL) on any failed check.
       let reconciliation = 'NOT_DUE';
       try {

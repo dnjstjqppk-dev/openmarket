@@ -16,11 +16,18 @@ Exit code 0 only if all checks hold and every profile assertion is met.
 """
 import json
 import pathlib
+import re
 import sqlite3
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MIG = ROOT / "migrations"
+
+
+def mig_key(name):
+    """Numeric-aware migration order: lexical sort would place d1_100 before d1_20."""
+    m = re.match(r"^d1_(\d+)", name)
+    return (int(m.group(1)) if m else -1, name)
 
 PROFILES = {
     "d1_31": {
@@ -73,8 +80,8 @@ def load(backup_dir, tables):
 
 def fresh_db(profile, data):
     db = sqlite3.connect(":memory:")
-    for f in sorted(MIG.glob("d1_*.sql")):
-        if f.name >= profile["migration"]:
+    for f in sorted(MIG.glob("d1_*.sql"), key=lambda p: mig_key(p.name)):
+        if mig_key(f.name) >= mig_key(profile["migration"]):
             break
         db.executescript(f.read_text(encoding="utf-8"))
     for t in profile["tables"]:  # the copy must contain production rows only, no seed rows

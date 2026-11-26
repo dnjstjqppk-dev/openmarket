@@ -144,9 +144,12 @@ await t.test('E04 expired sessions log out, route to login, and say so uniformly
     ['apps/admin/src/main.ts', 'clearAdminToken()'],
     ['apps/partner/src/main.ts', 'clearPartnerSession()']
   ]
+  // P2: the 401 interceptor lives in @olmoa/ui; mains wire it and own the
+  // app-specific logout + routing.
+  assert.ok(read('packages/ui/src/apiFetch.ts').includes('res.status === 401'), 'shared wrapper handles 401')
   for (const [f, logout] of mains) {
     const s = read(f)
-    assert.ok(s.includes('401'), `${f} handles 401`)
+    assert.ok(s.includes('installApiFetch'), `${f} wires the shared wrapper`)
     assert.ok(s.includes(logout), `${f} ends the session`)
     assert.ok(s.includes("path: '/login'"), `${f} routes to login`)
     assert.ok(s.includes('expired'), `${f} flags the expiry`)

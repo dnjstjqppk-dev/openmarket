@@ -106,7 +106,7 @@ onMounted(load)
           </div>
           <p class="whitespace-pre-wrap text-sm text-ink">{{ r.content }}</p>
           <div v-if="r.images && r.images.length" class="flex flex-wrap gap-2">
-            <OmImage v-for="(img, i) in r.images" :key="i" :src="img" :alt="`리뷰 사진 ${i + 1}`" ratio="h-16 w-16 rounded-lg border border-line" />
+            <OmImage v-for="(img, i) in r.images" :key="i" :src="img" :alt="`리뷰 사진 ${Number(i) + 1}`" ratio="h-16 w-16 rounded-lg border border-line" />
           </div>
           <div v-if="r.reply" class="rounded-xl bg-surface-2 p-3 text-xs">
             <p class="font-bold text-ink">판매자 답글</p>

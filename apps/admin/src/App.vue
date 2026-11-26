@@ -3,7 +3,7 @@ import { Bell, Boxes, ChartPie, LogOut, Megaphone, MessageSquare, Receipt, Setti
 import { ref, computed, watch, onMounted } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
 import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
-import { API_BASE_URL, getAdminToken, getAdminHeaders, clearAdminToken, getAdminRole, ADMIN_ROLE_LABEL } from './config';
+import { API_BASE_URL, getAdminHeaders, clearAdminToken, getAdminRole, ensureAdminSession, ADMIN_ROLE_LABEL } from './config';
 
 const router = useRouter();
 const route = useRoute();
@@ -11,8 +11,8 @@ const collapsed = ref(false);
 const isLoggedIn = ref(false);
 const adminRole = ref('');
 
-const checkAuth = () => {
-  isLoggedIn.value = !!getAdminToken() && route.path !== '/login';
+const checkAuth = async () => {
+  isLoggedIn.value = route.path !== '/login' && await ensureAdminSession();
   adminRole.value = getAdminRole();
 };
 

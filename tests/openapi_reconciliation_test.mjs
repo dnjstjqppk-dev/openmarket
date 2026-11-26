@@ -3,7 +3,7 @@
 // resolve to a live gateway route, and the six retired stale paths must stay
 // out of the docs (and keep answering 404). Doc-driven: the path/method table
 // is parsed from docs/openapi/openapi.yaml + docs/openapi/paths/*.yaml, then
-// probed against a real gateway harness. See P1 OpenAPI reconcilation (2026-11-07).
+// probed against a real gateway harness. See P1 OpenAPI reconciliation (2026-11-07).
 //
 // Auth discriminator: guarded routes run requireAuth AFTER the prefix match, so an
 // unauthenticated probe answers 401 when the prefix is served at all. That proves
@@ -241,6 +241,7 @@ const EXPECTED = [
   ['/api/v1/admin/sync/logs', 'GET', 401],
   ['/api/v1/sync/logs', 'GET', 401],
   ['/api/v1/auth/refresh', 'POST', 400],
+  ['/api/v1/auth/logout', 'POST', 200],
   ['/api/v1/integrations/pricescanner/feed', 'GET', 401],
   ['/api/v1/integrations/selbym/status', 'GET', 200],
   ['/api/v1/admin/logistics/consolidate', 'POST', 401],

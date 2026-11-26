@@ -21,11 +21,12 @@ const handlePartnerLogin = async () => {
       body: JSON.stringify({ role: 'PARTNER', email: email.value, password: password.value })
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.success || !json.token || !json.partner) {
+    if (!res.ok || !json.success || !json.user || !json.partner) {
       errorMsg.value = json.error || '로그인에 실패했습니다.'
       return
     }
-    savePartnerSession(json.token, json.partner, json.refresh_token)
+    // P0-2: the session cookie is set by the server; only the profile is kept.
+    savePartnerSession(json.user, json.partner)
     if (json.partner.status !== 'APPROVED') { router.replace('/application'); return }
     router.replace(safeRedirect(typeof route.query.redirect === 'string' ? route.query.redirect : '/'))
   } catch {

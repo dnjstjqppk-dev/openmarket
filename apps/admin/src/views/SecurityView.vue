@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 계정 보안 (O11): 내 2단계 인증 설정 + (최고관리자) 운영자 계정·권한 관리.
 import { ref, reactive, computed, onMounted } from 'vue'
-import { adminApi, setAdminToken, setAdminRole, ADMIN_ROLE_LABEL } from '../config'
+import { adminApi, setAdminRole, ADMIN_ROLE_LABEL } from '../config'
 import { userErrorMessage, useConfirm } from '@olmoa/ui'
 
 const { confirm: askConfirm } = useConfirm()
@@ -46,7 +46,7 @@ async function enable() {
   err.value = ''
   const r = await adminApi('/api/v1/auth/2fa/enable', { method: 'POST', json: { code: code.value } })
   if (!r.ok) { err.value = r.data.error || '인증 코드가 올바르지 않습니다.'; return }
-  setAdminToken(r.data.data.token)
+  // P0-2: the fresh MFA-flagged JWT arrives as an httpOnly cookie; nothing to store.
   recovery.value = r.data.data.recovery_codes
   setup.value = null
   code.value = ''

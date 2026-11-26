@@ -11,6 +11,62 @@ import { newId } from './ids.js';
 export const ACCESS_TOKEN_TTL_SECONDS = 3600;
 export const REFRESH_TOKEN_TTL_MS = 14 * 24 * 3600 * 1000;
 
+// P0-2: httpOnly cookie names. Web apps authenticate via these cookies (JS
+// cannot read them, so XSS cannot exfiltrate sessions); native/mobile clients
+// and tests keep using the Authorization Bearer header (dual-mode).
+export const ACCESS_COOKIE = 'olmoa_at';
+export const REFRESH_COOKIE = 'olmoa_rt';
+
+export function parseCookies(request) {
+  const out = {};
+  const header = request.headers.get('Cookie') || '';
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i <= 0) continue;
+    const k = part.slice(0, i).trim();
+    if (!k) continue;
+    try { out[k] = decodeURIComponent(part.slice(i + 1).trim()); } catch { out[k] = part.slice(i + 1).trim(); }
+  }
+  return out;
+}
+
+function cookieAttrs(env, maxAge, path) {
+  // SameSite=Lax: api.<domain> and <domain> share the eTLD+1, so first-party
+  // fetches carry the cookie while cross-site POSTs from an attacker's origin
+  // do not (CSRF-safe for this JSON API). Secure only in production because
+  // local dev serves plain http://localhost.
+  const secure = env && env.ENVIRONMENT === 'production' ? '; Secure' : '';
+  return `Path=${path}; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure}`;
+}
+
+/** Set-Cookie values for a fresh login/rotation. Both tokens are hex/JWT (cookie-safe). */
+export function authCookieHeaders(env, { token, refreshToken }) {
+  return [
+    `${ACCESS_COOKIE}=${token}; ${cookieAttrs(env, ACCESS_TOKEN_TTL_SECONDS, '/')}`,
+    `${REFRESH_COOKIE}=${refreshToken}; ${cookieAttrs(env, Math.floor(REFRESH_TOKEN_TTL_MS / 1000), '/api/v1/auth')}`,
+  ];
+}
+
+export function clearAuthCookieHeaders(env) {
+  return [
+    `${ACCESS_COOKIE}=; ${cookieAttrs(env, 0, '/')}`,
+    `${REFRESH_COOKIE}=; ${cookieAttrs(env, 0, '/api/v1/auth')}`,
+  ];
+}
+
+/**
+ * Append auth cookies to a Response. pass refreshToken only when the route
+ * rotates it (login/refresh/social exchange); access-only issuers (register,
+ * MFA enable, password change, application submit) pass { token } alone.
+ */
+export function attachAuthCookies(res, env, { token, refreshToken = null } = {}) {
+  const values = token
+    ? (refreshToken ? authCookieHeaders(env, { token, refreshToken }) : [`${ACCESS_COOKIE}=${token}; ${cookieAttrs(env, ACCESS_TOKEN_TTL_SECONDS, '/')}`])
+    : [];
+  for (const v of values) res.headers.append('Set-Cookie', v);
+  return res;
+}
+
 const principalCache = new WeakMap();
 
 export function getJwtSecret(env) {
@@ -79,9 +135,12 @@ export async function authenticate(request, env) {
   if (principalCache.has(request)) return principalCache.get(request);
   const header = request.headers.get('Authorization') || '';
   const m = header.match(/^Bearer\s+(\S+)$/i);
+  // P0-2: Bearer first (native/mobile/tests), then the httpOnly access cookie
+  // (web apps). Both feed the same JWT + users-table verification below.
+  const jwt = m ? m[1] : (parseCookies(request)[ACCESS_COOKIE] || null);
   let principal = null;
-  if (m) {
-    const payload = await verifyJwt(m[1], getJwtSecret(env));
+  if (jwt) {
+    const payload = await verifyJwt(jwt, getJwtSecret(env));
     if (payload && typeof payload.sub === 'string') {
       const user = await env.DB.prepare(
         'SELECT id, email, full_name, role, is_active, token_version, admin_role, totp_enabled_at FROM users WHERE id = ?'

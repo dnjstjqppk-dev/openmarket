@@ -128,7 +128,7 @@ export function useBuySelection(productRef: any, skusRef: any) {
   const wished = computed(() => !!product.value && wishlist.ids.has(product.value.id))
   async function toggleWish() {
     if (!product.value) return
-    if (!auth.isAuthenticated) {
+    if (!(await auth.ensureSession())) {
       router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
       return
     }
@@ -160,14 +160,14 @@ export function useBuySelection(productRef: any, skusRef: any) {
 
   const restocked = ref<Set<string>>(new Set())
   async function subscribeRestock(skuId: string) {
-    if (!auth.isAuthenticated) {
+    if (!(await auth.ensureSession())) {
       router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
       return
     }
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/restock-subscriptions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sku_id: skuId })
       })
       const json = await res.json().catch(() => null)

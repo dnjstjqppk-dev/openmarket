@@ -24,8 +24,8 @@ async function load() {
   loading.value = true
   loadError.value = null
   try {
-    const headers: Record<string, string> = auth.isAuthenticated ? { Authorization: `Bearer ${auth.token}` } : {}
-    const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(props.productId)}/coupons`, { headers })
+    // P0-2: cookies authenticate (see the fetch wrapper); no header needed.
+    const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(props.productId)}/coupons`)
     const json = await res.json().catch(() => null)
     if (!res.ok || !json?.success) throw new Error(json?.error || '쿠폰을 불러오지 못했습니다')
     coupons.value = Array.isArray(json.data) ? json.data : []
@@ -45,7 +45,7 @@ function discountText(c: any): string {
 }
 
 async function claim(c: any) {
-  if (!auth.isAuthenticated) {
+  if (!(await auth.ensureSession())) {
     open.value = false
     router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`)
     return
@@ -54,7 +54,7 @@ async function claim(c: any) {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/coupons/claim`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}`, 'X-Idempotency-Key': `dl-${c.id}-${Date.now()}` },
+      headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': `dl-${c.id}-${Date.now()}` },
       body: JSON.stringify({ coupon_id: c.id })
     })
     const json = await res.json().catch(() => null)

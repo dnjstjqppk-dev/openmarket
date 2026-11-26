@@ -3,7 +3,7 @@
 // diligence checklist + risk/reserve + the ruling on the right.
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { adminApi, API_BASE_URL, getAdminToken } from '../../config'
+import { adminApi, API_BASE_URL } from '../../config'
 import { userErrorMessage, useConfirm, useToast, OmSkeleton } from '@olmoa/ui'
 
 const route = useRoute()
@@ -57,7 +57,7 @@ async function load() {
 }
 
 async function openDoc(fileId: string) {
-  const res = await fetch(`${API_BASE_URL}/api/v1/storage/file/${fileId}`, { headers: { Authorization: `Bearer ${getAdminToken()}` } })
+  const res = await fetch(`${API_BASE_URL}/api/v1/storage/file/${fileId}`)
   if (!res.ok) { toastApi.error('서류를 열 수 없습니다.'); return }
   const url = URL.createObjectURL(await res.blob())
   window.open(url, '_blank', 'noopener')

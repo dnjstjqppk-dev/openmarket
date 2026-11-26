@@ -18,7 +18,7 @@ check('admin login (admin_role from d1_24)', adm.status === 200 && adm.json.admi
 const tok = adm.json.token;
 const rec = await call('/api/v1/admin/reconciliation', { token: tok });
 const failing = (rec.json.data.checks || []).filter((c) => !c.ok && c.id !== 'R07').map((c) => c.id);
-check('reconciliation R01–R21 on workerd D1 (json_each etc.)', rec.status === 200 && rec.json.data.checks.length === 22 && failing.length === 0, `checks=${rec.json.data.checks.length} failing=${failing.join(',') || 'none'}`);
+check('reconciliation R01–R24 + R04b on workerd D1 (json_each etc.)', rec.status === 200 && rec.json.data.checks.length === 25 && failing.length === 0, `checks=${rec.json.data.checks.length} failing=${failing.join(',') || 'none'}`);
 const runs = await call('/api/v1/admin/finance/reconciliation-runs', { token: tok });
 check('reconciliation run recorded', runs.status === 200 && runs.json.data.runs.length >= 1);
 const setup = await call('/api/v1/auth/2fa/setup', { method: 'POST', token: tok, body: {} });
@@ -26,7 +26,7 @@ check('TOTP setup (WebCrypto AES-GCM on workerd)', setup.status === 200 && /^otp
 const brn = (nine) => { const d = String(nine).split('').map(Number); const w = [1, 3, 7, 1, 3, 7, 1, 3, 5]; const s = d.reduce((a, x, i) => a + x * w[i], 0) + Math.floor((d[8] * 5) / 10); return `${nine}${(10 - (s % 10)) % 10}`; };
 const stamp = Date.now().toString().slice(-6);
 const app = await call('/api/v1/partner-applications', { method: 'POST', body: {
-  email: `smoke${stamp}@example.com`, password: 'SellerApply!2026', contact_name: '스모크', phone: '010-1111-2222', business_name: `스모크상회${stamp}`, representative_name: '대표',
+  email: `smoke${stamp}@example.com`, password: 'SellerApply!2026', contact_name: '스모크', phone: '010-1111-2222', business_name: `스모크상회${stamp}`, representative_name: '대표', business_address: '서울특별시 중구 세종대로 110', cs_email: `smoke${stamp}@example.com`,
   business_reg_number: brn(`123${stamp}`), mail_order_reg_number: '제2026-서울-0001호', bank_code: '004', bank_account_number: '123-456-789012', bank_account_holder: '스모크',
   customer_service_phone: '02-000-0000', return_shipping_address: '서울', agree_seller_terms: true, agree_privacy: true } });
 check('seller application (d1_23)', app.status === 201, app.text.slice(0, 120));

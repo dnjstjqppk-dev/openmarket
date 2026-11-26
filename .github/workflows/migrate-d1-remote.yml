@@ -2,12 +2,14 @@ name: OpenMarket D1 Remote Migrate (manual)
 
 # OPS-06: the ONLY sanctioned path for applying migrations to remote D1.
 # Manual dispatch exclusively — this workflow never runs on push, pull_request,
-# or schedule. The operator types APPLY to confirm, the job reads the remote
-# schema_migrations ledger, applies pending migrations/d1_*.sql files in
-# version order, stops at the first failure, and re-verifies the ledger.
+# or schedule. The operator types APPLY to confirm, the job snapshots remote D1
+# automatically (step 1: d1 export + artifact upload — a failed snapshot stops
+# the run before anything is applied), then reads the remote schema_migrations
+# ledger, applies pending migrations/d1_*.sql files in version order, stops at
+# the first failure, and re-verifies the ledger.
 # Required repo secrets: CLOUDFLARE_API_TOKEN (same as deploy.yml) and
-# CLOUDFLARE_ACCOUNT_ID. Take a D1 export before running (see
-# docs/database/BACKUP_RECOVERY.md); some migrations rebuild tables.
+# CLOUDFLARE_ACCOUNT_ID. Ordering is numeric-aware (d1_100 sorts after d1_77);
+# lexical sorting would silently skip or misorder post-d1_99 migrations.
 
 on:
   workflow_dispatch:
@@ -30,6 +32,30 @@ jobs:
         with:
           node-version: 22
 
+      - name: Snapshot remote D1 before migrating
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm }}" = "APPLY"
+          CFG="apps/cloudflare-gateway/wrangler.jsonc"
+          DB="openmarket-db"
+          mkdir -p .ops-backups
+          SNAP=".ops-backups/openmarket-db-$(date -u +%Y%m%dT%H%M%SZ)-pre-migrate.sql"
+          npx -y wrangler d1 export "$DB" --remote --config "$CFG" --output "$SNAP"
+          test -s "$SNAP"
+          echo "SNAP=$SNAP" >> "$GITHUB_ENV"
+
+      - name: Upload pre-migrate snapshot
+        # Sensitivity: the dump contains production PII. Artifacts inherit repo
+        # access control; 30-day retention matches the Time Travel window.
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-pre-migrate-${{ github.run_id }}
+          path: ${{ env.SNAP }}
+          retention-days: 30
+
       - name: Apply pending d1_*.sql files in version order
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -39,17 +65,22 @@ jobs:
           test "${{ inputs.confirm }}" = "APPLY"
           CFG="apps/cloudflare-gateway/wrangler.jsonc"
           DB="openmarket-db"
+          mig_num() { [[ "$1" =~ ^d1_([0-9]+) ]] && echo "${BASH_REMATCH[1]}" || echo -1; }
+          mig_gt() {
+            local a b; a="$(mig_num "$1")"; b="$(mig_num "$2")"
+            if (( a != b )); then (( a > b )); else [[ "$1" > "$2" ]]; fi
+          }
           remote_max() {
             npx -y wrangler d1 execute "$DB" --remote --config "$CFG" \
-              --command "SELECT MAX(version) AS v FROM schema_migrations" --json \
-              | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const j=JSON.parse(s);const r=(j[0]&&j[0].results&&j[0].results[0])||{};console.log(r.v||'');})"
+              --command "SELECT version AS v FROM schema_migrations" --json \
+              | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const j=JSON.parse(s);const rows=((j[0]&&j[0].results)||[]).map(r=>r.v).filter(Boolean);const num=v=>{const m=/^d1_(\d+)/.exec(v);return m?Number(m[1]):-1};rows.sort((a,b)=>(num(a)-num(b))||(a<b?-1:a>b?1:0));console.log(rows.length?rows[rows.length-1]:'');})"
           }
           before="$(remote_max)"
           echo "Remote schema level before: ${before:-<no ledger>}"
           applied=0
-          for f in migrations/d1_*.sql; do
+          for f in $(printf '%s\n' migrations/d1_*.sql | sort -V); do
             base="$(basename "$f")"
-            if [[ "$base" > "$before" ]]; then
+            if mig_gt "$base" "$before"; then
               echo "--- applying $base"
               npx -y wrangler d1 execute "$DB" --remote --config "$CFG" --file="$f"
               applied=$((applied + 1))
