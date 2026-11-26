@@ -110,6 +110,8 @@ export type { PriceLines, Countdown } from './commerce'
 export { loadTossSdk } from './payments'
 export { requiredEnv } from './config'
 export { installApiFetch } from './apiFetch'
+export { installChunkReloadGuard, isChunkLoadError, shouldReloadForChunk } from './chunkReload'
+export type { ReloadStore } from './chunkReload'
 export type { ApiFetchOptions } from './apiFetch'
 
 const all: Record<string, any> = {

@@ -2,9 +2,10 @@ name: OpenMarket D1 Remote Migrate (manual)
 
 # OPS-06: the ONLY sanctioned path for applying migrations to remote D1.
 # Manual dispatch exclusively — this workflow never runs on push, pull_request,
-# or schedule. The operator types APPLY to confirm, the job snapshots remote D1
-# automatically (step 1: d1 export + artifact upload — a failed snapshot stops
-# the run before anything is applied), then reads the remote schema_migrations
+# or schedule. The operator types APPLY to confirm, the job records a D1 Time
+# Travel bookmark (fail closed: no bookmark, nothing applied) and, when the
+# D1_SNAPSHOT_PASSPHRASE secret exists, an encrypted per-table snapshot
+# (never plaintext — this repo is public), then reads the remote schema_migrations
 # ledger, applies pending migrations/d1_*.sql files in version order, stops at
 # the first failure, and re-verifies the ledger.
 # Required repo secrets: CLOUDFLARE_API_TOKEN (same as deploy.yml) and
@@ -32,7 +33,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Snapshot remote D1 before migrating
+      # Restore point 1 (mandatory, fail closed): the D1 Time Travel bookmark
+      # taken right before anything is applied. Nothing leaves Cloudflare.
+      # Roll back with: wrangler d1 time-travel restore openmarket-db --bookmark=<value>
+      - name: Record pre-migrate Time Travel bookmark
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -40,16 +44,55 @@ jobs:
           set -euo pipefail
           test "${{ inputs.confirm }}" = "APPLY"
           CFG="apps/cloudflare-gateway/wrangler.jsonc"
-          DB="openmarket-db"
-          mkdir -p .ops-backups
-          SNAP=".ops-backups/openmarket-db-$(date -u +%Y%m%dT%H%M%SZ)-pre-migrate.sql"
-          npx -y wrangler d1 export "$DB" --remote --config "$CFG" --output "$SNAP"
-          test -s "$SNAP"
-          echo "SNAP=$SNAP" >> "$GITHUB_ENV"
+          BOOKMARK="$(npx -y wrangler d1 time-travel info openmarket-db --config "$CFG" --json \
+            | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const m=s.match(/\{[\s\S]*\}/);const b=m&&JSON.parse(m[0]).bookmark;if(!b)process.exit(1);console.log(b);})")"
+          test -n "$BOOKMARK"
+          echo "Pre-migrate bookmark: $BOOKMARK"
+          echo "### Pre-migrate D1 restore point" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`wrangler d1 time-travel restore openmarket-db --bookmark=$BOOKMARK\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload pre-migrate snapshot
-        # Sensitivity: the dump contains production PII. Artifacts inherit repo
-        # access control; 30-day retention matches the Time Travel window.
+      # Restore point 2 (optional): offline copy. This repository is PUBLIC and
+      # public-repo artifacts are downloadable by any signed-in GitHub user, so a
+      # plaintext dump (production PII) must never be uploaded. The snapshot is
+      # taken only when the D1_SNAPSHOT_PASSPHRASE secret exists and is AES-256
+      # encrypted before upload. Whole-DB `d1 export` refuses databases with FTS5
+      # virtual tables (since d1_51), so the export is per table (virtual tables
+      # and their shadow tables excluded) plus the sqlite_master DDL — the inputs
+      # scripts/ops/build_d1_restore.py rebuilds a restorable script from.
+      - name: Encrypted per-table snapshot (only with D1_SNAPSHOT_PASSPHRASE)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SNAPSHOT_PASSPHRASE: ${{ secrets.D1_SNAPSHOT_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm }}" = "APPLY"
+          if [ -z "${SNAPSHOT_PASSPHRASE:-}" ]; then
+            echo "::notice::D1_SNAPSHOT_PASSPHRASE not set — offline snapshot skipped; the Time Travel bookmark above is the restore point."
+            exit 0
+          fi
+          CFG="apps/cloudflare-gateway/wrangler.jsonc"
+          DB="openmarket-db"
+          WORK="$(mktemp -d)"
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          Q="SELECT name FROM sqlite_master m WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' AND NOT EXISTS (SELECT 1 FROM sqlite_master v WHERE v.type = 'table' AND v.sql LIKE 'CREATE VIRTUAL TABLE%' AND m.name LIKE v.name || '\_%' ESCAPE '\') ORDER BY name"
+          npx -y wrangler d1 execute "$DB" --remote --config "$CFG" --command "$Q" --json > "$WORK/tables.json"
+          mapfile -t TABLES < <(node -e "const j=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));for(const r of j[0].results)console.log(r.name)" "$WORK/tables.json")
+          test "${#TABLES[@]}" -gt 0
+          ARGS=(); for t in "${TABLES[@]}"; do ARGS+=(--table "$t"); done
+          npx -y wrangler d1 export "$DB" --remote --config "$CFG" "${ARGS[@]}" --output "$WORK/data.sql"
+          test -s "$WORK/data.sql"
+          npx -y wrangler d1 execute "$DB" --remote --config "$CFG" --command "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL" --json > "$WORK/ddl.json"
+          mkdir -p .ops-backups
+          OUT=".ops-backups/openmarket-db-$STAMP-pre-migrate.tar.gz.gpg"
+          tar -C "$WORK" -czf - data.sql ddl.json \
+            | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-fd 3 -o "$OUT" 3<<<"$SNAPSHOT_PASSPHRASE"
+          rm -rf "$WORK"
+          test -s "$OUT"
+          echo "SNAP=$OUT" >> "$GITHUB_ENV"
+
+      - name: Upload encrypted snapshot
+        if: env.SNAP != ''
         uses: actions/upload-artifact@v4
         with:
           name: d1-pre-migrate-${{ github.run_id }}

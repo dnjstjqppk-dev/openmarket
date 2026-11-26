@@ -49,8 +49,16 @@ await t.test('V04 remote workflow sorts, compares, and snapshots', async () => {
   assert.ok(yml.includes('mig_gt'), 'pending check compares numerically');
   assert.ok(yml.includes('SELECT version AS v FROM schema_migrations'), 'ledger max computed numerically');
   assert.ok(!yml.includes('SELECT MAX(version)'), 'no lexical MAX remains');
-  assert.ok(yml.includes('d1 export'), 'auto snapshot before applying');
-  assert.ok(yml.includes('upload-artifact@v4'), 'snapshot uploaded as artifact');
+  // Restore point taken before anything is applied (fail closed).
+  const bm = yml.indexOf('d1 time-travel info');
+  assert.ok(bm > 0 && bm < yml.indexOf('--file="$f"'), 'Time Travel bookmark recorded before applying');
+  // Whole-DB export fails on FTS5 databases (since d1_51): export per table.
+  assert.ok(yml.includes('"${ARGS[@]}"') && yml.includes("CREATE VIRTUAL TABLE%"), 'per-table export without virtual tables');
+  assert.ok(!/d1 export "\$DB" --remote --config "\$CFG" --output/.test(yml), 'no whole-DB export');
+  // Public repository: artifacts are world-readable, so only an encrypted snapshot may be uploaded.
+  assert.ok(yml.includes('gpg --batch') && yml.includes('--symmetric --cipher-algo AES256'), 'snapshot encrypted');
+  const up = yml.slice(yml.indexOf('upload-artifact@v4'));
+  assert.ok(/path: \$\{\{ env\.SNAP \}\}/.test(up) && yml.includes('.tar.gz.gpg"'), 'only the .gpg file is uploaded');
 });
 
 await t.test('V05 python ops scripts compare numerically and fail closed', async () => {

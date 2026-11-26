@@ -8,8 +8,10 @@ import router from './router';
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);
+// Stale chunks after a deploy: reload once onto the target route.
+installChunkReloadGuard(router);
 import { API_BASE_URL, clearPartnerSession, ensurePartnerSession } from './config';
-import { installApiFetch } from '@olmoa/ui';
+import { installApiFetch, installChunkReloadGuard } from '@olmoa/ui';
 
 // PWA (OPS-10): conservative shell worker, production only — a worker would
 // fight Vite HMR in dev. API/auth traffic always bypasses the cache.

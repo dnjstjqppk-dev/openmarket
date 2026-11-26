@@ -6,7 +6,7 @@
 // - /assets/* (Vite-hashed, immutable) is cache-first for offline repeat visits.
 // - navigations are network-first with an inline offline fallback page.
 // Bump VERSION to drop old caches; hashed asset URLs make stale entries harmless.
-const VERSION = 'olmoa-admin-v1';
+const VERSION = 'olmoa-admin-v2';
 const ASSETS_CACHE = `olmoa-assets-${VERSION}`;
 
 self.addEventListener('install', () => {
@@ -39,7 +39,9 @@ self.addEventListener('fetch', (event) => {
           (hit) =>
             hit ||
             fetch(req).then((res) => {
-              if (res.ok) cache.put(req, res.clone());
+              // A missing hashed chunk gets the SPA index.html (200); caching it
+              // would pin HTML under a JS/CSS URL forever. Only real assets.
+              if (res.ok && !String(res.headers.get('Content-Type') || '').includes('text/html')) cache.put(req, res.clone());
               return res;
             })
         )

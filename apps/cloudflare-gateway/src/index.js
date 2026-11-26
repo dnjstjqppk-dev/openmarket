@@ -4,44 +4,9 @@
 import { buildCorsHeaders, errorResponse, json } from './lib/http.js';
 import { maxMigrationVersion } from './lib/migration-version.js';
 import { emailConfigured } from './lib/email.js';
-import { handleAuthRoutes } from './routes/auth.js';
-import { handleSocialAuthRoutes } from './routes/social-auth.js';
-import { handleCatalogRoutes } from './routes/catalog.js';
-import { handleOrderRoutes } from './routes/orders.js';
-import { handlePartnerRoutes } from './routes/partner.js';
-import { handleAdminRoutes } from './routes/admin.js';
-import { handleIntegrationRoutes } from './routes/integrations.js';
-import { handleFeatureRoutes } from './routes/features.js';
-import { handlePushRoutes } from './routes/push.js';
-import { handleRecommendRoutes } from './routes/recommend.js';
-import { handleShippingRoutes } from './routes/shipping.js';
-import { handleGlobalCustomsAndFxRoutes } from './routes/global-customs-fx.js';
-import { handleGlobalLogisticsRoutes } from './routes/global-logistics.js';
-import { handleGlobalGovernanceRoutes } from './routes/global-governance.js';
-import { handlePaymentRoutes } from './routes/payments.js';
-import { handleStorageRoutes } from './routes/storage.js';
-import { handleTemuOpsRoutes } from './routes/temu-ops.js';
-import { handleBusinessRoutes } from './routes/business.js';
-import { handleLegalRoutes } from './routes/legal.js';
-import { handleSupplierRoutes } from './routes/suppliers.js';
-import { handleSourcingRoutes } from './routes/sourcing.js';
-import { handleSourcingOpsRoutes } from './routes/sourcing-ops.js';
-import { handleCatalogFullRoutes } from './routes/catalog-full.js';
-import { handleChannelPublishRoutes } from './routes/channel-publish.js';
-import { handleChannelsOpsRoutes } from './routes/channels-ops.js';
-import { handleChannelOrderRoutes } from './routes/channel-orders.js';
-import { handleFulfillmentOpsRoutes } from './routes/fulfillment-ops.js';
 import { handleSeoRoutes } from './routes/seo.js';
-import { handleSeoOpsRoutes } from './routes/seo-ops.js';
-import { handleBiddingAndM2cRoutes } from './routes/bidding-m2c.js';
-import { handleProductImportRoutes } from './routes/product-imports.js';
-import { handleSupplier3plRoutes } from './routes/supplier-3pl.js';
-import { handleFeatureFlagRoutes } from './routes/feature-flags.js';
-import { handleMultiChannelRoutes } from './routes/multichannel.js';
-import { handleFinanceRoutes, reconcileIfDue } from './routes/finance.js';
-import { handleOnboardingRoutes } from './routes/onboarding.js';
-import { handleAdminSecurityRoutes } from './routes/admin-security.js';
-import { handleClientErrorRoutes } from './routes/client-errors.js';
+import { routersFor } from './route-table.js';
+import { reconcileIfDue } from './routes/finance.js';
 import { expireStaleOrders, autoConfirmDelivered } from './services/orders.js';
 import { runPriceDropNotifs, runPurchaseReminds } from './services/reminders.js';
 import { purgeExpiredPii } from './services/privacy.js';
@@ -57,46 +22,6 @@ import { enforceRateLimit, classify } from './lib/ratelimit.js';
 import { authenticate } from './lib/auth.js';
 
 const SERVICE_VERSION = '2.0.0-v3-integrity';
-
-const ROUTERS = [
-  handleAdminSecurityRoutes, // /auth/2fa/* and /admin/admin-users before the generic auth/admin routers
-  handleAuthRoutes,
-  handleSocialAuthRoutes,
-  handleOnboardingRoutes, // before partner/admin routers: '/api/v1/partner-applications' shares their prefixes
-  handleBusinessRoutes,
-  handleLegalRoutes,
-  handlePaymentRoutes,
-  handleFinanceRoutes,
-  handleSupplierRoutes,
-  handleSourcingRoutes,
-  handleSourcingOpsRoutes,
-  handleSupplier3plRoutes,
-  handleProductImportRoutes,
-  handleFeatureFlagRoutes,
-  handleMultiChannelRoutes,
-  handleChannelPublishRoutes,
-  handleChannelsOpsRoutes,
-  handleChannelOrderRoutes,
-  handleFulfillmentOpsRoutes,
-  handleSeoOpsRoutes,
-  handleBiddingAndM2cRoutes,
-  handleGlobalCustomsAndFxRoutes,
-  handleGlobalLogisticsRoutes,
-  handleGlobalGovernanceRoutes,
-  handleStorageRoutes,
-  handleTemuOpsRoutes,
-  handleFeatureRoutes,
-  handlePushRoutes,
-  handleRecommendRoutes,
-  handleShippingRoutes,
-  handleCatalogFullRoutes,
-  handleCatalogRoutes,
-  handleOrderRoutes,
-  handlePartnerRoutes,
-  handleAdminRoutes,
-  handleIntegrationRoutes,
-  handleClientErrorRoutes
-];
 
 async function health(env, corsHeaders) {
   let db = 'DISCONNECTED';
@@ -180,7 +105,8 @@ export default {
         loginEmail = await request.clone().json().then((b) => (b && typeof b.email === 'string' ? b.email.slice(0, 254) : null)).catch(() => null);
       }
       await enforceRateLimit(request, env, { userKey, loginEmail });
-      for (const route of ROUTERS) {
+      // Only routers that can match this path's first segment run (route-table.js).
+      for (const route of routersFor(url.pathname)) {
         const res = await route(request, url, env, corsHeaders, ctx);
         if (res) return res;
       }

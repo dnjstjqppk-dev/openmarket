@@ -8,8 +8,10 @@ const app = createApp(App);
 // P2-A10: no pinia — the admin console keeps session in config.ts localStorage
 // helpers and has zero defineStore modules, so no store plugin is registered.
 app.use(router);
+// Stale chunks after a deploy: reload once onto the target route.
+installChunkReloadGuard(router);
 import { API_BASE_URL, getAdminRole, clearAdminToken, ensureAdminSession } from './config';
-import { installApiFetch } from '@olmoa/ui';
+import { installApiFetch, installChunkReloadGuard } from '@olmoa/ui';
 
 // PWA (OPS-10): conservative shell worker, production only — a worker would
 // fight Vite HMR in dev. API/auth traffic always bypasses the cache.

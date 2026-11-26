@@ -24,14 +24,27 @@ npx wrangler d1 time-travel restore openmarket-db --timestamp 2026-11-11T02:00:0
 
 ## 2. 방어선 2: `d1 export` 오프라인 사본 (DB 삭제 대비)
 
+d1_51(FTS5 `product_search_fts`) 이후 DB 전체 `d1 export`는
+`cannot export databases with Virtual Tables (fts5)`로 **항상 실패**한다
+(2026-11-27 로컬 재현). 테이블 단위로 받는다 — 가상 테이블과 그 shadow 테이블 제외:
+
 ```bash
-# 마이그레이션 전 필수 스냅샷 (PII 포함 — git-ignored .ops-backups/ 이하에만 보관)
-npx wrangler d1 export openmarket-db --remote --output .ops-backups/openmarket-db-20261111-pre-d1XX.sql
-# 주 1회 전체 export를 권장 (유료 전환 전까지는 격일)
+# PII 포함 — git-ignored .ops-backups/ 이하에만 보관. 이 저장소는 PUBLIC이므로
+# 평문 덤프를 Actions artifact·이슈·커밋 어디에도 올리지 않는다.
+Q="SELECT name FROM sqlite_master m WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' AND NOT EXISTS (SELECT 1 FROM sqlite_master v WHERE v.type = 'table' AND v.sql LIKE 'CREATE VIRTUAL TABLE%' AND m.name LIKE v.name || '\_%' ESCAPE '\') ORDER BY name"
+npx wrangler d1 execute openmarket-db --remote --command "$Q" --json > tables.json
+npx wrangler d1 export openmarket-db --remote $(node -e "for(const r of require('./tables.json')[0].results)process.stdout.write(' --table '+r.name)") --output .ops-backups/openmarket-db-YYYYMMDD-data.sql
+npx wrangler d1 execute openmarket-db --remote --command "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL" --json > .ops-backups/openmarket-db-YYYYMMDD-ddl.json
+# 주 1회 권장 (유료 전환 전까지는 격일)
 ```
 
-export 파일로 복원할 때는 빈 D1(또는 복원 전용 DB)에 `d1 execute --file`으로
-적재한 뒤 §4 검증 쿼리를 통과한 것만 운영 바인딩으로 교체한다.
+`migrate-d1-remote.yml`은 적용 전에 Time Travel bookmark를 필수로 기록하고(실패 시 중단),
+`D1_SNAPSHOT_PASSPHRASE` 시크릿이 있을 때만 위 방식의 스냅샷을 AES-256으로 암호화해
+artifact로 올린다(복호화: `gpg -d <file>.tar.gz.gpg | tar xz`).
+
+복원할 때는 `scripts/ops/build_d1_restore.py <data.sql> <ddl.json> <out.sql> <old_api> <new_api>`로
+FK 순서·FTS 백필·인덱스/트리거를 포함한 단일 스크립트를 만들고, 빈 D1(또는 복원 전용 DB)에
+`d1 execute --file`으로 적재한 뒤 §4 검증 쿼리를 통과한 것만 운영 바인딩으로 교체한다.
 직접 덮어쓰기가 아니라 교체 방식인 이유: 실패 시 원본이 그대로 남는다.
 
 ## 3. RPO & RTO (정직 표기)

@@ -8,7 +8,7 @@ import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
 import { useLocaleStore } from './stores/locale';
 import { i18n } from './i18n';
-import { useTheme, applyRouteHead, installApiFetch } from '@olmoa/ui';
+import { useTheme, applyRouteHead, installApiFetch, installChunkReloadGuard } from '@olmoa/ui';
 
 useTheme().init();
 
@@ -23,6 +23,8 @@ const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
 app.use(router);
+// Stale chunks after a deploy: reload once onto the target route.
+installChunkReloadGuard(router);
 app.use(i18n);
 
 // P0-2 + P2: cookie sessions via the shared fetch wrapper (see @olmoa/ui).
