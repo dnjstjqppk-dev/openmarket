@@ -13,12 +13,12 @@ const t = createRunner('Storefront shell')
 const SF = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'apps/storefront')
 const read = (p) => readFileSync(join(SF, p), 'utf8')
 
-await t.test('H01 head carries canonical, ko-KR + x-default hreflang and the theme pre-render snippet', async () => {
+await t.test('H01 head carries canonical, ko + x-default hreflang and the theme pre-render snippet', async () => {
   const html = read('index.html')
-  assert.ok(html.includes('<link rel="canonical" href="https://olmoa.com/" />'), 'canonical present')
-  assert.ok(html.includes('<link rel="alternate" hreflang="ko-KR" href="https://olmoa.com/" />'), 'ko-KR hreflang present')
-  assert.ok(!/hreflang="(en|ja)/.test(html), 'untranslated /en /ja mirrors are not advertised')
-  assert.ok(html.includes('<link rel="alternate" hreflang="x-default" href="https://olmoa.com/" />'), 'x-default points at ko')
+  assert.ok(html.includes('<link rel="canonical" href="https://olmoa.com/ko/krw" />'), 'canonical present')
+  assert.ok(html.includes('<link rel="alternate" hreflang="ko" href="https://olmoa.com/ko/krw" />'), 'ko hreflang present')
+  assert.ok(!/hreflang="(en|ja|zh-TW)/.test(html), 'untranslated locales are not advertised in static shell')
+  assert.ok(html.includes('<link rel="alternate" hreflang="x-default" href="https://olmoa.com/ko/krw" />'), 'x-default points at ko')
   assert.ok(html.includes('<meta property="og:locale" content="ko_KR" />'), 'og:locale present')
   // P1: the pre-render snippet lives in /theme-init.js (external) so the CSP
   // script-src 'self' stays strict; an inline copy would be blocked.
@@ -92,22 +92,20 @@ await t.test('SH05 category bar hides on scroll down', async () => {
   assert.ok(app.includes('resetCategoryBar()'), 'stale state resets on navigation')
 })
 
-await t.test('H04 6-2 locale mirrors duplicate every route under /en and /ja', async () => {
+await t.test('H04 /{lang}/{currency} routes wrap appRoutes and localize plain paths', async () => {
   const r = read('src/router/index.ts')
-  assert.ok(r.includes("for (const prefix of ['en', 'ja'])"), 'mirrors generated for both locales')
+  assert.ok(r.includes('/:lang(${LANG_RE})/:currency(${CUR_RE})'), 'prefixed locale+currency parent route')
   assert.ok(r.includes('appRoutes'), 'same components, catalog and prices')
+  assert.ok(r.includes('localizePath') && r.includes('switchLocalePath'), 'localized path helpers wired')
 })
 
-await t.test('H05 6-2 head carries ko-KR + x-default only, mirrors canonical to ko, prefix-aware robots', async () => {
+await t.test('H05 head delegates canonical/robots/hreflang to localeUrlPolicy and applies URL locale+currency', async () => {
   const h = readFileSync(join(SF, '..', '..', 'packages/ui/src/composables/useSeoHead.ts'), 'utf8')
-  assert.ok(h.includes('hreflangOf') && h.includes("lang: 'x-default'"), 'ko-KR/x-default set built')
-  assert.ok(h.includes("href: `${b}${bare}${suf}`"), 'x-default always points at the ko URL')
-  assert.ok(!h.includes("lang: 'en-US'") && !h.includes("lang: 'ja-JP'"), 'untranslated mirrors are not advertised')
-  assert.ok(h.includes('${barePathOf(path)}${pageSuffixOf(query)}'), 'mirror canonical is the bare ko URL')
-  assert.ok(h.includes('advertised.has('), 'stale en/ja alternates from the shell are removed')
+  assert.ok(h.includes('localeUrlPolicy') && h.includes('hreflangOf'), 'shared localeUrlPolicy drives head tags')
   assert.ok(h.includes('barePathOf(path)'), 'noindex evaluated on the bare path')
+  assert.ok(h.includes('link[rel="alternate"][hreflang]'), 'stale hreflang tags replaced on navigation')
   const m = read('src/main.ts')
-  assert.ok(m.includes('applyUrlLocale'), 'URL locale applied on navigation')
+  assert.ok(m.includes('applyUrlLocale') && m.includes('applyUrlCurrency'), 'URL locale and currency applied on navigation')
   assert.ok(m.includes('document.documentElement.lang'), 'html lang follows the URL')
 })
 

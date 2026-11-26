@@ -3,6 +3,8 @@
 // validates same-site https URLs; drain POSTs one batch and records per-URL
 // SENT/FAILED rows. Without INDEXNOW_KEY it fails closed, rows stay PENDING.
 
+import { loadTranslations, contentLangs, productPath } from '../../lib/translations.js';
+
 const DEFAULT_ENDPOINT = 'https://api.indexnow.org/indexnow';
 const BATCH = 100;
 const fail = (code) => Object.assign(new Error(code), { code });
@@ -39,10 +41,14 @@ const indexableOf = (row) => Boolean(row) && row.status === 'ACTIVE' && row.revi
  *  pre-write { status, review_status } row, or null when it was not read. */
 export async function notifyProductChanged(env, productId, before = null) {
   try {
-    const after = await env.DB.prepare('SELECT status, review_status FROM products WHERE id = ?').bind(productId).first();
+    const after = await env.DB.prepare('SELECT id, title, status, review_status FROM products WHERE id = ?').bind(productId).first();
     if (!indexableOf(after) && !indexableOf(before)) return { queued: 0, skipped: 'NOT_INDEXABLE' };
     const base = String(env.PUBLIC_STOREFRONT_URL || 'https://olmoa.com').replace(/\/$/, '');
-    return await enqueueUrls(env, [`${base}/product/${productId}`]);
+    // 2026-11-27 URL scheme: each content language's representative-currency
+    // PDP URL (the only indexable ones). A removed product still has its id.
+    const product = after || { id: productId, title: '' };
+    const tr = await loadTranslations(env, productId);
+    return await enqueueUrls(env, contentLangs(tr).map((lang) => `${base}${productPath(product, tr, lang)}`));
   } catch (e) {
     console.warn('indexnow notify failed', productId, String((e && e.message) || e));
     return { queued: 0, skipped: 'NOTIFY_FAILED' };

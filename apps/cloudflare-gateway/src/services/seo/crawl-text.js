@@ -8,7 +8,12 @@ import { returnPolicyNode } from '../../lib/seo-jsonld.js';
 import { SITE_NAME, SITE_TAGLINE } from '../../lib/site-entity.js';
 import { buildPdpBrief } from './pdp-brief.js';
 import { shippingText } from '../../lib/shipping-policy.js';
+import { localizedPath, productBarePath, slugify } from '../../../../../packages/ui/src/locale.config.ts';
 
+// Bare private paths (they only redirect since 2026-11-27). Prefixed private
+// pages (/{lang}/{currency}/cart ...) are NOT disallowed: robots `*` matches
+// across '/', so '/*/*/cart' would also block product slugs like 'cart-holder';
+// those pages carry noindex,nofollow from the edge head instead.
 export const PRIVATE_DISALLOWS = ['/api/', '/cart', '/checkout', '/my', '/orders', '/login',
   '/register', '/addresses', '/wishlist', '/coupons', '/payments', '/admin'];
 
@@ -33,7 +38,8 @@ export function robotsTxt(base) {
     for (const p of PRIVATE_DISALLOWS) lines.push(`Disallow: ${p}`);
     lines.push('Allow: /', '');
   }
-  lines.push(CONTENT_SIGNAL, `Sitemap: ${b}/sitemap-index.xml`, `Sitemap: ${b}/sitemap.xml`);
+  // /sitemap.xml is the sitemap index since 2026-11-27 (/sitemap-index.xml is an alias, not listed twice).
+  lines.push(CONTENT_SIGNAL, `Sitemap: ${b}/sitemap.xml`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -71,12 +77,12 @@ export async function llmsTxt(env, base) {
     if (operator) {
       lines.push(`운영주체: ${operator.legal_name} (사업자등록번호 ${operator.business_reg_number}, 통신판매업신고 ${operator.mail_order_reg_number})`, '');
     }
-    lines.push('## 카테고리', ...cats.map((c) => `- [${c.name}](${b}/category/${c.slug})`), '');
+    lines.push('## 카테고리', ...cats.map((c) => `- [${c.name}](${b}/ko/krw/c/${encodeURIComponent(c.slug)})`), '');
     lines.push('## 판매 정책',
-      `- [배송 정책](${b}/policy/shipping)`,
-      `- [반품·환불 규정](${b}/legal/refund)`,
+      `- [배송 정책](${b}/ko/krw/policy/shipping)`,
+      `- [반품·환불 규정](${b}/ko/krw/legal/refund)`,
       `- [스토어별 반품·교환 배송비](${b}/llms/return-policies)`,
-      `- [개인정보처리방침](${b}/legal/privacy)`, '');
+      `- [개인정보처리방침](${b}/ko/krw/legal/privacy)`, '');
     const shown = picks.slice(0, n);
     lines.push(`## 상품 문서 (베스트 ${shown.length}종)`,
       ...shown.map((p) => `- [${p.title}](${b}/llms/product/${p.id}.md)`), '');
@@ -133,7 +139,7 @@ export async function llmsFullTxt(env, base) {
        WHERE p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND ${sellableSql('p')}
          AND (c.id = (SELECT id FROM categories WHERE slug = ?) OR c.parent_id = (SELECT id FROM categories WHERE slug = ?))
        ORDER BY p.total_sold_count DESC, p.updated_at DESC LIMIT ?`).bind(c.slug, c.slug, perCat).all();
-    sections.push(['', `### [${c.name}](${b}/category/${c.slug})`, ...(results || []).map((p) =>
+    sections.push(['', `### [${c.name}](${b}/ko/krw/c/${encodeURIComponent(c.slug)})`, ...(results || []).map((p) =>
       `- [${p.title}](${b}/llms/product/${p.id}.md) — ${Number(p.lowest_sale_price).toLocaleString('ko-KR')}원, 누적 ${Number(p.total_sold_count).toLocaleString('ko-KR')}개`)].join('\n'));
   }
   let out = head;
@@ -183,7 +189,7 @@ export async function productMarkdown(env, base, productId) {
     `# ${brief.title}`,
     `> ${SITE_TAGLINE}`,
     '',
-    `- 정식 주소: ${b}/product/${brief.product_id}`,
+    `- 정식 주소: ${b}${localizedPath('ko', 'krw', productBarePath(brief.product_id, slugify(brief.title)))}`,
     `- 판매가: ${Number(p.lowest_sale_price).toLocaleString('ko-KR')}원`,
     `- 재고: ${Number(p.stock_sum) > 0 ? '구매 가능' : '일시 품절'}`,
     `- 배송: ${pol ? shippingText(pol) : '판매자 문의'}`,
@@ -227,8 +233,8 @@ export async function categoryMarkdown(env, base, slug) {
     `# ${cat.name}`,
     `> ${SITE_TAGLINE}`,
     '',
-    `- 정식 주소: ${b}/category/${cat.slug}`,
-    ...(subs && subs.length ? ['', '## 하위 분류', ...subs.map((s) => `- [${s.name}](${b}/category/${s.slug}) (${Number(s.n).toLocaleString('ko-KR')}개)`)] : []),
+    `- 정식 주소: ${b}/ko/krw/c/${encodeURIComponent(cat.slug)}`,
+    ...(subs && subs.length ? ['', '## 하위 분류', ...subs.map((s) => `- [${s.name}](${b}/ko/krw/c/${encodeURIComponent(s.slug)}) (${Number(s.n).toLocaleString('ko-KR')}개)`)] : []),
     '',
     `## 인기 상품 (상위 ${(picks || []).length}종)`,
     ...((picks || []).map((p) => `- [${p.title}](${b}/llms/product/${p.id}.md) — ${Number(p.lowest_sale_price).toLocaleString('ko-KR')}원`)),
@@ -259,7 +265,7 @@ export async function returnPolicyFeed(env, base) {
       '@type': 'ListItem',
       position: i + 1,
       name: r.seller_name,
-      url: `${b}/store/${r.partner_id}`,
+      url: `${b}/ko/krw/store/${encodeURIComponent(r.partner_id)}`,
       item: returnPolicyNode({ return_fee: r.return_fee, exchange_fee: r.exchange_fee }, windowDays)
     }))
   };

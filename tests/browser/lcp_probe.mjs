@@ -29,12 +29,12 @@ const prodSlug = prod.slug || prod.id || 'none';
 const catSlug = (cats[0] && (cats[0].slug || cats[0].id)) || 'none';
 
 const ROUTES = [
-  ['storefront', `${SF}/`],
-  ['storefront', `${SF}/categories`],
-  ['storefront', `${SF}/category/${catSlug}`],
-  ['storefront', `${SF}/product/${prodSlug}`],
-  ['storefront', `${SF}/search?q=${encodeURIComponent('가방')}`],
-  ['storefront', `${SF}/cart`],
+  ['storefront', `${SF}/ko/krw`],
+  ['storefront', `${SF}/ko/krw/categories`],
+  ['storefront', `${SF}/ko/krw/c/${catSlug}`],
+  ['storefront', `${SF}/ko/krw/p/${prodSlug}`],
+  ['storefront', `${SF}/ko/krw/search?q=${encodeURIComponent('가방')}`],
+  ['storefront', `${SF}/ko/krw/cart`],
   ['admin', `${AD}/login`],
   ['partner', `${PT}/login`]
 ];

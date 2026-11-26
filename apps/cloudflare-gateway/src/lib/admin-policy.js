@@ -27,6 +27,7 @@ const RULES = [
   R(null, /^\/api\/v1\/admin\/partners\/[^/]+\/payout-account$/, 'finance.payout'),
   R(null, /^\/api\/v1\/admin\/(finance|reconciliation|ledgers?|payout-requests)(\/|$)/, 'finance.read', 'finance.payout'),
   R(null, /^\/api\/v1\/admin\/platform-policies(\/|$)/, 'finance.read', 'finance.payout'),
+  R(null, /^\/api\/v1\/admin\/fx-rates(\/|$)/, 'finance.read', 'finance.payout'),
   R('POST', /^\/api\/v1\/admin\/orders\/[^/]+\/refund$/, 'orders.refund'),
   R(null, /^\/api\/v1\/admin\/sub-orders\//, 'orders.manage'),
   R(null, /^\/api\/v1\/admin\/(partners|partner-applications)(\/|$)/, 'partners.read', 'partners.manage'),

@@ -134,7 +134,7 @@ await t.test('7. migration data moves are rerun-safe', async () => {
 await t.test('8. schema version pin tracks the new migration', async () => {
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_77_user_locale.sql', 'pin names d1_77');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_78_product_translations.sql', 'pin names d1_78');
 });
 
 t.finish();

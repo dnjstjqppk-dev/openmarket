@@ -54,8 +54,8 @@ async function createDraft(g, token, title) {
   return r.json.product_id;
 }
 
-const queuedAs = (g, id) => g.db.prepare('SELECT status FROM indexnow_queue WHERE url = ?')
-  .get(`https://olmoa.com/product/${id}`);
+const queuedAs = (g, id) => g.db.prepare("SELECT status FROM indexnow_queue WHERE url LIKE ? ORDER BY rowid DESC LIMIT 1")
+  .get(`https://olmoa.com/ko/krw/p/${id}%`);
 
 // 1. Key file: byte-exact when the key exists; exact .txt routes still win.
 await t.test('1. /<key>.txt serves the key, impostors 404', async () => {

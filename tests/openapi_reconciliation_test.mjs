@@ -399,6 +399,14 @@ const EXPECTED = [
   ['/api/v1/admin/seo/indexnow/status', 'GET', 401],
   ['/api/v1/admin/seo/indexnow/queue', 'GET', 401],
   ['/api/v1/admin/seo/indexnow/drain', 'POST', 401],
+  // i18n URL routing & product translations + admin FX rates
+  ['/api/v1/partner/products/{id}/translations', 'GET', 401],
+  ['/api/v1/partner/products/{id}/translations/{lang}', 'PUT', 401],
+  ['/api/v1/partner/products/{id}/translations/{lang}', 'DELETE', 401],
+  ['/api/v1/products/{id}/localized', 'GET', 200],
+  ['/api/v1/admin/fx-rates', 'GET', 401],
+  ['/api/v1/admin/fx-rates/{currency}', 'PUT', 401],
+  ['/api/v1/admin/fx-rates/{currency}', 'DELETE', 401],
 ];
 
 // Retired 2026-11-07: documented paths with no gateway route behind them.
@@ -449,7 +457,8 @@ function probePath(template) {
   if (template.startsWith('/api/v1/legal/')) return template.replace('{kind}', 'terms');
   return template.replaceAll('{id}', 'probe-id').replaceAll('{subId}', 'probe-sub')
     .replaceAll('{slug}', 'probe-slug').replaceAll('{platform}', 'probe-id')
-    .replaceAll('{key}', 'probe-id').replaceAll('{fileKey}', 'probe-id');
+    .replaceAll('{key}', 'probe-id').replaceAll('{fileKey}', 'probe-id')
+    .replaceAll('{lang}', 'en').replaceAll('{currency}', 'TWD');
 }
 async function newGateway() {
   return createGateway({

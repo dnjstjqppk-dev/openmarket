@@ -1,9 +1,9 @@
 // apps/cloudflare-gateway/src/routes/seo.js
-// Public crawl surface: legacy bounded /sitemap.xml (e2e-02 contract),
-// sharded /sitemap-index.xml + /sitemaps/*, /robots.txt, /llms.txt and
+// Public crawl surface: /sitemap.xml index (+ /sitemap-index.xml alias) over
+// /sitemaps/* (per-language product series), /robots.txt, /llms.txt and
 // /llms-full.txt. All D1-driven; served pre-ratelimit like /health.
 
-import { STATIC_URLS, LEGACY_PRODUCT_CAP, PRODUCTS_PER_SITEMAP, categoryUrls, storeUrls,
+import { STATIC_URLS, PRODUCTS_PER_SITEMAP, categoryUrls, storeUrls, sitemapLangs,
   productUrls, approvedProductCount, productPageCount, renderUrlset, renderIndex } from '../services/seo/sitemap.js';
 import { robotsTxt, llmsTxt, llmsFullTxt, couponFeed, returnPolicyFeed, productMarkdown, categoryMarkdown } from '../services/seo/crawl-text.js';
 import { buildPdpBrief, renderPdpText } from '../services/seo/pdp-brief.js';
@@ -18,17 +18,17 @@ export async function handleSeoRoutes(request, url, env, corsHeaders) {
   const p = url.pathname;
   const base = baseOf(env);
 
-  if (p === '/sitemap.xml') {
-    const cats = await categoryUrls(env);
-    const prods = await productUrls(env, 1, LEGACY_PRODUCT_CAP);
-    const urls = [...STATIC_URLS.map((loc) => ({ loc })), ...cats, ...prods];
-    return xml(corsHeaders, renderUrlset(base, urls));
-  }
-  if (p === '/sitemap-index.xml') {
-    const pages = productPageCount(await approvedProductCount(env));
-    const entries = ['/sitemaps/categories.xml', '/sitemaps/stores.xml'];
-    for (let n = 1; n <= pages; n++) entries.push(`/sitemaps/products-${n}.xml`);
+  // 2026-11-27: /sitemap.xml is the index (spec 4.4); /sitemap-index.xml stays as an alias.
+  if (p === '/sitemap.xml' || p === '/sitemap-index.xml') {
+    const entries = ['/sitemaps/pages.xml', '/sitemaps/categories.xml', '/sitemaps/stores.xml'];
+    for (const lang of await sitemapLangs(env)) {
+      const pages = productPageCount(await approvedProductCount(env, lang));
+      for (let n = 1; n <= pages; n++) entries.push(`/sitemaps/${lang}-products-${n}.xml`);
+    }
     return xml(corsHeaders, renderIndex(base, entries));
+  }
+  if (p === '/sitemaps/pages.xml') {
+    return xml(corsHeaders, renderUrlset(base, STATIC_URLS.map((loc) => ({ loc }))));
   }
   if (p === '/sitemaps/categories.xml') {
     return xml(corsHeaders, renderUrlset(base, await categoryUrls(env)));
@@ -36,14 +36,16 @@ export async function handleSeoRoutes(request, url, env, corsHeaders) {
   if (p === '/sitemaps/stores.xml') {
     return xml(corsHeaders, renderUrlset(base, await storeUrls(env)));
   }
-  const pm = p.match(/^\/sitemaps\/products-(\d+)\.xml$/);
+  const pm = p.match(/^\/sitemaps\/(?:([a-z]{2}(?:-[a-z]{2})?)-)?products-(\d+)\.xml$/);
   if (pm) {
-    const page = Number(pm[1]);
-    const pages = productPageCount(await approvedProductCount(env));
+    const lang = pm[1] || 'ko'; // products-N.xml (pre-2026-11-27 name) = ko
+    const page = Number(pm[2]);
+    const langs = await sitemapLangs(env);
+    const pages = langs.includes(lang) ? productPageCount(await approvedProductCount(env, lang)) : 0;
     if (!Number.isSafeInteger(page) || page < 1 || page > pages) {
       return new Response('Not Found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
     }
-    return xml(corsHeaders, renderUrlset(base, await productUrls(env, page, PRODUCTS_PER_SITEMAP)));
+    return xml(corsHeaders, renderUrlset(base, await productUrls(env, page, PRODUCTS_PER_SITEMAP, lang)));
   }
   // 6-2: edge rendering data for one storefront path (the apex worker injects
   // it into index.html for every visitor alike). Read-only, public, cached 5 min.
@@ -52,7 +54,7 @@ export async function handleSeoRoutes(request, url, env, corsHeaders) {
     if (path.length > 512 || !path.startsWith('/')) {
       return Response.json({ status: 'pass' }, { status: 400, headers: { ...corsHeaders, 'Cache-Control': 'no-store' } });
     }
-    const data = await renderSeoPage(env, base, path);
+    const data = await renderSeoPage(env, base, path, String(url.searchParams.get('query') || ''));
     return Response.json(data, { headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=60, s-maxage=300' } });
   }
   if (p === '/robots.txt') return txt(corsHeaders, robotsTxt(base));

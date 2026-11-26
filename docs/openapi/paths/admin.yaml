@@ -2704,3 +2704,33 @@ paths:
           description: Non-SUPER_ADMIN role (ADMIN_PERMISSION_DENIED)
         '409':
           description: Version already registered for the kind (VERSION_EXISTS)
+
+  /api/v1/admin/fx-rates:
+    get:
+      tags: [Admin]
+      summary: List operator-published display FX rates (base KRW)
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Exchange rate rows and allowed currencies }
+        '401': { description: Missing or expired JWT }
+        '403': { description: Missing finance.read permission }
+
+  /api/v1/admin/fx-rates/{currency}:
+    put:
+      tags: [Admin]
+      summary: Upsert one operator display FX rate (audited)
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Saved FX rate row }
+        '400': { description: Unsupported currency or invalid rate/spread }
+        '401': { description: Missing or expired JWT }
+        '403': { description: Missing finance.payout permission }
+    delete:
+      tags: [Admin]
+      summary: Delete one operator display FX rate (audited)
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: FX rate removed }
+        '401': { description: Missing or expired JWT }
+        '403': { description: Missing finance.payout permission }
+        '404': { description: Currency not configured }

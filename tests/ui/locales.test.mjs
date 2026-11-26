@@ -29,9 +29,9 @@ function testI18n(messages, locale = 'en-US') {
   return createI18n({ legacy: false, locale, fallbackLocale: 'ko-KR', missingWarn: false, fallbackWarn: false, messages })
 }
 
-await t.test('L01 the three locales parse with identical non-empty key sets', async () => {
+await t.test('L01 the four locales parse with identical non-empty key sets', async () => {
   const messages = loadMessages()
-  assert.deepEqual(Object.keys(messages), ['en-US', 'ja-JP', 'ko-KR'])
+  assert.deepEqual(Object.keys(messages), ['en-US', 'ja-JP', 'ko-KR', 'zh-TW'])
   const keySets = Object.entries(messages).map(([loc, dict]) => {
     assert.ok(dict && typeof dict === 'object', `${loc} must be a key:value object`)
     for (const [k, v] of Object.entries(dict)) {
@@ -83,7 +83,7 @@ await t.test('L04 the storefront wires vue-i18n and delegates the locale store',
   assert.ok(i18nSrc.includes('createI18n'), 'src/i18n.ts must create the vue-i18n instance')
   assert.ok(i18nSrc.includes("fallbackLocale: 'ko-KR'"), 'fallback must be ko-KR')
   assert.ok(i18nSrc.includes('missingWarn: false') && i18nSrc.includes('fallbackWarn: false'), 'fallback must stay silent like the legacy store')
-  for (const loc of ['ko-KR', 'en-US', 'ja-JP']) {
+  for (const loc of ['ko-KR', 'en-US', 'ja-JP', 'zh-TW']) {
     assert.ok(i18nSrc.includes(`./locales/${loc}.json`), `i18n.ts must load ${loc}.json`)
   }
   assert.ok(read(join(SRC_DIR, 'main.ts')).includes('app.use(i18n)'), 'main.ts must install i18n')

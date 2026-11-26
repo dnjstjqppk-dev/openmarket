@@ -56,11 +56,11 @@ await t.test('2. llms.txt links all resolve', async () => {
     if (m || c) {
       const d = await g.call(u.pathname);
       assert.equal(d.status, 200, `${href} serves`);
-    } else if (u.pathname.startsWith('/category/')) {
-      const row = g.db.prepare('SELECT 1 FROM categories WHERE slug = ? AND is_active = 1').get(u.pathname.split('/')[2]);
+    } else if (u.pathname.startsWith('/ko/krw/c/')) {
+      const row = g.db.prepare('SELECT 1 FROM categories WHERE slug = ? AND is_active = 1').get(u.pathname.split('/')[4]);
       assert.ok(row, `${href} names a live category`);
-    } else if (u.pathname.startsWith('/policy/') || u.pathname.startsWith('/legal/')) {
-      assert.ok(['/policy/shipping', '/legal/refund', '/legal/privacy', '/legal/terms'].includes(u.pathname), `${href} is a known policy page`);
+    } else if (u.pathname.startsWith('/ko/krw/policy/') || u.pathname.startsWith('/ko/krw/legal/')) {
+      assert.ok(['/ko/krw/policy/shipping', '/ko/krw/legal/refund', '/ko/krw/legal/privacy', '/ko/krw/legal/terms'].includes(u.pathname), `${href} is a known policy page`);
     } else if (u.pathname === '/llms/return-policies') {
       const f = await g.call(u.pathname);
       assert.equal(f.status, 200, 'return-policy feed serves');
@@ -89,7 +89,7 @@ await t.test('4. product markdown matches rows, removed 404s', async () => {
   assert.match(r.headers.get('Content-Type'), /text\/markdown/);
   const p = g.db.prepare('SELECT * FROM products WHERE id = ?').get(id);
   assert.ok(r.text.includes(p.title), 'title live');
-  assert.ok(r.text.includes(`https://olmoa.com/product/${id}`), 'canonical live');
+  assert.ok(r.text.includes(`https://olmoa.com/ko/krw/p/${id}`), 'canonical live');
   assert.ok(r.text.includes(Number(p.lowest_sale_price).toLocaleString('ko-KR')), 'price live');
   assert.ok(r.text.includes(String(p.updated_at).slice(0, 10)), 'freshness live');
   assert.ok(bytesOf(r.text) <= LLMS_DOC_CAP, 'under the doc cap');
@@ -108,7 +108,7 @@ await t.test('5. category markdown mirrors the tree', async () => {
   const parent = g.db.prepare("SELECT slug FROM categories WHERE is_active = 1 AND id IN (SELECT parent_id FROM categories WHERE parent_id IS NOT NULL) LIMIT 1").get();
   const r = await g.call(`/llms/category/${parent.slug}.md`);
   assert.equal(r.status, 200, r.text);
-  assert.ok(r.text.includes(`/category/${parent.slug}`), 'canonical live');
+  assert.ok(r.text.includes(`/ko/krw/c/${parent.slug}`), 'canonical live');
   const miss = await g.call('/llms/category/no-such-cat.md');
   assert.equal(miss.status, 404);
 });
@@ -140,8 +140,8 @@ await t.test('7. one freshness value across .md, sitemap and JSON-LD', async () 
   const want = g.db.prepare('SELECT updated_at FROM products WHERE id = ?').get(id).updated_at.slice(0, 10);
   const md = await g.call(`/llms/product/${id}.md`);
   assert.ok(md.text.includes(`갱신: ${want}`), '.md stamp');
-  const map = await g.call('/sitemap.xml');
-  const loc = [...map.text.matchAll(new RegExp(`<loc>https://olmoa\\.com/product/${id}</loc>\\s*<lastmod>([^<]+)</lastmod>`, 'g'))][0];
+  const map = await g.call('/sitemaps/ko-products-1.xml');
+  const loc = [...map.text.matchAll(new RegExp(`<loc>https://olmoa\\.com/ko/krw/p/${id}(?:/[^<]+)?</loc>\\s*<lastmod>([^<]+)</lastmod>`, 'g'))][0];
   assert.ok(loc, 'sitemap carries the product');
   assert.equal(loc[1].slice(0, 10), want, 'sitemap lastmod');
   const p = g.db.prepare('SELECT * FROM products WHERE id = ?').get(id);

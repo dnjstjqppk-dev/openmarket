@@ -17,7 +17,9 @@ directory = "./apps/storefront/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 # Keep identical to RUN_WORKER_FIRST in apps/storefront/edge/apex-worker.js.
-run_worker_first = ["/robots.txt", "/sitemap.xml", "/sitemap-index.xml", "/sitemaps/*", "/llms.txt", "/llms-full.txt", "/llms/*", "/*.txt", "/", "/product/*", "/category/*", "/store/*", "/categories", "/channel/*", "/legal/*", "/policy/*", "/support", "/en", "/en/*", "/ja", "/ja/*"]
+# Every page path runs the worker (/{lang}/{currency} prefix, Geo 302, legacy 301,
+# edge head); only the hashed bundle and shell-loaded static files skip it.
+run_worker_first = ["/*", "!/assets/*", "!/sw.js", "!/theme-init.js", "!/favicon.ico", "!/manifest.webmanifest", "!/icons/*", "!/images/*"]
 # Secrets (wrangler secret put / dashboard; never values here):
 #   NAVER_SITE_VERIFICATION / GOOGLE_SITE_VERIFICATION — engine ownership codes,
 #   injected into <head> of / when set (omit entirely when verifying via DNS TXT).

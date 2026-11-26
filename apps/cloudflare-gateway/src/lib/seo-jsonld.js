@@ -51,13 +51,15 @@ export function returnPolicyNode(policy, windowDays = 7) {
 }
 
 /** Product graph (+Offer; +AggregateRating only when reviewCount > 0). */
-export function productGraph(base, p, { crumbs = [], rating = null, reviewCount = 0, availability = 'https://schema.org/InStock', shipping = null, gtin = null, description = null, sku = null, reviews = [], priceValidUntil = null, returns = null, windowDays = 7 } = {}) {
-  const price = Number(p.lowest_sale_price ?? p.sale_price ?? 0) || 0;
+export function productGraph(base, p, { crumbs = [], rating = null, reviewCount = 0, availability = 'https://schema.org/InStock', shipping = null, gtin = null, description = null, sku = null, reviews = [], priceValidUntil = null, returns = null, windowDays = 7, url = null, offerPrice = null, offerCurrency = null } = {}) {
+  // 2026-11-27: the URL's own currency (offerPrice/offerCurrency), exactly what that page renders; KRW otherwise.
+  const price = offerPrice !== null && offerPrice !== undefined && offerCurrency ? Number(offerPrice) : (Number(p.lowest_sale_price ?? p.sale_price ?? 0) || 0);
+  const priceCurrency = offerPrice !== null && offerPrice !== undefined && offerCurrency ? String(offerCurrency) : 'KRW';
   const updated = String(p.updated_at || '').slice(0, 10);
   const product = {
     '@context': CTX, '@type': 'Product',
     name: clean(p.title) || 'OLMOA 상품',
-    url: abs(base, `/product/${encodeURIComponent(p.id)}`),
+    url: url ? abs(base, url) : abs(base, `/product/${encodeURIComponent(p.id)}`),
     ...(p.thumbnail_url ? { image: [p.thumbnail_url] } : {}),
     // 6-5: same freshness value as the sitemap lastmod and the .md timestamp.
     ...(/^\d{4}-\d{2}-\d{2}$/.test(updated) ? { dateModified: updated } : {}),
@@ -68,7 +70,7 @@ export function productGraph(base, p, { crumbs = [], rating = null, reviewCount 
     ...(clean(p.brand) ? { brand: { '@type': 'Brand', name: clean(p.brand) } } : {}),
     ...(clean(p.manufacturer) ? { manufacturer: { '@type': 'Organization', name: clean(p.manufacturer) } } : {}),
     ...(clean(p.model_name) ? { mpn: clean(p.model_name) } : {}),
-    offers: { '@type': 'Offer', priceCurrency: 'KRW', price, availability }
+    offers: { '@type': 'Offer', priceCurrency, price, availability, ...(url ? { url: abs(base, url) } : {}) }
   };
   const digits = String(gtin || '').replace(/\D/g, '');
   const gtinProp = { 8: 'gtin8', 12: 'gtin12', 13: 'gtin13', 14: 'gtin14' }[digits.length] || null;
@@ -110,12 +112,12 @@ export function productGraph(base, p, { crumbs = [], rating = null, reviewCount 
 }
 
 /** QAPage from brief-style [{ q, a }]; empty input yields no graph (null). */
-export function qaPageGraph(base, productId, qna = []) {
+export function qaPageGraph(base, productId, qna = [], url = null) {
   const items = (qna || []).filter((r) => r && clean(r.q) && clean(r.a)).slice(0, 10);
   if (!items.length) return null;
   return {
     '@context': CTX, '@type': 'QAPage',
-    url: abs(base, `/product/${encodeURIComponent(productId)}`),
+    url: url ? abs(base, url) : abs(base, `/product/${encodeURIComponent(productId)}`),
     mainEntity: items.map((r) => ({
       '@type': 'Question', name: clean(r.q),
       acceptedAnswer: { '@type': 'Answer', text: clean(r.a).slice(0, 1000) }
@@ -134,12 +136,12 @@ export function faqGraph(faqs = []) {
 }
 
 /** ItemList for PLP/channel rows [{ id, title }]. */
-export function itemListGraph(base, name, items = []) {
+export function itemListGraph(base, name, items = [], hrefOf = null) {
   return {
     '@context': CTX, '@type': 'ItemList', name: clean(name) || '상품 목록',
     itemListElement: items.map((it, i) => ({
       '@type': 'ListItem', position: i + 1,
-      url: abs(base, `/product/${encodeURIComponent(it.id)}`), name: clean(it.title)
+      url: abs(base, hrefOf ? hrefOf(it) : `/product/${encodeURIComponent(it.id)}`), name: clean(it.title)
     }))
   };
 }

@@ -1,13 +1,17 @@
 // apps/storefront/src/stores/locale.ts
-// OLMOA Global Multi-Language (KO/EN/JA) & Multi-Currency (KRW/USD/JPY/EUR) Store
+// OLMOA languages (KO/EN/JA/ZH-TW) and display currencies (KRW/USD/JPY/TWD).
+// Since 2026-11-27 both come from the URL (/{lang}/{currency}); this store only
+// mirrors them for display. Changing either is a navigation (useLocaleSwitch).
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { API_BASE_URL } from '../config';
 import { i18n, messages } from '../i18n';
+import { convertFromKrw, formatMoney, type Currency } from '@olmoa/ui';
 
-export type SupportedLocale = 'ko-KR' | 'en-US' | 'ja-JP';
-export type SupportedCurrency = 'KRW' | 'USD' | 'JPY' | 'EUR';
+export type SupportedLocale = 'ko-KR' | 'en-US' | 'ja-JP' | 'zh-TW';
+export type SupportedCurrency = 'KRW' | 'USD' | 'JPY' | 'TWD';
+export const URL_CURRENCIES: SupportedCurrency[] = ['KRW', 'USD', 'JPY', 'TWD'];
 
 // Translation source of truth moved to locales/*.json behind vue-i18n (2026-11-07).
 // This alias keeps the store's locale-membership checks compiling unchanged.
@@ -22,15 +26,9 @@ export const useLocaleStore = defineStore('locale', () => {
   const fxUpdatedAt = ref<string | null>(null);
   const fxNote = ref<string>('');
   const availableCurrencies = computed<SupportedCurrency[]>(() =>
-    (['KRW', 'USD', 'JPY', 'EUR'] as SupportedCurrency[]).filter((c) => c === 'KRW' || fxRates.value[c] > 0)
+    URL_CURRENCIES.filter((c) => c === 'KRW' || fxRates.value[c] > 0)
   );
 
-  try {
-    const savedLoc = localStorage.getItem('olmoa_locale') as SupportedLocale;
-    const savedCur = localStorage.getItem('olmoa_currency') as SupportedCurrency;
-    if (savedLoc && DICT[savedLoc]) locale.value = savedLoc;
-    if (savedCur && ['KRW', 'USD', 'JPY', 'EUR'].includes(savedCur)) currency.value = savedCur;
-  } catch (_) {}
 
   // Fetch live FX rates from backend API
   async function fetchFxRates() {
@@ -54,7 +52,6 @@ export const useLocaleStore = defineStore('locale', () => {
   function setLocale(newLoc: SupportedLocale) {
     locale.value = newLoc;
     i18n.global.locale.value = newLoc;
-    try { localStorage.setItem('olmoa_locale', newLoc); } catch (_) {}
   }
 
   /** 6-2: display-only locale from the URL prefix (never persisted — no silent-setting). */
@@ -72,9 +69,9 @@ export const useLocaleStore = defineStore('locale', () => {
     try { sessionStorage.setItem(NUDGE_KEY, '1'); } catch { /* once per session best-effort */ }
   }
 
-  function setCurrency(newCur: SupportedCurrency) {
-    currency.value = newCur;
-    try { localStorage.setItem('olmoa_currency', newCur); } catch (_) {}
+  /** Display-only currency from the URL (the URL is the source of truth). */
+  function applyUrlCurrency(newCur: SupportedCurrency) {
+    if (URL_CURRENCIES.includes(newCur)) currency.value = newCur;
   }
 
   function t(key: string, fallback: string = ''): string {
@@ -86,16 +83,13 @@ export const useLocaleStore = defineStore('locale', () => {
     return DICT['ko-KR'][key] || fallback || key;
   }
 
+  /** Converted with the shared convertFromKrw (same rate source and rounding as the
+   *  edge JSON-LD). No published rate (or not loaded yet): the real KRW price. */
   function formatPrice(amountKrw: number | undefined | null, targetCurrency?: SupportedCurrency): string {
     const val = Number(amountKrw) || 0;
-    const cur = targetCurrency || currency.value;
-    const rate = fxRates.value[cur];
-    // no published rate (or rates not loaded yet): show the real KRW price rather than a guessed conversion
-    if (cur === 'KRW' || !(rate > 0)) return '₩' + Math.round(val).toLocaleString();
-    if (cur === 'USD') return '$' + (val / rate).toFixed(2);
-    if (cur === 'JPY') return '¥' + Math.round(val / rate).toLocaleString();
-    if (cur === 'EUR') return '€' + (val / rate).toFixed(2);
-    return '₩' + Math.round(val).toLocaleString();
+    const cur = (targetCurrency || currency.value).toLowerCase() as Currency;
+    const converted = cur === 'krw' ? null : convertFromKrw(val, cur, fxRates.value[cur.toUpperCase()]);
+    return converted === null ? formatMoney(Math.round(val), 'krw') : formatMoney(converted, cur);
   }
 
   return {
@@ -109,7 +103,7 @@ export const useLocaleStore = defineStore('locale', () => {
     applyUrlLocale,
     nudgeDismissed,
     dismissNudge,
-    setCurrency,
+    applyUrlCurrency,
     fetchFxRates,
     t,
     formatPrice

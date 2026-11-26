@@ -12,14 +12,15 @@ const my = (f) => read(`apps/storefront/src/views/my/${f}`);
 
 await t.test('M1 seven /my routes exist and /profile redirects to settings', async () => {
   const r = read('apps/storefront/src/router/index.ts');
-  for (const p of ['/my', '/my/reviews', '/my/qna', '/my/recent', '/my/credits', '/my/stores', '/my/settings']) {
-    assert.ok(r.includes(`path: '${p}'`), `${p} routed`);
+  for (const p of ['my', 'my/reviews', 'my/qna', 'my/recent', 'my/credits', 'my/stores', 'my/settings']) {
+    assert.ok(r.includes(`path: '${p}'`), `/${p} routed`);
   }
-  for (const p of ['/my', '/my/reviews', '/my/qna', '/my/recent', '/my/credits', '/my/stores', '/my/settings']) {
+  for (const p of ['my', 'my/reviews', 'my/qna', 'my/recent', 'my/credits', 'my/stores', 'my/settings']) {
     const line = r.split('\n').find((l) => l.includes(`path: '${p}'`));
-    assert.ok(line && line.includes('requiresAuth: true'), `${p} needs login`);
+    assert.ok(line && line.includes('requiresAuth: true'), `/${p} needs login`);
   }
-  assert.ok(r.includes("path: '/profile'") && r.includes("redirect: '/my/settings'"), '/profile redirects to /my/settings');
+  const profileLine = r.split('\n').find((l) => l.includes("path: 'profile'"));
+  assert.ok(profileLine && profileLine.includes('/my/settings'), '/profile redirects to /my/settings');
 });
 
 await t.test('M2 desktop shows a 200px my menu beside the content', async () => {

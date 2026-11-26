@@ -4,10 +4,15 @@
 // with a buy sheet. Prices, shipping, notice and review figures all come from
 // the server; the order sheet re-checks everything.
 import { ref, computed, watch, nextTick } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { Heart } from 'lucide-vue-next'
-import { OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs, OmKeyTakeaways, OmSpecTable, OmFaq, userErrorMessage, formatNumber, applyRouteHead, injectJsonLd } from '@olmoa/ui'
-import { productHeadOf, productJsonLdOf, qaPageJsonLdOf, galleryAltOf } from '../lib/productSeo'
+import {
+  OmBreadcrumb, OmButton, OmIconButton, OmSkeleton, OmErrorState, OmEmptyState, OmModal, OmImageGallery, OmStickyTabs,
+  OmKeyTakeaways, OmSpecTable, OmFaq, userErrorMessage, formatNumber, applyRouteHead, injectJsonLd,
+  isLang, isCurrency, SOURCE_LANG, localizedPath, productBarePath, slugify, convertFromKrw, CURRENCY_CODE,
+  type Lang, type Currency
+} from '@olmoa/ui'
+import { productHeadOf, productJsonLdOf, qaPageJsonLdOf, galleryAltOf, lowestPriceOf } from '../lib/productSeo'
 import ReviewsPanel from '../components/product/ReviewsPanel.vue'
 import QnaPanel from '../components/product/QnaPanel.vue'
 import ReviewHighlights from '../components/product/ReviewHighlights.vue'
@@ -15,13 +20,22 @@ import BuyPanel from '../components/product/BuyPanel.vue'
 import MobileBuySheet from '../components/product/MobileBuySheet.vue'
 import ProductCard from '../components/ProductCard.vue'
 import { useBuySelection } from '../components/product/useBuySelection'
+import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
 import { RETURN_WINDOW_DAYS } from '../config/policy'
 import { stripToSafeHtml } from '../utils/stripHtml'
 
 const route = useRoute()
+const router = useRouter()
+const locale = useLocaleStore()
 
 const product = ref<any>(null)
+const localized = ref<{ lang: Lang; translated: boolean; title: string; summary: string | null; slug: string; path: string; content_langs: Lang[] } | null>(null)
+const slugsByLang = ref<Partial<Record<Lang, string>>>({})
+const curLang = computed<Lang>(() => (isLang(route.params.lang) ? route.params.lang : SOURCE_LANG))
+const curCurrency = computed<Currency>(() => (isCurrency(route.params.currency) ? route.params.currency : 'krw'))
+const displayProduct = computed(() => (product.value ? { ...product.value, title: localized.value?.title || product.value.title } : null))
+const translatedSummary = computed(() => (localized.value?.translated && localized.value.summary ? localized.value.summary : null))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
@@ -62,8 +76,11 @@ async function load() {
     if (res.status === 404) { notFound.value = true; product.value = null; document.getElementById('olmoa-jsonld-product')?.remove(); document.getElementById('olmoa-jsonld-qa')?.remove(); return }
     if (!res.ok || !json?.success) throw new Error(json?.error || `상품을 불러오지 못했습니다`)
     product.value = json.data
+    localized.value = null
+    slugsByLang.value = { [SOURCE_LANG]: slugify(json.data.title || '') }
     recordRecentVisit(json.data)
     applyProductHead(json.data)
+    loadLocalized(json.data, my)
     if (route.hash === '#reviews') {
       await nextTick()
       gotoReviews()
@@ -80,11 +97,45 @@ async function load() {
   }
 }
 
+async function loadLocalized(p: any, my: number) {
+  const lang = curLang.value
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/products/${encodeURIComponent(p.id)}/localized?lang=${encodeURIComponent(lang)}`)
+    const j = await res.json().catch(() => null)
+    if (my !== seq || product.value?.id !== p.id || !res.ok || !j?.success || !j.data) return
+    const d = j.data
+    localized.value = d
+    if (d.slug) slugsByLang.value = { ...slugsByLang.value, [lang]: d.slug }
+    const currentSeo = String(route.params.seo || '')
+    if (d.slug && currentSeo !== d.slug) {
+      const target = localizedPath(lang, curCurrency.value, productBarePath(p.id, d.slug))
+      await router.replace({ path: target, query: route.query, hash: route.hash }).catch(() => {})
+    }
+    applyProductHead(p)
+  } catch { /* falls back to source ko title */ }
+}
+
 // ---- SEO: per-product head + Product/Offer/Breadcrumb/QAPage JSON-LD (live rows only) ----------------
 function applyProductHead(p: any) {
   const origin = window.location.origin
-  applyRouteHead(productHeadOf(p, route.path, origin))
-  injectJsonLd('olmoa-jsonld-product', productJsonLdOf(p, `${origin}${route.path}`, { windowDays: RETURN_WINDOW_DAYS }))
+  const loc = localized.value
+  const lang = curLang.value
+  const cur = curCurrency.value
+  const titleOverride = loc?.title || p?.title
+  const summaryOverride = loc?.translated && loc?.summary ? loc.summary : undefined
+  const contentLangs = loc?.content_langs?.length ? loc.content_langs : [SOURCE_LANG]
+  const koSlug = slugify(p?.title || '')
+  const bareFor = (l: Lang) => productBarePath(p.id, slugsByLang.value[l] || (l === lang && loc?.slug ? loc.slug : koSlug))
+  const minKrw = lowestPriceOf(p)
+  const curCode = CURRENCY_CODE[cur]
+  const converted = minKrw !== null && cur !== 'krw' ? convertFromKrw(minKrw, cur, locale.fxRates[curCode]) : null
+  const offerPrice = converted !== null ? converted : minKrw
+  const priceCurrency = converted !== null ? curCode : 'KRW'
+
+  applyRouteHead(productHeadOf(p, route.path, origin, { titleOverride, summaryOverride, contentLangs, bareFor, query: route.query }))
+  injectJsonLd('olmoa-jsonld-product', productJsonLdOf(p, `${origin}${route.path}`, {
+    windowDays: RETURN_WINDOW_DAYS, offerPrice, priceCurrency, titleOverride, summaryOverride
+  }))
   const qa = qaPageJsonLdOf(`${origin}${route.path}`, p?.brief?.qna)
   if (qa) injectJsonLd('olmoa-jsonld-qa', qa)
   else document.getElementById('olmoa-jsonld-qa')?.remove()
@@ -149,18 +200,19 @@ const noticeRows = computed<[string, string][]>(() => {
 const galleryImages = computed(() => {
   const rows = Array.isArray(product.value?.images) ? product.value.images : []
   const skus = Array.isArray(product.value?.skus) ? product.value.skus : []
+  const title = displayProduct.value?.title
   // 6-8: stored seller alt wins; otherwise product name + live options + position.
   if (rows.length) return rows.map((im: any, i: number) => ({
-    src: im.image_url, alt: String(im.alt_text || '').trim() || galleryAltOf(product.value?.title, skus, i, rows.length)
+    src: im.image_url, alt: String(im.alt_text || '').trim() || galleryAltOf(title, skus, i, rows.length)
   }))
-  if (product.value?.thumbnail_url) return [{ src: product.value.thumbnail_url, alt: galleryAltOf(product.value?.title, skus, 0, 1) }]
+  if (product.value?.thumbnail_url) return [{ src: product.value.thumbnail_url, alt: galleryAltOf(title, skus, 0, 1) }]
   return []
 })
 
 const crumbs = computed(() => [
   { label: '홈', to: '/' },
   ...(product.value?.category_slug ? [{ label: product.value.category_name, to: `/category/${product.value.category_slug}` }] : []),
-  { label: product.value?.title || '상품' }
+  { label: displayProduct.value?.title || '상품' }
 ])
 
 const sectionTabs = computed(() => [
@@ -178,6 +230,8 @@ const shipPolicy = computed(() => product.value?.shipping_policy || null)
 const shipMethodLabel: Record<string, string> = { PARCEL: '택배', DIRECT: '직접 전달', OVERSEAS: '해외 배송' }
 
 watch(() => route.params.slug, load, { immediate: true })
+watch(() => route.params.lang, () => { if (product.value) loadLocalized(product.value, seq) })
+watch([() => route.params.currency, () => route.path, () => locale.fxRates], () => { if (product.value) applyProductHead(product.value) })
 watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
 </script>
 
@@ -214,6 +268,10 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
           </div>
 
           <OmStickyTabs v-model="activeSection" :tabs="sectionTabs" offset-top="64px" />
+
+          <section v-if="translatedSummary" aria-label="번역 요약" class="mt-6 rounded-2xl border border-line bg-surface p-5">
+            <p class="whitespace-pre-line text-sm leading-relaxed text-ink">{{ translatedSummary }}</p>
+          </section>
 
           <section v-if="product.key_facts_html" aria-label="핵심 정보" class="mt-6 rounded-2xl border border-line bg-surface p-5">
             <h2 class="mb-3 text-base font-bold text-ink">핵심 정보</h2>
@@ -316,7 +374,7 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
         <!-- right (sticky buy panel) ------------------------------------------------------------------------ -->
         <div class="hidden min-w-0 lg:block">
           <div class="sticky top-24">
-            <BuyPanel :product="product" :sel="sel" @reviews="gotoReviews" />
+            <BuyPanel :product="displayProduct || product" :sel="sel" @reviews="gotoReviews" />
           </div>
         </div>
       </div>
@@ -328,7 +386,7 @@ watch(() => route.hash, () => { if (route.hash === '#reviews') gotoReviews() })
         </OmIconButton>
         <OmButton variant="primary" class="flex-1" data-testid="mobile-buy" @click="showSheet = true">구매하기</OmButton>
       </div>
-      <MobileBuySheet v-model:open="showSheet" :product="product" :sel="sel" />
+      <MobileBuySheet v-model:open="showSheet" :product="displayProduct || product" :sel="sel" />
 
       <OmModal v-if="product.video_url" v-model:open="showVideo" title="판매자 등록 영상" size="lg">
         <video v-if="showVideo" :src="product.video_url" controls playsinline class="aspect-video w-full rounded bg-overlay" />

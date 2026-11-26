@@ -690,6 +690,16 @@ paths:
     $ref: './paths/seo.yaml#/paths/~1api~1v1~1admin~1seo~1indexnow~1drain'
   /api/v1/seo/page:
     $ref: './paths/seo.yaml#/paths/~1api~1v1~1seo~1page'
+  /api/v1/partner/products/{id}/translations:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1{id}~1translations'
+  /api/v1/partner/products/{id}/translations/{lang}:
+    $ref: './paths/partner.yaml#/paths/~1api~1v1~1partner~1products~1{id}~1translations~1{lang}'
+  /api/v1/products/{id}/localized:
+    $ref: './paths/storefront.yaml#/paths/~1api~1v1~1products~1{id}~1localized'
+  /api/v1/admin/fx-rates:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1fx-rates'
+  /api/v1/admin/fx-rates/{currency}:
+    $ref: './paths/admin.yaml#/paths/~1api~1v1~1admin~1fx-rates~1{currency}'
 
 components:
   securitySchemes:

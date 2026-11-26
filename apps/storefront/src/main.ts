@@ -6,9 +6,9 @@ import router from './router';
 import App from './App.vue';
 import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
-import { useLocaleStore } from './stores/locale';
+import { useLocaleStore, type SupportedLocale, type SupportedCurrency } from './stores/locale';
 import { i18n } from './i18n';
-import { useTheme, applyRouteHead, installApiFetch, installChunkReloadGuard } from '@olmoa/ui';
+import { useTheme, applyRouteHead, installApiFetch, installChunkReloadGuard, isLang, isCurrency, localizedPath, DEFAULT_CURRENCY, BCP47, HREFLANG, CURRENCY_CODE } from '@olmoa/ui';
 
 useTheme().init();
 
@@ -43,30 +43,21 @@ installApiFetch({
 // route guard runs for them) also see the logged-in state.
 void useAuthStore(pinia).ensureSession();
 
-router.beforeEach(async (to, from) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore(pinia);
-  const toPath = String(to.path || '/');
-  const toLocale = toPath === '/en' || toPath.startsWith('/en/') ? 'en'
-    : toPath === '/ja' || toPath.startsWith('/ja/') ? 'ja' : 'ko';
-  // 6-2: the URL is the locale source of truth — apply it for display only
-  // (never persisted here, so no silent-setting; never redirected from
-  // stored preference, so no redirect loop).
+  // 2026-11-27: /{lang}/{currency} in the URL is the single source of truth for
+  // language and currency — applied for display, never inferred from storage.
+  const lang = isLang(to.params.lang) ? to.params.lang : 'ko';
+  const currency = isCurrency(to.params.currency) ? to.params.currency : DEFAULT_CURRENCY[lang];
   try {
-    useLocaleStore(pinia).applyUrlLocale(toLocale === 'en' ? 'en-US' : toLocale === 'ja' ? 'ja-JP' : 'ko-KR');
-    document.documentElement.lang = toLocale === 'en' ? 'en' : toLocale === 'ja' ? 'ja' : 'ko';
+    const store = useLocaleStore(pinia);
+    store.applyUrlLocale(BCP47[lang] as SupportedLocale);
+    store.applyUrlCurrency(CURRENCY_CODE[currency] as SupportedCurrency);
+    document.documentElement.lang = HREFLANG[lang];
   } catch { /* display locale must never break navigation */ }
   // P0-2: the session is memory-only; restore it from the cookie on entry.
   if (to.meta.requiresAuth && !(await auth.ensureSession())) {
-    const loginPath = toLocale === 'ko' ? '/login' : `/${toLocale}/login`;
-    return { path: loginPath, query: { redirect: to.fullPath } };
-  }
-  // 6-2: keep the mirror prefix across in-app navigation (explicit locale
-  // URLs always win; this only re-applies the current prefix to bare targets).
-  const fromPath = String(from.path || '/');
-  const fromLocale = fromPath === '/en' || fromPath.startsWith('/en/') ? 'en'
-    : fromPath === '/ja' || fromPath.startsWith('/ja/') ? 'ja' : 'ko';
-  if (toLocale === 'ko' && fromLocale !== 'ko' && to.name !== 'not-found') {
-    return { path: `/${fromLocale}${toPath === '/' ? '' : toPath}`, query: to.query, hash: to.hash };
+    return { path: localizedPath(lang, currency, '/login'), query: { redirect: to.fullPath } };
   }
   return true;
 });
@@ -78,7 +69,7 @@ router.afterEach((to) => {
     // 6-2: drop the edge-rendered JSON-LD of the first response; views inject
     // their own graphs, and a stale one must not survive client navigation.
     document.querySelectorAll('script[data-olmoa-edge]').forEach((el) => el.remove());
-    applyRouteHead({ path: to.path, base: window.location.origin, title: document.title });
+    applyRouteHead({ path: to.path, base: window.location.origin, title: document.title, query: to.query });
   } catch { /* head policy must never break navigation */ }
 });
 

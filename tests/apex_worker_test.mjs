@@ -55,7 +55,7 @@ await t.test('A03 apex serves real sitemap/robots/llms from the API, SPA for the
   const robots = await get('/robots.txt');
   assert.match(robots.headers.get('Content-Type'), /text\/plain/);
   const rt = await robots.text();
-  assert.match(rt, /^Sitemap: https:\/\/olmoa\.com\/sitemap-index\.xml$/m);
+  assert.match(rt, /^Sitemap: https:\/\/olmoa\.com\/sitemap\.xml$/m);
   assert.doesNotMatch(rt, /workers\.dev|pages\.dev/);
 
   for (const p of ['/llms.txt', '/llms-full.txt']) {
@@ -65,7 +65,10 @@ await t.test('A03 apex serves real sitemap/robots/llms from the API, SPA for the
     assert.doesNotMatch(await r.text(), /<!DOCTYPE html>/i, p);
   }
 
-  const home = await get('/category/food');
+  const legacy = await get('/category/food');
+  assert.equal(legacy.status, 301);
+  assert.equal(legacy.headers.get('Location'), 'https://olmoa.com/ko/krw/c/food');
+  const home = await get('/ko/krw/c/food');
   assert.equal(await home.text(), SHELL);
 });
 
@@ -101,9 +104,9 @@ await t.test('A06b 6-7 key file resolves on the apex when the key exists, else 4
 });
 
 await t.test('A06c 6-7 homepage carries verification meta tags only when codes exist', async () => {
-  const page = '<!DOCTYPE html><html><head><title>t</title></head><body>home</body></html>';
+  const page = '<!DOCTYPE html><html lang="ko"><head><title>t</title></head><body>home</body></html>';
   const html = { fetch: async () => new Response(page, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': String(page.length) } }) };
-  const coded = await apex.fetch(new Request('https://olmoa.com/'), {
+  const coded = await apex.fetch(new Request('https://olmoa.com/ko/krw'), {
     ASSETS: html, NAVER_SITE_VERIFICATION: 'naver-code-1', GOOGLE_SITE_VERIFICATION: 'google-code-2'
   });
   assert.equal(coded.status, 200);
@@ -111,8 +114,10 @@ await t.test('A06c 6-7 homepage carries verification meta tags only when codes e
   assert.ok(body.includes('<meta name="naver-site-verification" content="naver-code-1" />'), 'naver meta');
   assert.ok(body.includes('<meta name="google-site-verification" content="google-code-2" />'), 'google meta');
   assert.ok(body.indexOf('naver-site-verification') < body.indexOf('</head>'), 'inside head');
-  const plain = await apex.fetch(new Request('https://olmoa.com/'), { ASSETS: html });
+  const plain = await apex.fetch(new Request('https://olmoa.com/ko/krw'), { ASSETS: html });
   assert.equal(await plain.text(), page, 'byte-identical without codes');
+  const root = await apex.fetch(new Request('https://olmoa.com/'), { ASSETS: html });
+  assert.equal(root.status, 302, 'root redirects via Geo/cookie');
   const evil = injectVerifyMeta(page, { NAVER_SITE_VERIFICATION: '"><script>alert(1)</script>' });
   assert.doesNotMatch(evil, /<script>alert/);
   assert.ok(evil.includes('&quot;&gt;&lt;script&gt;'), 'code is escaped');

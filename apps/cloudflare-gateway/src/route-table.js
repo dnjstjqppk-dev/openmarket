@@ -54,6 +54,7 @@ import { handlePartnerRoutes } from './routes/partner.js';
 import { handleAdminRoutes } from './routes/admin.js';
 import { handleIntegrationRoutes } from './routes/integrations.js';
 import { handleClientErrorRoutes } from './routes/client-errors.js';
+import { handleTranslationRoutes } from './routes/translations.js';
 
 export const API_PREFIX = '/api/v1/';
 
@@ -64,6 +65,8 @@ export const ROUTE_TABLE = [
   { file: 'auth', handler: handleAuthRoutes, prefixes: ['auth'] },
   { file: 'social-auth', handler: handleSocialAuthRoutes, prefixes: ['auth'] },
   // before partner/admin routers: '/api/v1/partner-applications' shares their prefixes
+  // 2026-11-27: seller translations + public localized slug (before partner/catalog claim the prefixes)
+  { file: 'translations', handler: handleTranslationRoutes, prefixes: ['partner', 'products'] },
   { file: 'onboarding', handler: handleOnboardingRoutes, prefixes: ['admin', 'onboarding', 'partner'] },
   { file: 'business', handler: handleBusinessRoutes, prefixes: ['admin', 'business-info'] },
   { file: 'legal', handler: handleLegalRoutes, prefixes: ['legal'] },
@@ -82,7 +85,7 @@ export const ROUTE_TABLE = [
   { file: 'fulfillment-ops', handler: handleFulfillmentOpsRoutes, prefixes: ['admin'] },
   { file: 'seo-ops', handler: handleSeoOpsRoutes, prefixes: ['admin'] },
   { file: 'bidding-m2c', handler: handleBiddingAndM2cRoutes, prefixes: ['admin', 'bidding', 'partner', 'pricing'] },
-  { file: 'global-customs-fx', handler: handleGlobalCustomsAndFxRoutes, prefixes: ['customs', 'fx', 'orders'] },
+  { file: 'global-customs-fx', handler: handleGlobalCustomsAndFxRoutes, prefixes: ['admin', 'customs', 'fx', 'orders'] },
   { file: 'global-logistics', handler: handleGlobalLogisticsRoutes, prefixes: ['logistics'] },
   { file: 'global-governance', handler: handleGlobalGovernanceRoutes, prefixes: ['admin'] },
   { file: 'storage', handler: handleStorageRoutes, prefixes: ['storage'] },

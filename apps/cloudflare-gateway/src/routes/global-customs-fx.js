@@ -1,11 +1,14 @@
-import { authenticate, requireCustomer } from '../lib/auth.js';
+import { authenticate, requireAdmin, requireCustomer } from '../lib/auth.js';
 import { krwPerUnit, krwPerUnitMap } from '../lib/fx.js';
+import { auditStatement } from '../lib/ledger.js';
 import { logPiiView } from '../services/privacy.js';
-import { forbidden, notFound, HttpError, readJson } from '../lib/http.js';
+import { bad, forbidden, json, notFound, HttpError, readJson } from '../lib/http.js';
 import { maybeOpenPii } from '../lib/pii-crypto.js';
 import { validatePccc, queryUnipass } from '../lib/pccc.js';
 // apps/cloudflare-gateway/src/routes/global-customs-fx.js
 // OLMOA Global OpenMarket Engine: Real-Time Customs PCCC Verification, DDP/DDU Duty Calculator & Multi-Currency FX Engine
+
+const ALLOWED_FX_CURRENCIES = ['USD', 'JPY', 'TWD', 'CNY', 'EUR', 'SGD'];
 
 export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHeaders) {
   // 1. Real-Time Personal Customs Clearance Code (PCCC / 개인통관고유부호) Validation
@@ -329,6 +332,62 @@ export async function handleGlobalCustomsAndFxRoutes(request, url, env, corsHead
       brand: 'OLMOA Global Customs Engine',
       data: invoiceData
     }), { headers: corsHeaders });
+  }
+
+  // 6. Operator FX rate management (GET/PUT/DELETE /api/v1/admin/fx-rates[/:currency])
+  //    Allows Finance/Super-Admin operators to publish KRW-per-unit display rates (incl. TWD).
+  if (url.pathname === '/api/v1/admin/fx-rates' && request.method === 'GET') {
+    await requireAdmin(request, env);
+    const { results } = await env.DB.prepare(
+      'SELECT base_currency, target_currency, rate, inverse_rate, spread_pct, updated_at FROM exchange_rates WHERE base_currency = ? ORDER BY target_currency ASC'
+    ).bind('KRW').all();
+    return json(corsHeaders, { success: true, allowed_currencies: ALLOWED_FX_CURRENCIES, data: results || [] });
+  }
+
+  const fxM = url.pathname.match(/^\/api\/v1\/admin\/fx-rates\/([A-Za-z]{3})$/);
+  if (fxM && (request.method === 'PUT' || request.method === 'DELETE')) {
+    const admin = await requireAdmin(request, env);
+    const currency = fxM[1].toUpperCase();
+    if (!ALLOWED_FX_CURRENCIES.includes(currency)) {
+      throw bad('UNSUPPORTED_CURRENCY', `지원 통화는 ${ALLOWED_FX_CURRENCIES.join('·')}입니다.`);
+    }
+    const before = await env.DB.prepare(
+      'SELECT base_currency, target_currency, rate, inverse_rate, spread_pct, updated_at FROM exchange_rates WHERE base_currency = ? AND target_currency = ?'
+    ).bind('KRW', currency).first();
+
+    if (request.method === 'DELETE') {
+      if (!before) throw notFound(`${currency} 환율이 등록되어 있지 않습니다.`);
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM exchange_rates WHERE base_currency = ? AND target_currency = ?').bind('KRW', currency),
+        auditStatement(env, admin, { action: 'FX_RATE_DELETE', targetType: 'exchange_rates', targetId: `KRW:${currency}`, before, after: null, request })
+      ]);
+      return json(corsHeaders, { success: true, message: `${currency} 환율을 삭제했습니다.` });
+    }
+
+    const body = await readJson(request);
+    const inverseRate = Number(body.inverse_rate ?? body.krw_per_unit);
+    if (!Number.isFinite(inverseRate) || inverseRate <= 0 || inverseRate > 1000000) {
+      throw bad('INVALID_RATE', '원화 기준 환율(inverse_rate)은 0보다 크고 1,000,000 이하의 숫자여야 합니다.');
+    }
+    const spreadPct = body.spread_pct === undefined || body.spread_pct === null ? 1.2 : Number(body.spread_pct);
+    if (!Number.isFinite(spreadPct) || spreadPct < 0 || spreadPct > 20) {
+      throw bad('INVALID_SPREAD', '스프레드(spread_pct)는 0~20 범위여야 합니다.');
+    }
+    const rate = Number((1 / inverseRate).toPrecision(8));
+    const after = { base_currency: 'KRW', target_currency: currency, rate, inverse_rate: inverseRate, spread_pct: spreadPct };
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO exchange_rates (base_currency, target_currency, rate, inverse_rate, spread_pct, updated_at)
+         VALUES ('KRW', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(base_currency, target_currency) DO UPDATE SET
+           rate = excluded.rate, inverse_rate = excluded.inverse_rate, spread_pct = excluded.spread_pct, updated_at = CURRENT_TIMESTAMP`
+      ).bind(currency, rate, inverseRate, spreadPct),
+      auditStatement(env, admin, { action: 'FX_RATE_UPSERT', targetType: 'exchange_rates', targetId: `KRW:${currency}`, before, after, request })
+    ]);
+    const saved = await env.DB.prepare(
+      'SELECT base_currency, target_currency, rate, inverse_rate, spread_pct, updated_at FROM exchange_rates WHERE base_currency = ? AND target_currency = ?'
+    ).bind('KRW', currency).first();
+    return json(corsHeaders, { success: true, message: `${currency} 환율을 저장했습니다.`, data: saved });
   }
 
   return null;

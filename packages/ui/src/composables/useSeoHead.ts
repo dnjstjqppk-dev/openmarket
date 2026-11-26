@@ -1,66 +1,74 @@
-// Client head manager for the SPA storefront (no Nuxt SSR in this repo).
-// Mirrors the gateway seo-head policy: canonical per path, noindex on
-// private routes, ko-KR + x-default hreflang, OG/Twitter, JSON-LD injection.
+// Client head manager for the SPA storefront (no SSR runtime in this repo; the
+// apex edge worker injects the first response's head). Since 2026-11-27 every
+// page lives under /{lang}/{currency}; canonical/robots/hreflang come from the
+// same localeUrlPolicy() the edge uses (packages/ui/src/locale.config.ts), so
+// client navigation and the edge-rendered first response always agree.
 // Pure policy + thin DOM writers (guarded for SSR/test runtimes).
+
+import {
+  parseLocalePath, legacyToBare, localeUrlPolicy, isPrivateBare, isSearchBare, pageNumberOf,
+  OG_LOCALE_OF, HREFLANG, SOURCE_LANG, DEFAULT_CURRENCY, LANGS, type Lang, type Currency
+} from '../locale.config.ts'
 
 export const NOINDEX_PREFIXES = ['/cart', '/checkout', '/my', '/orders', '/login',
   '/register', '/forgot-password', '/verify-email', '/addresses', '/wishlist',
   '/coupons', '/payments']
 
-/** 6-2: locale sub-paths of the storefront mirrors (ko has no prefix). */
-export const LOCALE_PREFIXES: Record<string, string> = { ko: '', en: '/en', ja: '/ja' }
-export const LOCALE_OF_PREFIX: Record<string, string> = { '': 'ko', '/en': 'en', '/ja': 'ja' }
-export const OG_LOCALE: Record<string, string> = { ko: 'ko_KR', en: 'en_US', ja: 'ja_JP' }
+/** og:locale per language (key = URL lang). */
+export const OG_LOCALE: Record<string, string> = { ...OG_LOCALE_OF }
 
-/** Locales advertised to search engines. The /en and /ja mirrors render the same
- *  Korean catalog and UI (no translations exist), so advertising them as en-US/ja-JP
- *  alternates would publish three copies of one page. Only ko-KR is advertised and
- *  every mirror canonicalizes to its bare ko URL; add a locale here only together
- *  with real translated content. */
-export const HREFLANG_LOCALES = [
-  { key: 'ko', lang: 'ko-KR', prefix: '', og: 'ko_KR' }
-]
+/** Every language the URL scheme serves; which of them a page advertises depends on its content. */
+export const HREFLANG_LOCALES = LANGS.map((key) => ({ key, og: OG_LOCALE_OF[key] }))
 
-/** Strip a leading /en or /ja mirror prefix (bare path, always with leading slash). */
+/** Page path after the /{lang}/{currency} prefix (legacy /en, /ja mirrors and old shapes mapped too). */
 export function barePathOf(path: string): string {
   const p = String(path || '/').split('?')[0] || '/'
-  const m = p.match(/^\/(en|ja)(\/|$)/)
-  if (!m) return p.startsWith('/') ? p : `/${p}`
-  const rest = p.slice(m[0].length) || '/'
-  return rest.startsWith('/') ? rest : `/${rest}`
+  const loc = parseLocalePath(p)
+  if (loc) return loc.bare
+  return legacyToBare(p)
 }
 
-export function localeOfPath(path: string): string {
-  const p = String(path || '/').split('?')[0] || '/'
-  const m = p.match(/^\/(en|ja)(\/|$)/)
-  return m ? m[1] : 'ko'
+export function localeOfPath(path: string): Lang {
+  const loc = parseLocalePath(String(path || '/').split('?')[0] || '/')
+  if (loc) return loc.lang
+  const m = String(path || '').match(/^\/(en|ja)(\/|$)/)
+  return m ? (m[1] as Lang) : SOURCE_LANG
+}
+
+export function currencyOfPath(path: string): Currency {
+  const loc = parseLocalePath(String(path || '/').split('?')[0] || '/')
+  return loc ? loc.currency : DEFAULT_CURRENCY[localeOfPath(path)]
 }
 
 export function isNoindexPath(path: string): boolean {
-  const p = barePathOf(path)
-  return NOINDEX_PREFIXES.some((pre) => p === pre || p.startsWith(`${pre}/`))
+  return isPrivateBare(barePathOf(path))
 }
 
 /** 6-8: search result pages are never indexed, but their links are followed. */
 export const SEARCH_PATH = '/search'
 
 export function isSearchPath(path: string): boolean {
-  const p = barePathOf(path)
-  return p === SEARCH_PATH || p.startsWith(`${SEARCH_PATH}/`)
+  return isSearchBare(barePathOf(path))
 }
 
-/** 6-8: robots per path — search keeps link-following, private paths do not. */
-export function robotsOf(path: string): string {
-  if (isSearchPath(path)) return 'noindex,follow'
-  return isNoindexPath(path) ? 'noindex,nofollow' : 'index,follow'
+/** Per-page head inputs beyond the path: which languages have content and their per-language bare path. */
+export interface LocaleContent { contentLangs?: Lang[]; bareFor?: ((lang: Lang) => string) | null }
+
+function policyOf(base: string, path: string, query?: unknown, content: LocaleContent = {}) {
+  return localeUrlPolicy({
+    lang: localeOfPath(path), currency: currencyOfPath(path), bare: barePathOf(path),
+    bareFor: content.bareFor || null, base, query, contentLangs: content.contentLangs
+  })
+}
+
+/** robots per path: representative URL index,follow; other currency/untranslated noindex,follow; private noindex,nofollow. */
+export function robotsOf(path: string, content: LocaleContent = {}): string {
+  return policyOf('https://olmoa.com', path, undefined, content).robots
 }
 
 /** 6-8: pagination keeps its page (?page=N, N>=2); page=1 is the bare URL. */
 export function pageOfQuery(query: unknown): number {
-  const q = (query || {}) as Record<string, unknown>
-  const raw = Array.isArray(q.page) ? q.page[0] : q.page
-  const n = typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN
-  return Number.isInteger(n) && n >= 2 ? (n as number) : 1
+  return pageNumberOf(query)
 }
 
 export function pageSuffixOf(query: unknown): string {
@@ -68,32 +76,25 @@ export function pageSuffixOf(query: unknown): string {
   return n > 1 ? `?page=${n}` : ''
 }
 
-/** 6-8: every query is stripped except ?page=N (N>=2, self-canonical per page).
- *  /en and /ja mirrors canonicalize to the bare ko URL (same content). */
-export function canonicalOf(base: string, path: string, query?: unknown): string {
-  const b = String(base || '').replace(/\/$/, '')
-  return `${b}${barePathOf(path)}${pageSuffixOf(query)}`
+/** Canonical URL: the representative-currency URL of the page's content language (ko when untranslated). */
+export function canonicalOf(base: string, path: string, query?: unknown, content: LocaleContent = {}): string {
+  return policyOf(base, path, query, content).canonical
 }
 
-/** Advertised locale alternates (HREFLANG_LOCALES) plus x-default (always the ko URL — Korean market). */
-export function hreflangOf(base: string, path: string, query?: unknown): Array<{ lang: string; href: string }> {
-  const b = String(base || '').replace(/\/$/, '')
-  const bare = barePathOf(path)
-  const suf = pageSuffixOf(query)
-  return [
-    ...HREFLANG_LOCALES.map(({ lang, prefix }) => ({ lang, href: `${b}${prefix}${bare === '/' && prefix ? '' : bare}${suf}` })),
-    { lang: 'x-default', href: `${b}${bare}${suf}` }
-  ]
+/** hreflang alternates: content languages' representative URLs + x-default. */
+export function hreflangOf(base: string, path: string, query?: unknown, content: LocaleContent = {}): Array<{ lang: string; href: string }> {
+  return policyOf(base, path, query, content).hreflangs.map((h) => ({ lang: h.hreflang, href: h.href }))
 }
 
-export interface RouteHeadInput { path: string; base: string; title: string; description?: string; image?: string; query?: unknown }
+export interface RouteHeadInput extends LocaleContent { path: string; base: string; title: string; description?: string; image?: string; query?: unknown }
 
 export function routeHeadOf(input: RouteHeadInput) {
-  const canonical = canonicalOf(input.base, input.path, input.query)
+  const pol = policyOf(input.base, input.path, input.query, input)
   return {
     title: input.title,
-    robots: robotsOf(input.path),
-    canonical,
+    robots: pol.robots,
+    canonical: pol.canonical,
+    hreflangs: pol.hreflangs,
     description: String(input.description || '').slice(0, 160),
     image: input.image || ''
   }
@@ -120,9 +121,9 @@ function upsertLink(rel: string, href: string, hreflang = '') {
 export function mdAlternateOf(base: string, path: string): string | null {
   const b = String(base || '').replace(/\/$/, '')
   const bare = barePathOf(path)
-  const prod = bare.match(/^\/product\/([^/]+)$/)
+  const prod = bare.match(/^\/p\/([^/]+)(?:\/[^/]+)?$/)
   if (prod) return `${b}/llms/product/${prod[1]}.md`
-  const cat = bare.match(/^\/category\/([^/]+)$/)
+  const cat = bare.match(/^\/c\/([^/]+)$/)
   if (cat) return `${b}/llms/category/${cat[1]}.md`
   return null
 }
@@ -150,19 +151,17 @@ export function applyRouteHead(input: RouteHeadInput): void {
   upsertMeta('name', 'robots', head.robots)
   upsertMeta('name', 'description', head.description)
   upsertLink('canonical', head.canonical)
-  for (const alt of hreflangOf(input.base, input.path, input.query)) upsertLink('alternate', alt.href, alt.lang)
+  // Replace the whole hreflang set: a page advertises only its content languages.
+  doc.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((el: any) => el.remove())
+  for (const alt of head.hreflangs) upsertLink('alternate', alt.href, alt.hreflang)
   upsertMeta('property', 'og:url', head.canonical)
   upsertMeta('property', 'og:title', head.title)
-  upsertMeta('property', 'og:locale', 'ko_KR')
-  // Drop hreflang links for locales no longer advertised (static shell or older navigation).
-  const advertised = new Set([...HREFLANG_LOCALES.map((l) => l.lang), 'x-default'])
-  doc.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((el: any) => {
-    if (!advertised.has(el.getAttribute('hreflang'))) el.remove()
-  })
-  // og:locale:alternate only for advertised locales other than ko (none today).
+  upsertMeta('property', 'og:locale', OG_LOCALE_OF[localeOfPath(input.path)])
   doc.head.querySelectorAll('meta[property="og:locale:alternate"]').forEach((el: any) => el.remove())
+  const advertised = new Set(head.hreflangs.map((h) => h.hreflang))
   for (const loc of HREFLANG_LOCALES) {
-    if (loc.key === 'ko') continue
+    if (loc.key === localeOfPath(input.path)) continue
+    if (!advertised.has(HREFLANG[loc.key])) continue
     const el = doc.createElement('meta')
     el.setAttribute('property', 'og:locale:alternate')
     el.setAttribute('content', loc.og)

@@ -35,15 +35,23 @@ export function inStockOf(p: any): boolean {
 }
 
 /** 6-8: `상품명 | 브랜드 | OLMOA` (brand omitted when blank), clipped at 60. */
-export function productHeadOf(p: any, path: string, base: string) {
+export function productHeadOf(
+  p: any,
+  path: string,
+  base: string,
+  opts: { titleOverride?: string; summaryOverride?: string; contentLangs?: any[]; bareFor?: any; query?: unknown } = {}
+) {
   const images = Array.isArray(p?.images) ? p.images.map((im: any) => im?.image_url).filter(Boolean) : []
-  const title = String(p?.title || '상품')
+  const title = String(opts.titleOverride || p?.title || '상품')
   const brand = String(p?.brand || p?.brand_name || '').trim()
   return {
     path, base,
     title: clipText(brand ? `${title} | ${brand} | OLMOA` : `${title} | OLMOA`, HEAD_TITLE_MAX),
-    description: plainText(p?.description_html) || title,
-    image: images[0] || String(p?.thumbnail_url || '')
+    description: plainText(opts.summaryOverride || p?.description_html) || title,
+    image: images[0] || String(p?.thumbnail_url || ''),
+    ...(opts.contentLangs ? { contentLangs: opts.contentLangs } : {}),
+    ...(opts.bareFor ? { bareFor: opts.bareFor } : {}),
+    ...(opts.query ? { query: opts.query } : {})
   }
 }
 
@@ -93,21 +101,34 @@ export function galleryAltOf(title: unknown, skus: any[], index: number, total: 
   return `${name}${opts}${pos}`
 }
 
+/** Extract `https://origin/{lang}/{currency}` when `url` carries a locale prefix, else null. */
+function localeOriginPrefix(url: string): string | null {
+  const m = String(url || '').match(/^(https?:\/\/[^/]+)(\/(?:ko|en|ja|zh-tw)\/(?:krw|usd|jpy|twd))(?=\/|$)/i)
+  return m ? `${m[1]}${m[2].toLowerCase()}` : null
+}
+
 /** Product + Offer (+rating when reviewed) + BreadcrumbList @graph. */
-export function productJsonLdOf(p: any, canonical: string, opts: { windowDays?: number } = {}) {
-  const price = lowestPriceOf(p)
+export function productJsonLdOf(
+  p: any,
+  canonical: string,
+  opts: { windowDays?: number; offerPrice?: number | null; priceCurrency?: string; titleOverride?: string; summaryOverride?: string } = {}
+) {
+  const basePrice = lowestPriceOf(p)
+  const price = opts.offerPrice != null && Number.isFinite(Number(opts.offerPrice)) ? Number(opts.offerPrice) : basePrice
+  const priceCurrency = opts.priceCurrency || 'KRW'
+  const title = String(opts.titleOverride || p?.title || '상품')
   const reviewCount = Number(p?.review_count || 0)
   const avgRating = Number(p?.avg_rating)
   const updated = String(p?.updated_at || '').slice(0, 10)
   const product: Record<string, unknown> = {
     '@type': 'Product',
-    name: String(p?.title || '상품'),
+    name: title,
     url: canonical,
     image: [String(p?.thumbnail_url || '')].filter(Boolean)
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(updated)) product.dateModified = updated
   // 6-3: same seller description the page renders (plain text, capped like meta).
-  const desc = plainText(p?.description_html, 1000)
+  const desc = plainText(opts.summaryOverride || p?.description_html, 1000)
   if (desc) product.description = desc
   product.sku = String(p?.id || '')
   const brand = String(p?.brand || '').trim()
@@ -121,7 +142,7 @@ export function productJsonLdOf(p: any, canonical: string, opts: { windowDays?: 
   if (gtinProp[digits.length]) product[gtinProp[digits.length]] = digits
   if (price !== null) {
     const offer: Record<string, unknown> = {
-      '@type': 'Offer', priceCurrency: 'KRW', price,
+      '@type': 'Offer', priceCurrency, price,
       availability: inStockOf(p) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       url: canonical
     }
@@ -155,9 +176,12 @@ export function productJsonLdOf(p: any, canonical: string, opts: { windowDays?: 
       ...(r.date ? { datePublished: String(r.date).slice(0, 10) } : {})
     }))
   }
-  const crumbs: Record<string, unknown>[] = [{ '@type': 'ListItem', position: 1, name: '홈', item: canonical.split('/product/')[0] + '/' }]
-  if (p?.category_slug) crumbs.push({ '@type': 'ListItem', position: 2, name: String(p.category_name || p.category_slug), item: `${canonical.split('/product/')[0]}/category/${p.category_slug}` })
-  crumbs.push({ '@type': 'ListItem', position: crumbs.length + 1, name: String(p?.title || '상품'), item: canonical })
+  const locPrefix = localeOriginPrefix(canonical)
+  const homeUrl = locPrefix ? locPrefix : `${canonical.split('/product/')[0]}/`
+  const catUrl = (slug: string) => (locPrefix ? `${locPrefix}/c/${encodeURIComponent(slug)}` : `${canonical.split('/product/')[0]}/category/${slug}`)
+  const crumbs: Record<string, unknown>[] = [{ '@type': 'ListItem', position: 1, name: '홈', item: homeUrl }]
+  if (p?.category_slug) crumbs.push({ '@type': 'ListItem', position: 2, name: String(p.category_name || p.category_slug), item: catUrl(p.category_slug) })
+  crumbs.push({ '@type': 'ListItem', position: crumbs.length + 1, name: title, item: canonical })
   return { '@context': 'https://schema.org', '@graph': [product, { '@type': 'BreadcrumbList', itemListElement: crumbs }] }
 }
 
@@ -205,10 +229,12 @@ export function storeJsonLdOf(store: any, canonical: string, windowDays = 7): Re
 
 /** CollectionPage + ItemList for PLP rows (first 20, real URLs only). */
 export function plpJsonLdOf(title: string, canonical: string, items: any[], base: string) {
+  const locPrefix = localeOriginPrefix(canonical)
+  const itemUrl = (id: string) => (locPrefix ? `${locPrefix}/p/${encodeURIComponent(id)}` : `${String(base).replace(/\/$/, '')}/p/${encodeURIComponent(id)}`)
   const elements = (Array.isArray(items) ? items : []).slice(0, 20)
-    .map((it: any) => ({ id: it?.slug || it?.product_id || it?.id, name: String(it?.title || it?.name || '') }))
+    .map((it: any) => ({ id: it?.id || it?.product_id || it?.slug, name: String(it?.title || it?.name || '') }))
     .filter((e) => e.id && e.name)
-    .map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.name, url: `${String(base).replace(/\/$/, '')}/product/${e.id}` }))
+    .map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.name, url: itemUrl(String(e.id)) }))
   return {
     '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, url: canonical,
     mainEntity: { '@type': 'ItemList', numberOfItems: elements.length, itemListElement: elements }

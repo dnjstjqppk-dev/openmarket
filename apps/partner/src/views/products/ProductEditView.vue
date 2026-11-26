@@ -10,6 +10,7 @@ import ProductImageUploader, { type GalleryImage } from '../../components/produc
 import OptionMatrixEditor, { type OptionKind } from '../../components/product-form/OptionMatrixEditor.vue'
 import SkuTableEditor, { type SkuRow } from '../../components/product-form/SkuTableEditor.vue'
 import CategoryPicker from '../../components/product-form/CategoryPicker.vue'
+import ProductTranslationsEditor from '../../components/product-form/ProductTranslationsEditor.vue'
 import { NOBRAND_VALUE, isValidGtin } from '../../utils/gtin'
 
 const route = useRoute()
@@ -323,6 +324,11 @@ onMounted(async () => {
             <label class="space-y-1">무게kg<input v-model.number="form.package_weight_kg" type="number" min="0" step="0.01" class="h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink" /></label>
           </div>
         </div>
+      </section>
+
+      <ProductTranslationsEditor v-if="!isNew && productId" :product-id="productId" />
+      <section v-else class="rounded-2xl border border-line bg-surface-2 p-4 text-xs text-ink-muted" aria-label="다국어 번역 안내">
+        다국어 번역(영어·일본어·중국어 번체)은 상품 등록 후 수정 화면에서 입력할 수 있습니다.
       </section>
 
       <section class="space-y-3 rounded-2xl border border-line bg-surface p-5" aria-label="상품 주요정보">

@@ -33,7 +33,7 @@ export function publicUser(u) {
 }
 
 /** 6-2: storefront locale tags (sub-path mirrors /en /ja). */
-export const STORE_LOCALES = ['ko-KR', 'en-US', 'ja-JP'];
+export const STORE_LOCALES = ['ko-KR', 'en-US', 'ja-JP', 'zh-TW'];
 export function requireLocale(raw) {
   const v = String(raw || '').trim();
   if (!STORE_LOCALES.includes(v)) throw bad('INVALID_LOCALE', '지원하지 않는 언어입니다.');

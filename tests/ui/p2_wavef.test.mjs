@@ -27,8 +27,8 @@ await t.test('F-S03 verify-email offers resend with cooldown', async () => {
 
 await t.test('F-S04 coupons route requires auth', async () => {
   const v = read('apps/storefront/src/router/index.ts')
-  assert.ok(v.includes("{ path: '/coupons'") && v.includes('requiresAuth'), 'coupons guarded')
-  const line = v.split('\n').find((l) => l.includes("path: '/coupons'"))
+  assert.ok(v.includes("path: 'coupons'") && v.includes('requiresAuth'), 'coupons guarded')
+  const line = v.split('\n').find((l) => l.includes("path: 'coupons'"))
   assert.ok(line && line.includes('requiresAuth'), 'guard is on the coupons route itself')
 })
 

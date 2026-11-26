@@ -30,5 +30,6 @@
   "pcccPlaceholder": "P로 시작하는 13자리 입력 (예: P123456789012)",
   "customsExempt": "소액물품 면세 대상 ($150 이하)",
   "ddpOption": "DDP (관부가세 포함 선납)",
-  "dduOption": "DDU (수입 통관 시 후납)"
+  "dduOption": "DDU (수입 통관 시 후납)",
+  "checkoutKrwNotice": "표시 통화와 관계없이 실제 결제는 원화(KRW)로 진행됩니다."
 }

@@ -67,9 +67,12 @@ const maxCoupon = computed(() => (props.product?.max_coupon_discount == null ? n
     <div class="mt-5 border-t border-line-divider pt-5">
       <div class="flex flex-wrap items-baseline gap-x-2">
         <span v-if="showPct" class="text-2xl font-bold text-accent">{{ discountRate(minOrig, minSale) }}%</span>
-        <span class="text-3xl font-bold tracking-tight text-ink">{{ formatNumber(minSale) }}원</span>
-        <span v-if="showPct" class="text-sm text-ink-subtle line-through">{{ formatNumber(minOrig) }}원</span>
+        <span class="text-3xl font-bold tracking-tight text-ink">{{ locale.currency === 'KRW' ? `${formatNumber(minSale)}원` : locale.formatPrice(minSale) }}</span>
+        <span v-if="showPct" class="text-sm text-ink-subtle line-through">{{ locale.currency === 'KRW' ? `${formatNumber(minOrig)}원` : locale.formatPrice(minOrig) }}</span>
       </div>
+      <p v-if="locale.currency !== 'KRW'" class="mt-1 text-2xs text-ink-muted">
+        {{ locale.t('checkoutKrwNotice', '표시 통화와 관계없이 실제 결제는 원화(KRW)로 진행됩니다.') }} ({{ locale.formatPrice(minSale, 'KRW') }})
+      </p>
       <p v-if="sel.surgeHidden" class="mt-1 text-2xs text-ink-subtle">최근 정가 인상 이력이 있어 할인율을 표시하지 않습니다</p>
     </div>
 

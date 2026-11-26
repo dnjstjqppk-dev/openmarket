@@ -1505,3 +1505,19 @@ paths:
           description: Catalog page with next_cursor/has_more/total
         '400':
           description: INVALID_STATUS or INVALID_CURSOR
+
+  /api/v1/products/{id}/localized:
+    get:
+      tags: [Catalog]
+      summary: Localized product title, summary, canonical slug and content languages
+      parameters:
+        - name: lang
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ko, en, ja, zh-tw]
+      responses:
+        '200': { description: Localized product metadata }
+        '400': { description: INVALID_LANG }
+        '404': { description: Unknown product }

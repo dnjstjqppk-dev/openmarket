@@ -37,8 +37,10 @@ await t.test('01 health, readiness flags and security headers', async () => {
   assert.equal(r.headers.get('X-Frame-Options'), 'DENY');
 });
 await t.test('02 sitemap lists approved products only', async () => {
-  const r = await g.call('/sitemap.xml');
-  assert.ok(r.text.includes('<urlset') && r.text.includes('/category/'));
+  const idx = await g.call('/sitemap.xml');
+  assert.ok(idx.text.includes('<sitemapindex') && idx.text.includes('/sitemaps/ko-products-1.xml'));
+  const prods = await g.call('/sitemaps/ko-products-1.xml');
+  assert.ok(prods.text.includes('<urlset') && prods.text.includes('/ko/krw/p/'));
 });
 await t.test('03 42 root categories, each GNB slug has products', async () => {
   const r = await g.call('/api/v1/categories');

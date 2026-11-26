@@ -176,7 +176,7 @@ await t.test('6. return-policy feed matches policy rows', async () => {
   assert.ok(r.json.itemListElement.length > 0, 'stores listed');
   for (const el of r.json.itemListElement) {
     assert.equal(el['@type'], 'ListItem');
-    assert.ok(el.url.startsWith('https://olmoa.com/store/'), 'store URL real');
+    assert.ok(el.url.startsWith('https://olmoa.com/ko/krw/store/'), 'store URL real');
     assertGraphValid({ '@context': 'https://schema.org', ...el.item }, `return policy ${el.name}`);
   }
   const first = r.json.itemListElement[0];

@@ -30,5 +30,6 @@
   "pcccPlaceholder": "13-character PCCC starting with 'P'",
   "customsExempt": "Duty-Free De Minimis ($150 and under)",
   "ddpOption": "DDP (Delivered Duty Paid)",
-  "dduOption": "DDU (Delivered Duty Unpaid)"
+  "dduOption": "DDU (Delivered Duty Unpaid)",
+  "checkoutKrwNotice": "Displayed currency is for reference only. Checkout and payment are processed in KRW."
 }

@@ -77,21 +77,21 @@ await t.test('json-ld graphs type every required schema', async () => {
 });
 
 await t.test('route head policy indexes PDP and blocks private routes', async () => {
-  const pdp = routeHead({ route: 'product', path: '/product/p1', base: 'https://olmoa.com', title: '이어폰 | OLMOA' });
+  const pdp = routeHead({ route: 'product', path: '/ko/krw/p/p1/earphone', base: 'https://olmoa.com', title: '이어폰 | OLMOA' });
   assert.equal(pdp.robots, 'index,follow');
-  assert.equal(pdp.canonical, 'https://olmoa.com/product/p1');
-  assert.ok(pdp.hreflangs.map((h) => h.hreflang).join() === 'ko-KR,x-default' && pdp.og['og:title'] === '이어폰 | OLMOA');
+  assert.equal(pdp.canonical, 'https://olmoa.com/ko/krw/p/p1/earphone');
+  assert.ok(pdp.hreflangs.map((h) => h.hreflang).join() === 'ko,x-default' && pdp.og['og:title'] === '이어폰 | OLMOA');
   assert.ok(pdp.twitter['twitter:card'] === 'summary_large_image');
-  for (const path of ['/cart', '/checkout', '/my', '/orders/1', '/login', '/payments/success']) {
+  for (const path of ['/ko/krw/cart', '/ko/krw/checkout', '/ko/krw/my', '/ko/krw/orders/1', '/ko/krw/login', '/ko/krw/payments/success']) {
     assert.equal(routeHead({ route: 'x', path, base: 'https://olmoa.com', title: 't' }).robots, 'noindex,nofollow', path);
   }
 });
 
-await t.test('sitemap.xml stays a urlset of approved products', async () => {
+await t.test('sitemap.xml is a sitemap index pointing at per-lang product and page shards', async () => {
   const g = await newGateway();
   const r = await g.call('/sitemap.xml');
   assert.equal(r.status, 200);
-  assert.ok(r.text.includes('<urlset') && r.text.includes('/category/'));
+  assert.ok(r.text.includes('<sitemapindex') && r.text.includes('/sitemaps/ko-products-1.xml'));
 });
 
 await t.test('sitemap index shards products and categories', async () => {
@@ -99,26 +99,26 @@ await t.test('sitemap index shards products and categories', async () => {
   const idx = await g.call('/sitemap-index.xml');
   assert.ok(idx.text.includes('<sitemapindex') && idx.text.includes('/sitemaps/categories.xml'));
   const cats = await g.call('/sitemaps/categories.xml');
-  assert.ok(cats.text.includes('<urlset') && cats.text.includes('/category/'));
+  assert.ok(cats.text.includes('<urlset') && cats.text.includes('/ko/krw/c/'));
   const prods = await g.call('/sitemaps/products-1.xml');
   assert.equal(prods.status, 200);
-  assert.ok(prods.text.includes('<urlset') && prods.text.includes('/product/'));
+  assert.ok(prods.text.includes('<urlset') && prods.text.includes('/ko/krw/p/'));
   assert.equal((await g.call('/sitemaps/products-0.xml')).status, 404);
   const stores = await g.call('/sitemaps/stores.xml');
-  assert.ok(stores.text.includes('<urlset') && stores.text.includes('/store/'));
+  assert.ok(stores.text.includes('<urlset') && stores.text.includes('/ko/krw/store/'));
   assert.ok(idx.text.includes('/sitemaps/stores.xml'));
 });
 
 await t.test('robots and llms files are served from live data', async () => {
   const g = await newGateway();
   const robots = await g.call('/robots.txt');
-  assert.ok(robots.text.includes('Sitemap: https://olmoa.com/sitemap-index.xml'));
+  assert.ok(robots.text.includes('Sitemap: https://olmoa.com/sitemap.xml'));
   assert.ok(robots.text.includes('Disallow: /api/') && robots.text.includes('Disallow: /checkout'));
   const llms = await g.call('/llms.txt');
-  assert.ok(llms.text.includes('# OLMOA') && llms.text.includes('/category/'));
+  assert.ok(llms.text.includes('# OLMOA') && llms.text.includes('/ko/krw/c/'));
   const full = await g.call('/llms-full.txt');
-  assert.ok(full.text.includes('# OLMOA') && full.text.includes('/product/'));
-  assert.ok(full.text.includes('## 분류별 상품 요약') && full.text.includes('/category/'));
+  assert.ok(full.text.includes('# OLMOA') && full.text.includes('/llms/product/'));
+  assert.ok(full.text.includes('## 분류별 상품 요약') && full.text.includes('/ko/krw/c/'));
   assert.ok(full.text.includes('### 이용약관') && full.text.includes('### 개인정보처리방침') && full.text.includes('### 반품·환불 규정'));
 });
 

@@ -37,7 +37,7 @@ try {
   for (const vp of ['desktop', 'tablet_portrait', 'mobile']) {
     const page = await browser.newPage();
     await page.viewport(vp);
-    await page.goto(`${SF}/category/womens-clothing`, {});
+    await page.goto(`${SF}/ko/krw/c/womens-clothing`, {});
     await page.idle(2500);
     const r = await page.eval(`(async () => {
       const bar = document.querySelector('header > div.overflow-hidden') || document.querySelector('header div.overflow-hidden');

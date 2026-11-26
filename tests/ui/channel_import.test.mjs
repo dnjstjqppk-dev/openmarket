@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRunner } from '../lib/harness.mjs'
+import { legacyToBare } from '../../packages/ui/src/locale.config.ts'
 
 const t = createRunner('Channel import dead-ends')
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -27,13 +28,18 @@ await t.test('E02 bulk-upload sample CSV references real category IDs', async ()
 
 await t.test('E03 every banner link target resolves to a storefront route', async () => {
   const router = read('apps/storefront/src/router/index.ts')
-  const routes = [...router.matchAll(/path: '([^']+)'/g)].map((m) => m[1]).filter((p) => !p.includes('*'))
+  const routes = [...router.matchAll(/path: '([^']*)'/g)]
+    .map((m) => (m[1].startsWith('/') ? m[1] : `/${m[1]}`))
+    .filter((p) => !p.includes('*'))
   assert.ok(routes.length > 20, `router parsed (${routes.length} routes)`)
-  const resolves = (link) => routes.some((r) => {
-    if (!r.includes(':')) return r === link
-    const base = r.slice(0, r.indexOf(':') - 1)
-    return link === base || link.startsWith(`${base}/`)
-  })
+  const resolves = (link) => {
+    const bare = legacyToBare(link)
+    return routes.some((r) => {
+      if (!r.includes(':')) return r === bare
+      const base = r.slice(0, r.indexOf(':') - 1)
+      return bare === base || bare.startsWith(`${base}/`)
+    })
+  }
   const admin = read('apps/cloudflare-gateway/src/routes/admin.js')
   const def = admin.match(/body\.link_url \|\| '([^']+)'/)
   assert.ok(def, 'banner default link found')

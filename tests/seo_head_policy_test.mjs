@@ -16,50 +16,50 @@ import { SITE_TAGLINE } from '../apps/cloudflare-gateway/src/lib/site-entity.js'
 const t = createRunner('Head policy ko (6-8)');
 const BANNED = ['무료배송', '가장 합리적인 가격', '새로운 표준', '만나보세요'];
 
-// 1. One locale voice: lang, og:locale, ko-KR + x-default everywhere.
-await t.test('1. shell and builder agree on ko-KR plus x-default', async () => {
+// 1. One locale voice for untranslated pages: lang, og:locale, ko + x-default under /{lang}/{currency}.
+await t.test('1. shell and builder agree on ko plus x-default', async () => {
   const shell = readFileSync('apps/storefront/index.html', 'utf8');
   assert.ok(shell.includes('<html lang="ko">'), 'html lang');
   assert.ok(shell.includes('<meta property="og:locale" content="ko_KR" />'), 'og:locale');
-  for (const [code, href] of [['ko-KR', 'https://olmoa.com/'], ['x-default', 'https://olmoa.com/']]) {
+  for (const [code, href] of [['ko', 'https://olmoa.com/ko/krw'], ['x-default', 'https://olmoa.com/ko/krw']]) {
     assert.ok(shell.includes(`<link rel="alternate" hreflang="${code}" href="${href}" />`), `shell ${code}`);
   }
-  // The /en and /ja mirrors are untranslated copies: never advertised, canonical to ko.
-  assert.ok(!/hreflang="(en|ja)/.test(shell), 'no en/ja alternates in the shell');
+  assert.ok(!/hreflang="(en|ja|zh-TW)/.test(shell), 'no untranslated alternates in the shell');
   assert.ok(!shell.includes('og:locale:alternate'), 'no alternate og locales');
-  const alts = hreflangOf('https://olmoa.com', '/category/dress');
-  assert.deepEqual(alts.map((a) => a.lang), ['ko-KR', 'x-default']);
-  assert.equal(alts[0].href, 'https://olmoa.com/category/dress');
-  assert.equal(alts[1].href, 'https://olmoa.com/category/dress', 'x-default points at ko');
-  assert.deepEqual(hreflangOf('https://olmoa.com', '/en/category/dress'), alts, 'mirror advertises the same ko set');
-  assert.equal(canonicalOf('https://olmoa.com', '/ja/product/p1'), 'https://olmoa.com/product/p1', 'mirror canonical is the ko URL');
-  assert.equal(canonicalOf('https://olmoa.com', '/en'), 'https://olmoa.com/', 'mirror home canonical');
+  const alts = hreflangOf('https://olmoa.com', '/ko/krw/c/dress');
+  assert.deepEqual(alts.map((a) => a.lang), ['ko', 'x-default']);
+  assert.equal(alts[0].href, 'https://olmoa.com/ko/krw/c/dress');
+  assert.equal(alts[1].href, 'https://olmoa.com/ko/krw/c/dress', 'x-default points at ko when untranslated');
+  assert.deepEqual(hreflangOf('https://olmoa.com', '/en/usd/c/dress'), alts, 'untranslated en advertises ko set');
+  assert.equal(canonicalOf('https://olmoa.com', '/ja/jpy/p/p1'), 'https://olmoa.com/ko/krw/p/p1', 'untranslated ja canonical is ko/krw');
+  assert.equal(canonicalOf('https://olmoa.com', '/en/usd'), 'https://olmoa.com/ko/krw', 'untranslated home canonical');
 });
 
 // 2. Sort/filter queries strip; page 2+ self-canonicals; page=1 is bare.
 await t.test('2. canonical keeps only ?page=N (N>=2)', async () => {
-  const c = (q) => canonicalOf('https://olmoa.com', '/category/dress', q);
-  assert.equal(c({ sort: 'price_asc', brand: 'Acme', min_price: '1000' }), 'https://olmoa.com/category/dress');
-  assert.equal(c({ sort: 'price_asc', page: '3' }), 'https://olmoa.com/category/dress?page=3');
-  assert.equal(c({ page: '1' }), 'https://olmoa.com/category/dress');
-  assert.equal(c({ page: '0' }), 'https://olmoa.com/category/dress');
-  assert.equal(c({ page: ['2', '5'] }), 'https://olmoa.com/category/dress?page=2');
-  assert.equal(c({ page: 'abc' }), 'https://olmoa.com/category/dress');
+  const c = (q) => canonicalOf('https://olmoa.com', '/ko/krw/c/dress', q);
+  assert.equal(c({ sort: 'price_asc', brand: 'Acme', min_price: '1000' }), 'https://olmoa.com/ko/krw/c/dress');
+  assert.equal(c({ sort: 'price_asc', page: '3' }), 'https://olmoa.com/ko/krw/c/dress?page=3');
+  assert.equal(c({ page: '1' }), 'https://olmoa.com/ko/krw/c/dress');
+  assert.equal(c({ page: '0' }), 'https://olmoa.com/ko/krw/c/dress');
+  assert.equal(c({ page: ['2', '5'] }), 'https://olmoa.com/ko/krw/c/dress?page=2');
+  assert.equal(c({ page: 'abc' }), 'https://olmoa.com/ko/krw/c/dress');
   assert.equal(pageOfQuery({}), 1);
-  const alts = hreflangOf('https://olmoa.com', '/category/dress', { page: '2' });
-  assert.ok(alts.every((a) => a.href.endsWith('/category/dress?page=2')), 'alternates ride along');
-  assert.equal(srvCanonicalOf('https://olmoa.com', '/category/dress', { sort: 'x', page: '4' }),
-    'https://olmoa.com/category/dress?page=4', 'server mirror agrees');
+  const alts = hreflangOf('https://olmoa.com', '/ko/krw/c/dress', { page: '2' });
+  assert.ok(alts.every((a) => a.href.endsWith('/ko/krw/c/dress?page=2')), 'alternates ride along');
+  assert.equal(srvCanonicalOf('https://olmoa.com', '/ko/krw/c/dress', { sort: 'x', page: '4' }),
+    'https://olmoa.com/ko/krw/c/dress?page=4', 'server mirror agrees');
 });
 
 // 3. Search is noindex,follow; private stays noindex,nofollow.
 await t.test('3. /search keeps follow, private paths do not', async () => {
-  assert.equal(robotsOf('/search'), 'noindex,follow');
-  assert.equal(robotsOf('/en/search'), 'noindex,follow', 'mirror prefix stripped');
-  assert.equal(robotsOf('/cart'), 'noindex,nofollow');
-  assert.equal(robotsOf('/product/p1'), 'index,follow');
-  assert.equal(routeHeadOf({ path: '/search', base: 'https://olmoa.com', title: 't' }).robots, 'noindex,follow');
-  assert.equal(routeHead({ path: '/search', base: 'https://olmoa.com', title: 't' }).robots, 'noindex,follow', 'server mirror agrees');
+  assert.equal(robotsOf('/ko/krw/search'), 'noindex,follow');
+  assert.equal(robotsOf('/en/usd/search'), 'noindex,follow', 'prefixed search');
+  assert.equal(robotsOf('/ko/krw/cart'), 'noindex,nofollow');
+  assert.equal(robotsOf('/ko/krw/p/p1'), 'index,follow');
+  assert.equal(robotsOf('/ko/usd/p/p1'), 'noindex,follow', 'non-default currency is noindex,follow');
+  assert.equal(routeHeadOf({ path: '/ko/krw/search', base: 'https://olmoa.com', title: 't' }).robots, 'noindex,follow');
+  assert.equal(routeHead({ path: '/ko/krw/search', base: 'https://olmoa.com', title: 't' }).robots, 'noindex,follow', 'server mirror agrees');
 });
 
 // 4. Product titles: name | brand | OLMOA, clipped, description from the text.

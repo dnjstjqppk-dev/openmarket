@@ -482,6 +482,9 @@ function pickedStoreLabel(pid: string): string | null {
       <!-- summary / pay -->
       <aside class="rounded-lg border border-line bg-surface p-5 lg:sticky lg:top-24" aria-labelledby="sec-sum">
         <h2 id="sec-sum" class="text-lg font-bold text-ink">결제 금액 <span class="text-xs font-normal text-ink-muted">원화(KRW) 결제</span></h2>
+        <OmAlert v-if="locale.currency !== 'KRW'" tone="info" class="mt-3" data-testid="checkout-krw-notice">
+          {{ locale.t('checkoutKrwNotice', '표시 통화와 관계없이 실제 결제는 원화(KRW)로 진행됩니다.') }}
+        </OmAlert>
         <OmAlert v-if="quoteError" tone="danger" class="mt-3">{{ quoteError }}</OmAlert>
         <dl v-if="quote" class="mt-4 space-y-2 text-sm" :class="{ 'opacity-60': quoting }" aria-live="polite">
           <div class="flex justify-between"><dt class="text-ink-muted">상품 금액</dt><dd class="tabular-nums text-ink">{{ won(quote.total_goods_amount) }}</dd></div>

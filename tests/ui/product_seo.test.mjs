@@ -44,12 +44,13 @@ await t.test('P03 product JSON-LD omits missing offer and rating nodes', async (
 })
 
 await t.test('P04 PLP ItemList keeps real product URLs only', async () => {
-  const g = plpJsonLdOf('오디오', 'https://olmoa.com/category/audio', [
+  const g = plpJsonLdOf('오디오', 'https://olmoa.com/ko/krw/c/audio', [
     { slug: 'a', title: 'A' }, { title: 'no-id' }, { id: 'c', title: 'C' }
   ], 'https://olmoa.com/')
   assert.equal(g['@type'], 'CollectionPage')
   assert.equal(g.mainEntity.numberOfItems, 2)
-  assert.equal(g.mainEntity.itemListElement[0].url, 'https://olmoa.com/product/a')
+  assert.equal(g.mainEntity.itemListElement[0].url, 'https://olmoa.com/ko/krw/p/a')
+  assert.equal(g.mainEntity.itemListElement[1].url, 'https://olmoa.com/ko/krw/p/c')
 })
 
 t.finish()

@@ -2122,3 +2122,32 @@ paths:
           description: Unknown or foreign claim (NOT_FOUND)
         '409':
           description: Stage order violated (pickup first, once, while open)
+
+  /api/v1/partner/products/{id}/translations:
+    get:
+      tags: [Partner]
+      summary: List seller-entered product translations (en, ja, zh-tw)
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Source ko title/slug plus translation rows }
+        '401': { description: Missing or expired partner JWT }
+        '404': { description: Unknown or foreign product }
+
+  /api/v1/partner/products/{id}/translations/{lang}:
+    put:
+      tags: [Partner]
+      summary: Upsert one seller product translation and derive its URL slug
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Saved translation row with derived slug }
+        '400': { description: Invalid language or title }
+        '401': { description: Missing or expired partner JWT }
+        '404': { description: Unknown or foreign product }
+    delete:
+      tags: [Partner]
+      summary: Delete one seller product translation
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Translation deleted }
+        '401': { description: Missing or expired partner JWT }
+        '404': { description: Unknown or foreign product }

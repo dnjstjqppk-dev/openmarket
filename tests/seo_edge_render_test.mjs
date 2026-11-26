@@ -8,8 +8,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGateway, createRunner } from './lib/harness.mjs';
-import apex, { injectPage, isPagePath, RUN_WORKER_FIRST } from '../apps/storefront/edge/apex-worker.js';
-import { barePath } from '../apps/cloudflare-gateway/src/services/seo/page-render.js';
+import apex, { injectPage, RUN_WORKER_FIRST } from '../apps/storefront/edge/apex-worker.js';
+import { slugify, legacyToBare, productBarePath, isUnprefixedPath } from '../packages/ui/src/locale.config.ts';
 
 const t = createRunner('Edge rendering (6-2)');
 const SHELL = fs.readFileSync(new URL('../apps/storefront/index.html', import.meta.url), 'utf8');
@@ -33,15 +33,17 @@ await t.test('E01 product page: head, Product JSON-LD and summary match the DB r
   const p = await one(`SELECT p.*, sp.fee_type, sp.base_fee FROM products p JOIN shipping_policies sp ON sp.id = p.shipping_policy_id
     WHERE p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND sp.status = 'ACTIVE' ORDER BY p.id LIMIT 1`);
   assert.ok(p, 'seed has a live product');
-  const r = await get(`/product/${p.id}`);
+  const slug = slugify(p.title);
+  const path = `/ko/krw${productBarePath(p.id, slug)}`;
+  const r = await get(path);
   assert.equal(r.status, 200);
   const html = await r.text();
   assert.ok(decode(titleOf(html)).startsWith(p.title.slice(0, 20)), 'title from the product row');
-  assert.equal(canonicalOf(html), `https://olmoa.com/product/${p.id}`);
+  assert.equal(canonicalOf(html), `https://olmoa.com${path}`);
   assert.equal(countOf(html, /<title>/g), 1, 'one title (static one replaced)');
   assert.equal(countOf(html, /rel="canonical"/g), 1, 'one canonical');
   assert.equal(countOf(html, /name="description"/g), 1, 'one description');
-  assert.ok(!/hreflang="(en|ja)/.test(html), 'no en/ja alternates');
+  assert.ok(!/hreflang="(en|ja|zh-TW)/.test(html), 'no untranslated alternates');
   const product = graphsOf(html).find((x) => x['@type'] === 'Product');
   assert.ok(product, 'Product graph present without JS');
   assert.equal(product.name, p.title);
@@ -58,15 +60,15 @@ await t.test('E02 category page: title rule, ItemList of live products only', as
     SELECT 1 FROM products p JOIN shipping_policies sp ON sp.id = p.shipping_policy_id
     WHERE p.category_id = c.id AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND sp.status = 'ACTIVE') ORDER BY c.slug LIMIT 1`);
   assert.ok(c, 'seed has a category with live products');
-  const r = await get(`/category/${c.slug}`);
+  const r = await get(`/ko/krw/c/${c.slug}`);
   assert.equal(r.status, 200);
   const html = await r.text();
   assert.ok(decode(titleOf(html)).startsWith(c.name), 'title starts with the category name');
-  assert.equal(canonicalOf(html), `https://olmoa.com/category/${c.slug}`);
+  assert.equal(canonicalOf(html), `https://olmoa.com/ko/krw/c/${c.slug}`);
   const list = graphsOf(html).find((x) => x['@type'] === 'ItemList');
   assert.ok(list && list.itemListElement.length > 0, 'ItemList present');
   for (const it of list.itemListElement) {
-    const id = decodeURIComponent(it.url.split('/product/')[1]);
+    const id = decodeURIComponent(it.url.split('/p/')[1].split('/')[0]);
     const live = await one(`SELECT 1 AS ok FROM products p JOIN shipping_policies sp ON sp.id = p.shipping_policy_id
       WHERE p.id = ? AND p.status = 'ACTIVE' AND p.review_status = 'APPROVED' AND sp.status = 'ACTIVE'`, id);
     assert.ok(live, `listed product is live: ${id}`);
@@ -75,10 +77,10 @@ await t.test('E02 category page: title rule, ItemList of live products only', as
 
 await t.test('E03 store and support pages carry facts; support lists published FAQ', async () => {
   const s = await one("SELECT id, business_name FROM partners WHERE status = 'APPROVED' ORDER BY id LIMIT 1");
-  const store = await (await get(`/store/${s.id}`)).text();
+  const store = await (await get(`/ko/krw/store/${s.id}`)).text();
   assert.equal(decode(titleOf(store)), `${s.business_name} | OLMOA`.slice(0, 60), 'store title matches the store view');
   assert.ok(!store.includes('만나보세요'), 'no marketing phrase');
-  const sup = await get('/support');
+  const sup = await get('/ko/krw/support');
   assert.equal(sup.status, 200);
   const html = await sup.text();
   const faq = graphsOf(html).find((x) => x['@type'] === 'FAQPage');
@@ -88,35 +90,35 @@ await t.test('E03 store and support pages carry facts; support lists published F
 });
 
 await t.test('E04 missing and not-live entities answer 404 with the SPA body', async () => {
-  for (const p of ['/product/does-not-exist', '/category/does-not-exist', '/store/does-not-exist']) {
+  for (const p of ['/ko/krw/p/does-not-exist/x', '/ko/krw/c/does-not-exist', '/ko/krw/store/does-not-exist']) {
     const r = await get(p);
     assert.equal(r.status, 404, p);
     const html = await r.text();
     assert.ok(html.includes('<div id="app">'), `${p} still serves the SPA`);
     assert.match(html, /<meta name="robots" content="noindex,nofollow">/, `${p} noindex`);
   }
-  const live = await one("SELECT id FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
+  const live = await one("SELECT id, title FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
   await g.env.DB.prepare('UPDATE products SET shipping_policy_id = NULL WHERE id = ?').bind(live.id).run();
-  const r = await get(`/product/${live.id}`);
+  const r = await get(`/ko/krw${productBarePath(live.id, slugify(live.title))}`);
   assert.equal(r.status, 404, 'policy-less product is not exposed (6-11)');
 });
 
 await t.test('E05 API failure or timeout serves the untouched shell (200)', async () => {
   const broken = { ASSETS: assets, API: { fetch: async () => { throw new Error('down'); } } };
-  const r = await apex.fetch(new Request('https://olmoa.com/category/x'), broken);
+  const r = await apex.fetch(new Request('https://olmoa.com/ko/krw/c/x'), broken);
   assert.equal(r.status, 200);
   assert.equal(await r.text(), SHELL);
   const err = { ASSETS: assets, API: { fetch: async () => new Response('boom', { status: 500 }) } };
-  const r2 = await apex.fetch(new Request('https://olmoa.com/product/x'), err);
+  const r2 = await apex.fetch(new Request('https://olmoa.com/ko/krw/p/x/y'), err);
   assert.equal(r2.status, 200);
   assert.equal(await r2.text(), SHELL);
-  const none = await apex.fetch(new Request('https://olmoa.com/store/x'), { ASSETS: assets });
+  const none = await apex.fetch(new Request('https://olmoa.com/ko/krw/store/x'), { ASSETS: assets });
   assert.equal(await none.text(), SHELL, 'no API binding: shell as-is');
 });
 
 await t.test('E06 same HTML for every user agent (no cloaking)', async () => {
-  const p = await one("SELECT id FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
-  for (const path of ['/', `/product/${p.id}`, '/support']) {
+  const p = await one("SELECT id, title FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
+  for (const path of ['/ko/krw', `/ko/krw${productBarePath(p.id, slugify(p.title))}`, '/ko/krw/support']) {
     const human = await (await get(path, 'Mozilla/5.0 (iPhone)')).text();
     for (const ua of ['Googlebot/2.1', 'GPTBot/1.0', 'Yeti/1.1', 'ClaudeBot/1.0']) {
       assert.equal(await (await get(path, ua)).text(), human, `${path} ${ua}`);
@@ -124,21 +126,28 @@ await t.test('E06 same HTML for every user agent (no cloaking)', async () => {
   }
 });
 
-await t.test('E07 /en and /ja mirrors canonicalize to the ko URL', async () => {
-  const p = await one("SELECT id FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
-  const html = await (await get(`/en/product/${p.id}`)).text();
-  assert.equal(canonicalOf(html), `https://olmoa.com/product/${p.id}`);
-  assert.equal(barePath('/ja'), '/');
-  assert.equal(barePath('/en/category/a/'), '/category/a');
-  assert.equal(barePath('/entertainment'), '/entertainment', 'only whole /en segments are prefixes');
+await t.test('E07 untranslated /en/usd canonicalizes to /ko/krw and legacy paths 301', async () => {
+  const p = await one("SELECT id, title FROM products WHERE status = 'ACTIVE' AND review_status = 'APPROVED' AND shipping_policy_id IS NOT NULL ORDER BY id LIMIT 1");
+  const slug = slugify(p.title);
+  const html = await (await get(`/en/usd${productBarePath(p.id, slug)}`)).text();
+  assert.equal(canonicalOf(html), `https://olmoa.com/ko/krw${productBarePath(p.id, slug)}`);
+  assert.match(html, /<meta name="robots" content="noindex,follow">/);
+  const leg = await get(`/en/product/${p.id}`);
+  assert.equal(leg.status, 301);
+  assert.equal(leg.headers.get('Location'), `https://olmoa.com/en/usd/p/${p.id}`);
+  assert.equal(legacyToBare('/ja'), '/');
+  assert.equal(legacyToBare('/en/category/a/'), '/c/a');
+  assert.equal(legacyToBare('/entertainment'), '/entertainment', 'only whole /en segments are prefixes');
 });
 
 await t.test('E08 routing: page paths go through the worker, assets do not', () => {
-  for (const p of ['/', '/product/1', '/category/a', '/store/s', '/support', '/categories', '/channel/best-sellers', '/legal/terms', '/policy/shipping', '/en', '/ja/product/1']) {
-    assert.equal(isPagePath(p), true, p);
+  for (const p of ['/assets/index.js', '/olmoa-symbol.svg', '/sw.js', '/favicon.ico', '/robots.txt']) {
+    assert.equal(isUnprefixedPath(p), true, p);
   }
-  for (const p of ['/assets/index.js', '/olmoa-symbol.svg', '/cart', '/my', '/search']) assert.equal(isPagePath(p), false, p);
-  for (const p of ['/product/*', '/category/*', '/store/*', '/support']) assert.ok(RUN_WORKER_FIRST.includes(p), p);
+  for (const p of ['/ko/krw', '/ko/krw/p/1/s', '/ko/krw/c/a', '/ko/krw/store/s', '/ko/krw/support']) {
+    assert.equal(isUnprefixedPath(p), false, p);
+  }
+  assert.ok(RUN_WORKER_FIRST.includes('/*') && RUN_WORKER_FIRST.includes('!/assets/*'));
   assert.equal(injectPage('<html><body>x</body></html>', { head: { title: 't' } }), '<html><body>x</body></html>', 'no </head>: as-is');
 });
 

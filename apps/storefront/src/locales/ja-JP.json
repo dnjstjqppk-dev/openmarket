@@ -30,5 +30,6 @@
   "pcccPlaceholder": "Pで始まる13桁を入力",
   "customsExempt": "少額免税対象 ($150以下)",
   "ddpOption": "DDP (関税・消費税前払い)",
-  "dduOption": "DDU (受取時関税支払い)"
+  "dduOption": "DDU (受取時関税支払い)",
+  "checkoutKrwNotice": "表示通貨は参考価格です。実際のお支払いは韓国ウォン（KRW）で決済されます。"
 }

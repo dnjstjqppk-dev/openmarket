@@ -3,18 +3,18 @@
 // the URL locale, ask once per session whether to switch. Dismissal is
 // remembered in sessionStorage; explicit language choices suppress it.
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useLocaleStore, type SupportedLocale } from '../stores/locale'
-import { barePathOf } from '@olmoa/ui'
+import { useLocaleSwitch } from '../composables/useLocaleSwitch'
 
-const LABEL: Record<string, string> = { 'ko-KR': '한국어', 'en-US': '영어', 'ja-JP': '일본어' }
-const PREFIX: Record<string, string> = { 'ko-KR': '', 'en-US': '/en', 'ja-JP': '/ja' }
+const LABEL: Record<string, string> = { 'ko-KR': '한국어', 'en-US': '영어', 'ja-JP': '일본어', 'zh-TW': '중국어(번체)' }
+const LANG_OF = { 'ko-KR': 'ko', 'en-US': 'en', 'ja-JP': 'ja', 'zh-TW': 'zh-tw' } as const
 
 const auth = useAuthStore()
 const locale = useLocaleStore()
 const route = useRoute()
-const router = useRouter()
+const localeSwitch = useLocaleSwitch()
 const visible = ref(false)
 const saved = ref<SupportedLocale>('ko-KR')
 
@@ -37,13 +37,8 @@ const question = computed(() => `${LABEL[saved.value] || '저장된 언어'}로 
 
 async function switchToSaved() {
   const target = saved.value
-  locale.setLocale(target)
   dismiss()
-  const bare = barePathOf(route.path)
-  const to = `${PREFIX[target]}${bare === '/' ? '' : bare}` || '/'
-  if (to !== route.path) {
-    await router.push({ path: to, query: route.query, hash: route.hash }).catch(() => {})
-  }
+  await localeSwitch.switchLang(LANG_OF[target] || 'ko')
 }
 
 watch(() => route.path, () => void check())

@@ -84,16 +84,15 @@ await t.test('3. Content-Signal line exists', async () => {
   assert.equal(CONTENT_SIGNAL, 'Content-Signal: search=yes, ai-input=yes, ai-train=yes');
 });
 
-// 4. Sitemap lines follow PUBLIC_STOREFRONT_URL.
+// 4. Sitemap line follows PUBLIC_STOREFRONT_URL (/sitemap.xml is the sitemap index).
 await t.test('4. sitemap lines follow the public base', async () => {
   const custom = await newGateway('https://shop.example.com/');
   const r = await custom.call('/robots.txt');
-  assert.ok(r.text.includes('Sitemap: https://shop.example.com/sitemap-index.xml'), 'custom index');
-  assert.ok(r.text.includes('Sitemap: https://shop.example.com/sitemap.xml'), 'custom shard');
+  assert.ok(r.text.includes('Sitemap: https://shop.example.com/sitemap.xml'), 'custom sitemap index');
   assert.ok(!r.text.includes('shop.example.com//sitemap'), 'no double slash');
   const live = await newGateway();
   const d = await live.call('/robots.txt');
-  assert.ok(d.text.includes('Sitemap: https://olmoa.com/sitemap-index.xml'), 'default index');
+  assert.ok(d.text.includes('Sitemap: https://olmoa.com/sitemap.xml'), 'default sitemap index');
 });
 
 // 5. Search family and the * fallback.

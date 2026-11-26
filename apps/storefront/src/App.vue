@@ -14,7 +14,8 @@ import { API_BASE_URL, PARTNER_CONSOLE_URL, authHeader } from './config'
 import MegaMenu from './components/MegaMenu.vue'
 import LocaleNudge from './components/LocaleNudge.vue'
 import { SITE_NAME, SITE_TAGLINE } from '../../cloudflare-gateway/src/lib/site-entity.js'
-import { barePathOf } from '@olmoa/ui'
+import { isCurrency, barePathOf, type Lang } from '@olmoa/ui'
+import { useLocaleSwitch } from './composables/useLocaleSwitch'
 import type { SupportedLocale } from './stores/locale'
 
 // The full placeholder is cut mid-word in the phone header (≤390px beside the logo and icons).
@@ -26,18 +27,19 @@ const locale = useLocaleStore()
 const router = useRouter()
 const route = useRoute()
 
-// 6-2: explicit language choice — persist it, save it server-side when
-// logged in, and move to that locale's URL (the URL stays the source of truth).
+// 2026-11-27: explicit language/currency choice is a navigation to the same
+// page under the new /{lang}/{currency} prefix (+ pref cookies); a logged-in
+// customer's language is also saved server-side.
+const localeSwitch = useLocaleSwitch()
+const LANG_OF: Record<SupportedLocale, Lang> = { 'ko-KR': 'ko', 'en-US': 'en', 'ja-JP': 'ja', 'zh-TW': 'zh-tw' }
 async function switchLocale(v: SupportedLocale) {
-  locale.setLocale(v)
   locale.dismissNudge()
   if (auth.isAuthenticated) void auth.saveLocale(v)
-  const prefix = v === 'en-US' ? '/en' : v === 'ja-JP' ? '/ja' : ''
-  const bare = barePathOf(route.path)
-  const to = `${prefix}${bare === '/' ? '' : bare}` || '/'
-  if (to !== route.path) {
-    await router.push({ path: to, query: route.query, hash: route.hash }).catch(() => {})
-  }
+  await localeSwitch.switchLang(LANG_OF[v] || 'ko')
+}
+async function switchCurrency(v: string) {
+  const c = String(v || '').toLowerCase()
+  if (isCurrency(c)) await localeSwitch.switchCurrency(c)
 }
 
 // ---- categories live in MegaMenu (own store load) ------------------------------------------------------
@@ -188,7 +190,10 @@ const footerColumns: FooterColumn[] = [
   { title: '고객 지원', links: [{ label: '고객센터·1:1 문의', to: '/support' }, { label: '이용약관', to: '/legal/terms' }, { label: '개인정보처리방침', to: '/legal/privacy' }, { label: '판매자 입점·판매자센터', href: PARTNER_CONSOLE_URL }] }
 ]
 // These pages have their own fixed purchase bar on mobile.
-const hideBottomNav = computed(() => route.path.startsWith('/product/') || route.path === '/checkout' || route.path === '/cart')
+const hideBottomNav = computed(() => {
+  const bare = barePathOf(route.path)
+  return bare.startsWith('/p/') || bare.startsWith('/product/') || bare === '/checkout' || bare === '/cart'
+})
 
 // ---- recently viewed rail (guest localStorage until 2-9 server history) ----
 interface RecentProduct { id: string; title: string; thumb?: string; at: number }
@@ -282,14 +287,14 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
               <label class="flex items-center gap-1">
                 <span class="sr-only">언어</span>
                 <select :value="locale.locale" class="cursor-pointer bg-transparent font-medium text-ink-muted hover:text-ink focus:outline-none" @change="switchLocale(($event.target as HTMLSelectElement).value as SupportedLocale)">
-                  <option value="ko-KR">한국어</option><option value="en-US">English</option><option value="ja-JP">日本語</option>
+                  <option value="ko-KR">한국어</option><option value="en-US">English</option><option value="ja-JP">日本語</option><option value="zh-TW">繁體中文</option>
                 </select>
               </label>
               <span class="h-3 w-px bg-line-strong" aria-hidden="true" />
               <label class="flex items-center gap-1" :title="locale.currency !== 'KRW' ? locale.fxNote : undefined">
                 <span class="sr-only">표시 통화</span>
-                <select :value="locale.currency" class="cursor-pointer bg-transparent font-medium text-ink-muted hover:text-ink focus:outline-none" @change="locale.setCurrency(($event.target as HTMLSelectElement).value as any)">
-                  <option v-for="c in locale.availableCurrencies" :key="c" :value="c">{{ { KRW: 'KRW ₩', USD: 'USD $', JPY: 'JPY ¥', EUR: 'EUR €' }[c] }}</option>
+                <select :value="locale.currency" class="cursor-pointer bg-transparent font-medium text-ink-muted hover:text-ink focus:outline-none" @change="switchCurrency(($event.target as HTMLSelectElement).value)">
+                  <option v-for="c in locale.availableCurrencies" :key="c" :value="c">{{ { KRW: 'KRW ₩', USD: 'USD $', JPY: 'JPY ¥', TWD: 'TWD NT$' }[c] }}</option>
                 </select>
               </label>
               <span v-if="locale.currency !== 'KRW'" class="text-2xs text-ink-subtle">참고 환산가 · 결제는 원화</span>
