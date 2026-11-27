@@ -53,7 +53,7 @@ const fillDev = () => { if (import.meta.env.DEV) { email.value = 'admin@openmark
         <div class="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-secondary-on font-black text-lg">A</div>
         <div>
           <h1 class="text-xl font-black text-ink leading-none">OLMOA ADMIN</h1>
-          <span class="text-xs text-ink-muted">Platform Governance & Ledger Control</span>
+          <span class="text-xs text-ink-muted">플랫폼 운영 · 정산 관리</span>
         </div>
       </div>
 

@@ -175,12 +175,15 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
     return attachAuthCookies(json(corsHeaders, { success: true, message: '회원가입이 완료되었습니다.', ...payload, data: payload }, 201), env, { token });
   }
 
-  if ((p === '/api/v1/auth/me' || p === '/api/v1/auth/profile') && request.method === 'GET') {
+  const isSessionProbe = p === '/api/v1/auth/session';
+  if ((p === '/api/v1/auth/me' || p === '/api/v1/auth/profile' || isSessionProbe) && request.method === 'GET') {
     // A visitor with no credential at all (no bearer, no access cookie, and no refresh cookie —
-    // which the browser sends on /api/v1/auth/*) gets NO_SESSION, so web clients skip a refresh
-    // that can only fail (it was 400/429 on every guest page view and bounced guests to "session expired").
+    // which the browser sends on /api/v1/auth/*) has nothing to refresh. /auth/session says so with a
+    // 200 (web apps probe it on every boot, so a guest page view logs no failed request); /auth/me keeps
+    // its 401 contract with code NO_SESSION. A present but invalid credential stays a 401 on both.
     const ck = parseCookies(request);
     if (!request.headers.get('Authorization') && !ck[ACCESS_COOKIE] && !ck[REFRESH_COOKIE]) {
+      if (isSessionProbe) return json(corsHeaders, { success: true, authenticated: false, data: null });
       throw new HttpError(401, 'NO_SESSION', '로그인이 필요합니다.');
     }
     const me = await requireAuth(request, env);
@@ -195,7 +198,7 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
        AND rowid IN (SELECT MAX(rowid) FROM user_consents WHERE user_id = ? GROUP BY consent_type) ORDER BY consent_type`
     ).bind(me.userId, me.userId).all();
     const adminInfo = user.role === 'ROLE_ADMIN' ? { admin: { role: user.admin_role, mfa_enabled: Boolean(user.totp_enabled_at), mfa_setup_required: !user.totp_enabled_at && twoFactorRequired(env) } } : {};
-    return json(corsHeaders, { success: true, data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish, consents, ...adminInfo } });
+    return json(corsHeaders, { success: true, ...(isSessionProbe ? { authenticated: true } : {}), data: { user: publicUser(user), partner_id: me.partnerId, credit_balance: credit, available_coupons: coupons, wishlist_count: wish, consents, ...adminInfo } });
   }
 
   if (p === '/api/v1/auth/profile' && (request.method === 'PUT' || request.method === 'PATCH')) {

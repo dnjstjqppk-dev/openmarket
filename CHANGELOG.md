@@ -122,6 +122,26 @@ History before 2026-11-24 lives in git log only.
   rates as "예: …" so an unset rate is not mistaken for a stored one.
 - Browser tooling: lowercase drive letters on Windows, storefront routes under
   `/{lang}/{currency}` in the screen inventory and route smoke.
+- First visit to olmoa.com painted the edge-rendered crawler text (title + 30
+  bare category links) for ~1 s before Vue replaced it. `theme-init.js` marks
+  `html.js` and a head `<style>` hides `#app > [data-olmoa-edge]` for JS
+  visitors (same HTML for everyone; it reappears after 8 s if the app never
+  mounts). Banner slides keep a single `h1`; theme colour is the brand cobalt.
+- Guest page views no longer log a failed request: new
+  `GET /api/v1/auth/session` answers a credential-less visitor with
+  `200 {authenticated:false}` (a present but invalid credential still 401s so
+  the refresh runs); the three apps restore sessions from it
+  (`tests/auth_cookie_test.mjs` K10, OpenAPI documented).
+- Remaining English console copy translated (settlement/inventory ledger,
+  CSV bulk upload, admin login tagline, M2C badge). The supplier-integration
+  panel claimed "HMAC-SHA256 SIGNATURE VERIFIED" for a webhook route that
+  answers 501; it now says the route refuses until a verifier exists, and the
+  bulk-crawler badge no longer implies the feature is on.
+- Product cards and home banners show a neutral placeholder instead of a
+  broken-image icon when an external stock photo has been deleted at the source.
+- `migrations/ops/2026-11-27_banner_truth.sql` (owner-run, with rollback)
+  deactivates the two live banners that promise the removed price-protection
+  credit and an instant 10,000원 signup credit.
 
 ## [2026-11-26]
 

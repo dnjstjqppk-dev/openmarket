@@ -132,4 +132,14 @@ await t.test('H07 6-5 head advertises markdown alternates, shell uses the entity
   assert.ok(home.includes('olmoa-jsonld-org') && home.includes('organizationGraph'), 'home injects Organization')
 })
 
+await t.test('SH13 edge-rendered crawler text never flashes for JS visitors', async () => {
+  // 2026-11-27: the edge HTML inside #app painted as a bare category list for ~1 s before Vue mounted.
+  const html = read('index.html')
+  assert.ok(html.includes('html.js #app > [data-olmoa-edge] { display: none; }'), 'JS visitors hide the edge text')
+  assert.ok(html.indexOf('/theme-init.js') < html.indexOf('html.js #app'), 'class is set before the rule can apply')
+  const init = read('public/theme-init.js')
+  assert.ok(init.includes("classList.add('js')"), 'theme-init marks JS')
+  assert.ok(init.includes("classList.remove('js')") && init.includes('8000'), 'unmounted app shows the edge text again')
+})
+
 t.finish()

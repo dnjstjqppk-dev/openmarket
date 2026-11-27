@@ -768,8 +768,8 @@ onMounted(() => {
       <div class="bg-secondary text-secondary-on rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-primary-soft text-primary-soft-ink font-mono">INBOUND WEBHOOK ENDPOINT</span>
-            <span class="text-xs text-success font-bold">● HMAC-SHA256 SIGNATURE VERIFIED</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-primary-soft text-primary-soft-ink ">수신 웹훅 (미연동)</span>
+            <span class="text-xs text-warning font-bold">플랫폼별 서명 검증 구현 전까지 수신 거부 (501)</span>
           </div>
           <p class="text-xs text-secondary-on/80 font-mono break-all">
             POST {{ API_BASE_URL }}/api/v1/channels/webhooks/:platform_code
@@ -777,7 +777,7 @@ onMounted(() => {
         </div>
         <div class="flex items-center gap-2 text-xs text-secondary-on/70 font-medium">
           <ShieldCheck class="h-4 w-4 text-success" aria-hidden="true" />
-          <span>실제 외부 결제/발주 차단 가드(Safe Mock) 및 멱등키 보증</span>
+          <span>외부 실결제·실발주는 차단(시뮬레이션), 요청은 멱등키로 중복 처리 방지</span>
         </div>
       </div>
 

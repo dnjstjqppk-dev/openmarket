@@ -150,4 +150,26 @@ await t.test('K09 /auth/me tells a cookie-less visitor NO_SESSION (no refresh to
   assert.equal(badBearer.json.code, 'UNAUTHENTICATED');
 });
 
+await t.test('K10 /auth/session: guest is a 200 logged-out, a session is authenticated, a bad credential still 401s', async () => {
+  const g = await boot();
+  const guest = await g.call('/api/v1/auth/session');
+  assert.equal(guest.status, 200);
+  assert.equal(guest.json.success, true);
+  assert.equal(guest.json.authenticated, false);
+  assert.equal(guest.json.data, null);
+  const login = await loginCustomer(g);
+  const at = cookieValue(setCookies(login), 'olmoa_at');
+  const me = await g.call('/api/v1/auth/session', { headers: { Cookie: `olmoa_at=${at}` } });
+  assert.equal(me.status, 200);
+  assert.equal(me.json.authenticated, true);
+  assert.equal(me.json.data.user.email, 'customer@example.com');
+  // expired access cookie + refresh cookie: 401 so the web wrapper refreshes and retries
+  const stale = await g.call('/api/v1/auth/session', { headers: { Cookie: 'olmoa_at=not-a-jwt; olmoa_rt=deadbeef' } });
+  assert.equal(stale.status, 401);
+  // /auth/me keeps its contract (no "authenticated" flag)
+  const plain = await g.call('/api/v1/auth/me', { headers: { Cookie: `olmoa_at=${at}` } });
+  assert.equal(plain.status, 200);
+  assert.equal(plain.json.authenticated, undefined);
+});
+
 t.finish();

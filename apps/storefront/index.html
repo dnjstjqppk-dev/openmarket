@@ -2,6 +2,8 @@
 <html lang="ko">
   <head>
     <script src="/theme-init.js"></script>
+    <!-- crawler/no-JS text from the edge stays in the HTML; JS visitors see the app instead (theme-init.js adds html.js) -->
+    <style>html.js #app > [data-olmoa-edge] { display: none; }</style>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OLMOA (올모아) - 국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다.</title>
@@ -35,7 +37,7 @@
     <link rel="icon" type="image/svg+xml" href="/olmoa-symbol.svg" />
     <link rel="apple-touch-icon" href="/olmoa-symbol.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#FF5000" />
+    <meta name="theme-color" content="#1D4ED8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

@@ -2,6 +2,8 @@
 <html lang="ko">
   <head>
     <script src="/theme-init.js"></script>
+    <!-- crawler/no-JS text from the edge stays in the HTML; JS visitors see the app instead (theme-init.js adds html.js) -->
+    <style>html.js #app>[data-olmoa-edge]{display:none}</style>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OLMOA (올모아) - 국내외 판매자의 상품을 한곳에서 비교하고 구매하는 오픈마켓입니다.</title>
@@ -35,7 +37,7 @@
     <link rel="icon" type="image/svg+xml" href="/olmoa-symbol.svg" />
     <link rel="apple-touch-icon" href="/olmoa-symbol.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#FF5000" />
+    <meta name="theme-color" content="#1D4ED8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -44,11 +46,11 @@
     <!-- Stylesheets & Fonts -->
         <!-- Stylesheets & Fonts -->
     <!-- Font Awesome removed (work order 1-6): icons are lucide-vue-next components -->
-    <script type="module" crossorigin src="/assets/index-CDMboiLe.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/config-C7fnGl41.js">
-    <link rel="modulepreload" crossorigin href="/assets/pinia-D7HHkcjM.js">
-    <link rel="modulepreload" crossorigin href="/assets/OmModal-CFpxrF_h.js">
-    <link rel="modulepreload" crossorigin href="/assets/auth-Cu-FkpA-.js">
+    <script type="module" crossorigin src="/assets/index-E8umyT2k.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/config-BJUSwZ6G.js">
+    <link rel="modulepreload" crossorigin href="/assets/pinia-C_rTi10s.js">
+    <link rel="modulepreload" crossorigin href="/assets/OmModal-CGQ41mmx.js">
+    <link rel="modulepreload" crossorigin href="/assets/auth-Drl7_Rvz.js">
     <link rel="stylesheet" crossorigin href="/assets/index-BYvw5Z_A.css">
   </head>
   <body class="bg-slate-50 text-slate-800 antialiased min-h-screen">

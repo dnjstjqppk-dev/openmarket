@@ -67,20 +67,20 @@ onMounted(loadLedgers)
 
     <div v-if="!loading && !loadError" class="space-y-8">
     <div>
-      <h2 class="text-xl font-bold text-ink mb-1">Partner Settlement Ledger & Escrow Payout Approval</h2>
-      <p class="text-xs text-ink-muted mb-4">Approve pending partner settlements to release escrow payouts</p>
+      <h2 class="text-xl font-bold text-ink mb-1">판매자 정산 원장 · 에스크로 지급 승인</h2>
+      <p class="text-xs text-ink-muted mb-4">대기 중인 판매자 정산을 승인하면 에스크로 지급이 진행됩니다.</p>
 
       <div class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-surface-2 text-ink-muted border-b border-line uppercase">
-              <th class="py-3.5 px-5 font-bold">Settlement ID</th>
-              <th class="py-3.5 px-5 font-bold">Order ID</th>
-              <th class="py-3.5 px-5 font-bold">Partner</th>
-              <th class="py-3.5 px-5 font-bold">Gross</th>
-              <th class="py-3.5 px-5 font-bold">Fee</th>
-              <th class="py-3.5 px-5 font-bold">Net Payout</th>
-              <th class="py-3.5 px-5 font-bold">Status / Action</th>
+              <th class="py-3.5 px-5 font-bold">정산 ID</th>
+              <th class="py-3.5 px-5 font-bold">주문 ID</th>
+              <th class="py-3.5 px-5 font-bold">판매자</th>
+              <th class="py-3.5 px-5 font-bold">총액</th>
+              <th class="py-3.5 px-5 font-bold">수수료</th>
+              <th class="py-3.5 px-5 font-bold">지급액</th>
+              <th class="py-3.5 px-5 font-bold">상태 / 작업</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-line-divider">
@@ -155,19 +155,19 @@ onMounted(loadLedgers)
     </div>
 
     <div>
-      <h2 class="text-xl font-bold text-ink mb-1">Immutable Inventory Movement Ledger</h2>
-      <p class="text-xs text-ink-muted mb-4">Every SKU stock deduction, restock, and cancellation rollback</p>
+      <h2 class="text-xl font-bold text-ink mb-1">재고 변동 원장 (수정 불가)</h2>
+      <p class="text-xs text-ink-muted mb-4">SKU별 재고 차감·재입고·취소 복원 이력</p>
 
       <div class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-surface-2 text-ink-muted border-b border-line uppercase">
-              <th class="py-3.5 px-5 font-bold">Ledger ID</th>
+              <th class="py-3.5 px-5 font-bold">원장 ID</th>
               <th class="py-3.5 px-5 font-bold">SKU ID</th>
-              <th class="py-3.5 px-5 font-bold">Change Type</th>
-              <th class="py-3.5 px-5 font-bold">Delta</th>
-              <th class="py-3.5 px-5 font-bold">Reason</th>
-              <th class="py-3.5 px-5 font-bold">Timestamp</th>
+              <th class="py-3.5 px-5 font-bold">변동 유형</th>
+              <th class="py-3.5 px-5 font-bold">증감</th>
+              <th class="py-3.5 px-5 font-bold">사유</th>
+              <th class="py-3.5 px-5 font-bold">일시</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-line-divider">

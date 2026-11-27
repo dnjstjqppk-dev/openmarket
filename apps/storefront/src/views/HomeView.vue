@@ -23,6 +23,8 @@ const PAGE_SIZE = 40
 
 const banners = ref<any[]>([])
 const bannerIdx = ref(0)
+// A dead banner image (e.g. the source photo was deleted) is hidden so the slide keeps its plain dark backdrop.
+const bannerImgFailed = ref<Record<number, boolean>>({})
 const campaign = ref<any>(null)
 const deals = ref<any[]>([])
 const exhibitions = ref<any[]>([])
@@ -146,11 +148,11 @@ const remainingLabel = (d: any) =>
         <OmCarousel v-model="bannerIdx" :count="banners.length" :label="locale.t('homePromoBanner')">
           <template #default="{ index }">
             <div class="relative aspect-video w-full overflow-hidden bg-secondary text-white sm:aspect-auto sm:h-[360px]">
-              <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-70 transition-transform duration-slow" :fetchpriority="index === 0 ? 'high' : 'auto'" />
+              <img v-if="banners[index].image_url && !bannerImgFailed[index]" :src="banners[index].image_url" alt="" @error="bannerImgFailed[index] = true" class="absolute inset-0 h-full w-full object-cover opacity-70 transition-transform duration-slow" :fetchpriority="index === 0 ? 'high' : 'auto'" />
               <div class="absolute inset-0 bg-gradient-to-tr from-overlay/85 via-overlay/45 to-transparent" aria-hidden="true" />
               <div class="relative flex h-full flex-col justify-end gap-2.5 p-5 sm:gap-3.5 sm:p-12" aria-live="polite">
                 <span v-if="banners[index].badge_text" class="w-fit rounded-full bg-primary/90 px-3 py-1 text-2xs font-bold tracking-wider text-primary-on shadow-sm backdrop-blur whitespace-nowrap">{{ banners[index].badge_text }}</span>
-                <h1 class="line-clamp-2 max-w-2xl text-xl font-extrabold leading-tight tracking-tight sm:text-4xl">{{ banners[index].title }}</h1>
+                <component :is="index === 0 ? 'h1' : 'h2'" class="line-clamp-2 max-w-2xl text-xl font-extrabold leading-tight tracking-tight sm:text-4xl">{{ banners[index].title }}</component>
                 <p v-if="banners[index].subtitle" class="hidden max-w-xl text-sm text-white/90 sm:block sm:text-md">{{ banners[index].subtitle }}</p>
                 <div class="pt-1">
                   <OmButton :to="banners[index].link_url" variant="primary" :size="isPhone ? 'sm' : 'md'">

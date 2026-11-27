@@ -155,7 +155,7 @@ onMounted(loadData)
       <div>
         <h1 class="text-xl font-black text-ink flex items-center gap-2">
           <span>M2C 동적 역경매 비딩 &amp; MD 네고 워크벤치</span>
-          <span class="px-2.5 py-0.5 rounded-full bg-primary-soft text-primary-soft-ink text-[11px] font-black">Direct Factory M2C</span>
+          <span class="px-2.5 py-0.5 rounded-full bg-primary-soft text-primary-soft-ink text-[11px] font-black">공장 직거래 (M2C)</span>
         </h1>
         <p class="text-ink-muted mt-1">
           올모아 MD의 대량 소싱 캠페인에 공장 직접 도매가를 제시하여 전탁(Fully-Managed) 공식 독점 납품 기회를 선점하세요.

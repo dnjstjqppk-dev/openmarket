@@ -8,7 +8,7 @@ export const API_BASE = API_BASE_URL
 
 // P0-2: the seller session lives in httpOnly cookies (olmoa_at/olmoa_rt),
 // which JS cannot read — so NO credential is kept here or in localStorage.
-// Identity is memory-only and restored from GET /api/v1/auth/me. The stored
+// Identity is memory-only and restored from GET /api/v1/auth/session. The stored
 // id/name/status hints are display-only (the API enforces approval per call).
 // Legacy token keys from older builds are purged once on load.
 const KEYS = { id: 'partner_id', name: 'partner_name', model: 'partner_sales_model', status: 'partner_status' }
@@ -28,7 +28,7 @@ export const getPartnerSessionUser = (): PartnerSessionUser | null => sessionUse
 /** Rebuild the memory session from the cookie. False when logged out. */
 export async function restorePartnerSession(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/session`)
     const json = await res.json().catch(() => null)
     const u = json?.data?.user
     if (res.ok && json?.success && u && u.id && u.role === 'ROLE_PARTNER') {

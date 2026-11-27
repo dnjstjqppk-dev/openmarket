@@ -3,9 +3,9 @@
 // sold-out scrim, rank/deal/direct corner, frosted wishlist + quick-add actions,
 // store/name/price/badge/rating stack. Passes formatPrice down to OmPrice so
 // non-KRW currencies match PDP/JSON-LD everywhere.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Heart, ShoppingCart, Star } from 'lucide-vue-next'
+import { Heart, ImageOff, ShoppingCart, Star } from 'lucide-vue-next'
 import OmCommerceBadge from './OmCommerceBadge.vue'
 import OmPrice from './OmPrice.vue'
 import { discountRate, formatNumber } from '../format'
@@ -26,6 +26,9 @@ const discount = computed(() => discountRate(original.value, sale.value))
 const reviews = computed(() => Number(props.product.review_count || 0))
 const rating = computed(() => (reviews.value > 0 && props.product.avg_rating != null ? Number(props.product.avg_rating) : null))
 const seller = computed(() => props.product.business_name || props.product.brand || props.product.partner_name || '')
+// A dead thumbnail URL (an external stock photo deleted at the source) shows a neutral glyph, not a broken-image icon.
+const imgFailed = ref(false)
+watch(() => props.product.thumbnail_url, () => { imgFailed.value = false })
 const soldOut = computed(() => Number(props.product.in_stock ?? 1) === 0)
 const isDeal = computed(() => Array.isArray(props.product.badges) && props.product.badges.includes('DEAL'))
 const isDirect = computed(() => props.product.sales_model === 'DIRECT')
@@ -78,12 +81,15 @@ function onWish() {
   <div class="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition-all duration-fast ease-om hover:-translate-y-1 hover:border-line-strong hover:shadow-lg" data-testid="product-card">
     <div class="relative aspect-square overflow-hidden bg-surface-2">
       <RouterLink :to="to" tabindex="-1" aria-hidden="true" class="block h-full w-full focus-visible:outline-none">
+        <span v-if="imgFailed || !product.thumbnail_url" class="flex h-full w-full items-center justify-center text-ink-subtle"><ImageOff :size="32" aria-hidden="true" /></span>
         <img
+          v-else
           :src="product.thumbnail_url"
           :alt="product.title"
           :loading="eager ? 'eager' : 'lazy'"
           decoding="async"
           class="h-full w-full object-cover transition-transform duration-slow ease-om group-hover:scale-105"
+          @error="imgFailed = true"
         />
       </RouterLink>
       <span

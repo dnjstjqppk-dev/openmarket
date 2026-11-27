@@ -222,7 +222,35 @@ paths:
                         items:
                           type: object
         '401':
-          description: Missing or expired JWT
+          description: Missing or expired JWT (code NO_SESSION when the request carried no credential at all)
+
+  /api/v1/auth/session:
+    get:
+      summary: Web session probe — logged out is a 200, not an error
+      tags: [Auth]
+      description: >-
+        Same body as GET /api/v1/auth/me plus authenticated=true when a valid session exists. A request with no
+        Authorization header and no olmoa_at / olmoa_rt cookie answers 200 {success, authenticated:false, data:null},
+        so a guest's page view logs no failed request. A present but invalid/expired credential still answers 401,
+        which lets the web clients run their single refresh.
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, authenticated]
+                properties:
+                  success:
+                    type: boolean
+                  authenticated:
+                    type: boolean
+                  data:
+                    type: object
+                    nullable: true
+        '401':
+          description: Credential present but invalid or expired (refresh, then retry)
 
   /api/v1/auth/profile:
     put:

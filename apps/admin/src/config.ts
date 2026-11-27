@@ -5,7 +5,7 @@ export const API_BASE_URL = requiredEnv('VITE_API_BASE_URL', 'http://127.0.0.1:8
 
 // P0-2: the operator session lives in httpOnly cookies (olmoa_at/olmoa_rt),
 // which JS cannot read — so NO credential is kept here or in localStorage.
-// Identity is memory-only and restored from GET /api/v1/auth/me. Legacy token
+// Identity is memory-only and restored from GET /api/v1/auth/session. Legacy token
 // keys from older builds are purged once on load.
 const LEGACY_TOKEN_KEYS = ['olmoa_admin_token', 'olmoa_admin_refresh_token', 'admin_token']
 try { for (const k of LEGACY_TOKEN_KEYS) localStorage.removeItem(k) } catch { /* private mode */ }
@@ -25,7 +25,7 @@ export function setAdminSession(user: { id: string; email?: string; full_name?: 
 /** Rebuild the memory session from the cookie. False when logged out. */
 export async function restoreAdminSession(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`)
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/session`)
     const json = await res.json().catch(() => null)
     const u = json?.data?.user
     if (res.ok && json?.success && u && u.id && u.role === 'ROLE_ADMIN') {

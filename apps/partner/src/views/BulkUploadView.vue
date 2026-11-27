@@ -153,23 +153,23 @@ const executeBulkUpload = async () => {
   <div class="max-w-4xl space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-xl font-black text-ink">Mass SKU & Product Registration (CSV Batch Engine)</h2>
-        <p class="text-xs text-ink-muted">Atomically insert up to 200 products, SKUs, and initial inventory ledger records into D1</p>
+        <h2 class="text-xl font-black text-ink">CSV 대량 상품 등록</h2>
+        <p class="text-xs text-ink-muted">상품·SKU·초기 재고를 최대 200개까지 한 번에 등록합니다. 한 건이라도 실패하면 전체가 등록되지 않습니다.</p>
       </div>
       <div class="flex gap-2">
         <button @click="downloadSampleCsv" class="px-3.5 py-2 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-bold cursor-pointer">
-          ⬇ Download CSV Template
+          ⬇ CSV 양식 내려받기
         </button>
         <button v-if="isDev" @click="loadSampleBatchDirectly" class="px-3.5 py-2 rounded-xl bg-primary-soft text-primary border border-line text-xs font-black cursor-pointer">
-          ⚡ Load Sample 3-Product Batch
+          ⚡ 개발용 테스트 상품 3개 불러오기
         </button>
       </div>
     </div>
 
     <div class="bg-surface rounded-2xl p-8 border-2 border-dashed border-line text-center">
       <div class="text-4xl mb-3">📦</div>
-      <h3 class="text-base font-bold text-ink mb-1">Drop your Catalog CSV file here</h3>
-      <p class="text-xs text-ink-muted mb-2">Columns: title, brand, manufacturer, model_name, category_id, original_price, sale_price, stock_quantity, option_label, thumbnail_url, gtin, gtin_exempt_reason</p>
+      <h3 class="text-base font-bold text-ink mb-1">상품 CSV 파일을 선택하세요</h3>
+      <p class="text-xs text-ink-muted mb-2">열 순서: title, brand, manufacturer, model_name, category_id, original_price, sale_price, stock_quantity, option_label, thumbnail_url, gtin, gtin_exempt_reason</p>
       <details v-if="categories.length" class="mb-5 text-left text-xs text-ink-muted bg-surface-2 rounded-xl p-3 max-h-40 overflow-y-auto">
         <summary class="font-bold cursor-pointer">카테고리 ID 참조 ({{ categories.length }}개)</summary>
         <ul class="mt-2 space-y-0.5 font-mono"><li v-for="c in categories" :key="c.id">{{ c.id }} — {{ c.name }}</li></ul>
@@ -177,7 +177,7 @@ const executeBulkUpload = async () => {
       <div v-else class="mb-5"></div>
 
       <label class="inline-block px-5 py-2.5 rounded-xl bg-secondary hover:bg-secondary-hover text-secondary-on text-xs font-bold cursor-pointer">
-        Select CSV File
+        CSV 파일 선택
         <input type="file" accept=".csv" class="hidden" @change="handleFileSelect" />
       </label>
 
@@ -213,18 +213,18 @@ const executeBulkUpload = async () => {
           :disabled="uploading"
           class="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-primary-on text-xs font-black cursor-pointer disabled:opacity-50"
         >
-          {{ uploading ? 'Executing D1 Batch Insert...' : `Commit ${parsedItems.length} Products to D1` }}
+          {{ uploading ? '등록 중…' : `상품 ${parsedItems.length}개 등록` }}
         </button>
       </div>
       <table class="w-full text-left border-collapse text-xs">
         <thead>
           <tr class="border-b border-line text-ink-muted uppercase">
-            <th class="py-2.5 px-4">Title</th>
-            <th class="py-2.5 px-4">Brand</th>
-            <th class="py-2.5 px-4">Category ID</th>
-            <th class="py-2.5 px-4">Orig Price</th>
-            <th class="py-2.5 px-4">Sale Price</th>
-            <th class="py-2.5 px-4">Stock</th>
+            <th class="py-2.5 px-4">상품명</th>
+            <th class="py-2.5 px-4">브랜드</th>
+            <th class="py-2.5 px-4">카테고리 ID</th>
+            <th class="py-2.5 px-4">정상가</th>
+            <th class="py-2.5 px-4">판매가</th>
+            <th class="py-2.5 px-4">재고</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-line-divider">

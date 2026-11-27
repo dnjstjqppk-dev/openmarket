@@ -76,14 +76,15 @@ await t.test('W03 login and onboarding keep the profile only', async () => {
   assert.ok(!read('apps/partner/src/views/ApplyView.vue').includes('data.token'), 'application keeps profile only');
 });
 
-await t.test('W04 sessions restore from /me and log out via API', async () => {
+await t.test('W04 sessions restore from /auth/session and log out via API', async () => {
   for (const f of [
     'apps/storefront/src/stores/auth.ts',
     'apps/admin/src/config.ts',
     'apps/partner/src/config.ts',
   ]) {
     const src = read(f);
-    assert.ok(src.includes('/api/v1/auth/me'), `${f} restores from /me`);
+    // /auth/session answers a guest with 200 (no failed request on every page view)
+    assert.ok(src.includes('/api/v1/auth/session'), `${f} restores from /auth/session`);
     assert.ok(src.includes('/api/v1/auth/logout'), `${f} logs out via API`);
   }
   assert.ok(read('apps/storefront/src/main.ts').includes('ensureSession'), 'storefront guard restores');

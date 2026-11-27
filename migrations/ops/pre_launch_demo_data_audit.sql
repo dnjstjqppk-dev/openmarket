@@ -14,3 +14,5 @@ SELECT 'demo_partners_without_verified_payout_account' AS item, COUNT(*) AS n FR
 SELECT 'seed_qna_and_inquiries' AS item, (SELECT COUNT(*) FROM product_qna) + (SELECT COUNT(*) FROM support_inquiries) AS n;
 SELECT 'banners_with_unverified_claims' AS item, COUNT(*) AS n FROM banners WHERE subtitle LIKE '%85%' OR title LIKE '%최저가%';
 SELECT 'operator_entity_active' AS item, COUNT(*) AS n FROM business_entities WHERE status = 'ACTIVE';
+-- 2026-11-27: retired promises (price protection removed 2026-11-17; signup credit is granted on email verification only).
+SELECT 'banners_with_retired_claims' AS item, COUNT(*) AS n FROM banners WHERE is_active = 1 AND (subtitle LIKE '%차액 적립%' OR subtitle LIKE '%가입 즉시%' OR badge_text = 'FREE SHIPPING');

@@ -27,6 +27,7 @@ const EXPECTED = [
   ['/api/v1/auth/login', 'POST', 400],
   ['/api/v1/auth/register', 'POST', 400],
   ['/api/v1/auth/me', 'GET', 401],
+  ['/api/v1/auth/session', 'GET', 200],
   ['/api/v1/payments/config', 'GET', 200],
   ['/api/v1/payments/confirm', 'POST', 401],
   ['/api/v1/orders/quote', 'POST', 401],

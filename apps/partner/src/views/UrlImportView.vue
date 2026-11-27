@@ -884,7 +884,7 @@ onMounted(() => {
           </div>
           <span class="text-xs bg-primary-soft text-primary-soft-ink border border-line px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5">
             <Zap class="h-4 w-4" aria-hidden="true" />
-            <span>Feature Flag: bulk_crawler</span>
+            <span>운영자가 기능을 켠 경우에만 수집됩니다</span>
           </span>
         </div>
 

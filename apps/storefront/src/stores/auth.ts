@@ -10,7 +10,7 @@ export interface User {
 
 // P0-2: the session lives in httpOnly cookies (olmoa_at/olmoa_rt), which JS
 // cannot read — so NO credential is kept here or in localStorage. The user
-// profile is memory-only and restored from GET /api/v1/auth/me. Legacy token
+// profile is memory-only and restored from GET /api/v1/auth/session. Legacy token
 // keys from older builds are purged once on load.
 const LEGACY_KEYS = ['olmoa_token', 'olmoa_refresh_token', 'olmoa_customer_id', 'olmoa_customer_name', 'olmoa_customer_email']
 try { for (const k of LEGACY_KEYS) localStorage.removeItem(k) } catch { /* private mode */ }
@@ -39,7 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function restore(): Promise<boolean> {
     try {
       const { API_BASE_URL } = await import('../config')
-      const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`)
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/session`)
       const json = await res.json().catch(() => null)
       const u = json?.data?.user
       if (res.ok && json?.success && u && u.id && u.role === 'ROLE_CUSTOMER') {
