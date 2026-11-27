@@ -64,6 +64,12 @@ export function installApiFetch(options: ApiFetchOptions): void {
     const skipRefresh = initHeaders.get('x-olmoa-retried') === '1'
       || input instanceof Request
       || noRefresh.some((p) => url.includes(p));
+    // The session probe of a visitor who holds no cookie at all: nothing to refresh and nothing
+    // expired — hand the 401 back as "logged out" (no refresh request, no expired-session redirect).
+    if (res.status === 401 && isApi && url.includes('/api/v1/auth/me')) {
+      const body = await res.clone().json().catch(() => null);
+      if (body && body.code === 'NO_SESSION') return res;
+    }
     if (res.status === 401 && isApi && !skipRefresh) {
       const ok = await refreshAccessToken();
       if (ok) {

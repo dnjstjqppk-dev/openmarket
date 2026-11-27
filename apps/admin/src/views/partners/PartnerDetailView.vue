@@ -162,7 +162,7 @@ onMounted(() => void load())
       <section class="space-y-2 rounded-2xl border border-line bg-surface p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h1 class="text-lg font-bold text-ink">{{ p.business_name }}</h1>
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="p.status === 'APPROVED' ? 'bg-success-soft text-success' : p.status === 'PENDING' ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger'">{{ p.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="p.status === 'APPROVED' ? 'bg-success-soft text-success' : p.status === 'PENDING' ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger'">{{ p.status }}</span>
         </div>
         <dl class="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-3">
           <div><dt class="text-ink-subtle">사업자등록번호</dt><dd class="om-num font-bold text-ink">{{ p.business_reg_number }}</dd></div>
@@ -179,7 +179,7 @@ onMounted(() => void load())
         <h2 class="text-sm font-bold text-ink">정산 계좌</h2>
         <p class="om-num text-xs text-ink">{{ p.bank_code || '-' }} {{ maskAcct(p.bank_account_number) }} ({{ p.bank_account_holder || '예금주 미등록' }})</p>
         <p>
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(p.payout_account_verified) === 1 ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ Number(p.payout_account_verified) === 1 ? '실명확인' : '미확인' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(p.payout_account_verified) === 1 ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ Number(p.payout_account_verified) === 1 ? '실명확인' : '미확인' }}</span>
           <span v-if="data.payout_change_request" class="ml-1 rounded-full bg-info-soft px-2 py-0.5 text-2xs font-bold text-info">변경요청: {{ data.payout_change_request.bank_code }} {{ maskAcct(data.payout_change_request.bank_account_number) }}</span>
         </p>
         <div class="flex flex-wrap gap-2">

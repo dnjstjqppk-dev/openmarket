@@ -70,7 +70,7 @@ onMounted(loadLedgers)
       <h2 class="text-xl font-bold text-ink mb-1">Partner Settlement Ledger & Escrow Payout Approval</h2>
       <p class="text-xs text-ink-muted mb-4">Approve pending partner settlements to release escrow payouts</p>
 
-      <div class="bg-surface rounded-2xl border border-line overflow-hidden shadow-2xs">
+      <div class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-surface-2 text-ink-muted border-b border-line uppercase">
@@ -117,7 +117,7 @@ onMounted(loadLedgers)
       <h2 class="text-xl font-bold text-ink mb-1">전자세금계산서 및 현금영수증 국세청(홈택스) 전송 원장</h2>
       <p class="text-xs text-ink-muted mb-4">주문 및 정산 건별 법정 전자세금계산서 승인번호 및 국세청 전송 상태를 실시간 감시합니다.</p>
 
-      <div class="bg-surface rounded-2xl border border-line overflow-hidden shadow-2xs">
+      <div class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-surface-2 text-ink-muted border-b border-line uppercase">
@@ -158,7 +158,7 @@ onMounted(loadLedgers)
       <h2 class="text-xl font-bold text-ink mb-1">Immutable Inventory Movement Ledger</h2>
       <p class="text-xs text-ink-muted mb-4">Every SKU stock deduction, restock, and cancellation rollback</p>
 
-      <div class="bg-surface rounded-2xl border border-line overflow-hidden shadow-2xs">
+      <div class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
             <tr class="bg-surface-2 text-ink-muted border-b border-line uppercase">

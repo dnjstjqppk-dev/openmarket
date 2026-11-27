@@ -169,5 +169,9 @@
   "bizInfoVerify": "查詢營業資訊",
   "bizInfoMissing": "尚未登錄營運商資訊，完成登錄前無法受理訂單。",
   "retry": "重試",
-  "loading": "載入中..."
+  "loading": "載入中...",
+  "loginOr": "或",
+  "loginFromCheckout": "請登入以繼續您的訂單。",
+  "kakaoStart": "使用 Kakao 登入",
+  "kakaoRedirecting": "正在前往 Kakao..."
 }

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { launchBrowser } from './cdp.mjs';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '../..');
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../..');
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'reports/v4/phase3/lcp.json'));
 const API = process.env.API_URL || 'https://olmoa-api.dnjstjqppk.workers.dev';
 const HOST = process.env.HOST || '127.0.0.1';

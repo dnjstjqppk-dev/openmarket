@@ -234,7 +234,7 @@ onMounted(loadAddresses)
               <span class="text-sm font-bold text-ink">{{ addr.recipient_name }}</span>
               <span
                 v-if="addr.is_default"
-                class="rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink"
+                class="rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink whitespace-nowrap"
               >
                 기본 배송지
               </span>

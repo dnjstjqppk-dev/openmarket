@@ -288,7 +288,7 @@ onMounted(loadCategories)
             <button type="button" class="h-10 rounded-lg bg-secondary px-4 font-bold text-secondary-on hover:bg-secondary-hover" @click="addBanned">추가</button>
           </div>
           <div class="flex flex-wrap gap-1.5">
-            <span v-for="w in edit.banned" :key="w" class="flex items-center gap-1 rounded-full bg-danger-soft px-2.5 py-1 text-2xs font-bold text-danger">
+            <span v-for="w in edit.banned" :key="w" class="flex items-center gap-1 rounded-full bg-danger-soft px-2.5 py-1 text-2xs font-bold text-danger whitespace-nowrap">
               {{ w }}
               <button type="button" :aria-label="`${w} 삭제`" class="font-bold" @click="edit.banned = edit.banned.filter((x) => x !== w)">×</button>
             </span>

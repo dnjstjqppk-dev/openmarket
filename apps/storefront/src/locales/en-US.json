@@ -169,5 +169,9 @@
   "bizInfoVerify": "Verify Business",
   "bizInfoMissing": "Operator business info is not registered yet. Orders cannot be placed until registration is complete.",
   "retry": "Try again",
-  "loading": "Loading..."
+  "loading": "Loading...",
+  "loginOr": "or",
+  "loginFromCheckout": "Please sign in to continue your order.",
+  "kakaoStart": "Continue with Kakao",
+  "kakaoRedirecting": "Redirecting to Kakao..."
 }

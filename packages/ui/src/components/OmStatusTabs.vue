@@ -17,7 +17,7 @@ const active = defineModel<string>({ default: '' })
       @click="active = tb.value"
     >
       {{ tb.label }}
-      <span v-if="tb.count !== null && tb.count !== undefined" class="om-num rounded-full bg-overlay/10 px-1.5 py-0.5 text-2xs">{{ tb.count }}</span>
+      <span v-if="tb.count !== null && tb.count !== undefined" class="om-num rounded-full bg-overlay/10 px-1.5 py-0.5 text-2xs whitespace-nowrap">{{ tb.count }}</span>
     </button>
   </div>
 </template>

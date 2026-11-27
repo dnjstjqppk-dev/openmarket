@@ -142,11 +142,11 @@ onMounted(() => void load())
         </template>
         <template #cell-checks="{ row }">
           <div class="flex max-w-md flex-wrap gap-1">
-            <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.checks.images.ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">이미지 {{ row.checks.images.count }}장</span>
+            <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.checks.images.ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">이미지 {{ row.checks.images.count }}장</span>
             <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.checks.notice.ok ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'">{{ row.checks.notice.template ? (row.checks.notice.ok ? '고시 완료' : `고시 누락(${row.checks.notice.missing.join(', ')})`) : '고시 미지정' }}</span>
-            <span v-if="row.checks.shipping_policy && !row.checks.shipping_policy.ok" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
-            <span v-for="w in row.checks.banned_words" :key="w" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">금칙어({{ w }})</span>
-            <span v-for="w in row.checks.exaggeration" :key="w" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">과장({{ w }})</span>
+            <span v-if="row.checks.shipping_policy && !row.checks.shipping_policy.ok" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">배송정책 미지정</span>
+            <span v-for="w in row.checks.banned_words" :key="w" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">금칙어({{ w }})</span>
+            <span v-for="w in row.checks.exaggeration" :key="w" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning whitespace-nowrap">과장({{ w }})</span>
             <span v-if="row.checks.price_hike" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">정가인상 의심({{ won(row.checks.price_hike.original_before) }}→{{ won(row.checks.price_hike.original_raised) }})</span>
           </div>
         </template>

@@ -125,7 +125,7 @@ onMounted(() => void load())
         <template #cell-burden="{ row }"><span class="om-num text-ink">{{ won(row.discount_total ?? 0) }}</span></template>
         <template #cell-period="{ row }"><span class="om-num text-ink-muted">{{ String(row.starts_at || '').slice(0, 10) || '-' }} ~ {{ String(row.expires_at || '').slice(0, 10) }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(row.is_active) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(row.is_active) === 1 ? '발급중' : '중지됨' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(row.is_active) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(row.is_active) === 1 ? '발급중' : '중지됨' }}</span>
         </template>
         <template #actions="{ row }">
           <button v-if="Number(row.is_active) === 1" type="button" class="rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2" @click="suspend(row)">중지</button>

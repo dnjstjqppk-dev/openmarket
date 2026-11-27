@@ -24,7 +24,7 @@ module.exports = {
         ink: { DEFAULT: v('text'), muted: v('text-muted'), subtle: v('text-subtle'), inverse: v('text-inverse') },
         line: { DEFAULT: v('border'), strong: v('border-strong'), divider: v('divider') },
         primary: { DEFAULT: v('primary'), hover: v('primary-hover'), active: v('primary-active'), soft: v('primary-soft'), 'soft-ink': v('primary-soft-text'), on: v('on-primary') },
-        secondary: { DEFAULT: v('secondary'), hover: v('secondary-hover'), on: v('on-secondary') },
+        secondary: { DEFAULT: v('secondary'), hover: v('secondary-hover'), active: v('secondary-hover'), on: v('on-secondary') },
         accent: { DEFAULT: v('accent'), soft: v('accent-soft') },
         highlight: { DEFAULT: v('highlight'), soft: v('highlight-soft'), ink: v('highlight-text'), on: v('on-highlight') },
         success: { DEFAULT: v('success'), soft: v('success-soft') },
@@ -70,6 +70,8 @@ module.exports = {
         '3xl': 'var(--om-radius-3xl)'
       },
       boxShadow: {
+        '2xs': 'var(--om-shadow-sm)',
+        xs: 'var(--om-shadow-sm)',
         sm: 'var(--om-shadow-sm)',
         DEFAULT: 'var(--om-shadow-md)',
         md: 'var(--om-shadow-md)',
@@ -86,6 +88,11 @@ module.exports = {
       },
       transitionTimingFunction: { om: 'var(--om-ease)' },
       transitionDuration: { fast: 'var(--om-duration-fast)', DEFAULT: 'var(--om-duration)', slow: 'var(--om-duration-slow)' },
+      // 4.5 (18px) is used by OmButton md and the header cart CTA; Tailwind 3 has no default for it.
+      // 15 (60px) is the console header/sidebar-brand row height in OmConsoleShell.
+      spacing: { '4.5': '1.125rem', 15: '3.75rem' },
+      scale: { 98: '.98' },
+      backdropBlur: { xs: '2px' },
       maxWidth: { container: 'var(--om-container)' },
       height: { header: 'var(--om-header-h)' },
       keyframes: {

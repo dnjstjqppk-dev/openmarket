@@ -115,4 +115,15 @@ await t.test('W05 no view attaches a Bearer token from JS state', async () => {
   }
 });
 
+await t.test('W07 guests are never treated as expired sessions', async () => {
+  // The cookie-less session probe returns NO_SESSION; the wrapper must not refresh on it.
+  assert.ok(read('packages/ui/src/apiFetch.ts').includes("body.code === 'NO_SESSION'"), 'apiFetch skips refresh for NO_SESSION');
+  // Only a session that existed can expire: no "session expired" bounce for a first visit.
+  assert.ok(read('apps/admin/src/main.ts').includes('if (!getAdminSessionUser()) return;'), 'admin expired redirect needs a session');
+  assert.ok(read('apps/partner/src/main.ts').includes('if (!getPartnerSessionUser()) return;'), 'partner expired redirect needs a session');
+  // The partner shell waits for the first navigation and a seller session before seller-only calls.
+  const shell = read('apps/partner/src/App.vue');
+  assert.ok(shell.includes('await router.isReady()') && shell.includes('await ensurePartnerSession()'), 'partner header waits for router + session');
+});
+
 t.finish();

@@ -85,6 +85,44 @@ History before 2026-11-24 lives in git log only.
   (>12px) unreserved late layout shift after the settle window can still flip
   the bar once; layouts are skeleton-reserved so this is rare in practice.
 
+## [2026-11-27] — full UI/UX QA (real Chrome, 3 apps × 3 viewports)
+
+### Fixed
+- Guests were treated as expired sessions: the cookie-less `/auth/me` probe
+  fell through to `/auth/refresh` (400, then 429 under rate limiting) on every
+  page view, and admin/partner then bounced first-time visitors to
+  `/login?expired=1` — including the public seller application `/apply`.
+  `/auth/me` now answers `NO_SESSION` when no credential cookie is present,
+  the fetch wrapper skips the refresh for it, the expired-session redirect
+  needs a session that existed, and the partner shell waits for the first
+  navigation and a seller session before seller-only calls
+  (`tests/auth_cookie_test.mjs` K09, `tests/ui/auth_cookie.test.mjs` W07).
+- Cloudflare Web Analytics beacon was blocked by the CSP on all three sites
+  (console error on every page): `static.cloudflareinsights.com` allowed in
+  `script-src`.
+- Meridian 2.0 used Tailwind classes that do not exist in Tailwind 3
+  (`px-4.5`, `h-15`, `shadow-xs/2xs`, `backdrop-blur-xs`, `scale-98`,
+  `bg-secondary-active`, `bg-app`): every medium `OmButton` and the header
+  cart CTA had no horizontal padding and the console header had no height.
+  Added the tokens to the preset; the admin login uses `bg-bg`.
+- `body { overflow-wrap: anywhere }` lowered min-content width, so table
+  columns collapsed to one character (prices split "49,9 / 00원", headers
+  stacked letter by letter). Now `break-word`; ledger/bidding tables scroll
+  horizontally; pill badges no longer wrap.
+- Phone layouts: storefront search hides the submit button below 640px so the
+  placeholder is readable; admin/partner headers no longer overlap the
+  language picker (badges from `sm`, icon-only logout); date-range presets
+  stay on one line; multichannel tabs scroll instead of wrapping.
+- The recent-products rail now appears from 1600px (the 1360px container left
+  no room at 1440 and it covered the hero).
+- Korean login page showed "OR" / "Kakao Login" and a changed checkout
+  subtitle; restored and localized in all four languages. DOM phrase sync no
+  longer translates the category-initial glyph ("홈" → "Home").
+- Admin header payment badge lost its "결제" prefix; FX-rate inputs show sample
+  rates as "예: …" so an unset rate is not mistaken for a stored one.
+- Browser tooling: lowercase drive letters on Windows, storefront routes under
+  `/{lang}/{currency}` in the screen inventory and route smoke.
+
 ## [2026-11-26]
 
 - `56da475` feat(6-2,ui): edge rendering, ko-only hreflang, public FAQ,

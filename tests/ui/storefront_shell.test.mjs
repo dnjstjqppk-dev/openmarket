@@ -74,7 +74,8 @@ await t.test('SH03 bottom nav drops wishlist/cart for search', async () => {
 await t.test('SH04 recent-products rail on wide screens', async () => {
   const app = read('src/App.vue')
   assert.ok(app.includes('olmoa_recent_products'), 'guest store keyed')
-  assert.ok(app.includes('min-[1440px]'), 'rail shows at 1440px+')
+  // 1600px: the 1360px container + a 72px rail on each side only fits from ~1552px (at 1440 it covered the hero)
+  assert.ok(app.includes('min-[1600px]'), 'rail shows at 1600px+ where it cannot cover content')
   assert.ok(app.includes("locale.t('scrollTop')") || app.includes('맨 위로'), 'back-to-top present')
   const detail = read('src/views/ProductDetailView.vue')
   assert.ok(detail.includes('olmoa_recent_products'), 'detail view records visits')

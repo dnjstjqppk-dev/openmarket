@@ -135,4 +135,19 @@ await t.test('K07 CORS opts into credentials for allowlisted origins only', asyn
   assert.equal(bad.headers.get('access-control-allow-credentials'), null);
 });
 
+await t.test('K09 /auth/me tells a cookie-less visitor NO_SESSION (no refresh to try), others UNAUTHENTICATED', async () => {
+  const g = await boot();
+  const guest = await g.call('/api/v1/auth/me');
+  assert.equal(guest.status, 401);
+  assert.equal(guest.json.code, 'NO_SESSION');
+  // a refresh cookie (access cookie already expired) must still go down the refresh path
+  const withRt = await g.call('/api/v1/auth/me', { headers: { Cookie: 'olmoa_rt=deadbeef' } });
+  assert.equal(withRt.status, 401);
+  assert.equal(withRt.json.code, 'UNAUTHENTICATED');
+  const badAt = await g.call('/api/v1/auth/me', { headers: { Cookie: 'olmoa_at=not-a-jwt' } });
+  assert.equal(badAt.json.code, 'UNAUTHENTICATED');
+  const badBearer = await g.call('/api/v1/auth/me', { headers: { Authorization: 'Bearer nope' } });
+  assert.equal(badBearer.json.code, 'UNAUTHENTICATED');
+});
+
 t.finish();

@@ -73,7 +73,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), close: () => { open.value = 
   <div ref="root" class="relative w-full">
     <form role="search" class="relative flex items-center" @submit.prevent>
       <label :for="`${uid}-in`" class="sr-only">{{ uiT(label) }}</label>
-      <svg class="pointer-events-none absolute left-4 text-ink-muted" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <svg class="pointer-events-none absolute left-3.5 text-ink-muted sm:left-4" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
       <input
         :id="`${uid}-in`"
         ref="inputEl"
@@ -90,7 +90,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), close: () => { open.value = 
         :aria-activedescendant="active >= 0 ? optId(active) : undefined"
         :placeholder="placeholder"
         :class="[
-          'w-full rounded-full border border-line-strong bg-surface-2/80 pl-11 pr-20 text-ink placeholder:text-ink-subtle shadow-sm transition-all duration-fast',
+          'w-full rounded-full border border-line-strong bg-surface-2/80 pl-10 pr-10 text-ink sm:pl-11 sm:pr-20 placeholder:text-ink-subtle shadow-sm transition-all duration-fast',
           'hover:border-ink-subtle hover:bg-surface focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 [&::-webkit-search-cancel-button]:hidden',
           size === 'lg' ? 'h-12 text-md' : 'h-11 text-sm'
         ]"
@@ -103,7 +103,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), close: () => { open.value = 
       <span class="absolute right-1.5 flex items-center gap-1">
         <OmSpinner v-if="st.loading" :size="16" class="text-ink-muted" />
         <button v-if="model" type="button" class="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-surface-2" :aria-label="uiT('검색어 지우기')" @click="clear">×</button>
-        <button type="button" :class="['flex items-center justify-center rounded-full bg-primary font-semibold text-primary-on shadow-sm transition-colors hover:bg-primary-hover', size === 'lg' ? 'h-9 px-4 text-sm' : 'h-8 px-3.5 text-xs']" @click="open = false; emit('submit', model.trim())">{{ uiT('검색') }}</button>
+        <button type="button" :class="['hidden items-center justify-center rounded-full bg-primary sm:flex font-semibold text-primary-on shadow-sm transition-colors hover:bg-primary-hover', size === 'lg' ? 'h-9 px-4 text-sm' : 'h-8 px-3.5 text-xs']" @click="open = false; emit('submit', model.trim())">{{ uiT('검색') }}</button>
       </span>
     </form>
 

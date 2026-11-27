@@ -160,7 +160,7 @@ onMounted(() => void load())
         </template>
         <template #cell-amount="{ row }"><span class="om-num font-bold text-ink">{{ won(row.amount) }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'APPROVED' ? 'bg-info-soft text-info' : row.status === 'TRANSFERRED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'APPROVED' ? 'bg-info-soft text-info' : row.status === 'TRANSFERRED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.status] || row.status }}</span>
         </template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
         <template #actions="{ row }">

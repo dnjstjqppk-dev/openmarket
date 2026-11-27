@@ -3,7 +3,7 @@ import { Boxes, ChartPie, Globe, LogOut, MessageSquare, Monitor, Moon, Network, 
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { OmConsoleShell, OmConfirmDialog, OmToast, useTheme, nextThemeMode, useUiLocale, uiT, type ConsoleMenuItem, type UiLocale } from '@olmoa/ui';
-import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession } from './config';
+import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession, ensurePartnerSession } from './config';
 
 // Raw enum codes (APPROVED…) were shown in the header; show localized labels, keep unknown codes visible.
 const PARTNER_STATUS_LABEL: Record<string, string> = { APPROVED: '승인', PENDING: '심사 중', REJECTED: '반려', SUSPENDED: '정지', TERMINATED: '해지' }
@@ -90,7 +90,10 @@ const storeUrl = computed(() => {
 });
 
 async function loadHeader() {
-  if (isLoginPage.value) return;
+  // Wait for the initial navigation (route.path is '/' before it resolves, which used to fire
+  // seller-only calls on /apply) and only ask for seller data with a seller session.
+  await router.isReady();
+  if (isLoginPage.value || !(await ensurePartnerSession())) return;
   try {
     const [pr, pp] = await Promise.all([
       fetch(`${API_BASE_URL}/api/v1/partner/profile`, { headers: getPartnerHeaders() }).then((r) => r.json().catch(() => ({}))),
@@ -129,10 +132,10 @@ onMounted(() => { loadHeader(); });
       </span>
     </template>
     <template #header>
-      <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
+      <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-xs">
         <span class="truncate font-bold text-ink">{{ partnerName }}</span>
         <template v-if="profile">
-          <span class="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ partnerStatusLabel(profile.status) }}</span>
+          <span class="hidden shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-2xs font-bold text-ink-muted sm:inline-block">입점 상태 {{ partnerStatusLabel(profile.status) }}</span>
           <span
             class="hidden shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold sm:inline-block"
             :class="profile.payout_account_verified ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'"
@@ -143,21 +146,21 @@ onMounted(() => { loadHeader(); });
           <span v-if="profile.grade_code" class="hidden shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">{{ profile.grade_code }}</span>
         </template>
       </div>
-      <label class="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2/80 px-2.5 py-1 text-xs">
+      <label class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-surface-2/80 px-2.5 py-1 text-xs">
         <Globe class="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         <span class="sr-only">{{ uiT('언어') }}</span>
         <select :value="uiLoc" class="cursor-pointer bg-transparent text-xs font-semibold text-ink focus:outline-none" @change="onLocaleChange(($event.target as HTMLSelectElement).value)">
           <option v-for="o in localeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
       </label>
-      <button type="button" :aria-label="uiT('테마 변경')" class="rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="cycleTheme">
+      <button type="button" :aria-label="uiT('테마 변경')" class="shrink-0 rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="cycleTheme">
         <Sun v-if="themeMode === 'light'" class="h-4 w-4" aria-hidden="true" />
         <Moon v-else-if="themeMode === 'dark'" class="h-4 w-4" aria-hidden="true" />
         <Monitor v-else class="h-4 w-4" aria-hidden="true" />
       </button>
       <a v-if="storeUrl" :href="storeUrl" target="_blank" rel="noopener" class="hidden shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-bold text-ink shadow-sm transition-colors hover:border-primary hover:text-primary sm:flex">{{ uiT('판매 전환') }}</a>
-      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
-        <LogOut class="h-4 w-4" aria-hidden="true" />{{ uiT('로그아웃') }}
+      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink sm:px-3" :aria-label="uiT('로그아웃')" @click="handleLogout">
+        <LogOut class="h-4 w-4" aria-hidden="true" /><span class="hidden sm:inline">{{ uiT('로그아웃') }}</span>
       </button>
     </template>
     <router-view />

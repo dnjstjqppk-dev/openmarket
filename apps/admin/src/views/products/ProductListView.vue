@@ -216,12 +216,12 @@ onMounted(() => { void load(); void loadRefs() })
         <template #cell-price="{ row }"><span class="om-num font-bold text-ink">{{ won(row.lowest_sale_price) }}</span></template>
         <template #cell-stock="{ row }"><span class="om-num" :class="Number(row.total_stock) <= 0 ? 'font-bold text-danger' : 'text-ink-muted'">{{ row.total_stock ?? 0 }}개</span></template>
         <template #cell-status="{ row }">
-          <span v-if="row.review_status === 'PENDING'" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">심사 대기</span>
-          <span v-else-if="row.review_status === 'REJECTED'" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">반려</span>
-          <span v-else class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.status] || row.status }}</span>
-          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
-          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">식별정보 누락</span>
-          <span v-if="Number(row.gtin_conflict) === 1" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">바코드 중복</span>
+          <span v-if="row.review_status === 'PENDING'" class="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning whitespace-nowrap">심사 대기</span>
+          <span v-else-if="row.review_status === 'REJECTED'" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">반려</span>
+          <span v-else class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">배송정책 미지정</span>
+          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning whitespace-nowrap">식별정보 누락</span>
+          <span v-if="Number(row.gtin_conflict) === 1" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">바코드 중복</span>
         </template>
         <template #actions="{ row }">
           <RouterLink v-if="row.review_status === 'PENDING'" to="/products/review-queue" class="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-on hover:bg-primary-hover">심사</RouterLink>

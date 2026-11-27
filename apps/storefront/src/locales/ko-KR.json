@@ -169,5 +169,9 @@
   "bizInfoVerify": "사업자정보확인",
   "bizInfoMissing": "운영 사업자 정보가 등록되지 않았습니다. 사업자 정보 등록 전에는 주문이 접수되지 않습니다.",
   "retry": "다시 시도",
-  "loading": "불러오는 중..."
+  "loading": "불러오는 중...",
+  "loginOr": "또는",
+  "loginFromCheckout": "주문을 계속하려면 로그인해 주세요.",
+  "kakaoStart": "카카오로 시작하기",
+  "kakaoRedirecting": "카카오로 이동 중..."
 }

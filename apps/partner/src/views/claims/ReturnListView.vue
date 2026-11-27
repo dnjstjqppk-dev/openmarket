@@ -211,7 +211,7 @@ onMounted(() => void load())
           <span class="font-mono text-2xs text-ink-muted">{{ row.pickup_tracking_number || '회수 전' }}{{ row.inspect_result ? ` · 검수 ${row.inspect_result}` : '' }}</span>
         </template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'">{{ STATUS_LABEL[row.status] || row.status }}</span>
         </template>
         <template #actions="{ row }">
           <div v-if="row.status === 'REQUESTED'" class="flex gap-1">

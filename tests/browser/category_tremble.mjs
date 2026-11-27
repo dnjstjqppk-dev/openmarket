@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { launchBrowser } from './cdp.mjs';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '../..');
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../..');
 const API = process.env.API_URL || 'https://olmoa-api.dnjstjqppk.workers.dev';
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || '4191');

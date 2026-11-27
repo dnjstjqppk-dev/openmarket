@@ -105,7 +105,7 @@ onMounted(() => void load())
         <template #cell-docs="{ row }"><span class="om-num text-ink-muted">{{ docCount(row) }}</span></template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.submitted_at || row.applied_at || '').slice(0, 10) }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : row.kyc_status === 'REJECTED' ? 'bg-danger-soft text-danger' : row.kyc_status === 'SUBMITTED' ? 'bg-warning-soft text-warning' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.kyc_status] || row.kyc_status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : row.kyc_status === 'REJECTED' ? 'bg-danger-soft text-danger' : row.kyc_status === 'SUBMITTED' ? 'bg-warning-soft text-warning' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[row.kyc_status] || row.kyc_status }}</span>
         </template>
         <template #actions="{ row }">
           <RouterLink :to="`/partner-applications/${row.partner_id}`" class="rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2">심사</RouterLink>

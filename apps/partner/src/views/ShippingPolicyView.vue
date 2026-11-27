@@ -171,14 +171,14 @@ onMounted(() => { void load(); void loadCarriers() })
         <template #cell-tpl="{ row }">
           <div class="flex min-w-0 items-center gap-2">
             <p class="truncate font-bold text-ink">{{ row.name }}</p>
-            <span v-if="Number(row.is_default) === 1" class="shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink">기본</span>
+            <span v-if="Number(row.is_default) === 1" class="shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink whitespace-nowrap">기본</span>
           </div>
         </template>
         <template #cell-method="{ row }"><span class="text-ink-muted">{{ METHOD_LABEL[row.method] || row.method }}</span></template>
         <template #cell-fee="{ row }"><span class="om-num font-bold text-ink">{{ feeText(row) }}</span></template>
         <template #cell-dispatch="{ row }"><span class="om-num text-ink-muted">{{ dispatchText(row) }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ row.status === 'ACTIVE' ? '사용중' : '중지됨' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ row.status === 'ACTIVE' ? '사용중' : '중지됨' }}</span>
         </template>
         <template #actions="{ row }">
           <div class="flex gap-1.5">

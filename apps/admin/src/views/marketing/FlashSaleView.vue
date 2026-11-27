@@ -153,7 +153,7 @@ onMounted(() => void load())
           <p class="om-num mt-0.5 text-2xs text-ink-subtle">{{ String(c.starts_at || '').slice(0, 16) }} ~ {{ String(c.ends_at || '').slice(0, 16) }}</p>
         </div>
         <div class="flex items-center gap-2">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="c.status === 'ACTIVE' ? 'bg-success-soft text-success' : c.status === 'ENDED' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[c.status] || c.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="c.status === 'ACTIVE' ? 'bg-success-soft text-success' : c.status === 'ENDED' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[c.status] || c.status }}</span>
           <button v-if="c.status !== 'ENDED'" type="button" class="rounded-lg bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-on hover:bg-secondary-hover" @click="openPick(c)">직접 편성</button>
         </div>
       </div>
@@ -168,7 +168,7 @@ onMounted(() => void load())
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-1.5">
-            <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="it.status === 'APPROVED' ? 'bg-success-soft text-success' : it.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ ITEM_LABEL[it.status] || it.status }}</span>
+            <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="it.status === 'APPROVED' ? 'bg-success-soft text-success' : it.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ ITEM_LABEL[it.status] || it.status }}</span>
             <template v-if="it.status === 'REQUESTED'">
               <button type="button" :disabled="rulingId === it.id" class="rounded-lg bg-success px-2.5 py-1.5 font-bold text-primary-on disabled:opacity-50" @click="decide(c.id, it.id, 'APPROVE')">승인</button>
               <button type="button" :disabled="rulingId === it.id" class="rounded-lg border border-line px-2.5 py-1.5 font-bold text-ink-muted hover:bg-surface-2 disabled:opacity-50" @click="decide(c.id, it.id, 'REJECT')">반려</button>

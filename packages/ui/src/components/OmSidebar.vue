@@ -28,7 +28,7 @@ withDefaults(defineProps<{ groups: SidebarGroup[]; collapsed?: boolean; title?: 
             >
               <component :is="it.icon" v-if="it.icon" :size="18" :stroke-width="1.8" aria-hidden="true" class="shrink-0" />
               <span v-if="!collapsed" class="flex-1 truncate">{{ it.label }}</span>
-              <span v-if="!collapsed && it.badge" class="rounded-full bg-accent px-1.5 text-2xs font-bold text-primary-on om-num">{{ it.badge }}</span>
+              <span v-if="!collapsed && it.badge" class="rounded-full bg-accent px-1.5 text-2xs font-bold text-primary-on om-num whitespace-nowrap">{{ it.badge }}</span>
             </RouterLink>
           </li>
         </ul>
@@ -47,7 +47,7 @@ withDefaults(defineProps<{ groups: SidebarGroup[]; collapsed?: boolean; title?: 
             <RouterLink :to="it.to" active-class="!bg-primary-soft !text-primary-soft-ink" class="flex h-11 items-center gap-3 rounded px-3 text-md font-medium text-ink hover:bg-surface-2" @click="mobileOpen = false">
               <component :is="it.icon" v-if="it.icon" :size="18" aria-hidden="true" />
               <span class="flex-1">{{ it.label }}</span>
-              <span v-if="it.badge" class="rounded-full bg-accent px-1.5 text-2xs font-bold text-primary-on om-num">{{ it.badge }}</span>
+              <span v-if="it.badge" class="rounded-full bg-accent px-1.5 text-2xs font-bold text-primary-on om-num whitespace-nowrap">{{ it.badge }}</span>
             </RouterLink>
           </li>
         </ul>

@@ -225,6 +225,7 @@ export const UI_PHRASES: Record<string, PhraseEntry> = {
   '확인 필요': { en: 'Check Required', ja: '確認が必要', zh: '需確認' },
   '확인됨': { en: 'Verified', ja: '確認済み', zh: '已驗證' },
   '미확인': { en: 'Unverified', ja: '未確認', zh: '未驗證' },
+  '결제': { en: 'Payment', ja: '決済', zh: '付款' },
   '실결제': { en: 'Live', ja: '本番決済', zh: '正式付款' },
   '테스트': { en: 'Sandbox', ja: 'テスト', zh: '測試模式' },
   '비활성': { en: 'Inactive', ja: '無効', zh: '未啟用' },

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { launchBrowser, VIEWPORTS } from './cdp.mjs';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '../..');
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../..');
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, 'reports/v4/phase2/smoke'));
 // VPS selects the viewport matrix, e.g. VPS=desktop,desktop1280,tablet_landscape,tablet_portrait,mobile,mobile360.
 // WIDTH_SUFFIX=1 names files [View]_[viewport]_[width].png per the commercialization spec.
@@ -62,7 +62,7 @@ const prod = ((await j('/api/v1/products?limit=1')).data || [])[0] || {};
 const cats = (await j('/api/v1/categories')).data || [];
 const params = { slug: prod.slug || prod.id || 'none', id: prod.partner_id || 'none', type: 'shipping' };
 const catSlug = (cats[0] && (cats[0].slug || cats[0].id)) || 'none';
-const fill = (url, app) => url.replace(':slug', url.startsWith('/category') ? catSlug : params.slug).replace(':id', app === 'storefront' && url.startsWith('/orders') ? 'unknown-order' : params.id).replace(':type', params.type);
+const fill = (url, app) => url.replace('/:seo?', '').replace(':slug', /^\/(category|c)\//.test(url) ? catSlug : params.slug).replace(':id', app === 'storefront' && url.startsWith('/orders') ? 'unknown-order' : params.id).replace(':type', params.type);
 
 const servers = [];
 for (const a of REMOTE ? [] : APPS) {

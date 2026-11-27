@@ -10,7 +10,7 @@ app.use(createPinia());
 app.use(router);
 // Stale chunks after a deploy: reload once onto the target route.
 installChunkReloadGuard(router);
-import { API_BASE_URL, clearPartnerSession, ensurePartnerSession } from './config';
+import { API_BASE_URL, clearPartnerSession, ensurePartnerSession, getPartnerSessionUser } from './config';
 import { installApiFetch, installChunkReloadGuard, useTheme, initUiLocale, installDomLocaleSync } from '@olmoa/ui';
 
 useTheme().init();
@@ -26,7 +26,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 // P0-2 + P2: cookie sessions via the shared fetch wrapper (see @olmoa/ui).
 installApiFetch({
   apiBaseUrl: API_BASE_URL,
+  // Only a session that existed can expire (a guest on /apply must not be bounced to login).
   onExpiredSession: () => {
+    if (!getPartnerSessionUser()) return;
     clearPartnerSession();
     router.push({ path: '/login', query: { expired: '1' } });
   }

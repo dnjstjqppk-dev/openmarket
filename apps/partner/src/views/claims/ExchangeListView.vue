@@ -169,7 +169,7 @@ onMounted(() => void load())
           <span v-if="row.exchange_tracking_number" class="block font-mono text-2xs text-ink-subtle">{{ row.exchange_tracking_number }}</span>
         </template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'REQUESTED' ? 'bg-warning-soft text-warning' : row.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'">{{ STATUS_LABEL[row.status] || row.status }}</span>
         </template>
         <template #actions="{ row }">
           <div class="flex gap-1">

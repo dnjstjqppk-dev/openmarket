@@ -121,7 +121,7 @@ onMounted(() => void load())
         <img v-if="e.banner_url" :src="e.banner_url" :alt="e.title" loading="lazy" decoding="async" class="h-28 w-full rounded-xl border border-line object-cover" />
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-sm font-bold text-ink">{{ e.title }}</h2>
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="e.status === 'ACTIVE' ? 'bg-success-soft text-success' : e.status === 'ENDED' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[e.status] || e.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="e.status === 'ACTIVE' ? 'bg-success-soft text-success' : e.status === 'ENDED' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[e.status] || e.status }}</span>
         </div>
         <p class="om-num text-2xs text-ink-subtle">{{ String(e.starts_at || '').slice(0, 16) }} ~ {{ String(e.ends_at || '').slice(0, 16) }} · 상품 {{ (e.product_ids || []).length }}개 · 순서 {{ e.sort_order }}</p>
         <div class="flex gap-1.5">

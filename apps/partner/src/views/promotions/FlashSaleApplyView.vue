@@ -119,8 +119,8 @@ onMounted(() => void load())
           <span v-else class="text-ink-subtle">-</span>
         </template>
         <template #cell-status="{ row }">
-          <span v-if="row.my_application" class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.my_application.status === 'APPROVED' ? 'bg-success-soft text-success' : row.my_application.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ APP_LABEL[row.my_application.status] || row.my_application.status }}</span>
-          <span v-else class="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">{{ row.status === 'ENDED' ? '종료' : '모집중' }}</span>
+          <span v-if="row.my_application" class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.my_application.status === 'APPROVED' ? 'bg-success-soft text-success' : row.my_application.status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ APP_LABEL[row.my_application.status] || row.my_application.status }}</span>
+          <span v-else class="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted whitespace-nowrap">{{ row.status === 'ENDED' ? '종료' : '모집중' }}</span>
         </template>
         <template #actions="{ row }">
           <button v-if="row.status !== 'ENDED'" type="button" class="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-on hover:bg-primary-hover" @click="openApply(row)">신청</button>

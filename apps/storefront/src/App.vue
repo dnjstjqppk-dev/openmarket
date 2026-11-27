@@ -329,7 +329,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
                     <button type="button" class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-2" @click="runTrendingRow(row, close)">
                       <span class="w-4 shrink-0 text-center text-xs font-bold om-num" :class="i < 3 ? 'text-primary' : 'text-ink-subtle'">{{ i + 1 }}</span>
                       <span class="min-w-0 flex-1 truncate">{{ row.term }}</span>
-                      <span v-if="row.delta === 'NEW'" class="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-2xs font-bold text-accent">NEW</span>
+                      <span v-if="row.delta === 'NEW'" class="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-2xs font-bold text-accent whitespace-nowrap">NEW</span>
                       <span v-else-if="typeof row.delta === 'number' && row.delta !== 0" class="om-num shrink-0 text-2xs font-bold" :class="row.delta > 0 ? 'text-danger' : 'text-info'">
                         {{ row.delta > 0 ? `▲${row.delta}` : `▼${Math.abs(row.delta)}` }}
                       </span>
@@ -419,7 +419,7 @@ onBeforeUnmount(() => { window.removeEventListener('scroll', onScroll) })
 
     <aside
       v-if="!hideBottomNav"
-      class="fixed right-4 top-1/3 z-30 hidden w-[72px] min-[1440px]:flex flex-col items-center gap-2 rounded-2xl border border-line bg-surface/95 p-2 shadow-lg backdrop-blur-md"
+      class="fixed right-4 top-1/3 z-30 hidden w-[72px] min-[1600px]:flex flex-col items-center gap-2 rounded-2xl border border-line bg-surface/95 p-2 shadow-lg backdrop-blur-md"
       :aria-label="locale.t('recentProducts')"
     >
       <RouterLink

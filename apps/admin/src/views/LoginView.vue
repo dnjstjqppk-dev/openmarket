@@ -47,7 +47,7 @@ const fillDev = () => { if (import.meta.env.DEV) { email.value = 'admin@openmark
 </script>
 
 <template>
-  <div class="min-h-screen bg-app flex items-center justify-center p-4">
+  <div class="min-h-screen bg-bg flex items-center justify-center p-4">
     <div class="bg-surface rounded-2xl max-w-md w-full p-8 shadow-2xl border border-line">
       <div class="flex items-center gap-2.5 mb-6">
         <div class="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-secondary-on font-black text-lg">A</div>

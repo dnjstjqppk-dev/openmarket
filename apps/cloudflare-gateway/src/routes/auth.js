@@ -2,7 +2,7 @@
 // Unified authentication. Every role logs in with a users-table account and a PBKDF2 password.
 
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from '../utils/crypto-auth.js';
-import { issueToken, issueRefreshToken, useRefreshToken, requireAuth, ACCESS_TOKEN_TTL_SECONDS, REFRESH_COOKIE, parseCookies, attachAuthCookies, clearAuthCookieHeaders } from '../lib/auth.js';
+import { issueToken, issueRefreshToken, useRefreshToken, requireAuth, ACCESS_TOKEN_TTL_SECONDS, ACCESS_COOKIE, REFRESH_COOKIE, parseCookies, attachAuthCookies, clearAuthCookieHeaders } from '../lib/auth.js';
 
 function withCookies(res, values) {
   for (const v of values) res.headers.append('Set-Cookie', v);
@@ -176,6 +176,13 @@ export async function handleAuthRoutes(request, url, env, corsHeaders) {
   }
 
   if ((p === '/api/v1/auth/me' || p === '/api/v1/auth/profile') && request.method === 'GET') {
+    // A visitor with no credential at all (no bearer, no access cookie, and no refresh cookie —
+    // which the browser sends on /api/v1/auth/*) gets NO_SESSION, so web clients skip a refresh
+    // that can only fail (it was 400/429 on every guest page view and bounced guests to "session expired").
+    const ck = parseCookies(request);
+    if (!request.headers.get('Authorization') && !ck[ACCESS_COOKIE] && !ck[REFRESH_COOKIE]) {
+      throw new HttpError(401, 'NO_SESSION', '로그인이 필요합니다.');
+    }
     const me = await requireAuth(request, env);
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(me.userId).first();
     const credit = await env.DB.prepare('SELECT COALESCE(SUM(amount_delta), 0) AS b FROM user_credits WHERE user_id = ?').bind(me.userId).first('b');

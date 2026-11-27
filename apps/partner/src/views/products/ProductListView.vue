@@ -332,7 +332,7 @@ onMounted(() => {
           <option value="">전체 카테고리</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
-        <div class="md:col-span-2"><OmDateRangePicker v-model="fRange" /></div>
+        <div class="col-span-2"><OmDateRangePicker v-model="fRange" /></div>
         <div class="flex gap-1">
           <input v-model="fStockMin" type="number" min="0" placeholder="재고≥" aria-label="최소 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
           <input v-model="fStockMax" type="number" min="0" placeholder="≤" aria-label="최대 재고" class="h-9 w-full rounded-lg border border-line bg-surface px-2 text-ink" />
@@ -396,12 +396,12 @@ onMounted(() => {
         <template #cell-price="{ row }"><span class="om-num font-bold text-ink">{{ won(row.lowest_sale_price) }}</span></template>
         <template #cell-stock="{ row }"><span class="om-num font-bold" :class="Number(row.stock_sum) > 0 ? 'text-ink' : 'text-danger'">{{ Number(row.stock_sum).toLocaleString('ko-KR') }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : row.status === 'HIDDEN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[row.status] || row.status }}</span>
-          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">배송정책 미지정</span>
-          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">식별정보 누락</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'ACTIVE' ? 'bg-success-soft text-success' : row.status === 'HIDDEN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span v-if="!row.shipping_policy_id" class="ml-1 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">배송정책 미지정</span>
+          <span v-if="Number(row.identifiers_missing) === 1" class="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning whitespace-nowrap">식별정보 누락</span>
         </template>
         <template #cell-review="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.review_status === 'APPROVED' ? 'bg-success-soft text-success' : row.review_status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ REVIEW_LABEL[row.review_status] || row.review_status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.review_status === 'APPROVED' ? 'bg-success-soft text-success' : row.review_status === 'REJECTED' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'">{{ REVIEW_LABEL[row.review_status] || row.review_status }}</span>
         </template>
         <template #cell-created="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
         <template #actions="{ row }">

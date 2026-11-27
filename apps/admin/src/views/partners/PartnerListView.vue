@@ -77,13 +77,13 @@ onMounted(() => void load())
         </template>
         <template #cell-account="{ row }">
           <span class="om-num text-ink-muted">{{ row.bank_code || '-' }} {{ maskAcct(row.bank_account_number) }}</span>
-          <span class="ml-1 rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(row.payout_account_verified) === 1 ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ Number(row.payout_account_verified) === 1 ? '실명확인' : '미확인' }}</span>
-          <span v-if="hasChange(row)" class="ml-1 rounded-full bg-info-soft px-2 py-0.5 text-2xs font-bold text-info">변경요청</span>
+          <span class="ml-1 rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(row.payout_account_verified) === 1 ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ Number(row.payout_account_verified) === 1 ? '실명확인' : '미확인' }}</span>
+          <span v-if="hasChange(row)" class="ml-1 rounded-full bg-info-soft px-2 py-0.5 text-2xs font-bold text-info whitespace-nowrap">변경요청</span>
         </template>
         <template #cell-commission="{ row }"><span class="om-num font-bold text-ink">{{ row.commission_rate }}%</span></template>
         <template #cell-tier="{ row }"><span class="text-ink-muted">{{ TIER_LABEL[row.risk_tier] || row.risk_tier || '정상' }} · {{ row.rolling_reserve_pct ?? 0 }}%</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'APPROVED' ? 'bg-success-soft text-success' : row.status === 'PENDING' ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'APPROVED' ? 'bg-success-soft text-success' : row.status === 'PENDING' ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger'">{{ STATUS_LABEL[row.status] || row.status }}</span>
         </template>
         <template #actions="{ row }">
           <RouterLink :to="`/partners/${row.id}`" class="rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2">상세</RouterLink>

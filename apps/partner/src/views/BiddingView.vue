@@ -256,7 +256,7 @@ onMounted(loadData)
     </div>
 
     <!-- Tab 2: My Submitted Bids -->
-    <div v-else-if="activeTab === 'my-bids'" class="bg-surface rounded-2xl border border-line overflow-hidden shadow-2xs">
+    <div v-else-if="activeTab === 'my-bids'" class="bg-surface rounded-2xl border border-line overflow-x-auto shadow-2xs">
       <table class="w-full text-left border-collapse">
         <thead>
           <tr class="bg-surface-2 border-b border-line text-ink-muted uppercase text-[11px] font-bold">

@@ -240,7 +240,7 @@ onMounted(async () => {
         <template #cell-commission="{ row }"><span class="om-num text-ink-muted">{{ won(row.commission_amount) }}</span></template>
         <template #cell-net="{ row }"><span class="om-num font-bold text-primary">{{ won(row.effective_net_payout ?? row.net_payout_amount) }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'PAID_OUT' ? 'bg-success-soft text-success' : row.status === 'ELIGIBLE_FOR_PAYOUT' ? 'bg-primary-soft text-primary-soft-ink' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[row.status] || row.status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'PAID_OUT' ? 'bg-success-soft text-success' : row.status === 'ELIGIBLE_FOR_PAYOUT' ? 'bg-primary-soft text-primary-soft-ink' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[row.status] || row.status }}</span>
         </template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
       </OmDataTable>

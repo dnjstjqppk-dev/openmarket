@@ -15,7 +15,9 @@
     @apply bg-bg text-ink font-sans text-md antialiased;
     font-feature-settings: 'tnum' 0;
     word-break: keep-all;
-    overflow-wrap: anywhere;
+    /* break-word, not anywhere: `anywhere` also lowers min-content width, so auto-layout table
+       columns collapsed to one character (prices split "49,9 / 00원", headers stacked letter by letter). */
+    overflow-wrap: break-word;
   }
   :focus-visible { outline: 2px solid rgb(var(--om-focus)); outline-offset: 2px; }
   ::selection { background: rgb(var(--om-lagoon-200) / 0.55); }

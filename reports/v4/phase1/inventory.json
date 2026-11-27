@@ -9,19 +9,21 @@
       {
         "url": "/",
         "view": "HomeView",
-        "lines": 255,
+        "lines": 289,
         "buttons": 1,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 35,
+        "responsive_classes": 38,
         "english_text_nodes": 0,
-        "korean_text_nodes": 6,
-        "aria": 16,
+        "korean_text_nodes": 0,
+        "aria": 22,
         "inline_hex_colors": 0,
-        "suspicious": [],
+        "suspicious": [
+          "guarantee claim×1"
+        ],
         "api": [
           {
             "raw": "/api/v1/products?page=${p}&per_page=${PAGE_SIZE}",
@@ -81,9 +83,9 @@
         "api": []
       },
       {
-        "url": "/category/:slug",
+        "url": "/c/:slug",
         "view": "CategoryView",
-        "lines": 35,
+        "lines": 37,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -99,9 +101,9 @@
         "api": []
       },
       {
-        "url": "/product/:slug",
+        "url": "/p/:slug/:seo?",
         "view": "ProductDetailView",
-        "lines": 315,
+        "lines": 425,
         "buttons": 1,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -110,14 +112,22 @@
         "has_empty": true,
         "responsive_classes": 8,
         "english_text_nodes": 0,
-        "korean_text_nodes": 16,
-        "aria": 8,
+        "korean_text_nodes": 17,
+        "aria": 11,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
           {
             "raw": "${API_BASE_URL}/api/v1/products/${encodeURIComponent(String(route.params.slug))}",
             "path": "/api/v1/products/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/products/${encodeURIComponent(p.id)}/localized?lang=${encodeURIComponent(lang)}",
+            "path": "/api/v1/products/x_probe/localized",
             "method": "GET",
             "status": 404,
             "verdict": "EXISTS",
@@ -177,7 +187,7 @@
       {
         "url": "/checkout",
         "view": "CheckoutView",
-        "lines": 544,
+        "lines": 539,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -552,7 +562,7 @@
       {
         "url": "/orders/:id",
         "view": "OrderDetailView",
-        "lines": 859,
+        "lines": 850,
         "buttons": 27,
         "buttons_without_handler": 1,
         "dead_links": 0,
@@ -713,7 +723,7 @@
       {
         "url": "/login",
         "view": "LoginView",
-        "lines": 205,
+        "lines": 208,
         "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -722,7 +732,7 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 6,
+        "korean_text_nodes": 2,
         "aria": 4,
         "inline_hex_colors": 2,
         "suspicious": [],
@@ -831,7 +841,7 @@
       {
         "url": "/register",
         "view": "RegisterView",
-        "lines": 141,
+        "lines": 158,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -840,11 +850,19 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 14,
+        "korean_text_nodes": 12,
         "aria": 9,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/legal/${kind}",
+            "path": "/api/v1/legal/x_probe",
+            "method": "GET",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "INVALID_LEGAL_KIND"
+          },
           {
             "raw": "${API_BASE_URL}/api/v1/auth/register",
             "path": "/api/v1/auth/register",
@@ -1023,7 +1041,7 @@
       {
         "url": "/store/:id",
         "view": "SellerStoreView",
-        "lines": 317,
+        "lines": 330,
         "buttons": 1,
         "buttons_without_handler": 1,
         "dead_links": 0,
@@ -1032,7 +1050,7 @@
         "has_empty": true,
         "responsive_classes": 20,
         "english_text_nodes": 0,
-        "korean_text_nodes": 22,
+        "korean_text_nodes": 23,
         "aria": 8,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -1067,22 +1085,22 @@
       {
         "url": "/support",
         "view": "SupportView",
-        "lines": 183,
+        "lines": 203,
         "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": false,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 9,
+        "responsive_classes": 8,
         "english_text_nodes": 0,
-        "korean_text_nodes": 10,
+        "korean_text_nodes": 13,
         "aria": 2,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
           {
-            "raw": "${API_BASE_URL}/api/v1/support/faq",
+            "raw": "${API_BASE_URL}/api/v1/support/faq?${params.toString()}",
             "path": "/api/v1/support/faq",
             "method": "GET",
             "status": 200,
@@ -1128,20 +1146,27 @@
       {
         "url": "/legal/terms",
         "view": "LegalTermsView",
-        "lines": 86,
-        "buttons": 0,
+        "lines": 154,
+        "buttons": 4,
         "buttons_without_handler": 0,
         "dead_links": 0,
-        "has_loading": false,
+        "has_loading": true,
         "has_error": true,
         "has_empty": false,
         "responsive_classes": 3,
         "english_text_nodes": 1,
-        "korean_text_nodes": 20,
-        "aria": 2,
+        "korean_text_nodes": 17,
+        "aria": 5,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/legal/terms",
+            "path": "/api/v1/legal/terms",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
           {
             "raw": "${API_BASE_URL}/api/v1/business-info",
             "path": "/api/v1/business-info",
@@ -1154,25 +1179,33 @@
       {
         "url": "/legal/privacy",
         "view": "LegalPrivacyView",
-        "lines": 84,
-        "buttons": 0,
+        "lines": 146,
+        "buttons": 4,
         "buttons_without_handler": 0,
         "dead_links": 0,
-        "has_loading": false,
-        "has_error": false,
+        "has_loading": true,
+        "has_error": true,
         "has_empty": false,
         "responsive_classes": 3,
         "english_text_nodes": 1,
-        "korean_text_nodes": 24,
-        "aria": 2,
+        "korean_text_nodes": 15,
+        "aria": 5,
         "inline_hex_colors": 0,
         "suspicious": [],
-        "api": []
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/legal/privacy",
+            "path": "/api/v1/legal/privacy",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
       },
       {
         "url": "/payments/success",
         "view": "PaymentResultView",
-        "lines": 251,
+        "lines": 242,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1215,7 +1248,7 @@
       {
         "url": "/payments/fail",
         "view": "PaymentResultView",
-        "lines": 251,
+        "lines": 242,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1258,25 +1291,33 @@
       {
         "url": "/legal/refund",
         "view": "LegalRefundView",
-        "lines": 63,
-        "buttons": 0,
+        "lines": 130,
+        "buttons": 4,
         "buttons_without_handler": 0,
         "dead_links": 0,
-        "has_loading": false,
-        "has_error": false,
+        "has_loading": true,
+        "has_error": true,
         "has_empty": false,
         "responsive_classes": 3,
         "english_text_nodes": 0,
-        "korean_text_nodes": 16,
-        "aria": 2,
+        "korean_text_nodes": 11,
+        "aria": 5,
         "inline_hex_colors": 0,
         "suspicious": [],
-        "api": []
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/legal/refund",
+            "path": "/api/v1/legal/refund",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
       },
       {
         "url": "/:pathMatch(.*)*",
         "view": "NotFoundView",
-        "lines": 28,
+        "lines": 30,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1285,33 +1326,31 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 2,
+        "korean_text_nodes": 0,
         "aria": 2,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": []
-      },
-      {
-        "url": "/profile",
-        "redirect": "/my/settings"
       }
     ],
     "shell": [
       {
         "file": "App.vue",
-        "lines": 423,
+        "lines": 497,
         "buttons": 8,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 7,
-        "english_text_nodes": 3,
-        "korean_text_nodes": 21,
-        "aria": 17,
+        "responsive_classes": 8,
+        "english_text_nodes": 2,
+        "korean_text_nodes": 2,
+        "aria": 20,
         "inline_hex_colors": 0,
-        "suspicious": [],
+        "suspicious": [
+          "guarantee claim×1"
+        ],
         "api": [
           {
             "raw": "${API_BASE_URL}/api/v1/notifications",
@@ -1457,8 +1496,25 @@
         "api": []
       },
       {
+        "file": "components/LocaleNudge.vue",
+        "lines": 64,
+        "buttons": 2,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": false,
+        "has_error": false,
+        "has_empty": false,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 1,
+        "aria": 3,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": []
+      },
+      {
         "file": "components/MegaMenu.vue",
-        "lines": 134,
+        "lines": 136,
         "buttons": 1,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1467,15 +1523,40 @@
         "has_empty": true,
         "responsive_classes": 2,
         "english_text_nodes": 0,
-        "korean_text_nodes": 3,
+        "korean_text_nodes": 2,
         "aria": 8,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": []
       },
       {
+        "file": "components/plp/CategoryHub.vue",
+        "lines": 78,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 2,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 3,
+        "aria": 4,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/products?category=${encodeURIComponent(props.slug)}&sort=popular&per_page=8",
+            "path": "/api/v1/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          }
+        ]
+      },
+      {
         "file": "components/plp/PlpLayout.vue",
-        "lines": 535,
+        "lines": 567,
         "buttons": 0,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1514,7 +1595,7 @@
       },
       {
         "file": "components/product/BuyPanel.vue",
-        "lines": 145,
+        "lines": 144,
         "buttons": 2,
         "buttons_without_handler": 1,
         "dead_links": 0,
@@ -1523,7 +1604,7 @@
         "has_empty": true,
         "responsive_classes": 1,
         "english_text_nodes": 0,
-        "korean_text_nodes": 10,
+        "korean_text_nodes": 9,
         "aria": 8,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -1743,7 +1824,7 @@
       {
         "url": "/login",
         "view": "LoginView",
-        "lines": 83,
+        "lines": 82,
         "buttons": 3,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1771,14 +1852,14 @@
       {
         "url": "/",
         "view": "DashboardView",
-        "lines": 416,
+        "lines": 417,
         "buttons": 15,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 7,
+        "responsive_classes": 19,
         "english_text_nodes": 0,
         "korean_text_nodes": 63,
         "aria": 16,
@@ -1827,7 +1908,7 @@
       {
         "url": "/products",
         "view": "ProductListView",
-        "lines": 218,
+        "lines": 236,
         "buttons": 4,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1836,8 +1917,8 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 19,
-        "aria": 10,
+        "korean_text_nodes": 29,
+        "aria": 12,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -1875,7 +1956,7 @@
       {
         "url": "/products/review-queue",
         "view": "ReviewQueueView",
-        "lines": 177,
+        "lines": 179,
         "buttons": 6,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -1884,7 +1965,7 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 4,
+        "korean_text_nodes": 5,
         "aria": 2,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -2922,8 +3003,8 @@
       {
         "url": "/finance/policies",
         "view": "PolicyView",
-        "lines": 184,
-        "buttons": 6,
+        "lines": 210,
+        "buttons": 7,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
@@ -2931,7 +3012,7 @@
         "has_empty": true,
         "responsive_classes": 1,
         "english_text_nodes": 0,
-        "korean_text_nodes": 21,
+        "korean_text_nodes": 23,
         "aria": 1,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -2964,6 +3045,39 @@
             "status": 400,
             "verdict": "EXISTS",
             "code": "REQUIRED"
+          }
+        ]
+      },
+      {
+        "url": "/finance/fx-rates",
+        "view": "FxRatesView",
+        "lines": 225,
+        "buttons": 0,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": false,
+        "responsive_classes": 2,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 1,
+        "aria": 5,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/fx-rates",
+            "path": "/api/v1/admin/fx-rates",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/admin/fx-rates/${code}",
+            "path": "/api/v1/admin/fx-rates/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
           }
         ]
       },
@@ -3184,6 +3298,57 @@
         ]
       },
       {
+        "url": "/faqs",
+        "view": "FaqView",
+        "lines": 223,
+        "buttons": 9,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 8,
+        "aria": 4,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/faqs",
+            "path": "/api/v1/admin/faqs",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/faqs/${editing.value.id}",
+            "path": "/api/v1/admin/faqs/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND",
+            "method_found": "PUT"
+          },
+          {
+            "raw": "/api/v1/admin/faqs/${row.id}",
+            "path": "/api/v1/admin/faqs/x_probe",
+            "method": "PUT",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "/api/v1/admin/faqs/reorder",
+            "path": "/api/v1/admin/faqs/reorder",
+            "method": "PUT",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "EMPTY"
+          }
+        ]
+      },
+      {
         "url": "/shipping-zones",
         "view": "ShippingZonesView",
         "lines": 141,
@@ -3218,6 +3383,96 @@
         ]
       },
       {
+        "url": "/shipping/badges",
+        "view": "ShipBadgePolicyView",
+        "lines": 293,
+        "buttons": 12,
+        "buttons_without_handler": 1,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 24,
+        "aria": 2,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/platform-policies",
+            "path": "/api/v1/admin/platform-policies",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/ship-badges/sellers?${params.toString()}",
+            "path": "/api/v1/admin/ship-badges/sellers",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/platform-policies/history?limit=50",
+            "path": "/api/v1/admin/platform-policies/history",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/platform-policies",
+            "path": "/api/v1/admin/platform-policies",
+            "method": "PUT",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          },
+          {
+            "raw": "/api/v1/admin/partners/${cutoffSeller.value.partner_id}/shipping-cutoff",
+            "path": "/api/v1/admin/partners/x_probe/shipping-cutoff",
+            "method": "PUT",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "PARTNER_NOT_FOUND"
+          }
+        ]
+      },
+      {
+        "url": "/legal-documents",
+        "view": "LegalDocumentsView",
+        "lines": 286,
+        "buttons": 7,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 1,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 21,
+        "aria": 5,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "/api/v1/admin/legal-documents",
+            "path": "/api/v1/admin/legal-documents",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/admin/legal-documents",
+            "path": "/api/v1/admin/legal-documents",
+            "method": "POST",
+            "status": 400,
+            "verdict": "EXISTS",
+            "code": "REQUIRED"
+          }
+        ]
+      },
+      {
         "url": "/:pathMatch(.*)*",
         "view": "NotFoundView",
         "lines": 27,
@@ -3243,8 +3498,8 @@
     "shell": [
       {
         "file": "App.vue",
-        "lines": 200,
-        "buttons": 1,
+        "lines": 194,
+        "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": false,
@@ -3252,8 +3507,8 @@
         "has_empty": true,
         "responsive_classes": 1,
         "english_text_nodes": 2,
-        "korean_text_nodes": 20,
-        "aria": 4,
+        "korean_text_nodes": 0,
+        "aria": 9,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -3277,13 +3532,13 @@
   },
   "partner": {
     "router_guard": true,
-    "guard_excerpt": "beforeEach((to, _from, next) => {\n  const token = localStorage.getItem('partner_token');\n  if (to.meta.requiresAuth && !token) {\n    next({ path: '/login', query: { redirect: to.fullPath } });\n  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() !== 'APPROVED') {\n    // P2-T02: unknown/empty status also routes to the application (the API\n    // enforces approval per call; ",
+    "guard_excerpt": "beforeEach(async (to, _from, next) => {\r\n  // P0-2: the session is memory-only; restore it from the cookie on entry.\r\n  if (to.meta.requiresAuth && !(await ensurePartnerSession())) {\r\n    next({ path: '/login', query: { redirect: to.fullPath } });\r\n  } else if (to.meta.requiresAuth && !to.meta.applicant && getPartnerStatus() !== 'APPROVED') {\r\n    // P2-T02: unknown/empty status also routes to the",
     "unrouted_views": [],
     "screens": [
       {
         "url": "/login",
         "view": "LoginView",
-        "lines": 92,
+        "lines": 93,
         "buttons": 3,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -3311,7 +3566,7 @@
       {
         "url": "/apply",
         "view": "ApplyView",
-        "lines": 179,
+        "lines": 181,
         "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -3407,17 +3662,17 @@
       {
         "url": "/",
         "view": "DashboardView",
-        "lines": 215,
+        "lines": 239,
         "buttons": 6,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 4,
+        "responsive_classes": 6,
         "english_text_nodes": 0,
-        "korean_text_nodes": 17,
-        "aria": 8,
+        "korean_text_nodes": 19,
+        "aria": 9,
         "inline_hex_colors": 0,
         "suspicious": [
           "guarantee claim×1"
@@ -3450,14 +3705,28 @@
             "method": "GET",
             "status": 200,
             "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/partner/products?shipping=unassigned&per_page=1",
+            "path": "/api/v1/partner/products",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "/api/v1/partner/shipping-policies",
+            "path": "/api/v1/partner/shipping-policies",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
           }
         ]
       },
       {
         "url": "/products",
         "view": "ProductListView",
-        "lines": 311,
-        "buttons": 12,
+        "lines": 470,
+        "buttons": 17,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
@@ -3465,8 +3734,8 @@
         "has_empty": true,
         "responsive_classes": 3,
         "english_text_nodes": 0,
-        "korean_text_nodes": 16,
-        "aria": 9,
+        "korean_text_nodes": 31,
+        "aria": 14,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -3485,6 +3754,21 @@
             "verdict": "EXISTS"
           },
           {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/identifiers",
+            "path": "/api/v1/partner/products/identifiers",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/shipping-policies",
+            "path": "/api/v1/partner/shipping-policies",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
             "raw": "${API_BASE_URL}/api/v1/partner/products/bulk-update",
             "path": "/api/v1/partner/products/bulk-update",
             "method": "GET",
@@ -3497,17 +3781,17 @@
       {
         "url": "/products/new",
         "view": "ProductEditView",
-        "lines": 355,
-        "buttons": 5,
+        "lines": 413,
+        "buttons": 7,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 11,
+        "responsive_classes": 13,
         "english_text_nodes": 0,
-        "korean_text_nodes": 29,
-        "aria": 16,
+        "korean_text_nodes": 37,
+        "aria": 18,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -3554,17 +3838,17 @@
       {
         "url": "/products/:id/edit",
         "view": "ProductEditView",
-        "lines": 355,
-        "buttons": 5,
+        "lines": 413,
+        "buttons": 7,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 11,
+        "responsive_classes": 13,
         "english_text_nodes": 0,
-        "korean_text_nodes": 29,
-        "aria": 16,
+        "korean_text_nodes": 37,
+        "aria": 18,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -3669,7 +3953,7 @@
       {
         "url": "/bulk-upload",
         "view": "BulkUploadView",
-        "lines": 221,
+        "lines": 251,
         "buttons": 3,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -3678,7 +3962,7 @@
         "has_empty": true,
         "responsive_classes": 0,
         "english_text_nodes": 10,
-        "korean_text_nodes": 0,
+        "korean_text_nodes": 2,
         "aria": 2,
         "inline_hex_colors": 0,
         "suspicious": [],
@@ -3686,6 +3970,13 @@
           {
             "raw": "${API_BASE_URL}/api/v1/categories",
             "path": "/api/v1/categories",
+            "method": "GET",
+            "status": 200,
+            "verdict": "EXISTS"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/shipping-policies",
+            "path": "/api/v1/partner/shipping-policies",
             "method": "GET",
             "status": 200,
             "verdict": "EXISTS"
@@ -3703,16 +3994,16 @@
       {
         "url": "/imports",
         "view": "UrlImportView",
-        "lines": 1015,
+        "lines": 1101,
         "buttons": 12,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": true,
         "has_error": true,
         "has_empty": true,
-        "responsive_classes": 17,
+        "responsive_classes": 19,
         "english_text_nodes": 0,
-        "korean_text_nodes": 64,
+        "korean_text_nodes": 72,
         "aria": 22,
         "inline_hex_colors": 0,
         "suspicious": [
@@ -4338,8 +4629,8 @@
     "shell": [
       {
         "file": "App.vue",
-        "lines": 171,
-        "buttons": 1,
+        "lines": 168,
+        "buttons": 2,
         "buttons_without_handler": 0,
         "dead_links": 0,
         "has_loading": false,
@@ -4347,8 +4638,8 @@
         "has_empty": false,
         "responsive_classes": 3,
         "english_text_nodes": 1,
-        "korean_text_nodes": 21,
-        "aria": 1,
+        "korean_text_nodes": 0,
+        "aria": 6,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": [
@@ -4370,7 +4661,7 @@
       },
       {
         "file": "components/product-form/CategoryPicker.vue",
-        "lines": 63,
+        "lines": 77,
         "buttons": 4,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -4430,8 +4721,41 @@
         ]
       },
       {
+        "file": "components/product-form/ProductTranslationsEditor.vue",
+        "lines": 194,
+        "buttons": 3,
+        "buttons_without_handler": 0,
+        "dead_links": 0,
+        "has_loading": true,
+        "has_error": true,
+        "has_empty": true,
+        "responsive_classes": 0,
+        "english_text_nodes": 0,
+        "korean_text_nodes": 6,
+        "aria": 6,
+        "inline_hex_colors": 0,
+        "suspicious": [],
+        "api": [
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/${encodeURIComponent(props.productId)}/translations",
+            "path": "/api/v1/partner/products/x_probe/translations",
+            "method": "GET",
+            "status": 404,
+            "verdict": "EXISTS",
+            "code": "NOT_FOUND"
+          },
+          {
+            "raw": "${API_BASE_URL}/api/v1/partner/products/${encodeURIComponent(props.productId)}/translations/${lang}",
+            "path": "/api/v1/partner/products/x_probe/translations/x_probe",
+            "method": "GET",
+            "status": 404,
+            "verdict": "MISSING_ROUTE"
+          }
+        ]
+      },
+      {
         "file": "components/product-form/SkuTableEditor.vue",
-        "lines": 79,
+        "lines": 109,
         "buttons": 1,
         "buttons_without_handler": 0,
         "dead_links": 0,
@@ -4440,8 +4764,8 @@
         "has_empty": false,
         "responsive_classes": 0,
         "english_text_nodes": 0,
-        "korean_text_nodes": 9,
-        "aria": 5,
+        "korean_text_nodes": 12,
+        "aria": 9,
         "inline_hex_colors": 0,
         "suspicious": [],
         "api": []

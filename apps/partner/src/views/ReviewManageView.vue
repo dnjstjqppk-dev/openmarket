@@ -181,7 +181,7 @@ onMounted(() => void load())
         <template #cell-product="{ row }"><span class="text-ink-muted">{{ row.product_title || row.product_id }}</span></template>
         <template #cell-rating="{ row }"><span class="om-num font-bold text-ink">★ {{ row.rating }}</span></template>
         <template #cell-reply="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.reply ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ row.reply ? '답변완료' : '미답변' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.reply ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'">{{ row.reply ? '답변완료' : '미답변' }}</span>
         </template>
         <template #actions="{ row }">
           <div class="flex gap-1">

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { createGateway } from '../lib/harness.mjs';
 import { signJwt } from '../../apps/cloudflare-gateway/src/utils/crypto-auth.js';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '../..');
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../..');
 const OUT = path.join(ROOT, 'reports/v4/phase1');
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -29,7 +29,8 @@ function routesOf(app) {
   const routes = [];
   for (const m of src.matchAll(/\{\s*path:\s*'([^']*)'[^}]*?component:\s*(?:(\w+)|\(\)\s*=>\s*import\('\.\.\/views\/([\w/-]+\.vue)'\))/g)) {
     const rel = m[3] || imports[m[2]] || null;
-    routes.push({ path: m[1], view: rel ? rel.split('/').pop().replace(/\.vue$/, '') : m[2], file: rel });
+    // storefront routes are children of /:lang/:currency (relative paths); report them as bare absolute paths
+    routes.push({ path: m[1].startsWith('/') ? m[1] : `/${m[1]}`, view: rel ? rel.split('/').pop().replace(/\.vue$/, '') : m[2], file: rel });
   }
   for (const m of src.matchAll(/\{\s*path:\s*'([^']*)'[^}]*?redirect:\s*'([^']*)'/g)) routes.push({ path: m[1], redirect: m[2] });
   const guard = /beforeEach/.test(src);

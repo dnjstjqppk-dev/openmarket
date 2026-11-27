@@ -122,7 +122,7 @@ onMounted(() => void loadReviews());
         </template>
         <template #cell-rating="{ row }"><span class="font-bold text-warning">{{ row.rating }} ★</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.visibility === 'BLIND' ? 'bg-surface-3 text-ink-muted' : 'bg-success-soft text-success'">{{ row.visibility === 'BLIND' ? '블라인드' : '노출 중' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.visibility === 'BLIND' ? 'bg-surface-3 text-ink-muted' : 'bg-success-soft text-success'">{{ row.visibility === 'BLIND' ? '블라인드' : '노출 중' }}</span>
         </template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
         <template #actions="{ row }">

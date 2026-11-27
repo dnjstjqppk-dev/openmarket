@@ -160,21 +160,21 @@ onMounted(() => {
       </span>
     </template>
     <template #header>
-      <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
+      <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-xs">
         <span v-if="operatorName" class="truncate font-bold text-ink" :aria-label="uiT('운영 사업자')">{{ operatorName }}</span>
-        <span v-if="payMode" class="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-2xs font-bold text-ink-muted">{{ uiT(payMode) }}</span>
+        <span v-if="payMode" class="hidden shrink-0 rounded-full sm:inline-block border border-line bg-surface-2 px-2.5 py-0.5 text-2xs font-bold text-ink-muted">{{ uiT('결제') }} {{ uiT(payMode) }}</span>
         <span class="hidden shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">
           {{ ADMIN_ROLE_LABEL[adminRole] || '운영자' }}
         </span>
       </div>
-      <label class="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2/80 px-2.5 py-1 text-xs">
+      <label class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-surface-2/80 px-2.5 py-1 text-xs">
         <Globe class="h-3.5 w-3.5 text-primary" aria-hidden="true" />
         <span class="sr-only">{{ uiT('언어') }}</span>
         <select :value="uiLoc" class="cursor-pointer bg-transparent text-xs font-semibold text-ink focus:outline-none" @change="onLocaleChange(($event.target as HTMLSelectElement).value)">
           <option v-for="o in localeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
       </label>
-      <button type="button" :aria-label="uiT('테마 변경')" class="rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="cycleTheme">
+      <button type="button" :aria-label="uiT('테마 변경')" class="shrink-0 rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="cycleTheme">
         <Sun v-if="themeMode === 'light'" class="h-4 w-4" aria-hidden="true" />
         <Moon v-else-if="themeMode === 'dark'" class="h-4 w-4" aria-hidden="true" />
         <Monitor v-else class="h-4 w-4" aria-hidden="true" />
@@ -182,8 +182,8 @@ onMounted(() => {
       <RouterLink v-if="canSee('/marketing')" to="/marketing" class="shrink-0 rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" :aria-label="uiT('알림')">
         <Bell class="h-4 w-4" aria-hidden="true" />
       </RouterLink>
-      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
-        <LogOut class="h-4 w-4" aria-hidden="true" />{{ uiT('로그아웃') }}
+      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink sm:px-3" :aria-label="uiT('로그아웃')" @click="handleLogout">
+        <LogOut class="h-4 w-4" aria-hidden="true" /><span class="hidden sm:inline">{{ uiT('로그아웃') }}</span>
       </button>
     </template>
     <router-view @auth-changed="checkAuth" />

@@ -463,11 +463,11 @@ onMounted(() => {
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="flex items-center gap-2 border-b border-line pb-2">
+    <div class="om-scrollbar-none -mx-1 flex items-center gap-2 overflow-x-auto border-b border-line px-1 pb-2">
       <button
         @click="activeTab = 'channels'"
         type="button"
-        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex shrink-0 items-center gap-2 whitespace-nowrap cursor-pointer"
         :class="activeTab === 'channels' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Plug class="h-4 w-4" aria-hidden="true" />
@@ -476,7 +476,7 @@ onMounted(() => {
       <button
         @click="activeTab = 'listings'"
         type="button"
-        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex shrink-0 items-center gap-2 whitespace-nowrap cursor-pointer"
         :class="activeTab === 'listings' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Share2 class="h-4 w-4" aria-hidden="true" />
@@ -485,7 +485,7 @@ onMounted(() => {
       <button
         @click="activeTab = 'orders'"
         type="button"
-        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex shrink-0 items-center gap-2 whitespace-nowrap cursor-pointer"
         :class="activeTab === 'orders' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <ShoppingCart class="h-4 w-4" aria-hidden="true" />
@@ -494,7 +494,7 @@ onMounted(() => {
       <button
         @click="activeTab = 'calculator'"
         type="button"
-        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+        class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition flex shrink-0 items-center gap-2 whitespace-nowrap cursor-pointer"
         :class="activeTab === 'calculator' ? 'bg-secondary text-secondary-on shadow' : 'bg-surface text-ink-muted hover:bg-surface-2 border border-line'"
       >
         <Calculator class="h-4 w-4" aria-hidden="true" />
@@ -504,14 +504,14 @@ onMounted(() => {
 
     <!-- TAB 1: Channels & Credentials -->
     <div v-if="activeTab === 'channels'" class="space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
           <h2 class="text-lg font-bold text-ink">연동 가능한 국내외 판매채널 및 B2B 공급망</h2>
           <p class="text-xs text-ink-muted">판매 채널 계정을 등록하면 배포·주문 수집 흐름을 테스트할 수 있습니다(현재 시뮬레이션 동작).</p>
         </div>
         <button
           @click="showCredModal = true"
-          class="px-4 py-2 bg-primary hover:bg-primary-hover text-primary-on rounded-xl text-xs font-bold shadow flex items-center gap-2 cursor-pointer"
+          class="px-4 py-2 bg-primary hover:bg-primary-hover text-primary-on rounded-xl text-xs font-bold shadow flex shrink-0 items-center gap-2 whitespace-nowrap cursor-pointer"
         >
           <Key class="h-4 w-4" aria-hidden="true" />
           <span>새 판매채널 계정 연결</span>

@@ -105,7 +105,7 @@ onMounted(() => void load())
       <section class="space-y-2 rounded-2xl border border-line bg-surface p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h1 class="om-num text-lg font-bold text-ink">{{ order.order_no || order.id }}</h1>
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="order.payment_status === 'PAID' ? 'bg-warning-soft text-warning' : order.payment_status === 'CANCELLED' || order.payment_status === 'FAILED' ? 'bg-danger-soft text-danger' : order.payment_status === 'DELIVERED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[order.payment_status] || order.payment_status }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="order.payment_status === 'PAID' ? 'bg-warning-soft text-warning' : order.payment_status === 'CANCELLED' || order.payment_status === 'FAILED' ? 'bg-danger-soft text-danger' : order.payment_status === 'DELIVERED' ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[order.payment_status] || order.payment_status }}</span>
         </div>
         <dl class="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-3">
           <div><dt class="text-ink-subtle">구매자</dt><dd class="text-ink">{{ order.buyer_email || order.customer_id }}</dd></div>
@@ -118,7 +118,7 @@ onMounted(() => void load())
       <section v-for="s in (data.sub_orders || [])" :key="s.id" class="space-y-2 rounded-2xl border border-line bg-surface p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-sm font-bold text-ink">{{ s.business_name || s.partner_id }} <span class="om-num font-mono text-2xs font-normal text-ink-subtle">{{ s.sub_order_no }}</span></h2>
-          <span class="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">{{ s.status }}</span>
+          <span class="rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted whitespace-nowrap">{{ s.status }}</span>
         </div>
         <ul class="divide-y divide-line-divider text-xs">
           <li v-for="it in (s.items || [])" :key="it.id" class="flex flex-wrap items-center justify-between gap-2 py-2">

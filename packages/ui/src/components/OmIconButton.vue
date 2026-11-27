@@ -34,7 +34,7 @@ withDefaults(defineProps<{
     <slot v-else />
     <span
       v-if="badge !== null && badge !== 0 && badge !== ''"
-      class="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-accent px-1 text-center text-2xs font-bold leading-[18px] text-white om-num"
+      class="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-accent px-1 text-center text-2xs font-bold leading-[18px] text-white om-num whitespace-nowrap"
       aria-hidden="true"
     >{{ typeof badge === 'number' && badge > 99 ? '99+' : badge }}</span>
   </button>

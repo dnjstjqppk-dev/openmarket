@@ -169,5 +169,9 @@
   "bizInfoVerify": "事業者情報確認",
   "bizInfoMissing": "運営事業者情報が登録されていません。登録完了まで注文は受け付けられません。",
   "retry": "再試行",
-  "loading": "読み込み中..."
+  "loading": "読み込み中...",
+  "loginOr": "または",
+  "loginFromCheckout": "ご注文を続けるにはログインしてください。",
+  "kakaoStart": "Kakaoでログイン",
+  "kakaoRedirecting": "Kakaoへ移動中..."
 }

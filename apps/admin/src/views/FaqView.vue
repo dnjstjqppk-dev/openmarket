@@ -167,7 +167,7 @@ onMounted(load)
       <template #cell-category="{ row }">{{ row.category }}</template>
       <template #cell-question="{ row }"><span class="font-semibold text-ink">{{ row.question }}</span></template>
       <template #cell-status="{ row }">
-        <span class="rounded-full px-2 py-0.5 text-2xs font-bold"
+        <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap"
           :class="Number(row.is_published) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">
           {{ Number(row.is_published) === 1 ? '게시 중' : '게시 중단' }}
         </span>

@@ -130,7 +130,7 @@ onMounted(() => void load())
         <section class="space-y-2 rounded-2xl border border-line bg-surface p-5" data-testid="application-card">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h1 class="text-lg font-bold text-ink">{{ app.business_name }}</h1>
-            <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="app.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : app.kyc_status === 'REJECTED' ? 'bg-danger-soft text-danger' : app.kyc_status === 'SUBMITTED' ? 'bg-warning-soft text-warning' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[app.kyc_status] || app.kyc_status }}</span>
+            <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="app.kyc_status === 'APPROVED' ? 'bg-success-soft text-success' : app.kyc_status === 'REJECTED' ? 'bg-danger-soft text-danger' : app.kyc_status === 'SUBMITTED' ? 'bg-warning-soft text-warning' : 'bg-surface-3 text-ink-muted'">{{ STATUS_LABEL[app.kyc_status] || app.kyc_status }}</span>
           </div>
           <dl class="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
             <div><dt class="text-ink-subtle">사업자등록번호</dt><dd class="om-num font-bold text-ink">{{ app.business_reg_number }}</dd></div>

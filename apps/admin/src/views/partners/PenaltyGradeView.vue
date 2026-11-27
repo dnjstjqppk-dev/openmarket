@@ -221,7 +221,7 @@ onMounted(() => void load())
             <td class="p-2 text-ink">{{ r.name }}</td>
             <td class="om-num p-2 text-right text-ink">{{ r.points }}점</td>
             <td class="om-num p-2 text-right text-ink">{{ won(r.amount) }}</td>
-            <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(r.is_enabled) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(r.is_enabled) === 1 ? '켜짐' : '꺼짐' }}</span></td>
+            <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(r.is_enabled) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(r.is_enabled) === 1 ? '켜짐' : '꺼짐' }}</span></td>
             <td class="p-2 text-right"><button type="button" class="rounded-lg border border-line px-2.5 py-1.5 font-bold text-ink hover:bg-surface-2" @click="openRule(r)">수정</button></td>
           </tr>
         </tbody>
@@ -238,7 +238,7 @@ onMounted(() => void load())
             <td class="p-2 font-mono text-ink-muted">{{ h.rule_code }}</td>
             <td class="om-num p-2 text-right text-ink">{{ h.points }}점 · {{ won(h.penalty_amount) }}</td>
             <td class="max-w-xs truncate p-2 text-ink-muted" :title="h.reason">{{ h.reason }}</td>
-            <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="h.status === 'IMPOSED' ? 'bg-warning-soft text-warning' : h.status === 'REVOKED' ? 'bg-surface-3 text-ink-muted' : 'bg-danger-soft text-danger'">{{ PEN_LABEL[h.status] || h.status }}</span></td>
+            <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="h.status === 'IMPOSED' ? 'bg-warning-soft text-warning' : h.status === 'REVOKED' ? 'bg-surface-3 text-ink-muted' : 'bg-danger-soft text-danger'">{{ PEN_LABEL[h.status] || h.status }}</span></td>
             <td class="om-num p-2 text-ink-subtle">{{ String(h.created_at || '').slice(0, 10) }}</td>
           </tr>
         </tbody>
@@ -275,7 +275,7 @@ onMounted(() => void load())
               <td class="om-num p-2 text-right text-ink">{{ p.min_sales === null ? '-' : won(p.min_sales) }}</td>
               <td class="om-num p-2 text-right text-ink">{{ p.max_claim_rate === null ? '-' : `${Math.round(Number(p.max_claim_rate) * 100)}%` }}</td>
               <td class="om-num p-2 text-right text-ink">{{ p.max_penalty_points === null ? '-' : `${p.max_penalty_points}점` }}</td>
-              <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(p.is_enabled) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(p.is_enabled) === 1 ? '켜짐' : '꺼짐' }}</span></td>
+              <td class="p-2"><span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(p.is_enabled) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(p.is_enabled) === 1 ? '켜짐' : '꺼짐' }}</span></td>
               <td class="p-2 text-right"><button type="button" class="rounded-lg border border-line px-2.5 py-1.5 font-bold text-ink hover:bg-surface-2" @click="openPolicy(p)">수정</button></td>
             </tr>
           </tbody>
@@ -292,7 +292,7 @@ onMounted(() => void load())
           <tbody>
             <tr v-for="g in results" :key="g.partner_id" class="border-t border-line-divider">
               <td class="p-2 font-bold text-ink">{{ g.business_name || g.partner_id }}</td>
-              <td class="p-2"><span class="rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink">{{ g.grade_code || '미부여' }}</span></td>
+              <td class="p-2"><span class="rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink whitespace-nowrap">{{ g.grade_code || '미부여' }}</span></td>
               <td class="p-2 font-mono text-2xs text-ink-subtle">{{ g.metrics_json }}</td>
             </tr>
           </tbody>

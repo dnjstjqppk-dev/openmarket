@@ -134,7 +134,7 @@ watch(() => props.productId, load, { immediate: true })
         @click="activeLang = tab.lang; errorMsg = ''"
       >
         <span>{{ tab.label }}</span>
-        <span class="rounded-full px-1.5 py-0.5 text-2xs" :class="drafts[tab.lang].saved ? 'bg-success-soft text-success' : 'bg-surface-2 text-ink-subtle'">
+        <span class="rounded-full px-1.5 py-0.5 text-2xs whitespace-nowrap" :class="drafts[tab.lang].saved ? 'bg-success-soft text-success' : 'bg-surface-2 text-ink-subtle'">
           {{ drafts[tab.lang].saved ? '등록됨' : '미등록' }}
         </span>
       </button>

@@ -15,12 +15,12 @@ const applyPreset = (label: string) => {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <div class="flex gap-1" role="group" aria-label="기간 선택">
+    <div class="flex flex-wrap gap-1" role="group" aria-label="기간 선택">
       <button
         v-for="p in presets"
         :key="p"
         type="button"
-        class="h-9 rounded-lg border border-line px-3 text-xs font-bold transition-colors hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        class="h-9 shrink-0 whitespace-nowrap rounded-lg border border-line px-3 text-xs font-bold transition-colors hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         @click="applyPreset(p)"
       >
         {{ p }}

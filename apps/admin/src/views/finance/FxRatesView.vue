@@ -163,7 +163,7 @@ onMounted(loadRates)
               <p class="text-xs text-ink-muted">{{ c.name }}</p>
             </div>
             <span
-              class="rounded-full px-2.5 py-0.5 text-2xs font-bold"
+              class="rounded-full px-2.5 py-0.5 text-2xs font-bold whitespace-nowrap"
               :class="rates[c.code] ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'"
             >
               {{ rates[c.code] ? `1 ${c.code} = ${formatNumber(rates[c.code].krw_per_unit)}원` : uiT('미등록') }}
@@ -180,7 +180,7 @@ onMounted(loadRates)
               type="number"
               step="0.01"
               min="0.01"
-              :placeholder="String(c.sample)"
+              :placeholder="`예: ${c.sample}`"
               class="om-num h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>

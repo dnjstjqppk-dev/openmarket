@@ -161,7 +161,7 @@ onMounted(() => void loadQnA())
         <template #cell-q="{ row }">
           <div class="min-w-0">
             <p class="flex flex-wrap items-center gap-1.5 text-ink">
-              <span v-if="Number(row.is_secret) === 1" class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">비밀글</span>
+              <span v-if="Number(row.is_secret) === 1" class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted whitespace-nowrap">비밀글</span>
               <span>{{ row.question }}</span>
             </p>
             <p v-if="row.answer" class="mt-1 whitespace-pre-wrap rounded-lg bg-surface-2 p-2 text-ink-muted">A. {{ row.answer }}</p>
@@ -179,8 +179,8 @@ onMounted(() => void loadQnA())
         <template #cell-product="{ row }"><span class="text-ink-muted">{{ row.product_title || row.product_id }}</span></template>
         <template #cell-status="{ row }">
           <span class="flex flex-wrap items-center gap-1">
-            <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="row.status === 'WAITING' ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'">{{ row.status === 'WAITING' ? '미답변' : '답변완료' }}</span>
-            <span v-if="isOverdue(row)" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">24시간 경과</span>
+            <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="row.status === 'WAITING' ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'">{{ row.status === 'WAITING' ? '미답변' : '답변완료' }}</span>
+            <span v-if="isOverdue(row)" class="rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger whitespace-nowrap">24시간 경과</span>
           </span>
         </template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>

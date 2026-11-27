@@ -188,7 +188,7 @@ onMounted(() => void loadUsers())
         <template #cell-contact="{ row }"><span class="om-num text-ink-muted">{{ row.phone }}</span></template>
         <template #cell-orders="{ row }"><span class="om-num text-ink-muted">{{ row.order_count || 0 }}</span></template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="statusOf(row) === 'ACTIVE' ? 'bg-success-soft text-success' : statusOf(row) === 'WITHDRAWN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[statusOf(row)] }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="statusOf(row) === 'ACTIVE' ? 'bg-success-soft text-success' : statusOf(row) === 'WITHDRAWN' ? 'bg-surface-3 text-ink-muted' : 'bg-warning-soft text-warning'">{{ STATUS_LABEL[statusOf(row)] }}</span>
         </template>
         <template #cell-date="{ row }"><span class="om-num text-ink-muted">{{ String(row.created_at || '').slice(0, 10) }}</span></template>
         <template #actions="{ row }">

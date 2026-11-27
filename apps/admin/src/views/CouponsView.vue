@@ -183,7 +183,7 @@ onMounted(() => void loadCoupons())
           <span v-if="row.issuer === 'PLATFORM' && Number(row.platform_seller_share) > 0" class="om-num block text-2xs text-ink-subtle">판매자 {{ won(row.platform_seller_share) }}</span>
         </template>
         <template #cell-status="{ row }">
-          <span class="rounded-full px-2 py-0.5 text-2xs font-bold" :class="Number(row.is_active) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(row.is_active) === 1 ? '발급중' : '중지됨' }}</span>
+          <span class="rounded-full px-2 py-0.5 text-2xs font-bold whitespace-nowrap" :class="Number(row.is_active) === 1 ? 'bg-success-soft text-success' : 'bg-surface-3 text-ink-muted'">{{ Number(row.is_active) === 1 ? '발급중' : '중지됨' }}</span>
         </template>
         <template #actions="{ row }">
           <div class="flex gap-1">

@@ -168,7 +168,7 @@ onMounted(consumeSocialReturn)
 </script>
 
 <template>
-  <AuthCard :title="locale.t('loginTitle')" :subtitle="fromCheckout ? locale.t('loginSubtitle') : undefined">
+  <AuthCard :title="locale.t('loginTitle')" :subtitle="fromCheckout ? locale.t('loginFromCheckout') : undefined">
     <OmAlert v-if="expired" tone="warning" class="mb-4">세션이 만료되었습니다. 다시 로그인해주세요.</OmAlert>
 
     <form class="space-y-4" novalidate @submit.prevent="handleLogin">
@@ -188,12 +188,12 @@ onMounted(consumeSocialReturn)
     </form>
 
     <div class="my-4 flex items-center gap-3 text-xs text-ink-muted" aria-hidden="true">
-      <span class="h-px flex-1 bg-line"></span>OR<span class="h-px flex-1 bg-line"></span>
+      <span class="h-px flex-1 bg-line"></span>{{ locale.t('loginOr') }}<span class="h-px flex-1 bg-line"></span>
     </div>
 
     <button type="button" :disabled="socialLoading" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] text-[15px] font-semibold text-[#000000] shadow-sm transition-transform active:scale-[0.98] disabled:cursor-wait disabled:opacity-70" @click="startKakao">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.48 3 2 6.36 2 10.5c0 2.62 1.73 4.92 4.34 6.17-.19.68-.69 2.48-.71 2.56-.02.1.04.2.14.2.05 0 .1-.02.15-.04l3-1.98c.63.18 1.3.27 2.08.27 5.52 0 10-3.36 10-7.5S17.52 3 12 3Z" /></svg>
-      {{ socialLoading ? 'Kakao...' : 'Kakao Login' }}
+      {{ socialLoading ? locale.t('kakaoRedirecting') : locale.t('kakaoStart') }}
     </button>
 
     <div class="mt-4 text-right text-sm">

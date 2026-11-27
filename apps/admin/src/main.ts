@@ -10,7 +10,7 @@ const app = createApp(App);
 app.use(router);
 // Stale chunks after a deploy: reload once onto the target route.
 installChunkReloadGuard(router);
-import { API_BASE_URL, getAdminRole, clearAdminToken, ensureAdminSession } from './config';
+import { API_BASE_URL, getAdminRole, clearAdminToken, ensureAdminSession, getAdminSessionUser } from './config';
 import { installApiFetch, installChunkReloadGuard, useTheme, initUiLocale, installDomLocaleSync } from '@olmoa/ui';
 
 useTheme().init();
@@ -36,7 +36,9 @@ router.beforeEach(async (to) => {
 // P0-2 + P2: cookie sessions via the shared fetch wrapper (see @olmoa/ui).
 installApiFetch({
   apiBaseUrl: API_BASE_URL,
+  // Only a session that existed can expire; a visitor who never signed in is routed by the guard.
   onExpiredSession: () => {
+    if (!getAdminSessionUser()) return;
     clearAdminToken();
     router.push({ path: '/login', query: { expired: '1' } });
   }

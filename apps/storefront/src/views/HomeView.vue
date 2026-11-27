@@ -149,7 +149,7 @@ const remainingLabel = (d: any) =>
               <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-70 transition-transform duration-slow" :fetchpriority="index === 0 ? 'high' : 'auto'" />
               <div class="absolute inset-0 bg-gradient-to-tr from-overlay/85 via-overlay/45 to-transparent" aria-hidden="true" />
               <div class="relative flex h-full flex-col justify-end gap-2.5 p-5 sm:gap-3.5 sm:p-12" aria-live="polite">
-                <span v-if="banners[index].badge_text" class="w-fit rounded-full bg-primary/90 px-3 py-1 text-2xs font-bold tracking-wider text-primary-on shadow-sm backdrop-blur">{{ banners[index].badge_text }}</span>
+                <span v-if="banners[index].badge_text" class="w-fit rounded-full bg-primary/90 px-3 py-1 text-2xs font-bold tracking-wider text-primary-on shadow-sm backdrop-blur whitespace-nowrap">{{ banners[index].badge_text }}</span>
                 <h1 class="line-clamp-2 max-w-2xl text-xl font-extrabold leading-tight tracking-tight sm:text-4xl">{{ banners[index].title }}</h1>
                 <p v-if="banners[index].subtitle" class="hidden max-w-xl text-sm text-white/90 sm:block sm:text-md">{{ banners[index].subtitle }}</p>
                 <div class="pt-1">
@@ -164,7 +164,7 @@ const remainingLabel = (d: any) =>
         </OmCarousel>
       </div>
       <div v-if="banners.length > 1" class="relative" aria-hidden="true">
-        <span class="absolute -top-11 right-5 rounded-full bg-overlay/55 px-3 py-1 text-2xs font-bold text-white backdrop-blur-sm tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
+        <span class="absolute -top-11 right-5 rounded-full bg-overlay/55 px-3 py-1 text-2xs font-bold text-white backdrop-blur-sm tabular-nums whitespace-nowrap">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
       </div>
     </section>
 
@@ -174,7 +174,7 @@ const remainingLabel = (d: any) =>
         <ul class="grid grid-cols-5 gap-3 sm:grid-cols-10 sm:gap-4">
           <li v-for="c in shortcutRoots" :key="c.slug">
             <RouterLink :to="`/category/${c.slug}`" class="group flex flex-col items-center gap-2">
-              <span class="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface-2 text-lg font-extrabold text-ink shadow-sm transition-all duration-fast group-hover:-translate-y-0.5 group-hover:border-primary group-hover:bg-primary-soft group-hover:text-primary group-hover:shadow-md" aria-hidden="true">{{ c.name.slice(0, 1) }}</span>
+              <span class="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface-2 text-lg font-extrabold text-ink shadow-sm transition-all duration-fast group-hover:-translate-y-0.5 group-hover:border-primary group-hover:bg-primary-soft group-hover:text-primary group-hover:shadow-md" aria-hidden="true" data-no-i18n>{{ c.name.slice(0, 1) }}</span>
               <span class="w-full truncate text-center text-xs font-semibold text-ink-muted transition-colors group-hover:text-primary">{{ c.name }}</span>
             </RouterLink>
           </li>
