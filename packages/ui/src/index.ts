@@ -98,6 +98,8 @@ export { createAutocomplete, normalizeQuery, parseTrendingKeywords } from './com
 export type { AcItem, AcGroup, AcFetcher, AcState } from './composables/autocompleteCore'
 export { useTheme, nextThemeMode } from './composables/useTheme'
 export type { ThemeMode } from './composables/useTheme'
+export { useUiLocale, uiLocale, setUiLocale, initUiLocale, uiT, translatePhrase, installDomLocaleSync, UI_LOCALE_OPTIONS, UI_PHRASES } from './composables/useUiLocale'
+export type { UiLocale } from './composables/useUiLocale'
 export { useBreakpoint, BREAKPOINTS, BREAKPOINT_ORDER, breakpointOf, deviceOf, matches, matchesDevice } from './composables/useBreakpoint'
 export type { BreakpointKey, DeviceClass, BreakpointState } from './composables/useBreakpoint'
 export { isNoindexPath, canonicalOf, routeHeadOf, applyRouteHead, injectJsonLd, hreflangOf, localeOfPath, currencyOfPath, barePathOf, mdAlternateOf, OG_LOCALE, robotsOf, isSearchPath, pageOfQuery, pageSuffixOf, HREFLANG_LOCALES } from './composables/useSeoHead'

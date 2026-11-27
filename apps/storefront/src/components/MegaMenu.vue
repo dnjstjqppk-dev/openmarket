@@ -7,9 +7,11 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronDown, ChevronRight, LayoutGrid } from 'lucide-vue-next'
 import { useCatalogStore } from '../stores/catalog'
+import { useLocaleStore } from '../stores/locale'
 import { useClickOutside } from '@olmoa/ui'
 
 const catalog = useCatalogStore()
+const locale = useLocaleStore()
 onMounted(() => { catalog.load() })
 const root = ref<HTMLElement | null>(null)
 const open = ref(false)
@@ -81,17 +83,17 @@ function focusRoot(i: number) {
       type="button"
       :aria-expanded="open"
       aria-haspopup="true"
-      class="ml-2 hidden h-10 items-center gap-1.5 rounded px-3 text-sm font-semibold text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus lg:inline-flex"
+      class="ml-2 hidden h-10 items-center gap-1.5 rounded-full border border-line bg-surface-2/70 px-3.5 text-sm font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus lg:inline-flex"
       @mouseenter="requestOpen"
       @click="toggle"
       @keydown="onTriggerKey"
     >
-      <LayoutGrid :size="18" aria-hidden="true" />카테고리<ChevronDown :size="16" :class="['transition-transform', open ? 'rotate-180' : '']" aria-hidden="true" />
+      <LayoutGrid :size="17" aria-hidden="true" />{{ locale.t('navCategories') }}<ChevronDown :size="15" :class="['transition-transform', open ? 'rotate-180' : '']" aria-hidden="true" />
     </button>
     <div
       v-if="open"
       data-panel-wrap
-      class="absolute left-0 top-full z-dropdown mt-1 hidden w-[min(92vw,760px)] overflow-hidden rounded-lg border border-line bg-surface shadow-lg lg:block"
+      class="absolute left-0 top-full z-dropdown mt-2 hidden w-[min(92vw,780px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-overlay lg:block"
     >
       <div v-if="roots().length" class="flex max-h-[min(70vh,460px)]">
         <ul class="w-56 shrink-0 overflow-y-auto border-r border-line py-1" role="menu" aria-label="대분류">

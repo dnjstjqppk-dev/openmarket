@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// Commerce badges, 20px tall: free shipping, today/tomorrow dispatch, coupon,
-// point, direct store, deal, soldout, new arrival.
+// Commerce badges (Meridian 2.0): sleek pill tags with 4-language reactive labels.
+import { uiT } from '../composables/useUiLocale'
+
 type Kind = 'free-ship' | 'today' | 'tomorrow' | 'coupon' | 'point' | 'direct' | 'deal' | 'soldout' | 'new'
-const props = withDefaults(defineProps<{ kind: Kind; label?: string }>(), { label: '' })
+withDefaults(defineProps<{ kind: Kind; label?: string }>(), { label: '' })
 const meta: Record<Kind, { text: string; cls: string }> = {
   'free-ship': { text: '무료배송', cls: 'bg-success-soft text-ship-free' },
   today: { text: '오늘출발', cls: 'bg-info-soft text-ship-fast' },
@@ -17,7 +18,7 @@ const meta: Record<Kind, { text: string; cls: string }> = {
 </script>
 
 <template>
-  <span :class="['inline-flex h-5 items-center whitespace-nowrap rounded px-1.5 text-2xs font-bold', meta[kind].cls]">
-    {{ label || meta[kind].text }}
+  <span :class="['inline-flex h-5 items-center whitespace-nowrap rounded-full px-2 text-2xs font-bold tracking-tight', meta[kind].cls]">
+    {{ label ? uiT(label) : uiT(meta[kind].text) }}
   </span>
 </template>

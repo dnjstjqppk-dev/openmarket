@@ -57,7 +57,7 @@ await t.test('SH01 mega menu hover delays and keyboard support', async () => {
 
 await t.test('SH02 search idle panel shows recents, trending and deltas', async () => {
   const app = read('src/App.vue')
-  assert.ok(app.includes('급상승 검색어'), 'trending column headed')
+  assert.ok(app.includes("locale.t('trendingSearches')") || app.includes('급상승 검색어'), 'trending column headed')
   assert.ok(app.includes("'NEW'") || app.includes('"NEW"'), 'NEW movers labelled')
   assert.ok(app.includes('recommended'), 'recommended categories surfaced while typing')
 })
@@ -68,14 +68,14 @@ await t.test('SH03 bottom nav drops wishlist/cart for search', async () => {
   assert.ok(nav.includes("label: '검색'"), 'search tab present')
   assert.ok(!nav.includes('/cart'), 'cart moved to the header icon')
   assert.ok(!nav.includes('/wishlist'), 'wishlist leaves the tab bar')
-  assert.ok(app.includes('label="장바구니"'), 'header keeps the cart icon')
+  assert.ok(app.includes(":label=\"locale.t('cart')\"") || app.includes('label="장바구니"'), 'header keeps the cart icon')
 })
 
 await t.test('SH04 recent-products rail on wide screens', async () => {
   const app = read('src/App.vue')
   assert.ok(app.includes('olmoa_recent_products'), 'guest store keyed')
   assert.ok(app.includes('min-[1440px]'), 'rail shows at 1440px+')
-  assert.ok(app.includes('맨 위로'), 'back-to-top present')
+  assert.ok(app.includes("locale.t('scrollTop')") || app.includes('맨 위로'), 'back-to-top present')
   const detail = read('src/views/ProductDetailView.vue')
   assert.ok(detail.includes('olmoa_recent_products'), 'detail view records visits')
 })

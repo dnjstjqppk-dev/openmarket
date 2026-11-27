@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { API_BASE_URL } from '../config';
 import { i18n, messages } from '../i18n';
-import { convertFromKrw, formatMoney, type Currency } from '@olmoa/ui';
+import { convertFromKrw, formatMoney, setUiLocale, type Currency } from '@olmoa/ui';
 
 export type SupportedLocale = 'ko-KR' | 'en-US' | 'ja-JP' | 'zh-TW';
 export type SupportedCurrency = 'KRW' | 'USD' | 'JPY' | 'TWD';
@@ -52,13 +52,18 @@ export const useLocaleStore = defineStore('locale', () => {
   function setLocale(newLoc: SupportedLocale) {
     locale.value = newLoc;
     i18n.global.locale.value = newLoc;
+    setUiLocale(newLoc);
   }
 
   /** 6-2: display-only locale from the URL prefix (never persisted — no silent-setting). */
   function applyUrlLocale(newLoc: SupportedLocale) {
-    if (locale.value === newLoc && i18n.global.locale.value === newLoc) return;
+    if (locale.value === newLoc && i18n.global.locale.value === newLoc) {
+      setUiLocale(newLoc);
+      return;
+    }
     locale.value = newLoc;
     i18n.global.locale.value = newLoc;
+    setUiLocale(newLoc);
   }
 
   const NUDGE_KEY = 'olmoa_locale_nudge';

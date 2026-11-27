@@ -1,21 +1,15 @@
 <script setup lang="ts">
-// Product tile for every buyer grid (3-3): 1:1 thumbnail with hover zoom,
-// sold-out scrim, rank/deal/direct corner, wishlist + quick-add actions,
-// store/name/price/badge/rating stack. Only API facts are shown:
-//  - discount: only when the list price is really higher (discountRate)
-//  - rating: only when there are reviews
-//  - "무료배송": only when ONE unit already ships free under the server rule
-//  - "오늘출발": policy with a cutoff exists and the buyer-local clock is before it
-//  - "내일출발": tomorrow enabled and the buyer-local clock is past the cutoff
-//  - "쿠폰"/"적립": server has_coupon / earn_bps flags
-// Actions emit to the app wrapper (wishlist store, cart store, quick sheet);
-// this component never calls APIs itself.
+// Product tile (Meridian 2.0): 1:1 thumbnail with smooth hover zoom & lift,
+// sold-out scrim, rank/deal/direct corner, frosted wishlist + quick-add actions,
+// store/name/price/badge/rating stack. Passes formatPrice down to OmPrice so
+// non-KRW currencies match PDP/JSON-LD everywhere.
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Heart, ShoppingCart, Star } from 'lucide-vue-next'
 import OmCommerceBadge from './OmCommerceBadge.vue'
 import OmPrice from './OmPrice.vue'
 import { discountRate, formatNumber } from '../format'
+import { uiT, uiLocale } from '../composables/useUiLocale'
 
 const props = withDefaults(defineProps<{
   product: any
@@ -65,7 +59,8 @@ const hasEarn = computed(() => {
 const monthSales = computed(() => {
   const n = Number(props.product.sales_30d ?? 0)
   if (!Number.isFinite(n) || n < 10) return null
-  return n >= 1000 ? '1천+' : formatNumber(n)
+  if (n >= 1000) return uiLocale.value === 'ko-KR' ? '1천+' : '1K+'
+  return formatNumber(n)
 })
 const to = computed(() => `/product/${props.product.slug || props.product.product_id || props.product.id}`)
 
@@ -80,7 +75,7 @@ function onWish() {
 </script>
 
 <template>
-  <div class="group flex flex-col overflow-hidden rounded-lg border border-line bg-surface transition duration-fast ease-om hover:border-line-strong hover:shadow-md" data-testid="product-card">
+  <div class="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition-all duration-fast ease-om hover:-translate-y-1 hover:border-line-strong hover:shadow-lg" data-testid="product-card">
     <div class="relative aspect-square overflow-hidden bg-surface-2">
       <RouterLink :to="to" tabindex="-1" aria-hidden="true" class="block h-full w-full focus-visible:outline-none">
         <img
@@ -88,25 +83,25 @@ function onWish() {
           :alt="product.title"
           :loading="eager ? 'eager' : 'lazy'"
           decoding="async"
-          class="h-full w-full object-cover transition duration-slow ease-om group-hover:scale-105"
+          class="h-full w-full object-cover transition-transform duration-slow ease-om group-hover:scale-105"
         />
       </RouterLink>
       <span
         v-if="rank"
-        class="absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-sm bg-secondary px-1.5 text-xs font-bold text-secondary-on"
+        class="om-num absolute left-2.5 top-2.5 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-secondary px-2 text-xs font-extrabold text-secondary-on shadow-sm"
       >{{ rank }}</span>
-      <span v-else-if="isDeal" class="absolute left-2 top-2"><OmCommerceBadge kind="deal" /></span>
-      <span v-else-if="isDirect" class="absolute left-2 top-2"><OmCommerceBadge kind="direct" /></span>
-      <div v-if="soldOut" class="absolute inset-0 flex items-center justify-center bg-surface/70" aria-hidden="true">
-        <span class="rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-ink">품절</span>
+      <span v-else-if="isDeal" class="absolute left-2.5 top-2.5"><OmCommerceBadge kind="deal" /></span>
+      <span v-else-if="isDirect" class="absolute left-2.5 top-2.5"><OmCommerceBadge kind="direct" /></span>
+      <div v-if="soldOut" class="absolute inset-0 flex items-center justify-center bg-surface/70 backdrop-blur-[2px]" aria-hidden="true">
+        <span class="rounded-full border border-line bg-surface px-4 py-1.5 text-sm font-bold text-ink shadow-sm">{{ uiT('품절') }}</span>
       </div>
-      <div class="absolute bottom-2 right-2 flex gap-1.5">
+      <div class="absolute bottom-2.5 right-2.5 flex gap-1.5">
         <button
           type="button"
           data-testid="wish-toggle"
-          :aria-label="wished ? '찜 해제' : '찜하기'"
+          :aria-label="wished ? uiT('찜 해제') : uiT('찜하기')"
           :aria-pressed="wished"
-          class="rounded-full bg-surface p-2 shadow-md transition duration hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          class="rounded-full bg-surface/95 p-2 shadow-md backdrop-blur-sm transition-all duration-fast hover:bg-surface hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           :class="popping ? 'scale-125' : 'scale-100'"
           @click.stop="onWish"
         >
@@ -115,25 +110,25 @@ function onWish() {
         <button
           type="button"
           data-testid="quick-add"
-          aria-label="장바구니 담기"
+          :aria-label="uiT('장바구니 담기')"
           :disabled="soldOut"
-          class="rounded-full bg-surface p-2 shadow-md transition duration hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40"
+          class="rounded-full bg-surface/95 p-2 shadow-md backdrop-blur-sm transition-all duration-fast hover:bg-primary hover:text-primary-on hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40"
           @click.stop="emit('add')"
         >
-          <ShoppingCart class="h-4 w-4 text-ink" aria-hidden="true" />
+          <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
 
-    <div class="flex flex-1 flex-col gap-1.5 p-3">
-      <p v-if="seller" class="truncate text-xs text-ink-muted">{{ seller }}</p>
-      <RouterLink :to="to" class="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-tight text-ink hover:underline hover:decoration-line-strong hover:underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+    <div class="flex flex-1 flex-col gap-1.5 p-3.5">
+      <p v-if="seller" class="truncate text-xs text-ink-muted font-medium">{{ seller }}</p>
+      <RouterLink :to="to" class="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug text-ink transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
         {{ product.title }}
       </RouterLink>
 
-      <OmPrice :sale="sale" :original="discount > 0 ? original : null" size="card" />
+      <OmPrice :sale="sale" :original="discount > 0 ? original : null" :format-price="formatPrice" size="card" />
 
-      <div class="flex min-h-[1.25rem] flex-wrap items-center gap-1">
+      <div class="flex min-h-[1.25rem] flex-wrap items-center gap-1 pt-0.5">
         <OmCommerceBadge v-if="freeShipping" kind="free-ship" />
         <OmCommerceBadge v-if="todayDispatch" kind="today" />
         <OmCommerceBadge v-else-if="tomorrowDispatch" kind="tomorrow" />
@@ -146,7 +141,7 @@ function onWish() {
           <Star class="h-3 w-3 fill-rating text-rating" aria-hidden="true" />
           <span class="font-semibold text-ink">{{ rating.toFixed(1) }}</span>
         </span>
-        <span v-if="monthSales !== null">최근 30일 {{ monthSales }}개 구매</span>
+        <span v-if="monthSales !== null">{{ uiLocale === 'ko-KR' ? `최근 30일 ${monthSales}개 구매` : `${monthSales} ${uiT('최근 30일 구매')}` }}</span>
       </div>
     </div>
   </div>

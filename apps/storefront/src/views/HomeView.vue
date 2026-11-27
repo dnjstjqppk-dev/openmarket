@@ -1,12 +1,10 @@
 <script setup lang="ts">
-// Buyer home (3-1): banner carousel, category shortcuts, lightning deals,
-// best ranking, exhibitions, for-you (authed) and an infinite all-products
-// grid. Empty sections are hidden wholesale. First screen costs at most six
-// requests (banners, lightning, categories, exhibitions, products p1 and,
-// when logged in, for-you); ranking tabs lazy-load on click.
+// Buyer home (Meridian 2.0): editorial banner carousel, circular category hub,
+// elevated lightning deals strip, segmented best ranking, exhibitions, for-you
+// (signed-in), and infinite all-products grid. 100% localized across 4 locales.
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Zap } from 'lucide-vue-next'
+import { ArrowRight, Flame, Sparkles, TrendingUp, Zap } from 'lucide-vue-next'
 import { userErrorMessage, OmButton, OmSkeleton, OmEmptyState, OmErrorState, OmCarousel, OmCountdown, OmProgress, formatNumber, injectJsonLd, useBreakpoint } from '@olmoa/ui'
 import ProductCard from '../components/ProductCard.vue'
 import { organizationGraph } from '../../../cloudflare-gateway/src/lib/site-entity.js'
@@ -15,7 +13,6 @@ import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { API_BASE_URL } from '../config'
 
-// Phones keep the 16:9 hero (H31); a smaller CTA keeps badge + title + button inside it.
 const { isPhone } = useBreakpoint()
 
 const catalog = useCatalogStore()
@@ -43,8 +40,6 @@ const rankCache = ref<Record<string, any[]>>({})
 const rankLoading = ref(false)
 
 async function getJson(path: string, _authed = false) {
-  // P0-2: cookies authenticate (see the fetch wrapper); the flag is kept so
-  // call sites read unchanged.
   const res = await fetch(`${API_BASE_URL}${path}`)
   const json = await res.json().catch(() => null)
   if (!res.ok || !json?.success) throw new Error(json?.error || '불러오지 못했습니다')
@@ -119,7 +114,7 @@ watch(() => banners.value.length, () => { if (bannerIdx.value >= banners.value.l
 // ---- sections (all derived from server data; nothing invented) ----------------------------------
 const shortcutRoots = computed(() => catalog.roots.filter((c) => Number(c.product_count) > 0).slice(0, 10))
 const rankRoots = computed(() => catalog.roots.filter((c) => Number(c.product_count) > 0).slice(0, 6))
-const rankTabs = computed(() => [{ slug: 'ALL', name: '전체' }, ...rankRoots.value.map((c) => ({ slug: c.slug, name: c.name }))])
+const rankTabs = computed(() => [{ slug: 'ALL', name: locale.t('homeTabAll') }, ...rankRoots.value.map((c) => ({ slug: c.slug, name: c.name }))])
 const rankRows = computed(() => {
   if (rankTab.value === 'ALL') return products.value.slice(0, 10)
   return rankCache.value[rankTab.value] || []
@@ -137,118 +132,155 @@ async function selectRankTab(slug: string) {
     rankLoading.value = false
   }
 }
+const remainingLabel = (d: any) =>
+  locale.locale === 'ko-KR'
+    ? `${d.sold_percent}% 소진 · ${formatNumber(Number(d.remaining_stock ?? 0))}개 남음`
+    : `${d.sold_percent}% ${locale.t('homeSoldOutPct')} · ${formatNumber(Number(d.remaining_stock ?? 0))}${locale.t('homeRemainingUnit')}`
 </script>
 
 <template>
   <div class="pb-16">
-    <!-- 1. Banner carousel (hidden without banners) ------------------------------------------------- -->
-    <section v-if="banners.length" class="mx-auto max-w-container px-4 pt-4 sm:px-6 sm:pt-6" aria-label="프로모션">
-      <OmCarousel v-model="bannerIdx" :count="banners.length" label="프로모션 배너">
-        <template #default="{ index }">
-          <div class="relative aspect-video w-full overflow-hidden bg-secondary text-white sm:aspect-auto sm:h-[360px]">
-            <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-60" :fetchpriority="index === 0 ? 'high' : 'auto'" />
-            <div class="absolute inset-0 bg-gradient-to-r from-overlay/75 via-overlay/40 to-transparent" aria-hidden="true" />
-            <div class="relative flex h-full flex-col justify-end gap-2 p-4 sm:gap-3 sm:p-10" aria-live="polite">
-              <span v-if="banners[index].badge_text" class="w-fit rounded-sm bg-primary-on/15 px-2 py-0.5 text-2xs font-semibold tracking-wide backdrop-blur">{{ banners[index].badge_text }}</span>
-              <h1 class="line-clamp-2 max-w-xl text-lg font-bold leading-tight sm:text-4xl">{{ banners[index].title }}</h1>
-              <p v-if="banners[index].subtitle" class="hidden max-w-xl text-sm text-white/85 sm:block sm:text-md">{{ banners[index].subtitle }}</p>
-              <div><OmButton :to="banners[index].link_url" variant="primary" :size="isPhone ? 'sm' : 'md'">자세히 보기</OmButton></div>
+    <!-- 1. Editorial Banner Carousel (hidden without banners) --------------------------------------- -->
+    <section v-if="banners.length" class="om-container pt-4 sm:pt-6" :aria-label="locale.t('homePromoLabel')">
+      <div class="overflow-hidden rounded-2xl shadow-lg">
+        <OmCarousel v-model="bannerIdx" :count="banners.length" :label="locale.t('homePromoBanner')">
+          <template #default="{ index }">
+            <div class="relative aspect-video w-full overflow-hidden bg-secondary text-white sm:aspect-auto sm:h-[360px]">
+              <img :src="banners[index].image_url" alt="" class="absolute inset-0 h-full w-full object-cover opacity-70 transition-transform duration-slow" :fetchpriority="index === 0 ? 'high' : 'auto'" />
+              <div class="absolute inset-0 bg-gradient-to-tr from-overlay/85 via-overlay/45 to-transparent" aria-hidden="true" />
+              <div class="relative flex h-full flex-col justify-end gap-2.5 p-5 sm:gap-3.5 sm:p-12" aria-live="polite">
+                <span v-if="banners[index].badge_text" class="w-fit rounded-full bg-primary/90 px-3 py-1 text-2xs font-bold tracking-wider text-primary-on shadow-sm backdrop-blur">{{ banners[index].badge_text }}</span>
+                <h1 class="line-clamp-2 max-w-2xl text-xl font-extrabold leading-tight tracking-tight sm:text-4xl">{{ banners[index].title }}</h1>
+                <p v-if="banners[index].subtitle" class="hidden max-w-xl text-sm text-white/90 sm:block sm:text-md">{{ banners[index].subtitle }}</p>
+                <div class="pt-1">
+                  <OmButton :to="banners[index].link_url" variant="primary" :size="isPhone ? 'sm' : 'md'">
+                    {{ locale.t('homeHeroCta') }}
+                    <ArrowRight class="h-4 w-4" aria-hidden="true" />
+                  </OmButton>
+                </div>
+              </div>
             </div>
-          </div>
-        </template>
-      </OmCarousel>
+          </template>
+        </OmCarousel>
+      </div>
       <div v-if="banners.length > 1" class="relative" aria-hidden="true">
-        <span class="absolute -top-10 right-4 rounded-full bg-overlay/40 px-2.5 py-1 text-2xs text-white tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
+        <span class="absolute -top-11 right-5 rounded-full bg-overlay/55 px-3 py-1 text-2xs font-bold text-white backdrop-blur-sm tabular-nums">{{ bannerIdx + 1 }} / {{ banners.length }}</span>
       </div>
     </section>
 
-    <div class="mx-auto mt-8 max-w-container space-y-10 px-4 sm:px-6">
-      <!-- 2. Category shortcuts --------------------------------------------------------------------- -->
-      <section v-if="shortcutRoots.length" aria-label="카테고리 바로가기">
-        <ul class="grid grid-cols-5 gap-3 sm:grid-cols-10">
+    <div class="om-container mt-8 space-y-12">
+      <!-- 2. Category Shortcuts Hub ----------------------------------------------------------------- -->
+      <section v-if="shortcutRoots.length" :aria-label="locale.t('homeCategoryShortcuts')" class="rounded-2xl border border-line bg-surface p-4 shadow-sm sm:p-6">
+        <ul class="grid grid-cols-5 gap-3 sm:grid-cols-10 sm:gap-4">
           <li v-for="c in shortcutRoots" :key="c.slug">
-            <RouterLink :to="`/category/${c.slug}`" class="flex flex-col items-center gap-1.5">
-              <span class="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-xl font-bold text-ink transition hover:bg-surface-3" aria-hidden="true">{{ c.name.slice(0, 1) }}</span>
-              <span class="w-full truncate text-center text-xs text-ink">{{ c.name }}</span>
+            <RouterLink :to="`/category/${c.slug}`" class="group flex flex-col items-center gap-2">
+              <span class="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface-2 text-lg font-extrabold text-ink shadow-sm transition-all duration-fast group-hover:-translate-y-0.5 group-hover:border-primary group-hover:bg-primary-soft group-hover:text-primary group-hover:shadow-md" aria-hidden="true">{{ c.name.slice(0, 1) }}</span>
+              <span class="w-full truncate text-center text-xs font-semibold text-ink-muted transition-colors group-hover:text-primary">{{ c.name }}</span>
             </RouterLink>
           </li>
         </ul>
       </section>
 
-      <!-- 3. Lightning deals ------------------------------------------------------------------------ -->
-      <section v-if="campaign && deals.length" aria-labelledby="deals-title">
-        <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+      <!-- 3. Lightning Deals Showcase --------------------------------------------------------------- -->
+      <section v-if="campaign && deals.length" aria-labelledby="deals-title" class="rounded-2xl border border-line bg-surface p-4 shadow-sm sm:p-6">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-3">
-            <h2 id="deals-title" class="flex items-center gap-1.5 text-xl font-bold text-ink"><Zap class="h-5 w-5 text-accent" aria-hidden="true" />번개특가</h2>
+            <h2 id="deals-title" class="flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink">
+              <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-soft text-accent"><Zap class="h-4 w-4" aria-hidden="true" /></span>
+              {{ locale.t('lightningDeals') }}
+            </h2>
             <OmCountdown v-if="campaignEndsAt" :ends-at="campaignEndsAt" />
           </div>
-          <RouterLink to="/channel/lightning-deals" class="text-sm font-medium text-ink-muted hover:text-ink">전체 보기</RouterLink>
+          <RouterLink to="/channel/lightning-deals" class="inline-flex items-center gap-1 rounded-full bg-surface-2 px-3.5 py-1.5 text-xs font-bold text-ink transition-colors hover:bg-primary-soft hover:text-primary">
+            {{ locale.t('homeViewAll') }}
+            <ArrowRight class="h-3.5 w-3.5" aria-hidden="true" />
+          </RouterLink>
         </div>
-        <div class="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          <div v-for="d in deals" :key="d.id" class="w-40 shrink-0 snap-start sm:w-44">
+        <div class="no-scrollbar -mx-4 flex snap-x gap-3.5 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+          <div v-for="d in deals" :key="d.id" class="w-44 shrink-0 snap-start sm:w-48">
             <ProductCard :product="d" />
-            <div v-if="Number(d.allocated_stock) > 0" class="mt-1.5 space-y-1">
+            <div v-if="Number(d.allocated_stock) > 0" class="mt-2 space-y-1 px-0.5">
               <OmProgress :sold="Number(d.sold_quantity ?? d.sold_stock ?? 0)" :allocated="Number(d.allocated_stock)" />
-              <p class="text-2xs text-ink-muted tabular-nums">{{ d.sold_percent }}% 소진 · {{ formatNumber(Number(d.remaining_stock ?? 0)) }}개 남음</p>
+              <p class="text-2xs font-medium text-ink-muted tabular-nums">{{ remainingLabel(d) }}</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 4. Best ranking --------------------------------------------------------------------------- -->
+      <!-- 4. Best Sellers Ranking ------------------------------------------------------------------- -->
       <section v-if="rankTabs.length > 1" aria-labelledby="rank-title">
-        <h2 id="rank-title" class="mb-3 text-xl font-bold text-ink">베스트 랭킹</h2>
-        <div class="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="랭킹 분류">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 id="rank-title" class="flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink">
+            <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-primary-soft text-primary"><TrendingUp class="h-4 w-4" aria-hidden="true" /></span>
+            {{ locale.t('homeBestRanking') }}
+          </h2>
+          <RouterLink to="/channel/best-sellers" class="inline-flex items-center gap-1 text-xs font-bold text-ink-muted transition-colors hover:text-primary">
+            {{ locale.t('homeViewAll') }}
+            <ArrowRight class="h-3.5 w-3.5" aria-hidden="true" />
+          </RouterLink>
+        </div>
+        <div class="no-scrollbar -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" :aria-label="locale.t('homeRankingGroup')">
           <button
             v-for="t in rankTabs"
             :key="t.slug"
             type="button"
             :aria-pressed="rankTab === t.slug"
-            class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-            :class="rankTab === t.slug ? 'border-secondary bg-secondary text-secondary-on' : 'border-line bg-surface text-ink hover:border-line-strong'"
+            class="shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            :class="rankTab === t.slug ? 'border-primary bg-primary text-primary-on shadow-sm' : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink'"
             @click="selectRankTab(t.slug)"
           >
             {{ t.name }}
           </button>
         </div>
-        <div v-if="rankLoading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="5" /></div>
-        <ol v-else-if="rankRows.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        <div v-if="rankLoading" class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="5" /></div>
+        <ol v-else-if="rankRows.length" class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           <li v-for="(p, i) in rankRows" :key="p.id"><ProductCard :product="p" :rank="i + 1" /></li>
         </ol>
       </section>
 
-      <!-- 5. Exhibitions ---------------------------------------------------------------------------- -->
-      <section v-for="ex in exhibitions" :key="ex.id" :aria-labelledby="`ex-${ex.id}`">
-        <div class="mb-3 overflow-hidden rounded-xl">
-          <img v-if="ex.banner_url" :src="ex.banner_url" :alt="ex.title" class="h-32 w-full object-cover sm:h-44" loading="lazy" decoding="async" />
+      <!-- 5. Curated Exhibitions -------------------------------------------------------------------- -->
+      <section v-for="ex in exhibitions" :key="ex.id" :aria-labelledby="`ex-${ex.id}`" class="space-y-4">
+        <div v-if="ex.banner_url" class="overflow-hidden rounded-2xl border border-line shadow-sm">
+          <img :src="ex.banner_url" :alt="ex.title" class="h-36 w-full object-cover sm:h-48" loading="lazy" decoding="async" />
         </div>
-        <h2 :id="`ex-${ex.id}`" :class="ex.banner_url ? 'sr-only' : 'mb-3 text-xl font-bold text-ink'">{{ ex.title }}</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <h2 :id="`ex-${ex.id}`" :class="ex.banner_url ? 'sr-only' : 'flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink'">
+          <Flame v-if="!ex.banner_url" class="h-5 w-5 text-primary" aria-hidden="true" />
+          {{ ex.title }}
+        </h2>
+        <div class="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
           <ProductCard v-for="p in ex.products.slice(0, 8)" :key="p.id" :product="p" />
         </div>
       </section>
 
-      <!-- 6. For-you (signed in only) ----------------------------------------------------------------- -->
+      <!-- 6. Personalized For-You (signed in only) -------------------------------------------------- -->
       <section v-if="auth.isAuthenticated && forYou.length" aria-labelledby="foryou-title">
-        <h2 id="foryou-title" class="mb-3 text-xl font-bold text-ink">맞춤 추천</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        <h2 id="foryou-title" class="mb-4 flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink">
+          <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-highlight-soft text-highlight-ink"><Sparkles class="h-4 w-4" aria-hidden="true" /></span>
+          {{ locale.t('homeForYou') }}
+        </h2>
+        <div class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           <ProductCard v-for="p in forYou" :key="p.id" :product="p" />
         </div>
       </section>
 
-      <!-- 7. All products (infinite, 40/page; no client-side fetch-all) -------------------------------->
+      <!-- 7. All Products Discovery Grid (infinite, 40/page) ---------------------------------------- -->
       <section aria-labelledby="catalog-title">
-        <h2 id="catalog-title" class="mb-4 text-xl font-bold text-ink">전체 상품</h2>
-        <div v-if="loading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
+        <div class="mb-5 flex items-baseline justify-between gap-3">
+          <h2 id="catalog-title" class="text-xl font-extrabold tracking-tight text-ink">{{ locale.t('homeAllProducts') }}</h2>
+          <p v-if="!loading && !loadError && products.length" class="text-xs font-medium text-ink-subtle tabular-nums">
+            {{ formatNumber(products.length) }} / {{ formatNumber(totalProducts) }}{{ locale.t('homeProductsUnit') }}
+          </p>
+        </div>
+        <div v-if="loading" class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="10" /></div>
         <OmErrorState v-else-if="loadError" :message="loadError" @retry="load" />
-        <OmEmptyState v-else-if="!products.length" title="판매 중인 상품이 없습니다" description="다른 카테고리를 선택하거나 검색해 보세요." />
-        <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        <OmEmptyState v-else-if="!products.length" :title="locale.t('homeEmptyTitle')" :description="locale.t('homeEmptyDesc')" />
+        <div v-else class="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
           <ProductCard v-for="(p, i) in products" :key="p.id" :product="p" :eager="i < 5" />
         </div>
         <div ref="sentinel" class="h-1" aria-hidden="true" />
-        <div v-if="loadingMore" class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="5" /></div>
-        <p v-if="!loading && !loadError && products.length" class="mt-4 text-xs text-ink-subtle">
-          {{ formatNumber(products.length) }} / {{ formatNumber(totalProducts) }}개 상품 · 가격은 {{ locale.currency === 'KRW' ? '원화' : `${locale.currency} 환산 표시이며 결제는 원화` }} 기준
+        <div v-if="loadingMore" class="mt-4 grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"><OmSkeleton variant="card" :count="5" /></div>
+        <p v-if="!loading && !loadError && products.length" class="mt-5 text-xs text-ink-subtle">
+          {{ formatNumber(products.length) }} / {{ formatNumber(totalProducts) }}{{ locale.t('homeProductsUnit') }} · {{ locale.currency === 'KRW' ? locale.t('homePriceCaptionKrw') : `${locale.currency} ${locale.t('homePriceCaptionFx')}` }}
         </p>
       </section>
     </div>

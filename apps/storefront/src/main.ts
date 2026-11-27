@@ -8,7 +8,7 @@ import { API_BASE_URL } from './config';
 import { useAuthStore } from './stores/auth';
 import { useLocaleStore, type SupportedLocale, type SupportedCurrency } from './stores/locale';
 import { i18n } from './i18n';
-import { useTheme, applyRouteHead, installApiFetch, installChunkReloadGuard, isLang, isCurrency, localizedPath, DEFAULT_CURRENCY, BCP47, HREFLANG, CURRENCY_CODE } from '@olmoa/ui';
+import { useTheme, applyRouteHead, installApiFetch, installChunkReloadGuard, installDomLocaleSync, isLang, isCurrency, localizedPath, DEFAULT_CURRENCY, BCP47, HREFLANG, CURRENCY_CODE } from '@olmoa/ui';
 
 useTheme().init();
 
@@ -90,3 +90,4 @@ window.addEventListener('error', (e) => reportClientError('window.onerror', e.me
 window.addEventListener('unhandledrejection', (e) => reportClientError('unhandledrejection', (e.reason && (e.reason.message || String(e.reason))) || 'unknown'));
 
 app.mount('#app');
+installDomLocaleSync();

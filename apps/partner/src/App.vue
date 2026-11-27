@@ -1,23 +1,27 @@
 <script setup lang="ts">
-import { Boxes, ChartPie, LogOut, MessageSquare, Network, Receipt, Reply, Settings, Ticket, Truck } from 'lucide-vue-next'
+import { Boxes, ChartPie, Globe, LogOut, MessageSquare, Monitor, Moon, Network, Receipt, Reply, Settings, Sun, Ticket, Truck } from 'lucide-vue-next'
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { OmConsoleShell, OmConfirmDialog, OmToast, type ConsoleMenuItem } from '@olmoa/ui';
+import { OmConsoleShell, OmConfirmDialog, OmToast, useTheme, nextThemeMode, useUiLocale, uiT, type ConsoleMenuItem, type UiLocale } from '@olmoa/ui';
 import { API_BASE_URL, STOREFRONT_URL, getPartnerHeaders, getPartnerName, getPartnerId, clearPartnerSession } from './config';
 
-// Raw enum codes (APPROVED…) were shown in the header; show Korean labels, keep unknown codes visible.
+// Raw enum codes (APPROVED…) were shown in the header; show localized labels, keep unknown codes visible.
 const PARTNER_STATUS_LABEL: Record<string, string> = { APPROVED: '승인', PENDING: '심사 중', REJECTED: '반려', SUSPENDED: '정지', TERMINATED: '해지' }
-const partnerStatusLabel = (s?: string | null) => (s ? PARTNER_STATUS_LABEL[s] || s : '확인 필요')
+const partnerStatusLabel = (s?: string | null) => uiT(s ? PARTNER_STATUS_LABEL[s] || s : '확인 필요')
 
 const router = useRouter();
 const route = useRoute();
 const collapsed = ref(false);
 
+const { mode: themeMode, set: setTheme } = useTheme();
+const cycleTheme = () => setTheme(nextThemeMode(themeMode.value));
+const { locale: uiLoc, options: localeOptions, setLocale: setUiLoc } = useUiLocale();
+const onLocaleChange = (v: string) => setUiLoc(v as UiLocale, true);
+
 const isLoginPage = computed(() => ['/login', '/apply', '/application'].includes(route.path));
 const partnerName = computed(() => (route.path, getPartnerName()));
 
-// Work order 1-7: grouped menu. Items whose views land in stage 4 are added
-// with those views; every entry below opens a working screen today.
+// Grouped console menu; OmConsoleShell renders uiT() on every group and child label.
 const menu = computed<ConsoleMenuItem[]>(() => [
   { to: '/', label: '대시보드', icon: ChartPie },
   {
@@ -119,29 +123,41 @@ onMounted(() => { loadHeader(); });
   <router-view v-if="isLoginPage" />
   <OmConsoleShell v-else v-model:collapsed="collapsed" :menu="menu">
     <template #brand>
-      <span class="flex items-center gap-2">
-        <img src="/olmoa-symbol.svg" alt="OLMOA" class="h-8 w-8 object-contain" />
-        <span class="text-md font-black tracking-tight text-ink">OLMOA <span class="text-xs font-bold text-ink-muted">판매자 센터</span></span>
+      <span class="flex items-center gap-2.5">
+        <img src="/olmoa-symbol.svg" alt="OLMOA" class="h-8 w-8 shrink-0 object-contain" />
+        <span v-if="!collapsed" class="truncate text-md font-extrabold tracking-tight text-ink">OLMOA <span class="text-xs font-bold text-primary">{{ uiT('판매자 센터') }}</span></span>
       </span>
     </template>
     <template #header>
       <div class="flex min-w-0 flex-1 items-center gap-2 text-xs">
         <span class="truncate font-bold text-ink">{{ partnerName }}</span>
         <template v-if="profile">
-          <span class="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ partnerStatusLabel(profile.status) }}</span>
+          <span class="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-2xs font-bold text-ink-muted">입점 상태 {{ partnerStatusLabel(profile.status) }}</span>
           <span
-            class="hidden shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold sm:inline-block"
+            class="hidden shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold sm:inline-block"
             :class="profile.payout_account_verified ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'"
           >
-            정산계좌 {{ profile.payout_account_verified ? '확인됨' : '미확인' }}
+            정산계좌 {{ profile.payout_account_verified ? uiT('확인됨') : uiT('미확인') }}
           </span>
-          <span v-if="profile.penalty_count > 0" class="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-bold text-danger">페널티 {{ profile.penalty_count }}건</span>
-          <span v-if="profile.grade_code" class="hidden shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">{{ profile.grade_code }} 등급</span>
+          <span v-if="profile.penalty_count > 0" class="shrink-0 rounded-full bg-danger-soft px-2.5 py-0.5 text-2xs font-bold text-danger">페널티 {{ profile.penalty_count }}건</span>
+          <span v-if="profile.grade_code" class="hidden shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 text-2xs font-bold text-primary-soft-ink sm:inline-block">{{ profile.grade_code }}</span>
         </template>
       </div>
-      <a v-if="storeUrl" :href="storeUrl" target="_blank" rel="noopener" class="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-bold text-ink hover:bg-surface-2 sm:flex">판매 전환</a>
-      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
-        <LogOut class="h-4 w-4" aria-hidden="true" />로그아웃
+      <label class="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2/80 px-2.5 py-1 text-xs">
+        <Globe class="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+        <span class="sr-only">{{ uiT('언어') }}</span>
+        <select :value="uiLoc" class="cursor-pointer bg-transparent text-xs font-semibold text-ink focus:outline-none" @change="onLocaleChange(($event.target as HTMLSelectElement).value)">
+          <option v-for="o in localeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </label>
+      <button type="button" :aria-label="uiT('테마 변경')" class="rounded-full p-2 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="cycleTheme">
+        <Sun v-if="themeMode === 'light'" class="h-4 w-4" aria-hidden="true" />
+        <Moon v-else-if="themeMode === 'dark'" class="h-4 w-4" aria-hidden="true" />
+        <Monitor v-else class="h-4 w-4" aria-hidden="true" />
+      </button>
+      <a v-if="storeUrl" :href="storeUrl" target="_blank" rel="noopener" class="hidden shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-bold text-ink shadow-sm transition-colors hover:border-primary hover:text-primary sm:flex">{{ uiT('판매 전환') }}</a>
+      <button type="button" class="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink" @click="handleLogout">
+        <LogOut class="h-4 w-4" aria-hidden="true" />{{ uiT('로그아웃') }}
       </button>
     </template>
     <router-view />

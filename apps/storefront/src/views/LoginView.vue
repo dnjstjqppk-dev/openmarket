@@ -11,10 +11,12 @@ import { OmButton, OmInput, OmAlert } from '@olmoa/ui'
 import AuthCard from '../components/AuthCard.vue'
 import { API_BASE_URL } from '../config'
 import { useAuthStore } from '../stores/auth'
+import { useLocaleStore } from '../stores/locale'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const locale = useLocaleStore()
 const email = ref('')
 const password = ref('')
 const showPw = ref(false)
@@ -166,12 +168,12 @@ onMounted(consumeSocialReturn)
 </script>
 
 <template>
-  <AuthCard title="로그인" :subtitle="fromCheckout ? '주문을 계속하려면 로그인해 주세요.' : undefined">
+  <AuthCard :title="locale.t('loginTitle')" :subtitle="fromCheckout ? locale.t('loginSubtitle') : undefined">
     <OmAlert v-if="expired" tone="warning" class="mb-4">세션이 만료되었습니다. 다시 로그인해주세요.</OmAlert>
 
     <form class="space-y-4" novalidate @submit.prevent="handleLogin">
-      <OmInput id="login-email" v-model="email" label="이메일" type="email" autocomplete="username" placeholder="example@olmoa.com" required :error="emailError" />
-      <OmInput id="login-password" v-model="password" label="비밀번호" :type="showPw ? 'text' : 'password'" autocomplete="current-password" required :error="pwError">
+      <OmInput id="login-email" v-model="email" :label="locale.t('loginEmail')" type="email" autocomplete="username" placeholder="example@olmoa.com" required :error="emailError" />
+      <OmInput id="login-password" v-model="password" :label="locale.t('loginPassword')" :type="showPw ? 'text' : 'password'" autocomplete="current-password" required :error="pwError">
         <template #suffix>
           <button type="button" class="pointer-events-auto text-ink-muted hover:text-ink" :aria-label="showPw ? '비밀번호 숨기기' : '비밀번호 보기'" :aria-pressed="showPw" @click="showPw = !showPw">
             <EyeOff v-if="showPw" class="h-4 w-4" /><Eye v-else class="h-4 w-4" />
@@ -181,25 +183,25 @@ onMounted(consumeSocialReturn)
 
       <OmAlert v-if="error" tone="danger">{{ error }}</OmAlert>
 
-      <OmButton type="submit" variant="primary" size="lg" block :loading="loading" data-testid="login-submit">로그인</OmButton>
+      <OmButton type="submit" variant="primary" size="lg" block :loading="loading" data-testid="login-submit">{{ locale.t('loginSubmit') }}</OmButton>
       <OmButton v-if="isDev" variant="ghost" size="sm" block @click="fillDevAccount">개발 환경 전용 · 테스트 계정 입력</OmButton>
     </form>
 
     <div class="my-4 flex items-center gap-3 text-xs text-ink-muted" aria-hidden="true">
-      <span class="h-px flex-1 bg-line"></span>또는<span class="h-px flex-1 bg-line"></span>
+      <span class="h-px flex-1 bg-line"></span>OR<span class="h-px flex-1 bg-line"></span>
     </div>
 
-    <button type="button" :disabled="socialLoading" class="flex h-12 w-full items-center justify-center gap-2 rounded bg-[#FEE500] text-[15px] font-semibold text-[#000000] disabled:cursor-wait disabled:opacity-70" @click="startKakao">
+    <button type="button" :disabled="socialLoading" class="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] text-[15px] font-semibold text-[#000000] shadow-sm transition-transform active:scale-[0.98] disabled:cursor-wait disabled:opacity-70" @click="startKakao">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.48 3 2 6.36 2 10.5c0 2.62 1.73 4.92 4.34 6.17-.19.68-.69 2.48-.71 2.56-.02.1.04.2.14.2.05 0 .1-.02.15-.04l3-1.98c.63.18 1.3.27 2.08.27 5.52 0 10-3.36 10-7.5S17.52 3 12 3Z" /></svg>
-      {{ socialLoading ? '카카오로 이동 중...' : '카카오로 시작하기' }}
+      {{ socialLoading ? 'Kakao...' : 'Kakao Login' }}
     </button>
 
     <div class="mt-4 text-right text-sm">
-      <RouterLink to="/forgot-password" class="text-ink-muted hover:text-ink hover:underline">비밀번호를 잊으셨나요?</RouterLink>
+      <RouterLink to="/forgot-password" class="text-ink-muted hover:text-primary hover:underline">{{ locale.t('loginForgot') }}</RouterLink>
     </div>
 
     <template #footer>
-      계정이 없으신가요? <RouterLink :to="{ path: '/register', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" class="font-semibold text-primary hover:underline">회원가입</RouterLink>
+      {{ locale.t('loginNoAccount') }} <RouterLink :to="{ path: '/register', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" class="font-semibold text-primary hover:underline">{{ locale.t('signUp') }}</RouterLink>
     </template>
   </AuthCard>
 </template>

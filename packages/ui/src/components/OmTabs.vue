@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// WAI-ARIA tabs (roving tabindex, ←/→/Home/End). `variant="pill"` for compact filters, `line` for page sections.
+// WAI-ARIA tabs (Meridian 2.0): roving tabindex, line & pill variants + 4-language tab label support.
 import { ref, useId } from 'vue'
+import { uiT } from '../composables/useUiLocale'
 
 export interface TabItem { key: string; label: string; count?: number | null; disabled?: boolean }
 const model = defineModel<string>({ required: true })
@@ -42,16 +43,16 @@ const onKey = (e: KeyboardEvent, tabs: TabItem[]) => {
         :tabindex="model === t.key ? 0 : -1"
         :disabled="t.disabled"
         :class="[
-          'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold transition-colors duration-fast disabled:opacity-40',
+          'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold transition-all duration-fast disabled:opacity-40',
           full ? 'flex-1 justify-center' : '',
           variant === 'line'
-            ? ['-mb-px border-b-2 px-3 py-2.5', model === t.key ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink']
-            : ['h-8 rounded-full px-3.5', model === t.key ? 'bg-secondary text-secondary-on' : 'bg-surface-2 text-ink-muted hover:text-ink']
+            ? ['-mb-px border-b-2 px-3.5 py-2.5', model === t.key ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink']
+            : ['h-9 rounded-full px-4', model === t.key ? 'bg-primary text-primary-on shadow-sm' : 'bg-surface-2 text-ink-muted hover:bg-surface-3 hover:text-ink']
         ]"
         @click="model = t.key"
       >
-        {{ t.label }}
-        <span v-if="t.count !== undefined && t.count !== null" :class="['rounded-full px-1.5 text-2xs om-num', model === t.key ? 'bg-primary-soft text-primary-soft-ink' : 'bg-surface-3 text-ink-muted']">{{ t.count }}</span>
+        {{ uiT(t.label) }}
+        <span v-if="t.count !== undefined && t.count !== null" :class="['rounded-full px-1.5 text-2xs om-num', model === t.key ? (variant === 'pill' ? 'bg-primary-on/20 text-primary-on' : 'bg-primary-soft text-primary-soft-ink') : 'bg-surface-3 text-ink-muted']">{{ t.count }}</span>
       </button>
     </div>
     <div v-if="$slots.default" :id="`${uid}-panel`" role="tabpanel" :aria-labelledby="`${uid}-tab-${model}`" class="pt-4" tabindex="0">

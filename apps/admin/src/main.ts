@@ -11,7 +11,10 @@ app.use(router);
 // Stale chunks after a deploy: reload once onto the target route.
 installChunkReloadGuard(router);
 import { API_BASE_URL, getAdminRole, clearAdminToken, ensureAdminSession } from './config';
-import { installApiFetch, installChunkReloadGuard } from '@olmoa/ui';
+import { installApiFetch, installChunkReloadGuard, useTheme, initUiLocale, installDomLocaleSync } from '@olmoa/ui';
+
+useTheme().init();
+initUiLocale();
 
 // PWA (OPS-10): conservative shell worker, production only — a worker would
 // fight Vite HMR in dev. API/auth traffic always bypasses the cache.
@@ -54,3 +57,4 @@ function reportClientError(kind: string, message: string) {
 window.addEventListener('error', (e) => reportClientError('window.onerror', e.message || 'unknown'));
 window.addEventListener('unhandledrejection', (e: any) => reportClientError('unhandledrejection', (e.reason && (e.reason.message || String(e.reason))) || 'unknown'));
 app.mount('#app');
+installDomLocaleSync();

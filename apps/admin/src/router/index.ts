@@ -25,6 +25,7 @@ import FinanceReconciliationView from '../views/finance/ReconciliationView.vue';
 import SettlementBatchView from '../views/finance/SettlementBatchView.vue';
 import PayoutApprovalView from '../views/finance/PayoutApprovalView.vue';
 import PolicyView from '../views/finance/PolicyView.vue';
+import FxRatesView from '../views/finance/FxRatesView.vue';
 import ApplicationListView from '../views/partners/ApplicationListView.vue';
 import ApplicationDetailView from '../views/partners/ApplicationDetailView.vue';
 import SecurityView from '../views/SecurityView.vue';
@@ -69,6 +70,7 @@ const routes = [
   { path: '/finance/batches', name: 'finance-batches', component: SettlementBatchView, meta: { roles: ['SUPER_ADMIN', 'FINANCE'] } },
   { path: '/finance/payout-requests', name: 'finance-payout-requests', component: PayoutApprovalView, meta: { roles: ['SUPER_ADMIN', 'FINANCE'] } },
   { path: '/finance/policies', name: 'finance-policies', component: PolicyView, meta: { roles: ['SUPER_ADMIN', 'FINANCE'] } },
+  { path: '/finance/fx-rates', name: 'finance-fx-rates', component: FxRatesView, meta: { roles: ['SUPER_ADMIN', 'FINANCE'] } },
   { path: '/partner-applications', name: 'partner-applications', component: ApplicationListView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS'] } },
   { path: '/partner-applications/:id', name: 'partner-application-detail', component: ApplicationDetailView, meta: { roles: ['SUPER_ADMIN', 'FINANCE', 'OPERATIONS'] } },
   { path: '/security', name: 'security', component: SecurityView, meta: { roles: ALL } },
