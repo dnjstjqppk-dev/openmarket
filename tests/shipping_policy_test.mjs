@@ -227,7 +227,85 @@ await t.test('9. schema version pin tracks the new migration', async () => {
   const { default: path } = await import('node:path');
   const modPath = path.join(ROOT, 'apps/cloudflare-gateway/src/services/orders.js');
   const { REQUIRED_SCHEMA_VERSION } = await import(pathToFileURL(modPath).href);
-  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_78_product_translations.sql', 'pin names d1_78');
+  assert.equal(REQUIRED_SCHEMA_VERSION, 'd1_79_backfill_partner_shipping_policies.sql', 'pin names d1_79');
+});
+
+await t.test('10. d1_79 backfill registers each seller\'s own policy and makes legacy products sellable', async () => {
+  const fs = await import('node:fs');
+  const { default: path } = await import('node:path');
+  const { ROOT } = await import('./lib/harness.mjs');
+  const sql = fs.readFileSync(path.join(ROOT, 'migrations/d1_79_backfill_partner_shipping_policies.sql'), 'utf8');
+  const g = await newGateway();
+  // Recreate the production state: pre-6-11 products with no policy, sellers with
+  // only partner-level fee settings (pt_002 differs from the old 3000 default).
+  g.db.exec(`
+    UPDATE products SET shipping_policy_id = NULL;
+    DELETE FROM shipping_policies;
+    UPDATE partners SET base_shipping_fee = 3000, free_shipping_threshold = 30000, return_shipping_fee = NULL,
+      return_shipping_address = '서울 반품센터 1' WHERE id = 'pt_001';
+    UPDATE partners SET base_shipping_fee = 2500, free_shipping_threshold = 30000, return_shipping_fee = NULL,
+      return_shipping_address = '  ' WHERE id = 'pt_002';
+  `);
+  const hidden = await g.call('/api/v1/products?limit=100');
+  assert.equal(hidden.status, 200, hidden.text);
+  assert.equal((hidden.json.data || []).length, 0, 'fail-closed gate hides unassigned products');
+
+  g.db.exec(sql);
+  const pol = (pid) => g.db.prepare('SELECT * FROM shipping_policies WHERE partner_id = ?').all(pid);
+  const [p1] = pol('pt_001');
+  const [p2] = pol('pt_002');
+  assert.equal(pol('pt_001').length, 1, 'one policy per seller');
+  assert.equal(p1.fee_type, 'CONDITIONAL');
+  assert.equal(p1.base_fee, 3000);
+  assert.equal(p1.free_threshold, 30000);
+  assert.equal(p1.return_fee, 3000, 'return fee = what claims.js withholds (base when unset)');
+  assert.equal(p1.exchange_fee, 6000);
+  assert.equal(p1.processing_days, 3);
+  assert.equal(p1.today_cutoff, null, 'no 오늘출발 claim the seller never made');
+  assert.equal(p1.remote_surcharge, null);
+  assert.equal(p1.return_address, '서울 반품센터 1');
+  assert.equal(p1.is_default, 1);
+  assert.equal(p2.base_fee, 2500, "seller's own fee, not a code default");
+  assert.equal(p2.exchange_fee, 5000);
+  assert.equal(p2.return_address, null, 'blank address stays unregistered');
+  const unassigned = g.db.prepare(
+    "SELECT COUNT(*) AS c FROM products p WHERE NOT EXISTS (SELECT 1 FROM shipping_policies sp WHERE sp.id = p.shipping_policy_id AND sp.partner_id = p.partner_id AND sp.status = 'ACTIVE')"
+  ).get().c;
+  assert.equal(unassigned, 0, 'every product names its own seller\'s ACTIVE policy');
+
+  const shown = await g.call('/api/v1/products?limit=100');
+  assert.equal(shown.status, 200, shown.text);
+  const rows = shown.json.data || [];
+  assert.ok(rows.length > 0, 'products are listed again');
+  const p2Row = rows.find((r) => r.partner_id === 'pt_002');
+  assert.ok(p2Row, 'pt_002 product listed');
+  assert.equal(p2Row.shipping_text, '30,000원 이상 구매 시 무료 (미만 2,500원)');
+
+  // Rerun-safe and respects later seller choices.
+  g.db.exec("UPDATE shipping_policies SET base_fee = 4000 WHERE partner_id = 'pt_001'");
+  const before = g.db.prepare('SELECT COUNT(*) AS c FROM shipping_policies').get().c;
+  g.db.exec(sql);
+  assert.equal(g.db.prepare('SELECT COUNT(*) AS c FROM shipping_policies').get().c, before, 'rerun adds nothing');
+  assert.equal(pol('pt_001')[0].base_fee, 4000, 'rerun never overwrites a seller edit');
+
+  // A seller who already has an ACTIVE default keeps it; an inactive default never blocks the insert.
+  const pid = g.db.prepare("SELECT id FROM products WHERE partner_id = 'pt_001' LIMIT 1").get().id;
+  g.db.exec(`UPDATE products SET shipping_policy_id = NULL WHERE id = '${pid}'`);
+  g.db.exec(sql);
+  assert.equal(g.db.prepare('SELECT shipping_policy_id AS s FROM products WHERE id = ?').get(pid).s, 'sp_d179_pt_001');
+  g.db.exec(`
+    UPDATE shipping_policies SET status = 'INACTIVE' WHERE partner_id = 'pt_002';
+    UPDATE products SET shipping_policy_id = NULL WHERE partner_id = 'pt_002';
+    DELETE FROM shipping_policies WHERE partner_id = 'pt_002';
+    INSERT INTO shipping_policies (id, partner_id, name, method, fee_type, base_fee, is_default, status)
+      VALUES ('sp_old_inactive', 'pt_002', 'old', 'PARCEL', 'PAID', 9999, 1, 'INACTIVE');
+  `);
+  g.db.exec(sql);
+  const fresh = g.db.prepare("SELECT * FROM shipping_policies WHERE id = 'sp_d179_pt_002'").get();
+  assert.ok(fresh, 'inactive default does not block the backfill');
+  assert.equal(fresh.is_default, 0, 'unique default index respected');
+  assert.equal(g.db.prepare("SELECT COUNT(*) AS c FROM products WHERE partner_id = 'pt_002' AND shipping_policy_id = 'sp_d179_pt_002'").get().c,
+    g.db.prepare("SELECT COUNT(*) AS c FROM products WHERE partner_id = 'pt_002'").get().c, 'pt_002 products reassigned');
 });
 
 t.finish();
